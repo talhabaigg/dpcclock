@@ -60,6 +60,8 @@ The system is accessed by administrators, project managers, and clients (who rec
 | BO-05   | Automate the transmission of approved variations to Premier ERP for financial processing via API            |
 | BO-06   | Maintain bi-directional automated data sync between the portal and Premier for variation reconciliation    |
 | BO-07   | Enforce role-based access control so that only authorised users can create, edit, send, or delete variations|
+| BO-08   | Automate quote numbering for client-facing quotations to improve tracking and professionalism              |
+| BO-09   | Integrate with Premier's auto-numbering system for change orders to ensure consistency with ERP             |
 
 ---
 
@@ -389,6 +391,28 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 | FR-12.03 | The deleting user's name shall be recorded on the variation.                                        |
 | FR-12.04 | The Delete action shall require the `variations.delete` permission.                                 |
 
+### FR-13: Quote Number Generation
+
+| ID       | Requirement                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------- |
+| FR-13.01 | The portal shall auto-generate sequential quote numbers on first print of client quote.              |
+| FR-13.02 | Quote numbers shall follow format Q-NNNN (4 digits, zero-padded).                                   |
+| FR-13.03 | Quote numbers shall be globally unique across all projects.                                         |
+| FR-13.04 | Quote number shall be displayed on the printed client quote header.                                 |
+| FR-13.05 | Quote number generation shall use database row-level locking to prevent race conditions.            |
+| FR-13.06 | Once generated, a quote number shall remain unchanged for the variation's lifetime.                  |
+
+### FR-14: Premier Auto-Assignment Integration
+
+| ID       | Requirement                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------- |
+| FR-14.01 | The portal shall send 'NEXT #' as ChangeOrderNumber when transmitting variations to Premier.         |
+| FR-14.02 | The portal shall flag variations with premier_number_pending when awaiting number assignment.        |
+| FR-14.03 | The sync job shall update co_number with Premier's assigned ChangeOrderNumber.                       |
+| FR-14.04 | The UI shall display pending status for variations awaiting Premier number assignment.              |
+| FR-14.05 | Premier's assigned CO number shall overwrite the local co_number upon successful sync.              |
+| FR-14.06 | The portal shall log Premier CO number assignments for audit purposes.                              |
+
 ---
 
 ## 8. Non-Functional Requirements
@@ -453,6 +477,26 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 | BR-15 | **Line Renumbering**: When generating Premier variation lines, existing lines are deleted and remaining lines are renumbered sequentially. |
 | BR-16 | **Premier Sync**: The sync process uses an upsert pattern keyed on Premier's variation ID to avoid duplicates. Lines that no longer exist in Premier are deleted locally. |
 
+### Quote Numbering Rules
+
+| ID    | Rule                                                                                                      |
+| ----- | --------------------------------------------------------------------------------------------------------- |
+| BR-17 | **Quote Number Format**: Quote numbers follow the format Q-NNNN where NNNN is a 4-digit zero-padded sequential number (e.g., Q-0001, Q-0002). |
+| BR-18 | **Lazy Generation**: Quote numbers are generated only on first access to the client quote print view. Variations without a printed quote have no quote number. |
+| BR-19 | **Global Sequence**: Quote numbers use a single global sequence across all locations and companies.       |
+| BR-20 | **Atomicity**: Quote number generation uses database transactions with row-level locks to prevent duplicate numbers under concurrent access. |
+| BR-21 | **Idempotency**: Once a quote number is assigned to a variation, it remains unchanged. Subsequent prints of the same quote reuse the existing number. |
+
+### Premier Auto-Assignment Rules
+
+| ID    | Rule                                                                                                      |
+| ----- | --------------------------------------------------------------------------------------------------------- |
+| BR-22 | **NEXT # Placeholder**: All new variations sent to Premier use 'NEXT #' as the ChangeOrderNumber value in the API payload. |
+| BR-23 | **Premier Assignment**: Premier ERP resolves 'NEXT #' to the next sequential change order number in their system and returns it in the API response. |
+| BR-24 | **Pending Flag**: When a variation is sent to Premier with 'NEXT #', the premier_number_pending flag is set to true to indicate awaiting number assignment. |
+| BR-25 | **Number Sync**: The sync job retrieves Premier's assigned ChangeOrderNumber and updates the local co_number field, clearing the premier_number_pending flag. |
+| BR-26 | **Number Overwrite**: Premier's assigned CO number always overwrites the local co_number upon sync, regardless of the previous value. |
+
 ---
 
 ## 10. Data Dictionary
@@ -473,6 +517,9 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 | created_by         | String       | No       | Name of the user who created the variation                      |
 | updated_by         | String       | No       | Name of the user who last updated the variation                 |
 | deleted_by         | String       | No       | Name of the user who deleted the variation (soft delete)        |
+| quote_number       | String       | No       | Auto-generated quote number (format: Q-NNNN)                    |
+| quote_generated_at | Timestamp    | No       | Timestamp when quote number was generated                       |
+| premier_number_pending | Boolean  | No       | Flag indicating awaiting Premier CO number assignment (default: false) |
 
 ### 10.2 Variation Pricing Item
 
@@ -536,6 +583,7 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 ### 11.4 Client Quote (Printable)
 
 - Company-branded printable layout
+- Quote number displayed in header (auto-generated on first print)
 - Table of pricing items with Qty, Unit, Description, and Sell Rate
 - Optional unit toggle (LM/m2) per item
 - Client Notes section
@@ -554,8 +602,9 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 | Authentication  | Bearer token (OAuth2 password grant, 30-minute expiry)             |
 | Endpoint        | POST /api/ChangeOrder/CreateChangeOrders                           |
 | Trigger         | User action: "Send to Premier"                                    |
-| Payload Format  | JSON with Company, Job, Variation Number, Description, Date, Line Items |
-| On Success      | Variation status set to "Sent"                                     |
+| Payload Format  | JSON with Company, Job, **ChangeOrderNumber: 'NEXT #'**, Description, Date, Line Items |
+| Auto-Assignment | Premier resolves 'NEXT #' to next sequential CO number in their system |
+| On Success      | Variation status set to "Sent"; premier_number_pending flag set to true |
 | On Failure      | Error displayed to user; variation status unchanged                |
 
 ### 12.2 Premier ERP (Inbound — Sync Variations)
@@ -568,6 +617,8 @@ The variation ratio configuration is a prerequisite for generating Premier varia
 | Endpoints       | GET /api/ChangeOrder/GetChangeOrders, GET /api/ChangeOrder/GetChangeOrderLines |
 | Trigger         | User action: "Sync from Premier" (dispatches automated background job) |
 | Sync Pattern    | Upsert keyed on Premier variation ID                               |
+| CO Number Sync  | Updates local co_number with Premier's assigned ChangeOrderNumber  |
+| Pending Flag    | Clears premier_number_pending flag upon successful sync            |
 | Retry Policy    | 3 attempts with backoff: 60s, 120s, 240s                          |
 | Timeout         | 300 seconds per attempt                                            |
 
@@ -615,6 +666,8 @@ The Variation Management System uses role-based permissions. The following permi
 | A-04 | The Premier ERP API is available and reachable from the portal's application server.                     |
 | A-05 | The project's external ID corresponds to the valid Job Number in Premier ERP.                            |
 | A-06 | Users understand the difference between pricing items (internal scope) and Premier variation lines (ERP format). |
+| A-07 | Premier ERP API supports 'NEXT #' placeholder for auto-assignment of change order numbers.              |
+| A-08 | Quote numbers are only needed for variations that will be printed as client quotes.                      |
 
 ### Constraints
 
@@ -627,6 +680,9 @@ The Variation Management System uses role-based permissions. The following permi
 | C-05 | The CSV download format follows the QTMP specification required by Premier.                              |
 | C-06 | The Premier sync job has a 300-second timeout; large volumes of variations may require multiple syncs.   |
 | C-07 | Client quotes are rendered as a browser-printable page; PDF generation is not natively supported.        |
+| C-08 | Quote numbers use a single global sequence; per-location or per-company sequences are not supported.     |
+| C-09 | Once a variation is sent to Premier with 'NEXT #', the original co_number is overwritten upon sync.     |
+| C-10 | The database must support row-level locking for atomic quote number generation.                         |
 
 ---
 
@@ -649,6 +705,9 @@ The Variation Management System uses role-based permissions. The following permi
 | **Unit Rate Method**  | A pricing approach that applies fixed labour and material rates per unit of measurement (e.g., $/m2). |
 | **Soft Delete**       | A deletion method that marks records as deleted without physically removing them from the database. |
 | **Superior Portal**   | The web application used by the organisation for project management, including variation management.|
+| **Quote Number**      | Auto-generated sequential identifier for client quotes (format: Q-NNNN).                           |
+| **NEXT #**            | Placeholder value sent to Premier ERP that triggers auto-assignment of the next sequential CO number.|
+| **Premier Number Pending** | Flag indicating a variation is awaiting CO number assignment from Premier ERP.            |
 
 ---
 
@@ -660,11 +719,13 @@ This matrix maps business objectives to functional requirements to ensure comple
 | ------------------ | ---------------------------------------------------------------------- |
 | BO-01 (Capture)    | FR-01 (Create), FR-02 (Edit)                                           |
 | BO-02 (Costing)    | FR-05 (Pricing), FR-07 (Quick Gen), FR-10 (Variation Ratios)           |
-| BO-03 (Quotes)     | FR-06 (Client Quote)                                                   |
+| BO-03 (Quotes)     | FR-06 (Client Quote), FR-13 (Quote Number Generation)                 |
 | BO-04 (Quick Gen)  | FR-07 (Quick Gen), FR-10 (Variation Ratios)                            |
-| BO-05 (Premier)    | FR-08 (Send via API), FR-11 (CSV Download)                             |
-| BO-06 (Sync)       | FR-09 (Sync via API)                                                   |
+| BO-05 (Premier)    | FR-08 (Send via API), FR-11 (CSV Download), FR-14 (Premier Auto-Assignment) |
+| BO-06 (Sync)       | FR-09 (Sync via API), FR-14 (Premier Auto-Assignment)                 |
 | BO-07 (Access)     | FR-01.07, FR-02.02, FR-04.02, FR-08.08, FR-09.07, FR-11.06, FR-12.04 |
+| BO-08 (Quote Numbering) | FR-13 (Quote Number Generation)                               |
+| BO-09 (ERP Integration) | FR-14 (Premier Auto-Assignment)                               |
 
 ---
 
