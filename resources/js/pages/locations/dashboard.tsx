@@ -4,6 +4,8 @@ import { Head, router } from '@inertiajs/react';
 import ProjectDetailsCard from '@/components/dashboard/project-details-card';
 import OtherItemsCard from '@/components/dashboard/other-items-card';
 import ProjectIncomeCard from '@/components/dashboard/project-income-card';
+import VariationsCard from '@/components/dashboard/variations-card';
+import LabourBudgetCard, { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -66,6 +68,14 @@ interface ProjectIncomeData {
     };
 }
 
+interface VariationRow {
+    type: string;
+    qty: number;
+    value: number;
+    percent_of_total: number;
+    aging_over_30: number | null;
+}
+
 interface DashboardProps {
     location: Location & {
         job_summary?: JobSummary;
@@ -75,10 +85,12 @@ interface DashboardProps {
     claimedToDate?: number;
     cashRetention?: number;
     projectIncomeData: ProjectIncomeData;
+    variationsSummary: VariationRow[];
+    labourBudgetData: LabourBudgetRow[];
     availableLocations: AvailableLocation[];
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, availableLocations }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, availableLocations }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(
         asOfDate ? new Date(asOfDate) : new Date()
     );
@@ -224,7 +236,8 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     {/* Right Column - Project Income and other widgets */}
                     <div className="flex-1 flex flex-col gap-4">
                         <ProjectIncomeCard data={projectIncomeData} />
-                        {/* Variations table and other widgets will go here */}
+                        <VariationsCard data={variationsSummary} />
+                        <LabourBudgetCard data={labourBudgetData} />
                     </div>
                 </div>
             </div>

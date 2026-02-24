@@ -1,23 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
 
-interface VariationSummary {
-    change_type: string;
+interface VariationRow {
+    type: string;
     qty: number;
     value: number;
-    aging_count: number;
+    percent_of_total: number;
+    aging_over_30: number | null;
 }
 
 interface VariationsCardProps {
-    variations: VariationSummary[];
+    data: VariationRow[];
 }
 
-export default function VariationsCard({ variations }: VariationsCardProps) {
-    // Calculate totals
-    const totalQty = variations.reduce((sum, v) => sum + v.qty, 0);
-    const totalValue = variations.reduce((sum, v) => sum + v.value, 0);
-
-    // Format currency
+export default function VariationsCard({ data }: VariationsCardProps) {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-AU', {
             style: 'currency',
@@ -27,80 +22,54 @@ export default function VariationsCard({ variations }: VariationsCardProps) {
         }).format(value);
     };
 
-    // Format percentage
-    const formatPercentage = (value: number, total: number) => {
-        if (total === 0) return '0.00%';
-        return `${((value / total) * 100).toFixed(2)}%`;
-    };
-
-    // Show card even without data
-    if (!variations || variations.length === 0) {
-        return (
-            <Card className="w-full p-0 gap-0">
-                <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-3 py-1.5">
-                        <CardTitle className="text-sm font-semibold leading-none">Variations</CardTitle>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-3 text-sm text-muted-foreground">
-                    No variations data available
-                </CardContent>
-            </Card>
-        );
-    }
+    const totalQty = data.reduce((sum, row) => sum + row.qty, 0);
+    const totalValue = data.reduce((sum, row) => sum + row.value, 0);
 
     return (
-        <Card className="w-full p-0 gap-0">
+        <Card className="p-0 gap-0">
             <CardHeader className="!p-0 border-b">
                 <div className="flex items-center justify-between w-full px-3 py-1.5">
                     <CardTitle className="text-sm font-semibold leading-none">Variations</CardTitle>
                 </div>
             </CardHeader>
             <CardContent className="p-0 mt-0">
-                <div className="text-sm">
-                    {/* Header Row */}
-                    <div className="grid grid-cols-[100px_50px_110px_85px_85px] border-b bg-muted/50 font-medium">
-                        <div className="px-3 py-1.5 border-r">Type</div>
-                        <div className="px-3 py-1.5 border-r text-right">Qty</div>
-                        <div className="px-3 py-1.5 border-r text-right">Value</div>
-                        <div className="px-3 py-1.5 border-r text-right">% of Total</div>
-                        <div className="px-3 py-1.5 text-right">Aging (&gt;30 days)</div>
+                {data.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">No variations found.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                            <thead>
+                                <tr className="border-b">
+                                    <th className="text-left py-1.5 px-3 font-medium bg-muted/30 border-r">Change Type</th>
+                                    <th className="text-right py-1.5 px-3 font-medium border-r">Qty</th>
+                                    <th className="text-right py-1.5 px-3 font-medium border-r">Value</th>
+                                    <th className="text-right py-1.5 px-3 font-medium border-r">% of Total</th>
+                                    <th className="text-right py-1.5 px-3 font-medium">Aging &gt;30 days</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.map((row) => (
+                                    <tr key={row.type} className="border-b">
+                                        <td className="py-1.5 px-3 font-medium bg-muted/30 border-r capitalize">{row.type}</td>
+                                        <td className="text-right py-1.5 px-3 tabular-nums border-r">{row.qty}</td>
+                                        <td className="text-right py-1.5 px-3 tabular-nums border-r">{formatCurrency(row.value)}</td>
+                                        <td className="text-right py-1.5 px-3 tabular-nums border-r">{row.percent_of_total.toFixed(1)}%</td>
+                                        <td className="text-right py-1.5 px-3 tabular-nums">
+                                            {row.aging_over_30 !== null ? row.aging_over_30 : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                <tr className="font-semibold">
+                                    <td className="py-1.5 px-3 bg-muted/30 border-r">Total</td>
+                                    <td className="text-right py-1.5 px-3 tabular-nums border-r">{totalQty}</td>
+                                    <td className="text-right py-1.5 px-3 tabular-nums border-r">{formatCurrency(totalValue)}</td>
+                                    <td className="text-right py-1.5 px-3 tabular-nums border-r">100%</td>
+                                    <td className="text-right py-1.5 px-3"></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-
-                    {/* Data Rows */}
-                    {variations.map((variation, index) => (
-                        <div
-                            key={variation.change_type}
-                            className={cn(
-                                "grid grid-cols-[100px_50px_110px_85px_85px] border-b",
-                                index % 2 === 0 ? "bg-background" : "bg-muted/20"
-                            )}
-                        >
-                            <div className="px-3 py-1.5 border-r font-medium">{variation.change_type}</div>
-                            <div className="px-3 py-1.5 border-r text-right tabular-nums">{variation.qty}</div>
-                            <div className="px-3 py-1.5 border-r text-right tabular-nums">
-                                {formatCurrency(variation.value)}
-                            </div>
-                            <div className="px-3 py-1.5 border-r text-right tabular-nums">
-                                {formatPercentage(variation.value, totalValue)}
-                            </div>
-                            <div className="px-3 py-1.5 text-right tabular-nums">
-                                {variation.aging_count > 0 ? variation.aging_count : ''}
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Total Row */}
-                    <div className="grid grid-cols-[100px_50px_110px_85px_85px] bg-muted/30 font-semibold">
-                        <div className="px-3 py-1.5 border-r">Total</div>
-                        <div className="px-3 py-1.5 border-r text-right tabular-nums">{totalQty}</div>
-                        <div className="px-3 py-1.5 border-r text-right tabular-nums">
-                            {formatCurrency(totalValue)}
-                        </div>
-                        <div className="px-3 py-1.5 border-r text-right tabular-nums">100.00%</div>
-                        <div className="px-3 py-1.5 text-right"></div>
-                    </div>
-                </div>
+                )}
             </CardContent>
         </Card>
     );

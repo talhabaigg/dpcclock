@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\JobCostDetail;
+use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use App\Models\LocationItemPriceHistory;
+use App\Models\Variation;
 use App\Models\Worktype;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -147,6 +150,69 @@ class LocationController extends Controller
         $projectIncomeCalculator = new \App\Services\ProjectIncomeCalculator();
         $projectIncomeData = $projectIncomeCalculator->calculate($location, $asOfDate);
 
+        // Calculate variations summary grouped by type (status = Approved only)
+        $variationsSummary = DB::table('variations')
+            ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
+            ->where('variations.location_id', $location->id)
+            ->where('variations.status', 'Approved')
+            ->whereNull('variations.deleted_at')
+            ->select('variations.type')
+            ->selectRaw('COUNT(DISTINCT variations.id) as qty')
+            ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')
+            ->groupBy('variations.type')
+            ->get();
+
+        $totalVariations = $variationsSummary->sum('qty');
+
+        // Aging >30 days count for 'PENDING' type with status = Approved only
+        $agingCount = Variation::where('location_id', $location->id)
+            ->where('type', 'PENDING')
+            ->where('status', 'Approved')
+            ->where('co_date', '<=', now()->subDays(30))
+            ->count();
+
+        $variationsSummaryData = $variationsSummary->map(fn($row) => [
+            'type' => $row->type ?? 'Unknown',
+            'qty' => (int) $row->qty,
+            'value' => round((float) $row->value, 2),
+            'percent_of_total' => $totalVariations > 0
+                ? round(($row->qty / $totalVariations) * 100, 1)
+                : 0,
+            'aging_over_30' => strtoupper($row->type) === 'PENDING' ? $agingCount : null,
+        ])->values()->toArray();
+
+        // Labour budget utilization by cost item
+        $budgets = JobReportByCostItemAndCostType::where('job_number', $location->external_id)
+            ->select('cost_item', DB::raw('SUM(current_estimate) as budget'))
+            ->groupBy('cost_item')
+            ->get()
+            ->keyBy('cost_item');
+
+        $actuals = JobCostDetail::where('job_number', $location->external_id)
+            ->where('transaction_date', '<=', $asOfDate->format('Y-m-d'))
+            ->select(
+                'cost_item',
+                DB::raw('MAX(cost_item_description) as label'),
+                DB::raw('SUM(amount) as spent')
+            )
+            ->groupBy('cost_item')
+            ->get()
+            ->keyBy('cost_item');
+
+        $labourBudgetData = $budgets->map(function ($budget) use ($actuals) {
+            $actual = $actuals->get($budget->cost_item);
+            $budgetAmt = round((float) $budget->budget, 0);
+            $spentAmt = $actual ? round((float) $actual->spent, 0) : 0;
+
+            return [
+                'cost_item' => $budget->cost_item,
+                'label' => $actual?->label ?: $budget->cost_item,
+                'budget' => $budgetAmt,
+                'spent' => $spentAmt,
+                'percent' => $budgetAmt > 0 ? round(($spentAmt / $budgetAmt) * 100, 1) : 0,
+            ];
+        })->sortByDesc('budget')->values()->toArray();
+
         // Get all locations with job summaries for the selector
         $availableLocations = Location::with('jobSummary')
             ->whereHas('jobSummary')
@@ -167,6 +233,8 @@ class LocationController extends Controller
             'claimedToDate' => $claimedToDate,
             'cashRetention' => $cashRetention,
             'projectIncomeData' => $projectIncomeData,
+            'variationsSummary' => $variationsSummaryData,
+            'labourBudgetData' => $labourBudgetData,
             'availableLocations' => $availableLocations,
         ]);
     }
