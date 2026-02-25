@@ -61,6 +61,7 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
     const [gallerySelected, setGallerySelected] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
     const glowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const statusRef = useRef(status);
 
     useImperativeHandle(ref, () => ({ openSheet: () => setSheetOpen(true) }), []);
 
@@ -152,8 +153,20 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
             .catch(() => {});
     };
 
+    // Keep ref in sync so polling closure sees latest status
+    useEffect(() => { statusRef.current = status; }, [status]);
+
     useEffect(() => {
         fetchProgress(taskId);
+
+        // Poll every 5s while processing as fallback if WebSocket misses events
+        const interval = setInterval(() => {
+            if (statusRef.current === 'processing') {
+                fetchProgress(taskId);
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
     }, [taskId]);
 
     // Fetch all screenshots for gallery (completed/failed tasks)

@@ -682,8 +682,8 @@ async function handleLoginProgrammatically(page) {
         return false;
     }
 
-    // Look for the password input field inside the login frame
-    const passwordField = loginFrame.locator('input[type="password"]');
+    // Look for a visible password input field inside the login frame
+    const passwordField = loginFrame.locator('input[type="password"]:visible');
     const hasLoginForm = await passwordField.count().catch(() => 0);
 
     if (!hasLoginForm) {
@@ -700,18 +700,21 @@ async function handleLoginProgrammatically(page) {
     reportStep(1, 'starting', 'Logging into Premier...', null);
 
     try {
+        // Wait for the login form inputs to be ready (Premier SPA can be slow)
+        await loginFrame.locator('input[type="text"]:visible').first().waitFor({ state: 'visible', timeout: 15000 });
+
         // Get all visible inputs in the login frame
         const inputs = loginFrame.locator('input:visible');
         const inputCount = await inputs.count();
         console.error(`DEBUG: Found ${inputCount} visible inputs in loginContainer`);
 
-        // Fill Client ID (first text input)
-        const clientIdField = loginFrame.locator('input[type="text"]').first();
+        // Fill Client ID (first visible text input)
+        const clientIdField = loginFrame.locator('input[type="text"]:visible').first();
         await clientIdField.fill(PREMIER_WEB_CLIENT_ID);
         await page.waitForTimeout(300);
 
-        // Fill Username (second text input)
-        const usernameField = loginFrame.locator('input[type="text"]').nth(1);
+        // Fill Username (second visible text input)
+        const usernameField = loginFrame.locator('input[type="text"]:visible').nth(1);
         await usernameField.fill(PREMIER_WEB_USERNAME);
         await page.waitForTimeout(300);
 
