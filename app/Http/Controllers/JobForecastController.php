@@ -529,8 +529,9 @@ class JobForecastController extends Controller
 
     public function compareForecast($location, Request $request)
     {
-
-        $jobNumber = Location::where('id', $location)->value('external_id');
+        $locationModel = Location::findOrFail($location);
+        $jobNumber = $locationModel->external_id;
+        $locationName = $locationModel->name;
         $month = $request->query('month');
         $latestForecast = JobForecast::where('job_number', $jobNumber)
             ->orderBy('forecast_month', 'desc')
@@ -550,6 +551,8 @@ class JobForecastController extends Controller
                 'latestForecastMonth' => $latestForecastMonth,
                 'jobNumber' => $jobNumber,
                 'locationId' => $location,
+                'locationName' => $locationName,
+                'labourSummary' => null,
             ]);
         }
 
@@ -661,6 +664,71 @@ class JobForecastController extends Controller
             ->values()
             ->all();
 
+        // Fetch labour variance summary for the selected month
+        $labourSummary = null;
+        try {
+            // Find the approved labour forecast for this month (or the most recent one before it)
+            $labourForecast = LabourForecast::where('location_id', $locationModel->id)
+                ->where('status', 'approved')
+                ->where('forecast_month', '<=', $forecastMonth->copy()->startOfMonth())
+                ->orderBy('forecast_month', 'desc')
+                ->first();
+
+            $varianceService = new \App\Services\LabourVarianceService;
+            $varianceData = $varianceService->getVarianceData(
+                $locationModel,
+                $forecastMonth,
+                $labourForecast?->id
+            );
+
+            if ($varianceData['success'] && $varianceData['summary']) {
+                $summary = $varianceData['summary'];
+
+                // Build per-template variances from weekly data
+                $templateVariances = [];
+                foreach ($varianceData['variances'] as $week) {
+                    foreach ($week['templates'] as $tmpl) {
+                        if (abs($tmpl['cost_variance_pct']) > 15 && abs($tmpl['cost_variance']) > 1000) {
+                            $templateVariances[] = [
+                                'name' => $tmpl['template_name'],
+                                'weekEnding' => $week['week_ending_formatted'],
+                                'forecast' => $tmpl['forecast_cost'],
+                                'actual' => $tmpl['actual_cost'],
+                                'variance' => $tmpl['cost_variance'],
+                                'variancePct' => $tmpl['cost_variance_pct'],
+                            ];
+                        }
+                    }
+                }
+
+                // Sum leave hours from weekly data
+                $totalForecastLeaveHours = 0;
+                $totalActualLeaveHours = 0;
+                foreach ($varianceData['variances'] as $week) {
+                    $totalForecastLeaveHours += $week['totals']['forecast_leave_hours'] ?? 0;
+                    $totalActualLeaveHours += $week['totals']['actual_leave_hours'] ?? 0;
+                }
+
+                $labourSummary = [
+                    'headcount' => [
+                        'forecast' => $summary['avg_forecast_headcount'],
+                        'actual' => $summary['avg_actual_headcount'],
+                    ],
+                    'workedHours' => [
+                        'forecast' => $summary['total_forecast_hours'],
+                        'actual' => $summary['total_actual_hours'],
+                    ],
+                    'leaveHours' => [
+                        'forecast' => round($totalForecastLeaveHours, 1),
+                        'actual' => round($totalActualLeaveHours, 1),
+                    ],
+                    'templateVariances' => $templateVariances,
+                ];
+            }
+        } catch (\Exception $e) {
+            // Labour data is optional — don't break the page if unavailable
+        }
+
         return Inertia::render('compare-forecast/show', [
             'comparisonData' => [
                 'cost' => $costComparison,
@@ -671,6 +739,8 @@ class JobForecastController extends Controller
             'latestForecastMonth' => $latestForecastMonth,
             'jobNumber' => $jobNumber,
             'locationId' => $location,
+            'locationName' => $locationName,
+            'labourSummary' => $labourSummary,
         ]);
     }
 

@@ -417,9 +417,16 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
           ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-foreground';
 
+    const [retrying, setRetrying] = useState(false);
+
+    const handleRetry = () => {
+        setRetrying(true);
+        router.post(`/agent/task/${taskId}/retry`, {}, { preserveScroll: true, onFinish: () => setRetrying(false) });
+    };
+
     return (
         <>
-            {/* ── Inline card for all agent states ── */}
+            {/* ── Inline card: Working ── */}
             {isWorking && (
                 <Card className={cn(borderColor, bgColor, 'overflow-hidden')}>
                     <CardHeader className="pb-2">
@@ -443,6 +450,45 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                                 <Monitor className="h-3 w-3" />
                                 Live View
                             </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* ── Inline card: Failed ── */}
+            {isFailed && (
+                <Card className={cn(borderColor, bgColor, 'overflow-hidden')}>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <AlertCircle className={cn('h-5 w-5', iconColor)} />
+                            Agent Failed
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-red-600 dark:text-red-400 line-clamp-1">
+                                {error || 'Task failed unexpectedly'}
+                            </p>
+                            <div className="ml-3 flex shrink-0 gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-xs"
+                                    onClick={() => setSheetOpen(true)}
+                                >
+                                    <Monitor className="h-3 w-3" />
+                                    Details
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="gap-1.5 text-xs"
+                                    disabled={retrying}
+                                    onClick={handleRetry}
+                                >
+                                    <RotateCcw className={cn('h-3 w-3', retrying && 'animate-spin')} />
+                                    Retry
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -595,10 +641,30 @@ const AgentActivityFeed = forwardRef<AgentActivityFeedHandle, AgentActivityFeedP
                         )}
 
                         {/* Empty state */}
-                        {timeline.length === 0 && !error && (
+                        {timeline.length === 0 && !error && !isFailed && (
                             <div className="text-muted-foreground flex flex-col items-center justify-center py-8">
                                 <Loader2 className="h-6 w-6 animate-spin" />
                                 <p className="mt-2 text-sm">Agent is starting up...</p>
+                            </div>
+                        )}
+
+                        {/* Empty failed state (crashed before any events) */}
+                        {timeline.length === 0 && !error && isFailed && (
+                            <div className="flex flex-col items-center justify-center py-8">
+                                <AlertCircle className="h-6 w-6 text-red-500" />
+                                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                                    Agent failed before any steps were recorded
+                                </p>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="mt-3 gap-1.5 border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                                    disabled={retrying}
+                                    onClick={handleRetry}
+                                >
+                                    <RotateCcw className={cn('h-3 w-3', retrying && 'animate-spin')} />
+                                    Retry
+                                </Button>
                             </div>
                         )}
                     </div>

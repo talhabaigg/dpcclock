@@ -28,18 +28,22 @@ import {
     ArrowUpRight,
     BarChart3,
     Calendar,
+    Check,
     ChevronDown,
     ChevronRight,
     ChevronsUpDown,
     ChevronUp,
+    Copy,
     DollarSign,
+    ExternalLink,
     LineChart,
+    Mail,
     Search,
     TrendingDown,
     TrendingUp,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTooltip, Legend, Filler);
@@ -55,6 +59,20 @@ type ComparisonRow = {
     months: Record<string, MonthComparison>;
 };
 
+type LabourSummary = {
+    headcount: { forecast: number; actual: number };
+    workedHours: { forecast: number; actual: number };
+    leaveHours: { forecast: number; actual: number };
+    templateVariances: Array<{
+        name: string;
+        weekEnding: string;
+        forecast: number;
+        actual: number;
+        variance: number;
+        variancePct: number;
+    }>;
+};
+
 type Props = {
     comparisonData: {
         cost: ComparisonRow[];
@@ -65,6 +83,8 @@ type Props = {
     latestForecastMonth: string | null;
     jobNumber: string | null;
     locationId: number | string;
+    locationName?: string;
+    labourSummary?: LabourSummary | null;
 };
 
 type SortState = {
@@ -447,7 +467,292 @@ const MobileTotalsCard = ({
     );
 };
 
-export default function CompareForecastShow({ comparisonData, months, selectedForecastMonth, latestForecastMonth, jobNumber, locationId }: Props) {
+// --- Outlook-compatible email HTML builder (uses bgcolor, font color, no gradients) ---
+type EmailDataType = {
+    monthLabel: string;
+    jobName: string;
+    revenue: { actual: number; forecast: number };
+    labour: { actual: number; forecast: number };
+    materials: { actual: number; forecast: number };
+    totalCostActual: number;
+    totalCostForecast: number;
+    marginActual: number;
+    marginForecast: number;
+    sigMaterials: Array<{ label: string; actual: number; forecast: number; diff: number; diffPct: number }>;
+    marginAssessment: { text: string; level: 'green' | 'amber' | 'red' };
+    revenueAssessment: { text: string; level: 'green' | 'amber' | 'red' };
+    costAssessment: { text: string; level: 'green' | 'amber' | 'red' };
+};
+
+const eFmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const ePct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+const eDiff = (d: number) => `${d >= 0 ? '+' : '-'}$${Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const eColor = (d: number) => (d < 0 ? '#dc2626' : '#16a34a');
+
+const badgeColors: Record<string, { bg: string; fg: string }> = {
+    green: { bg: '#dcfce7', fg: '#166534' },
+    amber: { bg: '#fef3c7', fg: '#92400e' },
+    red: { bg: '#fee2e2', fg: '#991b1b' },
+};
+
+function buildHighlights(data: EmailDataType, labourSummary: LabourSummary | null): string[] {
+    const points: string[] = [];
+    const pct = (a: number, f: number) => (f !== 0 ? ((a - f) / f) * 100 : 0);
+    const dir = (v: number) => (v >= 0 ? 'above' : 'below');
+    const fmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+    // Revenue
+    const revDiff = data.revenue.actual - data.revenue.forecast;
+    const revPct = pct(data.revenue.actual, data.revenue.forecast);
+    if (Math.abs(revPct) < 3) {
+        points.push(`Revenue tracking close to forecast at ${fmt(data.revenue.actual)}.`);
+    } else {
+        points.push(`Revenue came in ${dir(revDiff)} forecast by ${fmt(revDiff)} (${revPct >= 0 ? '+' : ''}${revPct.toFixed(1)}%), actual ${fmt(data.revenue.actual)} vs forecast ${fmt(data.revenue.forecast)}.`);
+    }
+
+    // Costs — identify primary driver
+    const labDiff = data.labour.actual - data.labour.forecast;
+    const matDiff = data.materials.actual - data.materials.forecast;
+    const costDiff = data.totalCostActual - data.totalCostForecast;
+    const costPct = pct(data.totalCostActual, data.totalCostForecast);
+    if (Math.abs(costPct) < 3) {
+        points.push(`Total costs aligned with forecast at ${fmt(data.totalCostActual)}.`);
+    } else {
+        const driver = Math.abs(labDiff) > Math.abs(matDiff) ? 'labour' : 'materials & other';
+        const driverAmt = Math.abs(labDiff) > Math.abs(matDiff) ? labDiff : matDiff;
+        points.push(`Total costs ${costDiff > 0 ? 'exceeded' : 'came under'} forecast by ${fmt(costDiff)}, primarily driven by ${driver} (${driverAmt > 0 ? '+' : '-'}${fmt(driverAmt)}).`);
+    }
+
+    // Margin
+    const mDiff = data.marginActual - data.marginForecast;
+    if (data.marginActual < 0) {
+        points.push(`Gross margin is negative at -${fmt(data.marginActual)}, requiring immediate attention.`);
+    } else if (mDiff >= 0) {
+        points.push(`Gross margin ${mDiff === 0 ? 'on target' : 'exceeded forecast'} at ${fmt(data.marginActual)}${mDiff > 0 ? ` (+${fmt(mDiff)})` : ''}.`);
+    } else {
+        points.push(`Gross margin fell short of forecast by ${fmt(mDiff)}, actual ${fmt(data.marginActual)} vs forecast ${fmt(data.marginForecast)}.`);
+    }
+
+    // Headcount / hours
+    if (labourSummary?.headcount) {
+        const hcDiff = labourSummary.headcount.actual - labourSummary.headcount.forecast;
+        if (Math.abs(hcDiff) >= 0.5) {
+            points.push(`Headcount averaged ${labourSummary.headcount.actual.toFixed(1)} vs forecast ${labourSummary.headcount.forecast.toFixed(1)} (${hcDiff > 0 ? '+' : ''}${hcDiff.toFixed(1)}).`);
+        }
+    }
+
+    // Significant variances count
+    const labVarCount = labourSummary?.templateVariances?.length ?? 0;
+    const matVarCount = data.sigMaterials.length;
+    const totalSig = labVarCount + matVarCount;
+    if (totalSig > 0) {
+        const parts: string[] = [];
+        if (labVarCount > 0) parts.push(`${labVarCount} labour`);
+        if (matVarCount > 0) parts.push(`${matVarCount} material`);
+        points.push(`${totalSig} significant variance${totalSig > 1 ? 's' : ''} identified (${parts.join(', ')}) exceeding the 15% / $1k threshold.`);
+    } else {
+        points.push('No significant variances identified — all items within tolerance.');
+    }
+
+    // Overall assessment summary
+    const levels = [data.marginAssessment.level, data.revenueAssessment.level, data.costAssessment.level];
+    if (levels.includes('red')) {
+        points.push('Overall assessment: Action required — one or more indicators show significant deviation.');
+    } else if (levels.includes('amber')) {
+        points.push('Overall assessment: Monitoring required — moderate deviations detected.');
+    } else {
+        points.push('Overall assessment: All indicators within tolerance.');
+    }
+
+    return points;
+}
+
+function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null): string {
+    const hc = labourSummary?.headcount;
+    const wh = labourSummary?.workedHours;
+    const lh = labourSummary?.leaveHours;
+
+    const assessments = [data.marginAssessment, data.revenueAssessment, data.costAssessment];
+    const hasSignificant = assessments.some((a) => a.level === 'red');
+    const hasModerate = assessments.some((a) => a.level === 'amber');
+
+    // Outlook-compatible variance row (uses bgcolor + font color attributes)
+    const varRow = (label: string, actual: number, forecast: number, indent = false, bold = false) => {
+        const diff = actual - forecast;
+        const diffPct = forecast !== 0 ? (diff / forecast) * 100 : 0;
+        const c = eColor(diff);
+        const fw = bold ? 'font-weight:bold;' : '';
+        const pl = indent ? 'padding-left:28px;' : '';
+        return `<tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #d1d5db;${fw}${pl}"><font color="#374151">${label}</font></td>
+            <td align="right" style="padding:8px 12px;border-bottom:1px solid #d1d5db;${fw}">${eFmt(actual)}</td>
+            <td align="right" style="padding:8px 12px;border-bottom:1px solid #d1d5db;${fw}"><font color="#6b7280">${eFmt(forecast)}</font></td>
+            <td align="right" style="padding:8px 12px;border-bottom:1px solid #d1d5db;${fw}"><font color="${c}"><b>${eDiff(diff)}</b></font></td>
+            <td align="right" style="padding:8px 12px;border-bottom:1px solid #d1d5db;${fw}"><font color="${c}">${ePct(diffPct)}</font></td>
+        </tr>`;
+    };
+
+    // Ops row
+    const opsRow = (label: string, actual: string, forecast: string, unit = '') => {
+        const a = parseFloat(actual), f = parseFloat(forecast);
+        const diffPct = f !== 0 ? ((a - f) / f) * 100 : 0;
+        return `<tr>
+            <td style="padding:6px 12px;border-bottom:1px solid #d1d5db;font-weight:bold;"><font color="#374151">${label}</font></td>
+            <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;">${actual}${unit}</td>
+            <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;"><font color="#6b7280">${forecast}${unit}</font></td>
+            <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;"><font color="${eColor(diffPct)}"><b>${ePct(diffPct)}</b></font></td>
+        </tr>`;
+    };
+
+    // Badge (table-cell based for Outlook)
+    const badge = (level: string, text: string) => {
+        const c = badgeColors[level] ?? badgeColors.green;
+        return `<table cellpadding="0" cellspacing="0" border="0" style="display:inline-table;"><tr>
+            <td bgcolor="${c.bg}" style="padding:3px 12px;font-size:12px;font-weight:bold;"><font color="${c.fg}">${text}</font></td>
+        </tr></table>`;
+    };
+
+    // Section heading (blue left border via table)
+    const heading = (text: string) =>
+        `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:24px;margin-bottom:8px;">
+            <tr><td style="border-left:4px solid #2563eb;padding:4px 0 4px 12px;font-size:15px;font-weight:bold;"><font color="#1e293b">${text}</font></td></tr>
+        </table>`;
+
+    // Labour variances rows
+    const labourVarRows = (labourSummary?.templateVariances ?? []).map((t, i) =>
+        `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
+            <td style="padding:6px 10px;"><font color="#374151">${t.name} &mdash; ${t.weekEnding}</font></td>
+            <td align="right" style="padding:6px 10px;">${eFmt(t.actual)}</td>
+            <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(t.forecast)}</font></td>
+            <td align="right" style="padding:6px 10px;"><font color="${eColor(t.variance)}"><b>${eDiff(t.variance)}</b> / ${ePct(t.variancePct)}</font></td>
+        </tr>`
+    ).join('');
+
+    // Material variances rows
+    const matVarRows = data.sigMaterials.map((m, i) =>
+        `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
+            <td style="padding:6px 10px;"><font color="#374151">${m.label}</font></td>
+            <td align="right" style="padding:6px 10px;">${eFmt(m.actual)}</td>
+            <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(m.forecast)}</font></td>
+            <td align="right" style="padding:6px 10px;"><font color="${eColor(m.diff)}"><b>${eDiff(m.diff)}</b> / ${ePct(m.diffPct)}</font></td>
+        </tr>`
+    ).join('');
+
+    // Management actions
+    const actionBg = hasSignificant ? '#fef2f2' : hasModerate ? '#fffbeb' : '#f0fdf4';
+    const actionBorder = hasSignificant ? '#fca5a5' : hasModerate ? '#fde68a' : '#bbf7d0';
+    let actionText = '';
+    if (hasSignificant) actionText += `<p style="margin:0 0 4px;"><font color="#991b1b"><b>Please reply to this email with a brief explanation for significant deviations.</b></font></p>`;
+    if (hasModerate) actionText += `<p style="margin:0 0 4px;"><font color="#92400e"><b>Continued monitoring is required over multiple reporting cycles for moderate deviations.</b></font></p>`;
+    if (!hasSignificant && !hasModerate) actionText = `<p style="margin:0;"><font color="#166534"><b>All indicators are within tolerance. No action required.</b></font></p>`;
+
+    // Margin row
+    const mDiff = data.marginActual - data.marginForecast;
+    const mDiffPct = data.marginForecast !== 0 ? ((data.marginActual - data.marginForecast) / data.marginForecast) * 100 : 0;
+    const mColor = eColor(mDiff);
+
+    return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1a2e;">
+<tr><td>
+
+<!-- Header Banner -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td bgcolor="#1e3a5f" style="padding:20px 24px;">
+    <font color="#94a3b8" style="font-size:11px;text-transform:uppercase;letter-spacing:1px;">FORECAST VS ACTUAL REPORT</font><br>
+    <font color="#ffffff" style="font-size:20px;font-weight:bold;">${data.jobName}</font><br>
+    <font color="#bfdbfe" style="font-size:14px;">${data.monthLabel}</font>
+</td></tr>
+</table>
+
+<br>
+<p><font color="#374151">Hi Team,</font></p>
+<p><font color="#374151">Please find below a summary of Forecast vs Actual performance for <b>${data.monthLabel}</b>.</font></p>
+
+<!-- Overall Highlights -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td bgcolor="#f0f9ff" style="padding:12px 16px;border:1px solid #bae6fd;">
+    <font color="#0c4a6e"><b>Overall Highlights</b></font><br>
+    <table cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">
+    ${buildHighlights(data, labourSummary).map(p => `<tr><td style="padding:2px 0;vertical-align:top;width:16px;"><font color="#0c4a6e">&bull;</font></td><td style="padding:2px 0 2px 4px;"><font color="#334155" style="font-size:13px;">${p}</font></td></tr>`).join('')}
+    </table>
+</td></tr>
+</table>
+
+${heading('Financial Position')}
+<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:13px;">
+<tr bgcolor="#f1f5f9">
+    <th align="left" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">METRIC</font></th>
+    <th align="right" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ACTUAL</font></th>
+    <th align="right" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">FORECAST</font></th>
+    <th align="right" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VAR ($)</font></th>
+    <th align="right" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VAR (%)</font></th>
+</tr>
+${varRow('Revenue', data.revenue.actual, data.revenue.forecast)}
+${varRow('Total Cost', data.totalCostActual, data.totalCostForecast)}
+${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Labour', data.labour.actual, data.labour.forecast, true)}
+${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Materials &amp; Other', data.materials.actual, data.materials.forecast, true)}
+<tr bgcolor="#f1f5f9">
+    <td style="padding:10px 12px;font-weight:bold;"><font color="#1e293b">Gross Margin</font></td>
+    <td align="right" style="padding:10px 12px;font-weight:bold;">${eFmt(data.marginActual)}</td>
+    <td align="right" style="padding:10px 12px;font-weight:bold;"><font color="#6b7280">${eFmt(data.marginForecast)}</font></td>
+    <td align="right" style="padding:10px 12px;font-weight:bold;"><font color="${mColor}"><b>${eDiff(mDiff)}</b></font></td>
+    <td align="right" style="padding:10px 12px;font-weight:bold;"><font color="${mColor}">${ePct(mDiffPct)}</font></td>
+</tr>
+</table>
+
+${heading('Operational Drivers')}
+${hc && wh && lh ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:13px;">
+<tr bgcolor="#f1f5f9">
+    <th align="left" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">METRIC</font></th>
+    <th align="right" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ACTUAL</font></th>
+    <th align="right" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">FORECAST</font></th>
+    <th align="right" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VAR (%)</font></th>
+</tr>
+${opsRow('Headcount (avg)', hc.actual.toFixed(1), hc.forecast.toFixed(1))}
+${opsRow('Worked Hours', wh.actual.toFixed(0), wh.forecast.toFixed(0), ' hrs')}
+${opsRow('Leave Hours', lh.actual.toFixed(0), lh.forecast.toFixed(0), ' hrs')}
+</table>` : `<table cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td bgcolor="#f9fafb" style="padding:12px 16px;border:1px solid #e5e7eb;"><font color="#6b7280"><i>No labour forecast data available for this period.</i></font></td></tr>
+</table>`}
+
+${heading('Significant Variances')}
+<p style="font-size:12px;margin-bottom:8px;"><font color="#6b7280">Threshold: Absolute Variance &gt;15% and &gt;$1k</font></p>
+
+<p style="font-size:13px;margin-bottom:4px;"><font color="#475569"><b>Labour</b></font></p>
+${labourVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">${labourVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant labour variances.</font></p>`}
+
+<br>
+<p style="font-size:13px;margin-bottom:4px;"><font color="#475569"><b>Materials &amp; Other Costs</b></font></p>
+${matVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">${matVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant material variances.</font></p>`}
+
+${heading('Forecast Accuracy Assessment')}
+<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:13px;">
+<tr bgcolor="#f1f5f9">
+    <th align="left" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">INDICATOR</font></th>
+    <th align="left" style="padding:8px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ASSESSMENT</font></th>
+</tr>
+${[
+    { label: 'Gross Margin', ...data.marginAssessment },
+    { label: 'Revenue', ...data.revenueAssessment },
+    { label: 'Total Cost', ...data.costAssessment },
+].map(row => `<tr>
+    <td style="padding:8px 12px;border-bottom:1px solid #d1d5db;font-weight:bold;"><font color="#374151">${row.label}</font></td>
+    <td style="padding:8px 12px;border-bottom:1px solid #d1d5db;">${badge(row.level, row.text)}</td>
+</tr>`).join('')}
+</table>
+
+${heading('Management Actions')}
+<table cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td bgcolor="${actionBg}" style="padding:12px 16px;border:1px solid ${actionBorder};">${actionText}</td></tr>
+</table>
+
+<br>
+<p style="font-size:12px;"><font color="#6b7280">Please refer to the system dashboard for detailed breakdowns.</font></p>
+
+</td></tr>
+</table>`;
+}
+
+export default function CompareForecastShow({ comparisonData, months, selectedForecastMonth, latestForecastMonth, jobNumber, locationId, locationName, labourSummary }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
         { title: `Job ${jobNumber ?? ''}`, href: `/locations/${locationId}` },
@@ -562,6 +867,129 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
             margin: totalActualRevenue - totalActualCost,
         };
     }, [costTotals, revenueTotals]);
+
+    // --- Email report data ---
+    const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const emailData = useMemo(() => {
+        const allCostRows = comparisonData?.cost ?? [];
+        const emailMonth = selectedForecastMonth ? [selectedForecastMonth] : months;
+        const isLabourCode = (code: string) => {
+            const prefix = parseInt(code.split('-')[0], 10);
+            return prefix >= 1 && prefix <= 8;
+        };
+
+        const sumForRows = (rows: ComparisonRow[]) => {
+            let actual = 0, forecast = 0;
+            rows.forEach((row) => {
+                emailMonth.forEach((m) => {
+                    const cell = row.months?.[m];
+                    if (cell?.actual != null) actual += cell.actual;
+                    if (cell?.forecast != null) forecast += cell.forecast;
+                });
+            });
+            return { actual, forecast };
+        };
+
+        const labourRows = allCostRows.filter((r) => isLabourCode(r.cost_item));
+        const materialRows = allCostRows.filter((r) => !isLabourCode(r.cost_item));
+
+        const labour = sumForRows(labourRows);
+        const materials = sumForRows(materialRows);
+        const totalCostActual = labour.actual + materials.actual;
+        const totalCostForecast = labour.forecast + materials.forecast;
+        const revenue = sumForRows(comparisonData?.revenue ?? []);
+        const marginActual = revenue.actual - totalCostActual;
+        const marginForecast = revenue.forecast - totalCostForecast;
+
+        const monthLabel = selectedForecastMonth
+            ? (() => {
+                  const [y, m] = selectedForecastMonth.split('-');
+                  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+              })()
+            : '[Month Year]';
+
+        const jobName = locationName || `Job ${jobNumber ?? ''}`;
+
+        // Significant material variances
+        const sigMaterials: Array<{ label: string; actual: number; forecast: number; diff: number; diffPct: number }> = [];
+        materialRows.forEach((row) => {
+            let rowActual = 0, rowForecast = 0;
+            emailMonth.forEach((m) => {
+                const cell = row.months?.[m];
+                if (cell?.actual != null) rowActual += cell.actual;
+                if (cell?.forecast != null) rowForecast += cell.forecast;
+            });
+            if (rowForecast === 0) return;
+            const diff = rowActual - rowForecast;
+            const diffPct = (diff / rowForecast) * 100;
+            if (Math.abs(diffPct) > 15 && Math.abs(diff) > 1000) {
+                sigMaterials.push({ label: `${row.cost_item} - ${row.cost_item_description}`, actual: rowActual, forecast: rowForecast, diff, diffPct });
+            }
+        });
+
+        // Forecast accuracy assessment
+        const marginPct = revenue.actual !== 0 ? (marginActual / revenue.actual) * 100 : 0;
+        const forecastMarginPct = revenue.forecast !== 0 ? (marginForecast / revenue.forecast) * 100 : 0;
+        const marginVarPct = Math.abs(forecastMarginPct !== 0 ? ((marginPct - forecastMarginPct) / forecastMarginPct) * 100 : 0);
+        const revVarPct = Math.abs(revenue.forecast !== 0 ? ((revenue.actual - revenue.forecast) / revenue.forecast) * 100 : 0);
+        const costVarPct = Math.abs(totalCostForecast !== 0 ? ((totalCostActual - totalCostForecast) / totalCostForecast) * 100 : 0);
+
+        const assessMargin = (): { text: string; level: 'green' | 'amber' | 'red' } => {
+            if (marginPct < 0) return { text: 'Significant deviation, review and explanation required', level: 'red' };
+            if (marginVarPct <= 5) return { text: 'Within tolerance', level: 'green' };
+            if (marginVarPct <= 10) return { text: 'Moderate deviation', level: 'amber' };
+            return { text: 'Significant deviation, review and explanation required', level: 'red' };
+        };
+        const assessRevenue = (): { text: string; level: 'green' | 'amber' | 'red' } => {
+            if (revVarPct <= 3) return { text: 'Within tolerance', level: 'green' };
+            if (revVarPct <= 8) return { text: 'Moderate deviation', level: 'amber' };
+            return { text: 'Significant deviation, review and explanation required', level: 'red' };
+        };
+        const assessCost = (): { text: string; level: 'green' | 'amber' | 'red' } => {
+            if (costVarPct <= 5) return { text: 'Within tolerance', level: 'green' };
+            if (costVarPct <= 15) return { text: 'Moderate deviation', level: 'amber' };
+            return { text: 'Significant deviation, review and explanation required', level: 'red' };
+        };
+
+        return {
+            monthLabel, jobName,
+            revenue, labour, materials, totalCostActual, totalCostForecast, marginActual, marginForecast,
+            sigMaterials,
+            marginAssessment: assessMargin(),
+            revenueAssessment: assessRevenue(),
+            costAssessment: assessCost(),
+        };
+    }, [comparisonData, months, selectedForecastMonth, locationName, jobNumber, labourSummary]);
+
+    const handleCopyAndEmail = useCallback(async () => {
+        const html = buildEmailHtml(emailData, labourSummary ?? null);
+        try {
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) }),
+            ]);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            // Open mailto with subject + recipients only (body pasted by user)
+            const subject = `${emailData.jobName} - Monthly Forecast vs Actual - ${emailData.monthLabel}`;
+            const mailtoUrl = `mailto:talha@superiorgroup.com.au?subject=${encodeURIComponent(subject)}`;
+            setTimeout(() => { window.location.href = mailtoUrl; }, 300);
+        } catch {
+            // Fallback: create a temporary element for manual selection
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            tmp.style.position = 'fixed';
+            tmp.style.left = '-9999px';
+            document.body.appendChild(tmp);
+            const range = document.createRange();
+            range.selectNodeContents(tmp);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            document.body.removeChild(tmp);
+        }
+    }, [emailData, labourSummary]);
 
     const openChart = (title: string, actuals: Array<number | null>, forecasts: Array<number | null>) => {
         setChartDialog({ open: true, title, actuals, forecasts });
@@ -860,12 +1288,18 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                             </Button>
                         </div>
 
-                        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-                            <Link href={`/location/${locationId}/job-forecast`}>
-                                <LineChart className="size-4" />
-                                <span className="sm:inline">Job Forecast</span>
-                            </Link>
-                        </Button>
+                        <div className="flex w-full gap-2 sm:w-auto">
+                            <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-none">
+                                <Link href={`/location/${locationId}/job-forecast`}>
+                                    <LineChart className="size-4" />
+                                    <span className="sm:inline">Job Forecast</span>
+                                </Link>
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => setEmailDialogOpen(true)} disabled={!selectedForecastMonth}>
+                                <Mail className="size-4" />
+                                <span className="sm:inline">Email Report</span>
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -981,6 +1415,35 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                         <DialogTitle className="pr-6 text-base sm:text-lg">{chartDialog.title}</DialogTitle>
                     </DialogHeader>
                     <div className="h-[50vh] w-full sm:h-[400px]">{chartData && <Line data={chartData} options={chartOptions} />}</div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Email Preview Dialog */}
+            <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+                <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                            <Mail className="size-5" />
+                            Email Report Preview
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="flex gap-2 border-b pb-3">
+                        <Button size="sm" onClick={handleCopyAndEmail} className="gap-2">
+                            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                            {copied ? 'Copied! Opening email...' : 'Copy & Open Email'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => {
+                            const subject = `${emailData.jobName} - Monthly Forecast vs Actual - ${emailData.monthLabel}`;
+                            window.location.href = `mailto:talha@superiorgroup.com.au?subject=${encodeURIComponent(subject)}`;
+                        }} className="gap-2">
+                            <ExternalLink className="size-4" />
+                            Open Email Only
+                        </Button>
+                    </div>
+
+                    {/* Rendered email body preview */}
+                    <div dangerouslySetInnerHTML={{ __html: buildEmailHtml(emailData, labourSummary ?? null) }} />
                 </DialogContent>
             </Dialog>
         </AppLayout>
