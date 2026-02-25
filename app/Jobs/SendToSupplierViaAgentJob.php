@@ -47,7 +47,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
         event(new AgentTaskUpdated($task));
 
         $poNumber = 'PO'.$requisition->po_number;
-        $screenshotDir = storage_path('app/agent-screenshots/'.$requisition->id);
+        $screenshotDir = sys_get_temp_dir().'/agent-screenshots-'.$requisition->id;
 
         // Ensure screenshot directory exists
         if (! is_dir($screenshotDir)) {
@@ -75,7 +75,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
             'TOTAL_COST' => (string) $totalCost,
             'SUPPLIER_MESSAGE' => $task->context['supplier_message'] ?? '',
             'SCREENSHOT_DIR' => $screenshotDir,
-            'SESSION_DIR' => storage_path('app/playwright-session'),
+            'SESSION_DIR' => sys_get_temp_dir().'/playwright-session',
             'DRY_RUN' => $isDryRun ? '1' : '0',
             'ANTHROPIC_API_KEY' => config('services.anthropic.api_key'),
         ]));
@@ -326,7 +326,7 @@ class SendToSupplierViaAgentJob implements ShouldQueue
         }
 
         // Upload any screenshots captured before the error
-        $screenshotDir = storage_path('app/agent-screenshots/'.$requisition->id);
+        $screenshotDir = sys_get_temp_dir().'/agent-screenshots-'.$requisition->id;
         $this->uploadScreenshots($screenshotDir, $requisition->id);
 
         $task->update(['status' => 'failed']);
