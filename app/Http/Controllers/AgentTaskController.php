@@ -185,7 +185,7 @@ class AgentTaskController extends Controller
             $steps = $allSteps;
         } elseif ($task->status === 'processing') {
             // Task is running — read progress.json events array
-            $screenshotDir = sys_get_temp_dir().'/agent-screenshots-'.$requisition->id;
+            $screenshotDir = storage_path('app/agent-screenshots/'.$requisition->id);
             $progressFile = $screenshotDir.'/progress.json';
 
             if (file_exists($progressFile)) {
