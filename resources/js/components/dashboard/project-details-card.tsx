@@ -62,14 +62,14 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
     const status = getProjectStatus();
 
     return (
-        <Card className="w-full p-0 gap-0">
-            <CardHeader className="!p-0 border-b !flex !flex-row items-center">
-                <div className="flex items-center justify-between w-full px-3 py-1.5">
-                    <CardTitle className="text-sm font-semibold leading-none">Project details</CardTitle>
+        <Card className="w-full p-0 gap-0 flex flex-col">
+            <CardHeader className="!p-0 border-b !flex !flex-row items-center shrink-0">
+                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                    <CardTitle className="text-[11px] font-semibold leading-none">Project details</CardTitle>
                     {status.label !== 'Completed' && (
                         <Badge
                             variant={status.variant}
-                            className={cn("gap-1 text-xs", status.color)}
+                            className={cn("gap-1 text-[11px]", status.color)}
                         >
                             {status.label === 'At Risk' && <AlertTriangle className="h-3 w-3" />}
                             {status.label === 'On Track' && <CheckCircle2 className="h-3 w-3" />}
@@ -79,23 +79,23 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                     )}
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0">
-                <div className="text-sm">
+            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
+                <div className="text-[11px]">
                     {/* Name */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">Name</div>
-                        <div className="px-3 py-1.5">{location.name}</div>
+                    <div className="grid grid-cols-[240px_1fr] border-b">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Name</div>
+                        <div className="px-1.5 py-0.5">{location.name}</div>
                     </div>
 
                     {/* PM */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                    <div className="grid grid-cols-[240px_1fr] border-b">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                             <FieldLabel
                                 label="PM"
                                 helpText="Project Manager assigned to this location. Sourced from Premier ERP."
                             />
                         </div>
-                        <div className="px-3 py-1.5">
+                        <div className="px-1.5 py-0.5">
                             {(location as any).project_manager || (jobSummary as any)?.project_manager || '-'}
                         </div>
                     </div>
@@ -103,24 +103,24 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                     {timelineData && (
                         <>
                             {/* Date Headers */}
-                            <div className="grid grid-cols-[130px_1fr] border-b">
-                                <div className="px-3 py-1.5 border-r bg-muted/30"></div>
+                            <div className="grid grid-cols-[240px_1fr] border-b">
+                                <div className="px-1.5 py-0.5 border-r bg-muted/30"></div>
                                 <div className="grid grid-cols-2">
-                                    <div className="px-3 py-1.5 border-r text-center text-xs font-medium">Start</div>
-                                    <div className="px-3 py-1.5 text-center text-xs font-medium">Finish</div>
+                                    <div className="px-1.5 py-0.5 border-r text-center text-[10px] font-medium">Start</div>
+                                    <div className="px-1.5 py-0.5 text-center text-[10px] font-medium">Finish</div>
                                 </div>
                             </div>
 
                             {/* Contract Row */}
-                            <div className="grid grid-cols-[130px_1fr] border-b">
-                                <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <div className="grid grid-cols-[240px_1fr] border-b">
+                                <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                     <FieldLabel
                                         label="Contract"
                                         helpText="Contract start and estimated end dates as defined in the project timeline."
                                     />
                                 </div>
                                 <div className="grid grid-cols-2">
-                                    <div className="px-3 py-1.5 border-r tabular-nums text-center">
+                                    <div className="px-1.5 py-0.5 border-r tabular-nums text-center">
                                         {timelineData.start_date
                                             ? new Date(timelineData.start_date).toLocaleDateString('en-AU', {
                                                 day: '2-digit',
@@ -129,7 +129,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                                             })
                                             : '-'}
                                     </div>
-                                    <div className="px-3 py-1.5 tabular-nums text-center">
+                                    <div className="px-1.5 py-0.5 tabular-nums text-center">
                                         {timelineData.estimated_end_date
                                             ? new Date(timelineData.estimated_end_date).toLocaleDateString('en-AU', {
                                                 day: '2-digit',
@@ -142,15 +142,15 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                             </div>
 
                             {/* Actual Row */}
-                            <div className="grid grid-cols-[130px_1fr] border-b">
-                                <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                            <div className="grid grid-cols-[240px_1fr] border-b">
+                                <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                     <FieldLabel
                                         label="Actual"
                                         helpText="Actual start date and completion date. If project is ongoing, finish date shows current date."
                                     />
                                 </div>
                                 <div className="grid grid-cols-2">
-                                    <div className="px-3 py-1.5 border-r tabular-nums text-center">
+                                    <div className="px-1.5 py-0.5 border-r tabular-nums text-center">
                                         {timelineData.actual_start_date
                                             ? new Date(timelineData.actual_start_date).toLocaleDateString('en-AU', {
                                                 day: '2-digit',
@@ -159,7 +159,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                                             })
                                             : '-'}
                                     </div>
-                                    <div className="px-3 py-1.5 tabular-nums text-center">
+                                    <div className="px-1.5 py-0.5 tabular-nums text-center">
                                         {timelineData.actual_end_date
                                             ? new Date(timelineData.actual_end_date).toLocaleDateString('en-AU', {
                                                 day: '2-digit',
@@ -173,15 +173,15 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Start Delay */}
                             {startDelay !== null && (
-                                <div className="grid grid-cols-[130px_1fr] border-b">
-                                    <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                                <div className="grid grid-cols-[240px_1fr] border-b">
+                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                         <FieldLabel
                                             label="Start Delay"
                                             helpText="Days between contract start and actual start. Calculated as: Actual Start - Contract Start."
                                         />
                                     </div>
                                     <div className={cn(
-                                        "px-3 py-1.5 text-right tabular-nums",
+                                        "px-1.5 py-0.5 text-right tabular-nums",
                                         startDelay > 0 ? "text-red-600 font-semibold" : startDelay < 0 ? "text-green-600 font-semibold" : ""
                                     )}>
                                         {startDelay}
@@ -191,15 +191,15 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Over-run */}
                             {overrun !== null && (
-                                <div className="grid grid-cols-[130px_1fr] border-b">
-                                    <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
+                                <div className="grid grid-cols-[240px_1fr] border-b">
+                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                         <FieldLabel
                                             label="Over-run"
                                             helpText="Days beyond contract finish date. Calculated as: (Actual/Current Date) - Contract Finish."
                                         />
                                     </div>
                                     <div className={cn(
-                                        "px-3 py-1.5 text-right tabular-nums",
+                                        "px-1.5 py-0.5 text-right tabular-nums",
                                         overrun > 0 ? "text-red-600 font-semibold" : overrun < 0 ? "text-green-600 font-semibold" : ""
                                     )}>
                                         {overrun || ''}
@@ -209,15 +209,15 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Total Over-run */}
                             {(startDelay !== null || overrun !== null) && (
-                                <div className="grid grid-cols-[130px_1fr]">
-                                    <div className="px-3 py-1.5 border-r bg-muted/30 font-semibold">
+                                <div className="grid grid-cols-[240px_1fr]">
+                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-semibold">
                                         <FieldLabel
                                             label="Total Over-run"
                                             helpText="Total project delay in days. Calculated as: Start Delay + Over-run."
                                         />
                                     </div>
                                     <div className={cn(
-                                        "px-3 py-1.5 text-right tabular-nums font-bold",
+                                        "px-1.5 py-0.5 text-right tabular-nums font-bold",
                                         totalOverrun > 0 ? "text-red-600" : totalOverrun < 0 ? "text-green-600" : ""
                                     )}>
                                         {totalOverrun}

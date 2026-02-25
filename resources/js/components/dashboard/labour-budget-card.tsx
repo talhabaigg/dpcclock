@@ -76,8 +76,8 @@ export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
     return (
         <Card className="p-0 gap-0 h-full flex flex-col">
             <CardHeader className="!p-0 border-b">
-                <div className="flex items-center justify-between w-full px-3 py-1.5">
-                    <CardTitle className="text-sm font-semibold leading-none">
+                <div className="flex items-center justify-between w-full px-2 py-0.5">
+                    <CardTitle className="text-[11px] font-semibold leading-none">
                         Budget Utilization by Type
                     </CardTitle>
                     <Popover>
@@ -132,7 +132,7 @@ export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
                     </Popover>
                 </div>
             </CardHeader>
-            <CardContent className="p-3 flex-1 min-h-0">
+            <CardContent className="p-1 flex-1 min-h-0">
                 {chartData.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No cost items selected.</p>
                 ) : (

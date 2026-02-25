@@ -42,11 +42,11 @@ export default function VendorCommitmentsCard({ data }: VendorCommitmentsCardPro
         return (
             <Card className="p-0 gap-0 h-full">
                 <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-3 py-1.5">
-                        <CardTitle className="text-sm font-semibold leading-none">Vendor Commitments</CardTitle>
+                    <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                        <CardTitle className="text-[11px] font-semibold leading-none">Vendor Commitments</CardTitle>
                     </div>
                 </CardHeader>
-                <CardContent className="p-3 text-sm text-muted-foreground">
+                <CardContent className="p-2 text-[11px] text-muted-foreground">
                     No vendor commitment data available
                 </CardContent>
             </Card>
@@ -54,45 +54,45 @@ export default function VendorCommitmentsCard({ data }: VendorCommitmentsCardPro
     }
 
     return (
-        <Card className="p-0 gap-0 h-full">
-            <CardHeader className="!p-0 border-b">
-                <div className="flex items-center justify-between w-full px-3 py-1.5">
-                    <CardTitle className="text-sm font-semibold leading-none">Vendor Commitments</CardTitle>
+        <Card className="p-0 gap-0 h-full flex flex-col">
+            <CardHeader className="!p-0 border-b shrink-0">
+                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                    <CardTitle className="text-[11px] font-semibold leading-none">Vendor Commitments</CardTitle>
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0">
+            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
                 {/* PO / SC Outstanding Cards */}
                 <div className="grid grid-cols-2 border-b">
-                    <div className="border-r p-3 text-center">
-                        <div className="text-xs text-muted-foreground font-medium mb-1">PO O/S Commitment</div>
-                        <div className="text-xl font-bold tabular-nums">{formatCompact(data.po_outstanding)}</div>
+                    <div className="border-r px-1.5 py-0.5 text-center">
+                        <div className="text-[10px] text-muted-foreground font-medium">PO O/S Commitment</div>
+                        <div className="text-sm font-bold tabular-nums">{formatCompact(data.po_outstanding)}</div>
                     </div>
-                    <div className="p-3 text-center">
-                        <div className="text-xs text-muted-foreground font-medium mb-1">SC O/S Commitment</div>
-                        <div className="text-xl font-bold tabular-nums">{formatCompact(data.sc_outstanding)}</div>
+                    <div className="px-1.5 py-0.5 text-center">
+                        <div className="text-[10px] text-muted-foreground font-medium">SC O/S Commitment</div>
+                        <div className="text-sm font-bold tabular-nums">{formatCompact(data.sc_outstanding)}</div>
                     </div>
                 </div>
 
                 {/* Subcontracts Summary */}
-                <div className="text-sm">
-                    <div className="px-3 py-1.5 border-b bg-muted/30 font-semibold text-xs">
+                <div className="text-[11px]">
+                    <div className="px-1.5 py-0.5 border-b bg-muted/30 font-semibold text-[11px]">
                         Subcontracts Summary
                     </div>
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">Value</div>
-                        <div className="px-3 py-1.5 text-right tabular-nums">{formatCurrency(data.sc_summary.value)}</div>
+                    <div className="grid grid-cols-[240px_1fr] border-b">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Value</div>
+                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.value)}</div>
                     </div>
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">Variations</div>
-                        <div className="px-3 py-1.5 text-right tabular-nums">{formatCurrency(data.sc_summary.variations)}</div>
+                    <div className="grid grid-cols-[240px_1fr] border-b">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Variations</div>
+                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.variations)}</div>
                     </div>
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">Invoiced to date</div>
-                        <div className="px-3 py-1.5 text-right tabular-nums">{formatCurrency(data.sc_summary.invoiced_to_date)}</div>
+                    <div className="grid grid-cols-[240px_1fr] border-b">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Invoiced to date</div>
+                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.invoiced_to_date)}</div>
                     </div>
-                    <div className="grid grid-cols-[130px_1fr]">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">Remaining Balance</div>
-                        <div className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatCurrency(data.sc_summary.remaining_balance)}</div>
+                    <div className="grid grid-cols-[240px_1fr]">
+                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Remaining Balance</div>
+                        <div className="px-1.5 py-0.5 text-right tabular-nums font-semibold">{formatCurrency(data.sc_summary.remaining_balance)}</div>
                     </div>
                 </div>
             </CardContent>

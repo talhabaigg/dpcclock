@@ -30,11 +30,11 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
         return (
             <Card className="w-full p-0 gap-0">
                 <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-3 py-1.5">
-                        <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>
+                    <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                        <CardTitle className="text-[11px] font-semibold leading-none">Other items</CardTitle>
                     </div>
                 </CardHeader>
-                <CardContent className="p-3 text-sm text-muted-foreground">
+                <CardContent className="p-2 text-[11px] text-muted-foreground">
                     No financial data available for location {location.external_id || 'N/A'}
                 </CardContent>
             </Card>
@@ -82,88 +82,81 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
     };
 
     return (
-        <Card className="w-full p-0 gap-0">
-            <CardHeader className="!p-0 border-b">
-                <div className="flex items-center justify-between w-full px-3 py-1.5">
-                    <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>
+        <Card className="w-full p-0 gap-0 flex flex-col">
+            <CardHeader className="!p-0 border-b shrink-0">
+                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                    <CardTitle className="text-[11px] font-semibold leading-none">Other items</CardTitle>
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0">
-                <div className="text-sm">
-                    {/* Est Profit (Original Margin %) */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="Est Profit"
-                                helpText="Original estimated profit margin %. Calculated as: (Original Revenue - Original Cost) / Original Revenue × 100. Sourced from Premier ERP."
-                            />
-                        </div>
-                        <div className={cn(
-                            "px-3 py-1.5 text-right tabular-nums",
-                            originalMarginPercentage !== null && originalMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
-                        )}>
-                            {formatPercentage(originalMarginPercentage)}
-                        </div>
-                    </div>
-
-                    {/* Forecast Margin (Current Margin %) */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="Forecast Margin"
-                                helpText="Current forecasted profit margin %. Calculated as: (Current Revenue - Current Cost) / Current Revenue × 100. Updated with variations and change orders from Premier ERP."
-                            />
-                        </div>
-                        <div className={cn(
-                            "px-3 py-1.5 text-right tabular-nums",
-                            currentMarginPercentage !== null && currentMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
-                        )}>
-                            {formatPercentage(currentMarginPercentage)}
-                        </div>
-                    </div>
-
-                    {/* Under/Over Billed */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="Under/Over Billed"
-                                helpText="Over/Under billing amount. Shows whether you've billed more (positive) or less (negative) than work completed. Sourced from Premier ERP job summary."
-                            />
-                        </div>
-                        <div className={cn(
-                            "px-3 py-1.5 text-right tabular-nums",
-                            underOverBilled < 0 ? "text-red-600 font-semibold" : underOverBilled > 0 ? "text-green-600 font-semibold" : ""
-                        )}>
-                            {formatCurrency(underOverBilled)}
-                        </div>
-                    </div>
-
-                    {/* Claimed to Date (%) */}
-                    <div className="grid grid-cols-[130px_1fr] border-b">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="Claimed to Date (%)"
-                                helpText="Percentage of total contract value claimed to date. Calculated as: Claimed Amount / Current Estimate Revenue × 100."
-                            />
-                        </div>
-                        <div className="px-3 py-1.5 text-right tabular-nums">
-                            {formatPercentage(claimedToDatePercentage)}
-                        </div>
-                    </div>
-
-                    {/* Cash Retention */}
-                    <div className="grid grid-cols-[130px_1fr]">
-                        <div className="px-3 py-1.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="Cash Retention"
-                                helpText="Cash retention amount held by the client. Typically released upon project completion or milestones."
-                            />
-                        </div>
-                        <div className="px-3 py-1.5 text-right tabular-nums">
-                            {formatCurrency(cashRetention ?? 0)}
-                        </div>
-                    </div>
-                </div>
+            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
+                <table className="w-full h-full border-collapse text-[11px]">
+                    <tbody>
+                        <tr className="border-b">
+                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium w-[240px]">
+                                <FieldLabel
+                                    label="Est Profit"
+                                    helpText="Original estimated profit margin %. Calculated as: (Original Revenue - Original Cost) / Original Revenue × 100. Sourced from Premier ERP."
+                                />
+                            </td>
+                            <td className={cn(
+                                "px-1.5 py-0.5 text-right tabular-nums",
+                                originalMarginPercentage !== null && originalMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
+                            )}>
+                                {formatPercentage(originalMarginPercentage)}
+                            </td>
+                        </tr>
+                        <tr className="border-b">
+                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                <FieldLabel
+                                    label="Forecast Margin"
+                                    helpText="Current forecasted profit margin %. Calculated as: (Current Revenue - Current Cost) / Current Revenue × 100. Updated with variations and change orders from Premier ERP."
+                                />
+                            </td>
+                            <td className={cn(
+                                "px-1.5 py-0.5 text-right tabular-nums",
+                                currentMarginPercentage !== null && currentMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
+                            )}>
+                                {formatPercentage(currentMarginPercentage)}
+                            </td>
+                        </tr>
+                        <tr className="border-b">
+                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                <FieldLabel
+                                    label="Under/Over Billed"
+                                    helpText="Over/Under billing amount. Shows whether you've billed more (positive) or less (negative) than work completed. Sourced from Premier ERP job summary."
+                                />
+                            </td>
+                            <td className={cn(
+                                "px-1.5 py-0.5 text-right tabular-nums",
+                                underOverBilled < 0 ? "text-red-600 font-semibold" : underOverBilled > 0 ? "text-green-600 font-semibold" : ""
+                            )}>
+                                {formatCurrency(underOverBilled)}
+                            </td>
+                        </tr>
+                        <tr className="border-b">
+                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                <FieldLabel
+                                    label="Claimed to Date (%)"
+                                    helpText="Percentage of total contract value claimed to date. Calculated as: Claimed Amount / Current Estimate Revenue × 100."
+                                />
+                            </td>
+                            <td className="px-1.5 py-0.5 text-right tabular-nums">
+                                {formatPercentage(claimedToDatePercentage)}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                <FieldLabel
+                                    label="Cash Retention"
+                                    helpText="Cash retention amount held by the client. Typically released upon project completion or milestones."
+                                />
+                            </td>
+                            <td className="px-1.5 py-0.5 text-right tabular-nums">
+                                {formatCurrency(cashRetention ?? 0)}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </CardContent>
         </Card>
     );

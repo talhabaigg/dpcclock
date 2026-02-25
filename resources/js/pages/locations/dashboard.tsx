@@ -119,7 +119,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Dashboard`} />
 
-            <div className="p-3 flex flex-col gap-3 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
+            <div className="p-2 flex flex-col gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
 
                 {/* ── Top bar ── */}
                 <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
@@ -166,43 +166,58 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     </Link>
                 </div>
 
-                {/* ── Main grid: Left ~60% | Right ~40% ── */}
-                <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-3 flex-1 min-h-0">
+                {/* ── Main grid: 14 cols × 10 rows on xl ──
+                    R1-2: ProjDetails(4) | Variations(4) | Placeholder(2) | Placeholder(2) | Placeholder(2)
+                    R3-4: OtherItems(4)  | Vendor(4)     | Employees(6, R3-10)
+                    R5-6: ProjIncome(8)                  |       ↑
+                    R7-10: BudgetUtil(8)                 |       ↑
+                ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-14 xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr_1fr_1fr_1fr] gap-2 flex-1 min-h-0">
 
-                    {/* ═══ LEFT COLUMN ═══ */}
-                    <div className="flex flex-col gap-3 min-h-0">
-
-                        {/* Row 1: Project Details + Other Items | Variations */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-3">
-                                <ProjectDetailsCard location={location} timelineData={timelineData} />
-                                <OtherItemsCard location={location} claimedToDate={claimedToDate} cashRetention={cashRetention} />
-                            </div>
-                            <VariationsCard data={variationsSummary} />
-                        </div>
-
-                        {/* Row 2: Project Income */}
-                        <ProjectIncomeCard data={projectIncomeData} />
-
-                        {/* Row 3: Vendor Commitments | Labour Budget */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
-                            <VendorCommitmentsCard data={vendorCommitmentsSummary} />
-                            <LabourBudgetCard data={labourBudgetData} />
-                        </div>
+                    {/* R1-2: Project Details (4) */}
+                    <div className="xl:col-span-4 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <ProjectDetailsCard location={location} timelineData={timelineData} />
                     </div>
 
-                    {/* ═══ RIGHT COLUMN ═══ */}
-                    <div className="flex flex-col gap-3 min-h-0">
+                    {/* R1-2: Variations (4) */}
+                    <div className="xl:col-span-4 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <VariationsCard data={variationsSummary} />
+                    </div>
 
-                        {/* Row 1: Budget v/s Actual placeholders */}
-                        <div className="grid grid-cols-3 gap-3 shrink-0">
-                            <PlaceholderCard title="Budget v/s Actual - Safety" />
-                            <PlaceholderCard title="Actual Days" />
-                            <PlaceholderCard title="Budget v/s Actual - Weather" />
-                        </div>
+                    {/* R1-2: Placeholder cards (2 each) */}
+                    <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <PlaceholderCard title="Budget v/s Actual - Safety" />
+                    </div>
+                    <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <PlaceholderCard title="Actual Days - Industrial Action" />
+                    </div>
+                    <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <PlaceholderCard title="Budget v/s Actual - Weather" />
+                    </div>
 
-                        {/* Row 2: Employees on site + weekly trend */}
+                    {/* R3-4: Other Items (4) */}
+                    <div className="xl:col-span-4 xl:row-start-3 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <OtherItemsCard location={location} claimedToDate={claimedToDate} cashRetention={cashRetention} />
+                    </div>
+
+                    {/* R3-4: Vendor Commitments (4) */}
+                    <div className="xl:col-span-4 xl:row-start-3 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <VendorCommitmentsCard data={vendorCommitmentsSummary} />
+                    </div>
+
+                    {/* R3-10: Employees on Site (6, spans rows 3-10) — fill height for chart */}
+                    <div className="md:col-span-2 xl:col-span-6 xl:row-start-3 xl:row-span-8 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
                         <EmployeesOnSiteCard data={employeesOnSite} />
+                    </div>
+
+                    {/* R5-6: Project Income (8) */}
+                    <div className="md:col-span-2 xl:col-span-8 xl:row-start-5 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <ProjectIncomeCard data={projectIncomeData} />
+                    </div>
+
+                    {/* R7-10: Budget Utilization (8) — fill height for chart */}
+                    <div className="md:col-span-2 xl:col-span-8 xl:row-start-7 xl:row-span-4 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
+                        <LabourBudgetCard data={labourBudgetData} />
                     </div>
                 </div>
             </div>

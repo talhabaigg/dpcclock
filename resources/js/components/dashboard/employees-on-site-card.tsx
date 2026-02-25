@@ -36,11 +36,11 @@ export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) 
         return (
             <Card className="p-0 gap-0 flex-1 min-h-0 flex flex-col">
                 <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-3 py-1.5">
-                        <CardTitle className="text-sm font-semibold leading-none">Employees on Site</CardTitle>
+                    <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                        <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
                     </div>
                 </CardHeader>
-                <CardContent className="p-3 text-sm text-muted-foreground flex-1">
+                <CardContent className="p-2 text-[11px] text-muted-foreground flex-1">
                     No timesheet data available
                 </CardContent>
             </Card>
@@ -63,12 +63,12 @@ export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) 
     return (
         <Card className="p-0 gap-0 flex-1 min-h-0 flex flex-col">
             <CardHeader className="!p-0 border-b shrink-0">
-                <div className="flex items-center justify-between w-full px-3 py-1.5">
-                    <CardTitle className="text-sm font-semibold leading-none">Employees on Site</CardTitle>
+                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+                    <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
                     {data.total_workers != null && (
                         <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground">Total (30d):</span>
-                            <span className="text-lg font-bold tabular-nums leading-none">{data.total_workers}</span>
+                            <span className="text-[10px] text-muted-foreground">Total (30d):</span>
+                            <span className="text-sm font-bold tabular-nums leading-none">{data.total_workers}</span>
                         </div>
                     )}
                 </div>
@@ -77,11 +77,11 @@ export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) 
                 {/* By type table */}
                 {data.by_type.length > 0 && (
                     <div className="overflow-x-auto border-b shrink-0">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-[11px]">
                             <thead>
                                 <tr className="border-b bg-muted/30">
                                     {data.by_type.map((row) => (
-                                        <th key={row.worktype} className="px-3 py-1.5 text-center font-medium">
+                                        <th key={row.worktype} className="px-1.5 py-0.5 text-center font-medium">
                                             {row.worktype}
                                         </th>
                                     ))}
@@ -90,7 +90,7 @@ export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) 
                             <tbody>
                                 <tr>
                                     {data.by_type.map((row) => (
-                                        <td key={row.worktype} className="px-3 py-1.5 text-center tabular-nums font-semibold">
+                                        <td key={row.worktype} className="px-1.5 py-0.5 text-center tabular-nums font-semibold">
                                             {row.count}
                                         </td>
                                     ))}
