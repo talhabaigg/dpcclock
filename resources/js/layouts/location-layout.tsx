@@ -30,13 +30,14 @@ import {
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites';
+export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites' | 'production-data';
 
 const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey: string }[] = [
     { key: 'sublocations', label: 'Sub-locations', icon: FolderTree, countKey: 'sublocations' },
     { key: 'cost-codes', label: 'Cost Codes', icon: Code2, countKey: 'cost_codes' },
     { key: 'price-list', label: 'Price List', icon: DollarSign, countKey: 'price_list' },
     { key: 'favourites', label: 'Favorites', icon: Heart, countKey: 'favourites' },
+    { key: 'production-data', label: 'Production Data', icon: ChartColumnIncreasing, countKey: 'production_data' },
 ];
 
 export type LocationBase = {
@@ -55,6 +56,7 @@ export type LocationBase = {
         cost_codes: number;
         price_list: number;
         favourites: number;
+        production_data: number;
     };
 };
 

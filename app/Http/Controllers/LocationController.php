@@ -53,7 +53,7 @@ class LocationController extends Controller
     /**
      * Load base location data with tab counts (shared across all tab pages).
      */
-    private function getLocationWithCounts(Location $location): Location
+    public function getLocationWithCounts(Location $location): Location
     {
         $location->load('worktypes');
         $location->subLocations = Location::where('eh_parent_id', $location->eh_location_id)->get();
@@ -62,6 +62,7 @@ class LocationController extends Controller
             'cost_codes' => $location->costCodes()->count(),
             'price_list' => $location->materialItems()->count(),
             'favourites' => $location->favouriteMaterials()->count(),
+            'production_data' => $location->productionUploads()->count(),
         ];
 
         return $location;

@@ -28,6 +28,7 @@ use App\Http\Controllers\MissingSignOutReportController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\ProductionUploadController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
@@ -148,6 +149,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes');
         Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list');
         Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites');
+        Route::get('/locations/{location}/production-data', [ProductionUploadController::class, 'index'])->name('locations.production-data');
+        Route::post('/locations/{location}/production-data/upload', [ProductionUploadController::class, 'upload'])->name('locations.production-data.upload');
+        Route::get('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'show'])->name('locations.production-data.show');
+        Route::delete('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'destroy'])->name('locations.production-data.destroy');
     });
     Route::post('/locations', [LocationController::class, 'store'])->name('locations.store')
         ->middleware('permission:locations.create');

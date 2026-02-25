@@ -102,4 +102,9 @@ class Location extends Model
     {
         return $this->hasMany(JobVendorCommitment::class, 'job_number', 'external_id');
     }
+
+    public function productionUploads()
+    {
+        return $this->hasMany(ProductionUpload::class);
+    }
 }
