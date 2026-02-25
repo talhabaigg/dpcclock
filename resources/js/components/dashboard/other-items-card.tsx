@@ -28,7 +28,7 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
     // Show card even without data
     if (!jobSummary) {
         return (
-            <Card className="w-full max-w-sm p-0 gap-0">
+            <Card className="w-full p-0 gap-0">
                 <CardHeader className="!p-0 border-b">
                     <div className="flex items-center justify-between w-full px-3 py-1.5">
                         <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>
@@ -82,7 +82,7 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
     };
 
     return (
-        <Card className="w-full max-w-sm p-0 gap-0">
+        <Card className="w-full p-0 gap-0">
             <CardHeader className="!p-0 border-b">
                 <div className="flex items-center justify-between w-full px-3 py-1.5">
                     <CardTitle className="text-sm font-semibold leading-none">Other items</CardTitle>

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\JobCostDetail;
+use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use App\Models\LocationItemPriceHistory;
+use App\Models\Variation;
 use App\Models\Worktype;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -129,7 +132,7 @@ class LocationController extends Controller
      */
     public function dashboard(Request $request, Location $location)
     {
-        $location->load('jobSummary');
+        $location->load('jobSummary', 'vendorCommitments');
 
         // Get the "as of" date from query params, default to today
         $asOfDate = $request->input('as_of_date')
@@ -146,6 +149,157 @@ class LocationController extends Controller
         // Calculate project income data
         $projectIncomeCalculator = new \App\Services\ProjectIncomeCalculator();
         $projectIncomeData = $projectIncomeCalculator->calculate($location, $asOfDate);
+
+        // Calculate variations summary grouped by type (status = Approved only)
+        $variationsSummary = DB::table('variations')
+            ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
+            ->where('variations.location_id', $location->id)
+            ->where('variations.status', 'Approved')
+            ->whereNull('variations.deleted_at')
+            ->select('variations.type')
+            ->selectRaw('COUNT(DISTINCT variations.id) as qty')
+            ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')
+            ->groupBy('variations.type')
+            ->get();
+
+        $totalVariations = $variationsSummary->sum('qty');
+
+        // Aging >30 days count for 'PENDING' type with status = Approved only
+        $agingCount = Variation::where('location_id', $location->id)
+            ->where('type', 'PENDING')
+            ->where('status', 'Approved')
+            ->where('co_date', '<=', now()->subDays(30))
+            ->count();
+
+        $variationsSummaryData = $variationsSummary->map(fn($row) => [
+            'type' => $row->type ?? 'Unknown',
+            'qty' => (int) $row->qty,
+            'value' => round((float) $row->value, 2),
+            'percent_of_total' => $totalVariations > 0
+                ? round(($row->qty / $totalVariations) * 100, 1)
+                : 0,
+            'aging_over_30' => strtoupper($row->type) === 'PENDING' ? $agingCount : null,
+        ])->values()->toArray();
+
+        // Labour budget utilization by cost item
+        $budgets = JobReportByCostItemAndCostType::where('job_number', $location->external_id)
+            ->select('cost_item', DB::raw('SUM(current_estimate) as budget'))
+            ->groupBy('cost_item')
+            ->get()
+            ->keyBy('cost_item');
+
+        $actuals = JobCostDetail::where('job_number', $location->external_id)
+            ->where('transaction_date', '<=', $asOfDate->format('Y-m-d'))
+            ->select(
+                'cost_item',
+                DB::raw('MAX(cost_item_description) as label'),
+                DB::raw('SUM(amount) as spent')
+            )
+            ->groupBy('cost_item')
+            ->get()
+            ->keyBy('cost_item');
+
+        $labourBudgetData = $budgets->map(function ($budget) use ($actuals) {
+            $actual = $actuals->get($budget->cost_item);
+            $budgetAmt = round((float) $budget->budget, 0);
+            $spentAmt = $actual ? round((float) $actual->spent, 0) : 0;
+
+            return [
+                'cost_item' => $budget->cost_item,
+                'label' => $actual?->label ?: $budget->cost_item,
+                'budget' => $budgetAmt,
+                'spent' => $spentAmt,
+                'percent' => $budgetAmt > 0 ? round(($spentAmt / $budgetAmt) * 100, 1) : 0,
+            ];
+        })->sortByDesc('budget')->values()->toArray();
+
+        // Vendor commitments summary split by PO and SC
+        $vendorCommitmentsSummary = null;
+        if ($location->vendorCommitments->isNotEmpty()) {
+            $commitments = $location->vendorCommitments;
+
+            // SC = has subcontract_no, PO = everything else
+            $scCommitments = $commitments->filter(fn($c) => !empty($c->subcontract_no));
+            $poCommitments = $commitments->filter(fn($c) => empty($c->subcontract_no));
+
+            $vendorCommitmentsSummary = [
+                'po_outstanding' => round((float) $poCommitments->sum('os_commitment'), 2),
+                'sc_outstanding' => round((float) $scCommitments->sum('os_commitment'), 2),
+                'sc_summary' => [
+                    'value' => round((float) $scCommitments->sum('original_commitment'), 2),
+                    'variations' => round((float) $scCommitments->sum('approved_changes'), 2),
+                    'invoiced_to_date' => round((float) $scCommitments->sum('total_billed'), 2),
+                    'remaining_balance' => round((float) $scCommitments->sum('os_commitment'), 2),
+                ],
+            ];
+        }
+
+        // Employees on site - unique count by worktype + monthly trend
+        $employeesOnSite = null;
+        if ($location->eh_location_id) {
+            $locationIds = Location::where('eh_parent_id', $location->eh_location_id)
+                ->pluck('eh_location_id')
+                ->push($location->eh_location_id)
+                ->unique()
+                ->values()
+                ->toArray();
+
+            // By employee's default worktype — scoped to selected month
+            $monthStart = $asOfDate->copy()->startOfMonth();
+            $monthEnd = $asOfDate->copy()->endOfMonth();
+
+            $byType = DB::table('clocks')
+                ->join('employees', 'clocks.eh_employee_id', '=', 'employees.eh_employee_id')
+                ->leftJoin('employee_worktype', 'employees.id', '=', 'employee_worktype.employee_id')
+                ->leftJoin('worktypes', 'employee_worktype.worktype_id', '=', 'worktypes.id')
+                ->whereIn('clocks.eh_location_id', $locationIds)
+                ->where('clocks.status', 'processed')
+                ->whereNotNull('clocks.clock_out')
+                ->whereBetween('clocks.clock_in', [$monthStart, $monthEnd])
+                ->select(
+                    DB::raw("COALESCE(worktypes.name, 'Unknown') as worktype"),
+                    DB::raw('COUNT(DISTINCT clocks.eh_employee_id) as count')
+                )
+                ->groupBy('worktype')
+                ->orderByDesc('count')
+                ->get()
+                ->map(fn($r) => ['worktype' => $r->worktype, 'count' => (int) $r->count])
+                ->toArray();
+
+            // Weekly trend (weeks ending Friday)
+            $weeklyTrend = DB::table('clocks')
+                ->whereIn('eh_location_id', $locationIds)
+                ->where('status', 'processed')
+                ->whereNotNull('clock_out')
+                ->select(
+                    DB::raw("DATE_FORMAT(DATE_ADD(clock_in, INTERVAL (4 - WEEKDAY(clock_in) + 7) % 7 DAY), '%Y-%m-%d') as week_ending"),
+                    DB::raw('COUNT(DISTINCT eh_employee_id) as count')
+                )
+                ->groupBy('week_ending')
+                ->orderBy('week_ending')
+                ->get()
+                ->map(fn($r) => [
+                    'week_ending' => $r->week_ending,
+                    'month' => substr($r->week_ending, 0, 7),
+                    'count' => (int) $r->count,
+                ])
+                ->toArray();
+
+            // Total unique workers in last 30 days
+            $totalWorkers = (int) DB::table('clocks')
+                ->whereIn('eh_location_id', $locationIds)
+                ->where('status', 'processed')
+                ->whereNotNull('clock_out')
+                ->where('clock_in', '>=', now()->subDays(30))
+                ->distinct('eh_employee_id')
+                ->count('eh_employee_id');
+
+            $employeesOnSite = [
+                'by_type' => $byType,
+                'weekly_trend' => $weeklyTrend,
+                'total_workers' => $totalWorkers,
+            ];
+        }
 
         // Get all locations with job summaries for the selector
         $availableLocations = Location::with('jobSummary')
@@ -167,6 +321,10 @@ class LocationController extends Controller
             'claimedToDate' => $claimedToDate,
             'cashRetention' => $cashRetention,
             'projectIncomeData' => $projectIncomeData,
+            'variationsSummary' => $variationsSummaryData,
+            'labourBudgetData' => $labourBudgetData,
+            'vendorCommitmentsSummary' => $vendorCommitmentsSummary,
+            'employeesOnSite' => $employeesOnSite,
             'availableLocations' => $availableLocations,
         ]);
     }
@@ -403,6 +561,16 @@ class LocationController extends Controller
 
     }
 
+    /**
+     * Load all timesheets from EH for a location (backfill).
+     */
+    public function loadTimesheets(Location $location)
+    {
+        \App\Jobs\LoadTimesheetsForLocation::dispatch($location->id);
+
+        return redirect()->back()->with('success', "Timesheet sync dispatched for {$location->name} (all time).");
+    }
+
     public function LoadJobDataFromPremier(Location $location)
     {
 
@@ -425,6 +593,7 @@ class LocationController extends Controller
             \App\Jobs\LoadArPostedInvoices::dispatch();
             \App\Jobs\LoadApPostedInvoices::dispatch();
             \App\Jobs\LoadApPostedInvoiceLines::dispatch();
+            \App\Jobs\LoadJobVendorCommitments::dispatch();
 
             return redirect()->back()->with('success', 'Data download initiated. All jobs have been queued.');
         } catch (\Exception $e) {

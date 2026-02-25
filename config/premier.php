@@ -32,6 +32,7 @@ return [
         'ar_posted_invoices' => '/ARPostedInvoices',
         'ap_posted_invoices' => '/APPostedInvoices',
         'ap_posted_invoice_lines' => '/APPostedInvoiceLines',
+        'job_vendor_commitments' => '/JobVendorsCommitments',
     ],
 
     'jobs' => [

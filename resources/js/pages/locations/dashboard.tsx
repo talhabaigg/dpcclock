@@ -1,14 +1,19 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, JobSummary, Location } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import ProjectDetailsCard from '@/components/dashboard/project-details-card';
 import OtherItemsCard from '@/components/dashboard/other-items-card';
 import ProjectIncomeCard from '@/components/dashboard/project-income-card';
+import VariationsCard from '@/components/dashboard/variations-card';
+import LabourBudgetCard, { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
+import VendorCommitmentsCard from '@/components/dashboard/vendor-commitments-card';
+import EmployeesOnSiteCard from '@/components/dashboard/employees-on-site-card';
+import PlaceholderCard from '@/components/dashboard/placeholder-card';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarIcon, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
@@ -34,54 +39,45 @@ interface AvailableLocation {
 }
 
 interface ProjectIncomeData {
-    originalContractSum: {
-        income: number;
-        cost: number;
-        profit: number;
-        profitPercent: number;
-    };
-    currentContractSum: {
-        income: number;
-        cost: number;
-        profit: number;
-        profitPercent: number;
-    };
-    thisMonth: {
-        income: number;
-        cost: number;
-        profit: number;
-        profitPercent: number;
-    };
-    projectToDate: {
-        income: number;
-        cost: number;
-        profit: number;
-        profitPercent: number;
-    };
-    remainingBalance: {
-        income: number;
-        cost: number;
-        profit: number;
-        profitPercent: number;
-    };
+    originalContractSum: { income: number; cost: number; profit: number; profitPercent: number };
+    currentContractSum: { income: number; cost: number; profit: number; profitPercent: number };
+    thisMonth: { income: number; cost: number; profit: number; profitPercent: number };
+    projectToDate: { income: number; cost: number; profit: number; profitPercent: number };
+    remainingBalance: { income: number; cost: number; profit: number; profitPercent: number };
+}
+
+interface VariationRow {
+    type: string;
+    qty: number;
+    value: number;
+    percent_of_total: number;
+    aging_over_30: number | null;
 }
 
 interface DashboardProps {
-    location: Location & {
-        job_summary?: JobSummary;
-    };
+    location: Location & { job_summary?: JobSummary };
     timelineData: TimelineData | null;
     asOfDate?: string;
     claimedToDate?: number;
     cashRetention?: number;
     projectIncomeData: ProjectIncomeData;
+    variationsSummary: VariationRow[];
+    labourBudgetData: LabourBudgetRow[];
+    vendorCommitmentsSummary: {
+        po_outstanding: number;
+        sc_outstanding: number;
+        sc_summary: { value: number; variations: number; invoiced_to_date: number; remaining_balance: number };
+    } | null;
+    employeesOnSite: {
+        by_type: { worktype: string; count: number }[];
+        weekly_trend: { week_ending: string; month: string; count: number }[];
+        total_workers: number;
+    } | null;
     availableLocations: AvailableLocation[];
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, availableLocations }: DashboardProps) {
-    const [date, setDate] = useState<Date | undefined>(
-        asOfDate ? new Date(asOfDate) : new Date()
-    );
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations }: DashboardProps) {
+    const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -92,139 +88,121 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     const handleDateChange = (newDate: Date | undefined) => {
         if (!newDate) return;
         setDate(newDate);
-
-        // Navigate with the new date filter
-        router.get(
-            `/locations/${location.id}/dashboard`,
-            { as_of_date: format(newDate, 'yyyy-MM-dd') },
-            { preserveState: true, preserveScroll: true }
-        );
+        router.get(`/locations/${location.id}/dashboard`, { as_of_date: format(newDate, 'yyyy-MM-dd') }, { preserveState: true, preserveScroll: true });
     };
 
-    // Handle location/job change
     const handleLocationChange = (locationId: string) => {
-        const params = asOfDate ? { as_of_date: asOfDate } : {};
-        router.get(`/locations/${locationId}/dashboard`, params);
+        router.get(`/locations/${locationId}/dashboard`, asOfDate ? { as_of_date: asOfDate } : {});
     };
 
-    // Navigate to previous month (same day, previous month)
     const handlePreviousMonth = () => {
         if (!date) return;
-        const newDate = new Date(date);
-        newDate.setMonth(newDate.getMonth() - 1);
-        handleDateChange(newDate);
+        const d = new Date(date);
+        d.setMonth(d.getMonth() - 1);
+        handleDateChange(d);
     };
 
-    // Navigate to next month (same day, next month)
     const handleNextMonth = () => {
         if (!date) return;
-        const newDate = new Date(date);
-        newDate.setMonth(newDate.getMonth() + 1);
-        handleDateChange(newDate);
+        const d = new Date(date);
+        d.setMonth(d.getMonth() + 1);
+        handleDateChange(d);
     };
 
-    // Handle keyboard navigation: Arrow keys for ±30 days
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (!date) return;
-
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            handleNextMonth();
-        } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            handlePreviousMonth();
-        }
+        if (e.key === 'ArrowRight') { e.preventDefault(); handleNextMonth(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); handlePreviousMonth(); }
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Dashboard`} />
 
-            <div className="p-4">
-                {/* Filters */}
-                <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
-                    {/* Job Selector */}
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium">Job:</label>
+            <div className="p-3 flex flex-col gap-3 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
+
+                {/* ── Top bar ── */}
+                <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium whitespace-nowrap">As of Date:</span>
+                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePreviousMonth}>
+                            <ChevronLeft className="h-3 w-3" />
+                        </Button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className={cn('h-7 w-[150px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
+                                    <CalendarIcon className="mr-1.5 h-3 w-3" />
+                                    {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start" onKeyDown={handleKeyDown}>
+                                <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                            </PopoverContent>
+                        </Popover>
+                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextMonth}>
+                            <ChevronRight className="h-3 w-3" />
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium whitespace-nowrap">Select Job:</span>
                         <Select value={location.id.toString()} onValueChange={handleLocationChange}>
-                            <SelectTrigger className="w-[280px]">
-                                <SelectValue placeholder="Select a job" />
+                            <SelectTrigger className="h-7 w-[140px] text-xs">
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {availableLocations.map((loc) => (
-                                    <SelectItem key={loc.id} value={loc.id.toString()}>
-                                        {loc.external_id}
-                                    </SelectItem>
+                                    <SelectItem key={loc.id} value={loc.id.toString()}>{loc.external_id}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
 
-                    {/* Date Filter */}
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium">As of Date:</label>
-
-                        {/* Previous Month Button */}
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={handlePreviousMonth}
-                            title="Previous month"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
+                    <Link href={`/locations/${location.id}/load-timesheets`}>
+                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
+                            <Download className="h-3 w-3" />
+                            Load Timesheets
                         </Button>
-
-                        {/* Date Picker */}
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    className={cn(
-                                        'w-[240px] justify-start text-left font-normal',
-                                        !date && 'text-muted-foreground'
-                                    )}
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date ? format(date, 'PPP') : <span>Pick a date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start" onKeyDown={handleKeyDown}>
-                                <Calendar
-                                    mode="single"
-                                    selected={date}
-                                    onSelect={handleDateChange}
-                                />
-                            </PopoverContent>
-                        </Popover>
-
-                        {/* Next Month Button */}
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={handleNextMonth}
-                            title="Next month"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    </Link>
                 </div>
 
-                {/* Dashboard Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
-                    {/* Left Column - Stacked Cards */}
-                    <div className="flex flex-col gap-4">
-                        <ProjectDetailsCard location={location} timelineData={timelineData} />
-                        <OtherItemsCard
-                            location={location}
-                            claimedToDate={claimedToDate}
-                            cashRetention={cashRetention}
-                        />
+                {/* ── Main grid: Left ~60% | Right ~40% ── */}
+                <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-3 flex-1 min-h-0">
+
+                    {/* ═══ LEFT COLUMN ═══ */}
+                    <div className="flex flex-col gap-3 min-h-0">
+
+                        {/* Row 1: Project Details + Other Items | Variations */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-3">
+                                <ProjectDetailsCard location={location} timelineData={timelineData} />
+                                <OtherItemsCard location={location} claimedToDate={claimedToDate} cashRetention={cashRetention} />
+                            </div>
+                            <VariationsCard data={variationsSummary} />
+                        </div>
+
+                        {/* Row 2: Project Income */}
+                        <ProjectIncomeCard data={projectIncomeData} />
+
+                        {/* Row 3: Vendor Commitments | Labour Budget */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+                            <VendorCommitmentsCard data={vendorCommitmentsSummary} />
+                            <LabourBudgetCard data={labourBudgetData} />
+                        </div>
                     </div>
 
-                    {/* Right Column - Project Income and other widgets */}
-                    <div className="flex-1 flex flex-col gap-4">
-                        <ProjectIncomeCard data={projectIncomeData} />
-                        {/* Variations table and other widgets will go here */}
+                    {/* ═══ RIGHT COLUMN ═══ */}
+                    <div className="flex flex-col gap-3 min-h-0">
+
+                        {/* Row 1: Budget v/s Actual placeholders */}
+                        <div className="grid grid-cols-3 gap-3 shrink-0">
+                            <PlaceholderCard title="Budget v/s Actual - Safety" />
+                            <PlaceholderCard title="Actual Days" />
+                            <PlaceholderCard title="Budget v/s Actual - Weather" />
+                        </div>
+
+                        {/* Row 2: Employees on site + weekly trend */}
+                        <EmployeesOnSiteCard data={employeesOnSite} />
                     </div>
                 </div>
             </div>

@@ -62,7 +62,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
     const status = getProjectStatus();
 
     return (
-        <Card className="w-full max-w-sm py-0 gap-0">
+        <Card className="w-full p-0 gap-0">
             <CardHeader className="!p-0 border-b !flex !flex-row items-center">
                 <div className="flex items-center justify-between w-full px-3 py-1.5">
                     <CardTitle className="text-sm font-semibold leading-none">Project details</CardTitle>

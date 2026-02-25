@@ -32,4 +32,9 @@ class JobSummary extends Model
     {
         return $this->belongsTo(Location::class, 'job_number', 'external_id');
     }
+
+    public function vendorCommitments()
+    {
+        return $this->hasMany(JobVendorCommitment::class, 'job_number', 'job_number');
+    }
 }
