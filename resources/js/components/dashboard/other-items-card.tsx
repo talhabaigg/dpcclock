@@ -9,9 +9,10 @@ interface OtherItemsCardProps {
     };
     claimedToDate?: number;
     cashRetention?: number;
+    isEditing?: boolean;
 }
 
-export default function OtherItemsCard({ location, claimedToDate, cashRetention }: OtherItemsCardProps) {
+export default function OtherItemsCard({ location, claimedToDate, cashRetention, isEditing }: OtherItemsCardProps) {
     const jobSummary = location.job_summary;
 
     // Calculate claimed to date percentage
@@ -28,9 +29,9 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
     // Show card even without data
     if (!jobSummary) {
         return (
-            <Card className="w-full p-0 gap-0">
-                <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+            <Card className="w-full p-0 gap-0 h-full overflow-hidden">
+                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Other items</CardTitle>
                     </div>
                 </CardHeader>
@@ -82,9 +83,9 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention 
     };
 
     return (
-        <Card className="w-full p-0 gap-0 flex flex-col">
-            <CardHeader className="!p-0 border-b shrink-0">
-                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+        <Card className="w-full p-0 gap-0 flex flex-col h-full overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Other items</CardTitle>
                 </div>
             </CardHeader>

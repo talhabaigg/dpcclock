@@ -481,6 +481,14 @@ class LocationController extends Controller
             'dpc_rates.foreman' => 'nullable|numeric|min:0',
             'dpc_rates.leading_hands' => 'nullable|numeric|min:0',
             'dpc_rates.labourer' => 'nullable|numeric|min:0',
+            'grid_layout' => 'nullable|array',
+            'grid_layout.*.i' => 'required|string|max:50',
+            'grid_layout.*.x' => 'required|integer|min:0',
+            'grid_layout.*.y' => 'required|integer|min:0',
+            'grid_layout.*.w' => 'required|integer|min:1|max:14',
+            'grid_layout.*.h' => 'required|integer|min:1|max:20',
+            'hidden_widgets' => 'nullable|array',
+            'hidden_widgets.*' => 'string|max:50',
         ]);
 
         $settings = $location->dashboard_settings ?? [];
@@ -491,6 +499,7 @@ class LocationController extends Controller
             'analysis_premier_wages_items', 'analysis_premier_foreman_items',
             'analysis_premier_lh_items', 'analysis_premier_labourer_items',
             'dpc_hourly_rate', 'dpc_rates',
+            'grid_layout', 'hidden_widgets',
         ];
 
         foreach ($allowedKeys as $key) {

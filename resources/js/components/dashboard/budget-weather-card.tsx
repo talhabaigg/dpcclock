@@ -4,9 +4,10 @@ interface BudgetWeatherCardProps {
     locationId: number;
     costCodes: ProductionCostCode[];
     savedCostCode?: string | null;
+    isEditing?: boolean;
 }
 
-export default function BudgetWeatherCard({ locationId, costCodes, savedCostCode }: BudgetWeatherCardProps) {
+export default function BudgetWeatherCard({ locationId, costCodes, savedCostCode, isEditing }: BudgetWeatherCardProps) {
     return (
         <BudgetDonutCard
             title="Budget v/s Actual - Weather"
@@ -14,6 +15,7 @@ export default function BudgetWeatherCard({ locationId, costCodes, savedCostCode
             costCodes={costCodes}
             savedCostCode={savedCostCode}
             settingKey="weather_cost_code"
+            isEditing={isEditing}
         />
     );
 }

@@ -18,9 +18,10 @@ interface ProjectDetailsCardProps {
         job_summary?: JobSummary;
     };
     timelineData: TimelineData | null;
+    isEditing?: boolean;
 }
 
-export default function ProjectDetailsCard({ location, timelineData }: ProjectDetailsCardProps) {
+export default function ProjectDetailsCard({ location, timelineData, isEditing }: ProjectDetailsCardProps) {
     const jobSummary = location.job_summary;
 
     // Calculate delays and overruns
@@ -62,9 +63,9 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
     const status = getProjectStatus();
 
     return (
-        <Card className="w-full p-0 gap-0 flex flex-col">
-            <CardHeader className="!p-0 border-b !flex !flex-row items-center shrink-0">
-                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+        <Card className="w-full p-0 gap-0 flex flex-col h-full overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Project details</CardTitle>
                     {status.label !== 'Completed' && (
                         <Badge
@@ -80,15 +81,15 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                 </div>
             </CardHeader>
             <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
-                <div className="text-[11px]">
+                <div className="text-[11px] h-full flex flex-col">
                     {/* Name */}
-                    <div className="grid grid-cols-[240px_1fr] border-b">
+                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                         <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Name</div>
                         <div className="px-1.5 py-0.5">{location.name}</div>
                     </div>
 
                     {/* PM */}
-                    <div className="grid grid-cols-[240px_1fr] border-b">
+                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                         <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                             <FieldLabel
                                 label="PM"
@@ -103,7 +104,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                     {timelineData && (
                         <>
                             {/* Date Headers */}
-                            <div className="grid grid-cols-[240px_1fr] border-b">
+                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                                 <div className="px-1.5 py-0.5 border-r bg-muted/30"></div>
                                 <div className="grid grid-cols-2">
                                     <div className="px-1.5 py-0.5 border-r text-center text-[10px] font-medium">Start</div>
@@ -112,7 +113,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                             </div>
 
                             {/* Contract Row */}
-                            <div className="grid grid-cols-[240px_1fr] border-b">
+                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                                 <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                     <FieldLabel
                                         label="Contract"
@@ -142,7 +143,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
                             </div>
 
                             {/* Actual Row */}
-                            <div className="grid grid-cols-[240px_1fr] border-b">
+                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                                 <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                     <FieldLabel
                                         label="Actual"
@@ -173,7 +174,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Start Delay */}
                             {startDelay !== null && (
-                                <div className="grid grid-cols-[240px_1fr] border-b">
+                                <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                                     <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                         <FieldLabel
                                             label="Start Delay"
@@ -191,7 +192,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Over-run */}
                             {overrun !== null && (
-                                <div className="grid grid-cols-[240px_1fr] border-b">
+                                <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
                                     <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
                                         <FieldLabel
                                             label="Over-run"
@@ -209,7 +210,7 @@ export default function ProjectDetailsCard({ location, timelineData }: ProjectDe
 
                             {/* Total Over-run */}
                             {(startDelay !== null || overrun !== null) && (
-                                <div className="grid grid-cols-[240px_1fr]">
+                                <div className="grid grid-cols-[240px_1fr] flex-1 min-h-0">
                                     <div className="px-1.5 py-0.5 border-r bg-muted/30 font-semibold">
                                         <FieldLabel
                                             label="Total Over-run"

@@ -1,16 +1,9 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, JobSummary, Location } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import ProjectDetailsCard from '@/components/dashboard/project-details-card';
-import OtherItemsCard from '@/components/dashboard/other-items-card';
-import ProjectIncomeCard from '@/components/dashboard/project-income-card';
-import VariationsCard from '@/components/dashboard/variations-card';
-import LabourBudgetCard, { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
-import VendorCommitmentsCard from '@/components/dashboard/vendor-commitments-card';
-import EmployeesOnSiteCard from '@/components/dashboard/employees-on-site-card';
-import BudgetSafetyCard, { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
-import BudgetWeatherCard from '@/components/dashboard/budget-weather-card';
-import IndustrialActionCard from '@/components/dashboard/industrial-action-card';
+import DashboardGrid from '@/components/dashboard/dashboard-grid';
+import { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
+import { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
 import { ProductionDataTable, type RowSelection } from './production-data-table';
 import { productionColumns, type ProductionRow, type GroupByMode } from './production-data-columns';
 import { useMemo, useState } from 'react';
@@ -295,54 +288,20 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                 {/* ── Dashboard tab ── */}
                 {activeTab === 'dashboard' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-14 xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr_1fr_1fr_1fr] gap-2 flex-1 min-h-0">
-
-                        <div className="xl:col-span-4 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <ProjectDetailsCard location={location} timelineData={timelineData} />
-                        </div>
-
-                        <div className="xl:col-span-4 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <VariationsCard data={variationsSummary} />
-                        </div>
-
-                        <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <BudgetSafetyCard
-                                locationId={location.id}
-                                costCodes={productionCostCodes ?? []}
-                                savedCostCode={(location.dashboard_settings as Record<string, string> | null)?.safety_cost_code}
-                            />
-                        </div>
-                        <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <IndustrialActionCard hours={industrialActionHours} />
-                        </div>
-                        <div className="xl:col-span-2 xl:row-start-1 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <BudgetWeatherCard
-                                locationId={location.id}
-                                costCodes={productionCostCodes ?? []}
-                                savedCostCode={(location.dashboard_settings as Record<string, string> | null)?.weather_cost_code}
-                            />
-                        </div>
-
-                        <div className="xl:col-span-4 xl:row-start-3 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <OtherItemsCard location={location} claimedToDate={claimedToDate} cashRetention={cashRetention} />
-                        </div>
-
-                        <div className="xl:col-span-4 xl:row-start-3 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <VendorCommitmentsCard data={vendorCommitmentsSummary} />
-                        </div>
-
-                        <div className="md:col-span-2 xl:col-span-6 xl:row-start-3 xl:row-span-8 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <EmployeesOnSiteCard data={employeesOnSite} />
-                        </div>
-
-                        <div className="md:col-span-2 xl:col-span-8 xl:row-start-5 xl:row-span-2 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <ProjectIncomeCard data={projectIncomeData} />
-                        </div>
-
-                        <div className="md:col-span-2 xl:col-span-8 xl:row-start-7 xl:row-span-4 xl:min-h-0 [&>*]:w-full [&>*]:h-full">
-                            <LabourBudgetCard data={labourBudgetData} />
-                        </div>
-                    </div>
+                    <DashboardGrid
+                        location={location}
+                        timelineData={timelineData}
+                        claimedToDate={claimedToDate}
+                        cashRetention={cashRetention}
+                        projectIncomeData={projectIncomeData}
+                        variationsSummary={variationsSummary}
+                        labourBudgetData={labourBudgetData}
+                        vendorCommitmentsSummary={vendorCommitmentsSummary}
+                        employeesOnSite={employeesOnSite}
+                        productionCostCodes={productionCostCodes}
+                        industrialActionHours={industrialActionHours}
+                        dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
+                    />
                 )}
 
                 {/* ── Production Data tab ── */}

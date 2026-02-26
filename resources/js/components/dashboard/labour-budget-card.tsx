@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Filter, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface LabourBudgetRow {
     cost_item: string;
@@ -18,6 +19,7 @@ export interface LabourBudgetRow {
 
 interface LabourBudgetCardProps {
     data: LabourBudgetRow[];
+    isEditing?: boolean;
 }
 
 const DEFAULT_COST_ITEMS = ['01-01', '03-01', '05-01', '07-01'];
@@ -35,7 +37,7 @@ const formatCurrency = (value: number) =>
         maximumFractionDigits: 0,
     }).format(value);
 
-export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
+export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardProps) {
     const [selectedItems, setSelectedItems] = useState<Set<string>>(
         new Set(DEFAULT_COST_ITEMS.filter((item) => data.some((d) => d.cost_item === item)))
     );
@@ -75,8 +77,8 @@ export default function LabourBudgetCard({ data }: LabourBudgetCardProps) {
 
     return (
         <Card className="p-0 gap-0 h-full flex flex-col">
-            <CardHeader className="!p-0 border-b">
-                <div className="flex items-center justify-between w-full px-2 py-0.5">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">
                         Budget Utilization by Type
                     </CardTitle>

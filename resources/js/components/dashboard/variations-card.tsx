@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface VariationRow {
     type: string;
@@ -10,9 +11,10 @@ interface VariationRow {
 
 interface VariationsCardProps {
     data: VariationRow[];
+    isEditing?: boolean;
 }
 
-export default function VariationsCard({ data }: VariationsCardProps) {
+export default function VariationsCard({ data, isEditing }: VariationsCardProps) {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-AU', {
             style: 'currency',
@@ -26,9 +28,9 @@ export default function VariationsCard({ data }: VariationsCardProps) {
     const totalValue = data.reduce((sum, row) => sum + row.value, 0);
 
     return (
-        <Card className="p-0 gap-0 flex flex-col">
-            <CardHeader className="!p-0 border-b shrink-0">
-                <div className="flex items-center justify-between w-full px-2 py-0.5">
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Variations</CardTitle>
                 </div>
             </CardHeader>

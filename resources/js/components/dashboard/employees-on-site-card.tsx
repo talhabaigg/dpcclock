@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { cn } from '@/lib/utils';
 import { Line, LineChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { format, parse } from 'date-fns';
 
@@ -22,6 +23,7 @@ interface EmployeesOnSiteData {
 
 interface EmployeesOnSiteCardProps {
     data: EmployeesOnSiteData | null;
+    isEditing?: boolean;
 }
 
 const chartConfig = {
@@ -31,12 +33,12 @@ const chartConfig = {
     },
 } satisfies ChartConfig;
 
-export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) {
+export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSiteCardProps) {
     if (!data) {
         return (
-            <Card className="p-0 gap-0 flex-1 min-h-0 flex flex-col">
-                <CardHeader className="!p-0 border-b">
-                    <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+            <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
+                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
                     </div>
                 </CardHeader>
@@ -61,9 +63,9 @@ export default function EmployeesOnSiteCard({ data }: EmployeesOnSiteCardProps) 
     });
 
     return (
-        <Card className="p-0 gap-0 flex-1 min-h-0 flex flex-col">
-            <CardHeader className="!p-0 border-b shrink-0">
-                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+        <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
                     {data.total_workers != null && (
                         <div className="flex items-center gap-1.5">

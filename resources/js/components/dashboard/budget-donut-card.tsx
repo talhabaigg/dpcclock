@@ -23,6 +23,7 @@ interface BudgetDonutCardProps {
     costCodes: ProductionCostCode[];
     savedCostCode?: string | null;
     settingKey: string; // e.g. 'safety_cost_code' or 'weather_cost_code'
+    isEditing?: boolean;
 }
 
 const COLORS = {
@@ -39,7 +40,7 @@ function fmt(val: number): string {
     return val.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
-export default function BudgetDonutCard({ title, locationId, costCodes, savedCostCode, settingKey }: BudgetDonutCardProps) {
+export default function BudgetDonutCard({ title, locationId, costCodes, savedCostCode, settingKey, isEditing }: BudgetDonutCardProps) {
     const [selectedCode, setSelectedCode] = useState<string>(savedCostCode ?? '');
     const [pickerOpen, setPickerOpen] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -71,9 +72,9 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
     const usedPercent = hasData ? Math.round((selected.used_hours / selected.est_hours) * 100) : 0;
 
     return (
-        <Card className="p-0 gap-0 flex flex-col">
-            <CardHeader className="!p-0 border-b shrink-0">
-                <div className="flex items-center justify-between w-full px-1.5 py-0.5">
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">{title}</CardTitle>
                     <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                         <PopoverTrigger asChild>

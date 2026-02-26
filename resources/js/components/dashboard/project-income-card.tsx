@@ -1,4 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import FieldLabel from './field-label';
 
@@ -37,9 +37,10 @@ interface ProjectIncomeData {
 
 interface ProjectIncomeCardProps {
     data: ProjectIncomeData;
+    isEditing?: boolean;
 }
 
-export default function ProjectIncomeCard({ data }: ProjectIncomeCardProps) {
+export default function ProjectIncomeCard({ data, isEditing }: ProjectIncomeCardProps) {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -57,13 +58,18 @@ export default function ProjectIncomeCard({ data }: ProjectIncomeCardProps) {
     const hasNoClaimThisMonth = data.thisMonth.income === 0;
 
     return (
-        <Card className="p-0 gap-0 flex flex-col">
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
+            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
+                    <CardTitle className="text-[11px] font-semibold leading-none">Project Income</CardTitle>
+                </div>
+            </CardHeader>
             <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
-                <div>
-                    <table className="w-full border-collapse text-[11px]">
+                <div className="h-full">
+                    <table className="w-full h-full border-collapse text-[11px]">
                         <thead>
                             <tr className="border-b">
-                                <th className="text-left py-0.5 px-1.5 font-semibold bg-muted/30 border-r">Project Income</th>
+                                <th className="text-left py-0.5 px-1.5 font-medium bg-muted/30 border-r"></th>
                                 <th className="text-right py-0.5 px-1.5 font-medium border-r">Income</th>
                                 <th className="text-right py-0.5 px-1.5 font-medium border-r">Cost</th>
                                 <th className="text-right py-0.5 px-1.5 font-medium border-r">Profit</th>

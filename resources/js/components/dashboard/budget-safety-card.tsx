@@ -6,9 +6,10 @@ interface BudgetSafetyCardProps {
     locationId: number;
     costCodes: ProductionCostCode[];
     savedCostCode?: string | null;
+    isEditing?: boolean;
 }
 
-export default function BudgetSafetyCard({ locationId, costCodes, savedCostCode }: BudgetSafetyCardProps) {
+export default function BudgetSafetyCard({ locationId, costCodes, savedCostCode, isEditing }: BudgetSafetyCardProps) {
     return (
         <BudgetDonutCard
             title="Budget v/s Actual - Safety"
@@ -16,6 +17,7 @@ export default function BudgetSafetyCard({ locationId, costCodes, savedCostCode 
             costCodes={costCodes}
             savedCostCode={savedCostCode}
             settingKey="safety_cost_code"
+            isEditing={isEditing}
         />
     );
 }

@@ -159,6 +159,20 @@
     }
 }
 
+/* ================================
+   Dashboard Grid — Edit Mode
+   ================================ */
+.react-grid-item.react-grid-placeholder {
+    background: hsl(217 91% 60% / 0.12) !important;
+    border: 2px dashed hsl(217 91% 60% / 0.35) !important;
+    border-radius: 10px !important;
+    opacity: 1 !important;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+    border-color: hsl(var(--muted-foreground) / 0.4) !important;
+}
+
 /* AG Grid Wrapper Styling (legacy - excluded from shadcn theme) */
 :not(.ag-theme-shadcn) > .ag-root-wrapper {
     box-shadow:
