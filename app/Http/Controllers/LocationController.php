@@ -6,6 +6,7 @@ use App\Models\JobCostDetail;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
 use App\Models\LocationItemPriceHistory;
+use App\Models\ProductionUploadLine;
 use App\Models\Variation;
 use App\Models\Worktype;
 use Illuminate\Http\Request;
@@ -315,6 +316,66 @@ class LocationController extends Controller
                 'external_id' => $loc->external_id,
             ]);
 
+        // Industrial action — total hours where worktype is industrial action (eh_worktype_id = 2585103)
+        $industrialActionHours = 0;
+        if ($location->eh_location_id) {
+            $iaLocationIds = $employeesOnSite
+                ? $locationIds  // reuse if already built
+                : Location::where('eh_parent_id', $location->eh_location_id)
+                    ->pluck('eh_location_id')
+                    ->push($location->eh_location_id)
+                    ->unique()
+                    ->values()
+                    ->toArray();
+
+            $industrialActionHours = (float) DB::table('clocks')
+                ->whereIn('eh_location_id', $iaLocationIds)
+                ->where('eh_worktype_id', 2585103)
+                ->where('status', 'processed')
+                ->whereNotNull('clock_out')
+                ->sum('hours_worked');
+        }
+
+        // Production data — available uploads + selected upload's cost codes & lines
+        $productionUploads = $location->productionUploads()
+            ->where('status', 'completed')
+            ->orderByDesc('report_date')
+            ->get(['id', 'report_date', 'original_filename', 'total_rows']);
+
+        $selectedUploadId = $request->input('production_upload_id');
+        $selectedUpload = $selectedUploadId
+            ? $productionUploads->firstWhere('id', (int) $selectedUploadId)
+            : $productionUploads->first();
+
+        $productionCostCodes = [];
+        $productionLines = [];
+
+        if ($selectedUpload) {
+            $productionCostCodes = ProductionUploadLine::where('production_upload_id', $selectedUpload->id)
+                ->select(
+                    'cost_code',
+                    DB::raw('MAX(code_description) as code_description'),
+                    DB::raw('SUM(est_hours) as est_hours'),
+                    DB::raw('SUM(used_hours) as used_hours'),
+                    DB::raw('GREATEST(SUM(est_hours) - SUM(used_hours), 0) as remaining_hours'),
+                )
+                ->where('cost_code', '!=', '')
+                ->groupBy('cost_code')
+                ->orderBy('cost_code')
+                ->get()
+                ->map(fn($row) => [
+                    'cost_code' => $row->cost_code,
+                    'code_description' => $row->code_description,
+                    'est_hours' => round((float) $row->est_hours, 2),
+                    'used_hours' => round((float) $row->used_hours, 2),
+                    'remaining_hours' => round((float) $row->remaining_hours, 2),
+                ])
+                ->values()
+                ->toArray();
+
+            $productionLines = $selectedUpload->lines()->get();
+        }
+
         return Inertia::render('locations/dashboard', [
             'location' => $location,
             'timelineData' => $timelineData,
@@ -327,7 +388,32 @@ class LocationController extends Controller
             'vendorCommitmentsSummary' => $vendorCommitmentsSummary,
             'employeesOnSite' => $employeesOnSite,
             'availableLocations' => $availableLocations,
+            'productionCostCodes' => $productionCostCodes,
+            'productionUploads' => $productionUploads,
+            'selectedUploadId' => $selectedUpload?->id,
+            'productionLines' => $productionLines,
+            'industrialActionHours' => round($industrialActionHours, 1),
         ]);
+    }
+
+    public function saveDashboardSettings(Request $request, Location $location)
+    {
+        $request->validate([
+            'safety_cost_code' => 'nullable|string|max:50',
+            'weather_cost_code' => 'nullable|string|max:50',
+        ]);
+
+        $settings = $location->dashboard_settings ?? [];
+
+        foreach (['safety_cost_code', 'weather_cost_code'] as $key) {
+            if ($request->has($key)) {
+                $settings[$key] = $request->input($key);
+            }
+        }
+
+        $location->update(['dashboard_settings' => $settings]);
+
+        return response()->json(['success' => true]);
     }
 
     private function getTimelineData($location)

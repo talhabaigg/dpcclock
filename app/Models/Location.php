@@ -16,6 +16,11 @@ class Location extends Model
         'eh_parent_id',
         'external_id',
         'state',
+        'dashboard_settings',
+    ];
+
+    protected $casts = [
+        'dashboard_settings' => 'array',
     ];
 
     public function worktypes()

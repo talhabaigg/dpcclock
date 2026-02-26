@@ -146,6 +146,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
         Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard');
+        Route::put('/locations/{location}/dashboard-settings', [LocationController::class, 'saveDashboardSettings'])->name('locations.dashboard-settings.update');
         Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes');
         Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list');
         Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites');
