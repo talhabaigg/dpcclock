@@ -29,6 +29,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
+import ProductionAnalysis from './production-analysis';
 
 interface TimelineData {
     start_date: string;
@@ -100,6 +101,8 @@ interface DashboardProps {
     productionLines: ProductionRow[];
     industrialActionHours: number;
     varianceTrend: VarianceTrendPoint[];
+    premierCostByCategory: { wages: number; foreman: number; leading_hands: number; labourer: number };
+    premierLatestDate: string | null;
 }
 
 function formatReportDate(dateStr: string): string {
@@ -110,7 +113,7 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
@@ -220,6 +223,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         <TabsList className="h-7">
                             <TabsTrigger value="dashboard" className="text-xs h-5 px-2">Dashboard</TabsTrigger>
                             <TabsTrigger value="production-data" className="text-xs h-5 px-2">Production</TabsTrigger>
+                            <TabsTrigger value="analysis" className="text-xs h-5 px-2">Analysis</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
@@ -396,6 +400,19 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                             />
                         )}
                     </div>
+                )}
+
+                {/* ── Analysis tab ── */}
+                {activeTab === 'analysis' && (
+                    <ProductionAnalysis
+                        locationId={location.id}
+                        productionCostCodes={productionCostCodes ?? []}
+                        productionLines={productionLines}
+                        premierCostByCategory={premierCostByCategory}
+                        dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
+                        premierLatestDate={premierLatestDate ?? undefined}
+                        reportDate={productionUploads.find((u) => u.id === selectedUploadId)?.report_date}
+                    />
                 )}
             </div>
         </AppLayout>

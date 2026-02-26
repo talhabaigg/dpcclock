@@ -400,6 +400,39 @@ class LocationController extends Controller
                 ->toArray();
         }
 
+        // Production Analysis — Premier costs from job_cost_details
+        $dashSettings = $location->dashboard_settings ?? [];
+        $premierWagesItems = $dashSettings['analysis_premier_wages_items'] ?? ['01-01'];
+        $premierForemanItems = $dashSettings['analysis_premier_foreman_items'] ?? ['03-01'];
+        $premierLhItems = $dashSettings['analysis_premier_lh_items'] ?? ['05-01'];
+        $premierLabourerItems = $dashSettings['analysis_premier_labourer_items'] ?? ['07-01'];
+
+        $allPremierItems = array_merge($premierWagesItems, $premierForemanItems, $premierLhItems, $premierLabourerItems);
+
+        $premierCosts = [];
+        $premierLatestDate = null;
+        if ($location->external_id) {
+            $premierQuery = JobCostDetail::where('job_number', $location->external_id)
+                ->whereIn('cost_item', $allPremierItems)
+                ->where('transaction_date', '<=', $asOfDate->format('Y-m-d'));
+
+            $premierCosts = (clone $premierQuery)
+                ->select('cost_item', DB::raw('SUM(amount) as total_amount'))
+                ->groupBy('cost_item')
+                ->pluck('total_amount', 'cost_item')
+                ->toArray();
+
+            $premierLatestDate = (clone $premierQuery)->max('transaction_date');
+        }
+
+        // Build premier cost by category
+        $premierCostByCategory = [
+            'wages' => collect($premierWagesItems)->sum(fn($item) => (float) ($premierCosts[$item] ?? 0)),
+            'foreman' => collect($premierForemanItems)->sum(fn($item) => (float) ($premierCosts[$item] ?? 0)),
+            'leading_hands' => collect($premierLhItems)->sum(fn($item) => (float) ($premierCosts[$item] ?? 0)),
+            'labourer' => collect($premierLabourerItems)->sum(fn($item) => (float) ($premierCosts[$item] ?? 0)),
+        ];
+
         return Inertia::render('locations/dashboard', [
             'location' => $location,
             'timelineData' => $timelineData,
@@ -418,6 +451,8 @@ class LocationController extends Controller
             'productionLines' => $productionLines,
             'industrialActionHours' => round($industrialActionHours, 1),
             'varianceTrend' => $varianceTrend,
+            'premierCostByCategory' => $premierCostByCategory,
+            'premierLatestDate' => $premierLatestDate,
         ]);
     }
 
@@ -426,11 +461,39 @@ class LocationController extends Controller
         $request->validate([
             'safety_cost_code' => 'nullable|string|max:50',
             'weather_cost_code' => 'nullable|string|max:50',
+            'analysis_foreman_codes' => 'nullable|array',
+            'analysis_foreman_codes.*' => 'string|max:50',
+            'analysis_leading_hands_codes' => 'nullable|array',
+            'analysis_leading_hands_codes.*' => 'string|max:50',
+            'analysis_labourer_codes' => 'nullable|array',
+            'analysis_labourer_codes.*' => 'string|max:50',
+            'analysis_premier_wages_items' => 'nullable|array',
+            'analysis_premier_wages_items.*' => 'string|max:20',
+            'analysis_premier_foreman_items' => 'nullable|array',
+            'analysis_premier_foreman_items.*' => 'string|max:20',
+            'analysis_premier_lh_items' => 'nullable|array',
+            'analysis_premier_lh_items.*' => 'string|max:20',
+            'analysis_premier_labourer_items' => 'nullable|array',
+            'analysis_premier_labourer_items.*' => 'string|max:20',
+            'dpc_hourly_rate' => 'nullable|numeric|min:0',
+            'dpc_rates' => 'nullable|array',
+            'dpc_rates.wages' => 'nullable|numeric|min:0',
+            'dpc_rates.foreman' => 'nullable|numeric|min:0',
+            'dpc_rates.leading_hands' => 'nullable|numeric|min:0',
+            'dpc_rates.labourer' => 'nullable|numeric|min:0',
         ]);
 
         $settings = $location->dashboard_settings ?? [];
 
-        foreach (['safety_cost_code', 'weather_cost_code'] as $key) {
+        $allowedKeys = [
+            'safety_cost_code', 'weather_cost_code',
+            'analysis_foreman_codes', 'analysis_leading_hands_codes', 'analysis_labourer_codes',
+            'analysis_premier_wages_items', 'analysis_premier_foreman_items',
+            'analysis_premier_lh_items', 'analysis_premier_labourer_items',
+            'dpc_hourly_rate', 'dpc_rates',
+        ];
+
+        foreach ($allowedKeys as $key) {
             if ($request->has($key)) {
                 $settings[$key] = $request->input($key);
             }
