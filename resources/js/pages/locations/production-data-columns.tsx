@@ -32,49 +32,9 @@ const multiSelectFilter: FilterFn<ProductionRow> = (row, columnId, filterValue: 
     return filterValue.includes(cellValue);
 };
 
-export const productionColumns: ColumnDef<ProductionRow>[] = [
-    {
-        accessorKey: 'area',
-        header: ({ column }) => (
-            <div className="flex items-center gap-1">
-                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-                    Area
-                    <ArrowUpDown className="ml-1 h-4 w-4" />
-                </Button>
-                <ColumnFilter column={column} />
-            </div>
-        ),
-        cell: ({ row }) => <div className="text-xs font-medium">{row.getValue('area')}</div>,
-        filterFn: multiSelectFilter,
-    },
-    {
-        accessorKey: 'cost_code',
-        header: ({ column }) => (
-            <div className="flex items-center gap-1">
-                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-                    Cost Code
-                    <ArrowUpDown className="ml-1 h-4 w-4" />
-                </Button>
-                <ColumnFilter column={column} />
-            </div>
-        ),
-        cell: ({ row }) => <code className="bg-muted rounded px-1 py-0.5 text-xs">{row.getValue('cost_code')}</code>,
-        filterFn: multiSelectFilter,
-    },
-    {
-        accessorKey: 'code_description',
-        header: ({ column }) => (
-            <div className="flex items-center gap-1">
-                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-                    Description
-                    <ArrowUpDown className="ml-1 h-4 w-4" />
-                </Button>
-                <ColumnFilter column={column} />
-            </div>
-        ),
-        cell: ({ row }) => <div className="text-muted-foreground max-w-[250px] truncate text-xs">{row.getValue('code_description')}</div>,
-        filterFn: multiSelectFilter,
-    },
+export type GroupByMode = 'none' | 'area' | 'cost_code';
+
+const numericColumns: ColumnDef<ProductionRow>[] = [
     {
         accessorKey: 'est_hours',
         header: ({ column }) => (
@@ -155,4 +115,50 @@ export const productionColumns: ColumnDef<ProductionRow>[] = [
         ),
         cell: ({ row }) => <NumCell value={row.getValue('projected_variance')} highlight />,
     },
+];
+
+export const productionColumns: ColumnDef<ProductionRow>[] = [
+    {
+        accessorKey: 'area',
+        header: ({ column }) => (
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                    Area
+                    <ArrowUpDown className="ml-1 h-4 w-4" />
+                </Button>
+                <ColumnFilter column={column} />
+            </div>
+        ),
+        cell: ({ row }) => <div className="text-xs font-medium">{row.getValue('area')}</div>,
+        filterFn: multiSelectFilter,
+    },
+    {
+        accessorKey: 'cost_code',
+        header: ({ column }) => (
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                    Cost Code
+                    <ArrowUpDown className="ml-1 h-4 w-4" />
+                </Button>
+                <ColumnFilter column={column} />
+            </div>
+        ),
+        cell: ({ row }) => <code className="bg-muted rounded px-1 py-0.5 text-xs">{row.getValue('cost_code')}</code>,
+        filterFn: multiSelectFilter,
+    },
+    {
+        accessorKey: 'code_description',
+        header: ({ column }) => (
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                    Description
+                    <ArrowUpDown className="ml-1 h-4 w-4" />
+                </Button>
+                <ColumnFilter column={column} />
+            </div>
+        ),
+        cell: ({ row }) => <div className="text-muted-foreground max-w-[250px] truncate text-xs">{row.getValue('code_description')}</div>,
+        filterFn: multiSelectFilter,
+    },
+    ...numericColumns,
 ];

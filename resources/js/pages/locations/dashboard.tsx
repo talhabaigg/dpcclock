@@ -11,14 +11,14 @@ import EmployeesOnSiteCard from '@/components/dashboard/employees-on-site-card';
 import BudgetSafetyCard, { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
 import BudgetWeatherCard from '@/components/dashboard/budget-weather-card';
 import IndustrialActionCard from '@/components/dashboard/industrial-action-card';
-import { ProductionDataTable } from './production-data-table';
-import { productionColumns, type ProductionRow } from './production-data-columns';
+import { ProductionDataTable, type RowSelection } from './production-data-table';
+import { productionColumns, type ProductionRow, type GroupByMode } from './production-data-columns';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { CalendarIcon, ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
@@ -28,6 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 
 interface TimelineData {
     start_date: string;
@@ -66,6 +67,13 @@ interface ProductionUploadOption {
     total_rows: number;
 }
 
+interface VarianceTrendPoint {
+    report_date: string;
+    area: string;
+    cost_code: string;
+    actual_variance: number;
+}
+
 interface DashboardProps {
     location: Location & { job_summary?: JobSummary };
     timelineData: TimelineData | null;
@@ -91,19 +99,22 @@ interface DashboardProps {
     selectedUploadId: number | null;
     productionLines: ProductionRow[];
     industrialActionHours: number;
+    varianceTrend: VarianceTrendPoint[];
 }
 
 function formatReportDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function fmtNum(val: number): string {
-    return val.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function shortDate(dateStr: string): string {
+    return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [groupBy, setGroupBy] = useState<GroupByMode>('none');
+    const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -152,45 +163,77 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
         else if (e.key === 'ArrowLeft') { e.preventDefault(); handlePreviousMonth(); }
     };
 
-    const prodSummary = useMemo(() => {
-        if (productionLines.length === 0) return null;
-        const totalEstHours = productionLines.reduce((s, l) => s + l.est_hours, 0);
-        const totalEarnedHours = productionLines.reduce((s, l) => s + l.earned_hours, 0);
-        const totalUsedHours = productionLines.reduce((s, l) => s + l.used_hours, 0);
-        const totalVariance = productionLines.reduce((s, l) => s + l.actual_variance, 0);
-        const remainingHours = totalEstHours - totalEarnedHours;
-        const totalProjectedHours = productionLines.reduce((s, l) => s + l.projected_hours, 0);
-        const totalProjectedVariance = productionLines.reduce((s, l) => s + l.projected_variance, 0);
-        const percentComplete = totalEstHours > 0 ? (totalEarnedHours / totalEstHours) * 100 : 0;
-        return { percentComplete, totalEarnedHours, totalUsedHours, totalVariance, remainingHours, totalProjectedHours, totalProjectedVariance };
-    }, [productionLines]);
+    // Clear selection when grouping changes
+    const handleGroupByChange = (mode: GroupByMode) => {
+        setGroupBy(mode);
+        setSelectedRow(null);
+    };
+
+    // Build chart data from varianceTrend filtered by selectedRow
+    const chartData = useMemo(() => {
+        if (varianceTrend.length === 0) return [];
+
+        let filtered = varianceTrend;
+        if (selectedRow) {
+            filtered = varianceTrend.filter((p) => {
+                if (selectedRow.area && selectedRow.cost_code) {
+                    return p.area === selectedRow.area && p.cost_code === selectedRow.cost_code;
+                }
+                if (selectedRow.area) return p.area === selectedRow.area;
+                if (selectedRow.cost_code) return p.cost_code === selectedRow.cost_code;
+                return true;
+            });
+        }
+
+        // Aggregate by report_date
+        const map = new Map<string, number>();
+        for (const p of filtered) {
+            map.set(p.report_date, (map.get(p.report_date) ?? 0) + p.actual_variance);
+        }
+
+        return Array.from(map.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([report_date, actual_variance]) => ({
+                report_date,
+                label: shortDate(report_date),
+                actual_variance: Math.round(actual_variance * 100) / 100,
+            }));
+    }, [varianceTrend, selectedRow]);
+
+    const chartLabel = useMemo(() => {
+        if (!selectedRow) return 'Variance Trend — All';
+        if (selectedRow.area && selectedRow.cost_code) return `Variance Trend — ${selectedRow.area} / ${selectedRow.cost_code}`;
+        if (selectedRow.area) return `Variance Trend — ${selectedRow.area}`;
+        if (selectedRow.cost_code) return `Variance Trend — ${selectedRow.cost_code}`;
+        return 'Variance Trend';
+    }, [selectedRow]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Dashboard`} />
 
-            <div className="p-2 flex flex-col gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
+            <div className="p-1.5 sm:p-2 flex flex-col gap-1.5 sm:gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden min-w-0">
 
                 {/* ── Top bar with tabs + filters ── */}
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="h-7">
                             <TabsTrigger value="dashboard" className="text-xs h-5 px-2">Dashboard</TabsTrigger>
-                            <TabsTrigger value="production-data" className="text-xs h-5 px-2">Production Data</TabsTrigger>
+                            <TabsTrigger value="production-data" className="text-xs h-5 px-2">Production</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
-                    <div className="flex-1" />
+                    <div className="hidden sm:block flex-1" />
 
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium whitespace-nowrap">As of Date:</span>
+                    <div className="flex items-center gap-1">
+                        <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">As of Date:</span>
                         <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePreviousMonth}>
                             <ChevronLeft className="h-3 w-3" />
                         </Button>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn('h-7 w-[150px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
-                                    <CalendarIcon className="mr-1.5 h-3 w-3" />
+                                <Button variant="outline" className={cn('h-7 w-[120px] sm:w-[150px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
+                                    <CalendarIcon className="mr-1 sm:mr-1.5 h-3 w-3" />
                                     {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
                                 </Button>
                             </PopoverTrigger>
@@ -204,11 +247,11 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     </div>
 
                     {productionUploads.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium whitespace-nowrap">Report Date:</span>
+                        <div className="flex items-center gap-1">
+                            <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">Report:</span>
                             <Select value={selectedUploadId?.toString() ?? ''} onValueChange={handleUploadChange}>
-                                <SelectTrigger className="h-7 w-[160px] text-xs">
-                                    <SelectValue placeholder="Select report" />
+                                <SelectTrigger className="h-7 w-[120px] sm:w-[160px] text-xs">
+                                    <SelectValue placeholder="Report" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {productionUploads.map((u) => (
@@ -221,10 +264,10 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         </div>
                     )}
 
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium whitespace-nowrap">Select Job:</span>
+                    <div className="flex items-center gap-1">
+                        <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">Job:</span>
                         <Select value={location.id.toString()} onValueChange={handleLocationChange}>
-                            <SelectTrigger className="h-7 w-[140px] text-xs">
+                            <SelectTrigger className="h-7 w-[100px] sm:w-[140px] text-xs">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -236,7 +279,10 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     </div>
 
                     <Link href={`/locations/${location.id}/load-timesheets`}>
-                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
+                        <Button variant="outline" size="icon" className="h-7 w-7 sm:hidden">
+                            <Download className="h-3 w-3" />
+                        </Button>
+                        <Button variant="outline" size="sm" className="hidden sm:inline-flex h-7 gap-1 text-xs px-2">
                             <Download className="h-3 w-3" />
                             Load Timesheets
                         </Button>
@@ -297,40 +343,61 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                 {/* ── Production Data tab ── */}
                 {activeTab === 'production-data' && (
-                    <div className="flex flex-col flex-1 min-h-0 gap-2">
-                        {/* Summary cards */}
-                        {prodSummary && (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 shrink-0">
-                                <SummaryCard label="% Complete" value={`${fmtNum(prodSummary.percentComplete)}%`} />
-                                <SummaryCard label="Earned Hrs" value={fmtNum(prodSummary.totalEarnedHours)} />
-                                <SummaryCard label="Used Hrs" value={fmtNum(prodSummary.totalUsedHours)} />
-                                <SummaryCard label="Variance" value={fmtNum(prodSummary.totalVariance)} highlight={prodSummary.totalVariance < 0} />
-                                <SummaryCard label="Remaining Hrs" value={fmtNum(prodSummary.remainingHours)} />
-                                <SummaryCard label="Projected Hrs" value={fmtNum(prodSummary.totalProjectedHours)} />
-                                <SummaryCard label="Projected Var" value={fmtNum(prodSummary.totalProjectedVariance)} highlight={prodSummary.totalProjectedVariance < 0} />
+                    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-1.5 sm:gap-2 overflow-hidden">
+                        {/* Variance trend chart */}
+                        {varianceTrend.length > 0 && (
+                            <div className="shrink-0 rounded-md border bg-background p-2 sm:p-3">
+                                <div className="flex items-center justify-between mb-1 sm:mb-2">
+                                    <p className="text-[10px] sm:text-xs font-medium truncate mr-2">{chartLabel}</p>
+                                    {selectedRow && (
+                                        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs px-1.5" onClick={() => setSelectedRow(null)}>
+                                            <X className="h-3 w-3" />
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                                <ResponsiveContainer width="100%" height={100} className="sm:!h-[140px]">
+                                    <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                                        <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={40} />
+                                        <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                                        <Tooltip
+                                            contentStyle={{ fontSize: 11, borderRadius: 6 }}
+                                            formatter={(value: number) => [value.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }), 'Variance']}
+                                            labelFormatter={(label) => `Report: ${label}`}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="actual_variance"
+                                            stroke="hsl(217, 91%, 60%)"
+                                            strokeWidth={2}
+                                            dot={{ r: 3, fill: 'hsl(217, 91%, 60%)' }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
                             </div>
                         )}
 
-                        {/* Data table - fills remaining viewport */}
+                        {/* Data table */}
                         {productionLines.length === 0 ? (
                             <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                                 No production data available. Upload a CSV from the Production Data tab.
                             </div>
                         ) : (
-                            <ProductionDataTable columns={productionColumns} data={productionLines} />
+                            <ProductionDataTable
+                                columns={productionColumns}
+                                data={productionLines}
+                                groupBy={groupBy}
+                                onGroupByChange={handleGroupByChange}
+                                selectedRow={selectedRow}
+                                onRowSelect={setSelectedRow}
+                            />
                         )}
                     </div>
                 )}
             </div>
         </AppLayout>
-    );
-}
-
-function SummaryCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-    return (
-        <div className="bg-muted/50 rounded-lg border px-3 py-1.5">
-            <p className="text-muted-foreground text-[10px]">{label}</p>
-            <p className={cn('text-sm font-semibold tabular-nums', highlight && 'text-destructive')}>{value}</p>
-        </div>
     );
 }

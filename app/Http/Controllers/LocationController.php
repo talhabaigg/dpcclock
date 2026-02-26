@@ -376,6 +376,30 @@ class LocationController extends Controller
             $productionLines = $selectedUpload->lines()->get();
         }
 
+        // Variance trend across ALL uploads — grouped by report_date + area + cost_code
+        $varianceTrend = [];
+        if ($productionUploads->isNotEmpty()) {
+            $varianceTrend = ProductionUploadLine::whereIn('production_upload_lines.production_upload_id', $productionUploads->pluck('id'))
+                ->join('production_uploads', 'production_upload_lines.production_upload_id', '=', 'production_uploads.id')
+                ->select(
+                    'production_uploads.report_date',
+                    'production_upload_lines.area',
+                    'production_upload_lines.cost_code',
+                    DB::raw('SUM(production_upload_lines.actual_variance) as actual_variance'),
+                )
+                ->groupBy('production_uploads.report_date', 'production_upload_lines.area', 'production_upload_lines.cost_code')
+                ->orderBy('production_uploads.report_date')
+                ->get()
+                ->map(fn($row) => [
+                    'report_date' => $row->report_date,
+                    'area' => $row->area,
+                    'cost_code' => $row->cost_code,
+                    'actual_variance' => round((float) $row->actual_variance, 2),
+                ])
+                ->values()
+                ->toArray();
+        }
+
         return Inertia::render('locations/dashboard', [
             'location' => $location,
             'timelineData' => $timelineData,
@@ -393,6 +417,7 @@ class LocationController extends Controller
             'selectedUploadId' => $selectedUpload?->id,
             'productionLines' => $productionLines,
             'industrialActionHours' => round($industrialActionHours, 1),
+            'varianceTrend' => $varianceTrend,
         ]);
     }
 
