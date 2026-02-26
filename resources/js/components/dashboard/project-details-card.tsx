@@ -80,154 +80,165 @@ export default function ProjectDetailsCard({ location, timelineData, isEditing }
                     )}
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
-                <div className="text-[11px] h-full flex flex-col">
-                    {/* Name */}
-                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Name</div>
-                        <div className="px-1.5 py-0.5">{location.name}</div>
-                    </div>
+            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-hidden">
+                <table className="w-full h-full border-collapse text-[11px]">
+                    <tbody>
+                        {/* Name */}
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-0.5 px-2 font-medium w-[240px]">Name</td>
+                            <td className="py-0.5 px-2">{location.name}</td>
+                        </tr>
 
-                    {/* PM */}
-                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
-                            <FieldLabel
-                                label="PM"
-                                helpText="Project Manager assigned to this location. Sourced from Premier ERP."
-                            />
-                        </div>
-                        <div className="px-1.5 py-0.5">
-                            {(location as any).project_manager || (jobSummary as any)?.project_manager || '-'}
-                        </div>
-                    </div>
+                        {/* PM */}
+                        <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                            <td className="py-0.5 px-2 font-medium">
+                                <FieldLabel
+                                    label="PM"
+                                    helpText="Project Manager assigned to this location. Sourced from Premier ERP."
+                                />
+                            </td>
+                            <td className="py-0.5 px-2">
+                                {(location as any).project_manager || (jobSummary as any)?.project_manager || '-'}
+                            </td>
+                        </tr>
 
-                    {timelineData && (
-                        <>
-                            {/* Date Headers */}
-                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                                <div className="px-1.5 py-0.5 border-r bg-muted/30"></div>
-                                <div className="grid grid-cols-2">
-                                    <div className="px-1.5 py-0.5 border-r text-center text-[10px] font-medium">Start</div>
-                                    <div className="px-1.5 py-0.5 text-center text-[10px] font-medium">Finish</div>
-                                </div>
-                            </div>
+                        {timelineData && (
+                            <>
+                                {/* Date Headers */}
+                                <tr className="border-b bg-muted/40">
+                                    <td className="py-0.5 px-2"></td>
+                                    <td className="py-0.5 px-2">
+                                        <div className="grid grid-cols-2">
+                                            <div className="text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Start</div>
+                                            <div className="text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Finish</div>
+                                        </div>
+                                    </td>
+                                </tr>
 
-                            {/* Contract Row */}
-                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                                <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
-                                    <FieldLabel
-                                        label="Contract"
-                                        helpText="Contract start and estimated end dates as defined in the project timeline."
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2">
-                                    <div className="px-1.5 py-0.5 border-r tabular-nums text-center">
-                                        {timelineData.start_date
-                                            ? new Date(timelineData.start_date).toLocaleDateString('en-AU', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: '2-digit'
-                                            })
-                                            : '-'}
-                                    </div>
-                                    <div className="px-1.5 py-0.5 tabular-nums text-center">
-                                        {timelineData.estimated_end_date
-                                            ? new Date(timelineData.estimated_end_date).toLocaleDateString('en-AU', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: '2-digit'
-                                            })
-                                            : '-'}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Actual Row */}
-                            <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                                <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
-                                    <FieldLabel
-                                        label="Actual"
-                                        helpText="Actual start date and completion date. If project is ongoing, finish date shows current date."
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2">
-                                    <div className="px-1.5 py-0.5 border-r tabular-nums text-center">
-                                        {timelineData.actual_start_date
-                                            ? new Date(timelineData.actual_start_date).toLocaleDateString('en-AU', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: '2-digit'
-                                            })
-                                            : '-'}
-                                    </div>
-                                    <div className="px-1.5 py-0.5 tabular-nums text-center">
-                                        {timelineData.actual_end_date
-                                            ? new Date(timelineData.actual_end_date).toLocaleDateString('en-AU', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: '2-digit'
-                                            })
-                                            : '-'}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Start Delay */}
-                            {startDelay !== null && (
-                                <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                {/* Contract Row */}
+                                <tr className="border-b hover:bg-muted/30 transition-colors">
+                                    <td className="py-0.5 px-2 font-medium">
                                         <FieldLabel
-                                            label="Start Delay"
-                                            helpText="Days between contract start and actual start. Calculated as: Actual Start - Contract Start."
+                                            label="Contract"
+                                            helpText="Contract start and estimated end dates as defined in the project timeline."
                                         />
-                                    </div>
-                                    <div className={cn(
-                                        "px-1.5 py-0.5 text-right tabular-nums",
-                                        startDelay > 0 ? "text-red-600 font-semibold" : startDelay < 0 ? "text-green-600 font-semibold" : ""
-                                    )}>
-                                        {startDelay}
-                                    </div>
-                                </div>
-                            )}
+                                    </td>
+                                    <td className="py-0.5 px-2">
+                                        <div className="grid grid-cols-2">
+                                            <div className="tabular-nums text-center">
+                                                {timelineData.start_date
+                                                    ? new Date(timelineData.start_date).toLocaleDateString('en-AU', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: '2-digit'
+                                                    })
+                                                    : '-'}
+                                            </div>
+                                            <div className="tabular-nums text-center">
+                                                {timelineData.estimated_end_date
+                                                    ? new Date(timelineData.estimated_end_date).toLocaleDateString('en-AU', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: '2-digit'
+                                                    })
+                                                    : '-'}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
 
-                            {/* Over-run */}
-                            {overrun !== null && (
-                                <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                                {/* Actual Row */}
+                                <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                                    <td className="py-0.5 px-2 font-medium">
                                         <FieldLabel
-                                            label="Over-run"
-                                            helpText="Days beyond contract finish date. Calculated as: (Actual/Current Date) - Contract Finish."
+                                            label="Actual"
+                                            helpText="Actual start date and completion date. If project is ongoing, finish date shows current date."
                                         />
-                                    </div>
-                                    <div className={cn(
-                                        "px-1.5 py-0.5 text-right tabular-nums",
-                                        overrun > 0 ? "text-red-600 font-semibold" : overrun < 0 ? "text-green-600 font-semibold" : ""
-                                    )}>
-                                        {overrun || ''}
-                                    </div>
-                                </div>
-                            )}
+                                    </td>
+                                    <td className="py-0.5 px-2">
+                                        <div className="grid grid-cols-2">
+                                            <div className="tabular-nums text-center">
+                                                {timelineData.actual_start_date
+                                                    ? new Date(timelineData.actual_start_date).toLocaleDateString('en-AU', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: '2-digit'
+                                                    })
+                                                    : '-'}
+                                            </div>
+                                            <div className="tabular-nums text-center">
+                                                {timelineData.actual_end_date
+                                                    ? new Date(timelineData.actual_end_date).toLocaleDateString('en-AU', {
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: '2-digit'
+                                                    })
+                                                    : '-'}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
 
-                            {/* Total Over-run */}
-                            {(startDelay !== null || overrun !== null) && (
-                                <div className="grid grid-cols-[240px_1fr] flex-1 min-h-0">
-                                    <div className="px-1.5 py-0.5 border-r bg-muted/30 font-semibold">
-                                        <FieldLabel
-                                            label="Total Over-run"
-                                            helpText="Total project delay in days. Calculated as: Start Delay + Over-run."
-                                        />
-                                    </div>
-                                    <div className={cn(
-                                        "px-1.5 py-0.5 text-right tabular-nums font-bold",
-                                        totalOverrun > 0 ? "text-red-600" : totalOverrun < 0 ? "text-green-600" : ""
+                                {/* Start Delay */}
+                                {startDelay !== null && (
+                                    <tr className="border-b hover:bg-muted/30 transition-colors">
+                                        <td className="py-0.5 px-2 font-medium">
+                                            <FieldLabel
+                                                label="Start Delay"
+                                                helpText="Days between contract start and actual start. Calculated as: Actual Start - Contract Start."
+                                            />
+                                        </td>
+                                        <td className={cn(
+                                            "py-0.5 px-2 text-right tabular-nums",
+                                            startDelay > 0 ? "text-red-600 font-semibold" : startDelay < 0 ? "text-green-600 font-semibold" : ""
+                                        )}>
+                                            {startDelay}
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {/* Over-run */}
+                                {overrun !== null && (
+                                    <tr className={cn(
+                                        "border-b hover:bg-muted/30 transition-colors",
+                                        startDelay !== null ? "bg-muted/15" : ""
                                     )}>
-                                        {totalOverrun}
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
+                                        <td className="py-0.5 px-2 font-medium">
+                                            <FieldLabel
+                                                label="Over-run"
+                                                helpText="Days beyond contract finish date. Calculated as: (Actual/Current Date) - Contract Finish."
+                                            />
+                                        </td>
+                                        <td className={cn(
+                                            "py-0.5 px-2 text-right tabular-nums",
+                                            overrun > 0 ? "text-red-600 font-semibold" : overrun < 0 ? "text-green-600 font-semibold" : ""
+                                        )}>
+                                            {overrun || ''}
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {/* Total Over-run */}
+                                {(startDelay !== null || overrun !== null) && (
+                                    <tr className="bg-muted/40 border-t-2 border-border">
+                                        <td className="py-0.5 px-2 font-bold">
+                                            <FieldLabel
+                                                label="Total Over-run"
+                                                helpText="Total project delay in days. Calculated as: Start Delay + Over-run."
+                                            />
+                                        </td>
+                                        <td className={cn(
+                                            "py-0.5 px-2 text-right tabular-nums font-bold",
+                                            totalOverrun > 0 ? "text-red-600" : totalOverrun < 0 ? "text-green-600" : ""
+                                        )}>
+                                            {totalOverrun}
+                                        </td>
+                                    </tr>
+                                )}
+                            </>
+                        )}
+                    </tbody>
+                </table>
             </CardContent>
         </Card>
     );

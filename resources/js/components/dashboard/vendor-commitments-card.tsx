@@ -62,41 +62,47 @@ export default function VendorCommitmentsCard({ data, isEditing }: VendorCommitm
                     <CardTitle className="text-[11px] font-semibold leading-none">Vendor Commitments</CardTitle>
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto flex flex-col">
-                {/* PO / SC Outstanding Cards */}
-                <div className="grid grid-cols-2 border-b flex-1 min-h-0">
-                    <div className="border-r px-1.5 py-0.5 text-center flex flex-col items-center justify-center">
-                        <div className="text-[10px] text-muted-foreground font-medium">PO O/S Commitment</div>
-                        <div className="text-sm font-bold tabular-nums">{formatCompact(data.po_outstanding)}</div>
-                    </div>
-                    <div className="px-1.5 py-0.5 text-center flex flex-col items-center justify-center">
-                        <div className="text-[10px] text-muted-foreground font-medium">SC O/S Commitment</div>
-                        <div className="text-sm font-bold tabular-nums">{formatCompact(data.sc_outstanding)}</div>
-                    </div>
-                </div>
+            <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
+                <table className="w-full h-full border-collapse text-[11px]">
+                    <tbody>
+                        {/* PO / SC Outstanding */}
+                        <tr className="border-b">
+                            <td className="py-1 px-2 text-center" colSpan={1}>
+                                <div className="text-[10px] text-muted-foreground font-medium">PO O/S Commitment</div>
+                                <div className="text-sm font-bold tabular-nums">{formatCompact(data.po_outstanding)}</div>
+                            </td>
+                            <td className="py-1 px-2 text-center" colSpan={1}>
+                                <div className="text-[10px] text-muted-foreground font-medium">SC O/S Commitment</div>
+                                <div className="text-sm font-bold tabular-nums">{formatCompact(data.sc_outstanding)}</div>
+                            </td>
+                        </tr>
 
-                {/* Subcontracts Summary */}
-                <div className="text-[11px] flex-1 min-h-0 flex flex-col">
-                    <div className="px-1.5 py-0.5 border-b bg-muted/30 font-semibold text-[11px]">
-                        Subcontracts Summary
-                    </div>
-                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Value</div>
-                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.value)}</div>
-                    </div>
-                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Variations</div>
-                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.variations)}</div>
-                    </div>
-                    <div className="grid grid-cols-[240px_1fr] border-b flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Invoiced to date</div>
-                        <div className="px-1.5 py-0.5 text-right tabular-nums">{formatCurrency(data.sc_summary.invoiced_to_date)}</div>
-                    </div>
-                    <div className="grid grid-cols-[240px_1fr] flex-1 min-h-0">
-                        <div className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">Remaining Balance</div>
-                        <div className="px-1.5 py-0.5 text-right tabular-nums font-semibold">{formatCurrency(data.sc_summary.remaining_balance)}</div>
-                    </div>
-                </div>
+                        {/* Subcontracts Summary Header */}
+                        <tr className="bg-muted/40">
+                            <td colSpan={2} className="py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">
+                                Subcontracts Summary
+                            </td>
+                        </tr>
+
+                        {/* SC rows */}
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">Value</td>
+                            <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.value)}</td>
+                        </tr>
+                        <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">Variations</td>
+                            <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.variations)}</td>
+                        </tr>
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">Invoiced to date</td>
+                            <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.invoiced_to_date)}</td>
+                        </tr>
+                        <tr className="bg-muted/40 border-t-2 border-border">
+                            <td className="py-1 px-2 font-bold">Remaining Balance</td>
+                            <td className="py-1 px-2 text-right tabular-nums font-bold">{formatCurrency(data.sc_summary.remaining_balance)}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </CardContent>
         </Card>
     );

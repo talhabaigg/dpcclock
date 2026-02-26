@@ -75,28 +75,23 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                     )}
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0 flex flex-col flex-1 min-h-0">
-                {/* By type table */}
+            <CardContent className="p-0 mt-0 flex flex-row flex-1 min-h-0">
+                {/* Side panel - by type table */}
                 {data.by_type.length > 0 && (
-                    <div className="overflow-x-auto border-b shrink-0">
-                        <table className="w-full text-[11px]">
-                            <thead>
-                                <tr className="border-b bg-muted/30">
-                                    {data.by_type.map((row) => (
-                                        <th key={row.worktype} className="px-1.5 py-0.5 text-center font-medium">
-                                            {row.worktype}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
+                    <div className="border-r shrink-0 overflow-auto flex flex-col h-full">
+                        <table className="text-[11px] h-full">
                             <tbody>
-                                <tr>
-                                    {data.by_type.map((row) => (
-                                        <td key={row.worktype} className="px-1.5 py-0.5 text-center tabular-nums font-semibold">
-                                            {row.count}
+                                {[...data.by_type].sort((a, b) => a.worktype.localeCompare(b.worktype)).map((row, i) => (
+                                    <tr key={row.worktype} className={cn(
+                                        "border-b last:border-b-0 hover:bg-muted/30 transition-colors",
+                                        i % 2 === 1 && "bg-muted/15"
+                                    )}>
+                                        <td className="py-1 px-2 text-center">
+                                            <div className="tabular-nums font-bold text-xl leading-none">{row.count}</div>
+                                            <div className="font-medium whitespace-nowrap text-muted-foreground text-[10px] mt-0.5">{row.worktype}</div>
                                         </td>
-                                    ))}
-                                </tr>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
@@ -104,7 +99,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
 
                 {/* Weekly trend chart - fills remaining space */}
                 {trendData.length > 0 && (
-                    <div className="flex-1 min-h-0 p-2">
+                    <div className="flex-1 min-h-0 min-w-0 p-2">
                         <ChartContainer config={chartConfig} className="h-full w-full">
                             <LineChart data={trendData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />

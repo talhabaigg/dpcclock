@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { getDefaultLayout, GRID_COLS, GRID_ROWS, WIDGET_REGISTRY, type LayoutItem } from './widget-registry';
+import { getDefaultLayout, GRID_COLS, WIDGET_REGISTRY, type LayoutItem } from './widget-registry';
 
 export interface GridLayoutSettings {
     grid_layout?: LayoutItem[];

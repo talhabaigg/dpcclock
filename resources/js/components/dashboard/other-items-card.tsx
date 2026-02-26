@@ -92,67 +92,67 @@ export default function OtherItemsCard({ location, claimedToDate, cashRetention,
             <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-auto">
                 <table className="w-full h-full border-collapse text-[11px]">
                     <tbody>
-                        <tr className="border-b">
-                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium w-[240px]">
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">
                                 <FieldLabel
                                     label="Est Profit"
                                     helpText="Original estimated profit margin %. Calculated as: (Original Revenue - Original Cost) / Original Revenue × 100. Sourced from Premier ERP."
                                 />
                             </td>
                             <td className={cn(
-                                "px-1.5 py-0.5 text-right tabular-nums",
+                                "py-1 px-2 text-right tabular-nums",
                                 originalMarginPercentage !== null && originalMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
                             )}>
                                 {formatPercentage(originalMarginPercentage)}
                             </td>
                         </tr>
-                        <tr className="border-b">
-                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                        <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">
                                 <FieldLabel
                                     label="Forecast Margin"
                                     helpText="Current forecasted profit margin %. Calculated as: (Current Revenue - Current Cost) / Current Revenue × 100. Updated with variations and change orders from Premier ERP."
                                 />
                             </td>
                             <td className={cn(
-                                "px-1.5 py-0.5 text-right tabular-nums",
+                                "py-1 px-2 text-right tabular-nums",
                                 currentMarginPercentage !== null && currentMarginPercentage < 0 ? "text-red-600 font-semibold" : ""
                             )}>
                                 {formatPercentage(currentMarginPercentage)}
                             </td>
                         </tr>
-                        <tr className="border-b">
-                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">
                                 <FieldLabel
                                     label="Under/Over Billed"
                                     helpText="Over/Under billing amount. Shows whether you've billed more (positive) or less (negative) than work completed. Sourced from Premier ERP job summary."
                                 />
                             </td>
                             <td className={cn(
-                                "px-1.5 py-0.5 text-right tabular-nums",
+                                "py-1 px-2 text-right tabular-nums",
                                 underOverBilled < 0 ? "text-red-600 font-semibold" : underOverBilled > 0 ? "text-green-600 font-semibold" : ""
                             )}>
                                 {formatCurrency(underOverBilled)}
                             </td>
                         </tr>
-                        <tr className="border-b">
-                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                        <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">
                                 <FieldLabel
                                     label="Claimed to Date (%)"
                                     helpText="Percentage of total contract value claimed to date. Calculated as: Claimed Amount / Current Estimate Revenue × 100."
                                 />
                             </td>
-                            <td className="px-1.5 py-0.5 text-right tabular-nums">
+                            <td className="py-1 px-2 text-right tabular-nums">
                                 {formatPercentage(claimedToDatePercentage)}
                             </td>
                         </tr>
-                        <tr>
-                            <td className="px-1.5 py-0.5 border-r bg-muted/30 font-medium">
+                        <tr className="hover:bg-muted/30 transition-colors">
+                            <td className="py-1 px-2 font-medium">
                                 <FieldLabel
                                     label="Cash Retention"
                                     helpText="Cash retention amount held by the client. Typically released upon project completion or milestones."
                                 />
                             </td>
-                            <td className="px-1.5 py-0.5 text-right tabular-nums">
+                            <td className="py-1 px-2 text-right tabular-nums">
                                 {formatCurrency(cashRetention ?? 0)}
                             </td>
                         </tr>
