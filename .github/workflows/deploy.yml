@@ -34,6 +34,9 @@ jobs:
 
             cd ${{ secrets.APP_PATH }}
 
+            # Mark repo as safe (ownership may differ from SSH user)
+            git config --global --add safe.directory ${{ secrets.APP_PATH }}
+
             # ---- PHASE 1: Slow steps (site stays live) ----
 
             # Pull latest code
@@ -41,8 +44,10 @@ jobs:
             git pull origin main
             git stash drop || true
 
-            # Fix permissions (files may be owned by www-data)
-            sudo chown -R $(whoami) vendor/ public/build/ storage/ || true
+            # Fix permissions (shared ownership: deploy user + www-data group)
+            sudo chown -R $(whoami):www-data ${{ secrets.APP_PATH }} || true
+            sudo chmod -R g+w ${{ secrets.APP_PATH }} || true
+            sudo find ${{ secrets.APP_PATH }} -type d -exec chmod g+s {} + || true
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --optimize-autoloader

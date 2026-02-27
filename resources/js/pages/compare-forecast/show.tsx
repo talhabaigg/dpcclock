@@ -3,24 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
-import {
-    CategoryScale,
-    Chart as ChartJS,
-    ChartOptions,
-    Tooltip as ChartTooltip,
-    Filler,
-    Legend,
-    LinearScale,
-    LineElement,
-    PointElement,
-} from 'chart.js';
+import { BreadcrumbItem, SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowDownRight,
     ArrowLeft,
@@ -30,7 +19,6 @@ import {
     Calendar,
     Check,
     ChevronDown,
-    ChevronRight,
     ChevronsUpDown,
     ChevronUp,
     Copy,
@@ -43,10 +31,7 @@ import {
     TrendingUp,
     X,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
-import { Line } from 'react-chartjs-2';
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTooltip, Legend, Filler);
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type MonthComparison = {
     actual: number;
@@ -73,6 +58,13 @@ type LabourSummary = {
     }>;
 };
 
+type AvailableForecast = {
+    id: number;
+    forecast_month: string;
+    forecast_month_label: string;
+    status: string;
+};
+
 type Props = {
     comparisonData: {
         cost: ComparisonRow[];
@@ -85,6 +77,9 @@ type Props = {
     locationId: number | string;
     locationName?: string;
     labourSummary?: LabourSummary | null;
+    availableForecasts: AvailableForecast[];
+    selectedForecastId: number | null;
+    forecastSourceMonth?: string | null;
 };
 
 type SortState = {
@@ -147,58 +142,36 @@ const buildMonthTotals = (rows: ComparisonRow[], months: string[]): MonthTotal[]
         };
     });
 
-const Sparkline = ({
-    actuals,
-    forecasts,
-    width = 100,
-    height = 28,
+const MiniBarChart = ({
+    actual,
+    forecast,
+    width = 60,
+    height = 24,
+    actualColor = 'hsl(45 93% 47%)',
     className,
 }: {
-    actuals: Array<number | null>;
-    forecasts: Array<number | null>;
+    actual: number | null;
+    forecast: number | null;
     width?: number;
     height?: number;
+    actualColor?: string;
     className?: string;
 }) => {
+    const a = actual ?? 0;
+    const f = forecast ?? 0;
+    if (a === 0 && f === 0) return <div className={cn('bg-muted/40 rounded', className)} style={{ width, height }} />;
+
+    const max = Math.max(a, f);
     const padding = 2;
-    const allValues = [...actuals, ...forecasts].filter((v) => v != null) as number[];
-    if (!allValues.length) return <div className={cn('bg-muted/40 rounded', className)} style={{ width, height }} />;
-
-    const min = Math.min(...allValues);
-    const max = Math.max(...allValues);
-    const range = max - min || 1;
-
-    const getPoints = (values: Array<number | null>) => {
-        const xStep = (width - padding * 2) / Math.max(values.length - 1, 1);
-        return values
-            .map((value, idx) => {
-                if (value == null) return null;
-                const x = padding + idx * xStep;
-                const y = padding + (height - padding * 2) * (1 - (value - min) / range);
-                return `${x.toFixed(1)},${y.toFixed(1)}`;
-            })
-            .filter(Boolean)
-            .join(' ');
-    };
-
-    const actualPoints = getPoints(actuals);
-    const forecastPoints = getPoints(forecasts);
+    const barHeight = (height - padding * 3) / 2;
+    const maxBarWidth = width - padding * 2;
+    const aWidth = max > 0 ? (a / max) * maxBarWidth : 0;
+    const fWidth = max > 0 ? (f / max) * maxBarWidth : 0;
 
     return (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={cn('block', className)}>
-            {forecastPoints && (
-                <polyline
-                    points={forecastPoints}
-                    fill="none"
-                    stroke="hsl(221 83% 53%)"
-                    strokeWidth="1.5"
-                    strokeDasharray="3 2"
-                    strokeLinecap="round"
-                />
-            )}
-            {actualPoints && (
-                <polyline points={actualPoints} fill="none" stroke="hsl(45 93% 47%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            )}
+            <rect x={padding} y={padding} width={fWidth} height={barHeight} rx={1.5} fill="hsl(221 83% 53%)" />
+            <rect x={padding} y={padding * 2 + barHeight} width={aWidth} height={barHeight} rx={1.5} fill={actualColor} />
         </svg>
     );
 };
@@ -217,53 +190,96 @@ const VarianceIndicator = ({
     if (variance == null) return <span className="text-muted-foreground">-</span>;
 
     const isPositive = variance >= 0;
-    const isGood = type === 'cost' ? isPositive : isPositive;
+    // For cost: positive variance (forecast > actual) = under budget = good
+    // For revenue: positive variance (forecast > actual) = under target = bad
+    const isGood = type === 'cost' ? isPositive : !isPositive;
 
     return (
         <div className={cn('flex items-center gap-1', isGood ? 'text-emerald-600' : 'text-rose-600')}>
-            {isPositive ? <TrendingUp className="size-3 shrink-0" /> : <TrendingDown className="size-3 shrink-0" />}
+            {isGood ? <TrendingUp className="size-3 shrink-0" /> : <TrendingDown className="size-3 shrink-0" />}
             <span className={cn('font-medium', compact && 'text-sm')}>{formatAmount(Math.abs(variance))}</span>
-            {variancePct != null && !compact && <span className="text-xs opacity-75">({formatPercent(variancePct)})</span>}
+            {variancePct != null && !compact && <span className="text-xs opacity-75">({formatPercent(type === 'revenue' ? -variancePct : variancePct)})</span>}
+        </div>
+    );
+};
+
+const BulletChart = ({
+    actual,
+    forecast,
+    actualColor,
+}: {
+    actual: number;
+    forecast: number;
+    actualColor: string;
+}) => {
+    const max = Math.max(actual, forecast) * 1.15; // 15% headroom
+    const actualPct = max > 0 ? (actual / max) * 100 : 0;
+    const forecastPct = max > 0 ? (forecast / max) * 100 : 0;
+
+    return (
+        <div className="relative h-5 w-full">
+            {/* Background track */}
+            <div className="bg-muted absolute inset-0 rounded" />
+            {/* Actual bar */}
+            <div
+                className="absolute inset-y-0.5 left-0 rounded transition-all"
+                style={{ width: `${actualPct}%`, backgroundColor: actualColor }}
+            />
+            {/* Forecast target marker */}
+            <div
+                className="absolute top-0 bottom-0 w-0.5 bg-white/90 dark:bg-white/80"
+                style={{ left: `${forecastPct}%` }}
+            />
         </div>
     );
 };
 
 const KPICard = ({
     title,
-    value,
-    subtitle,
     trend,
     trendLabel,
-    icon: Icon,
+    barActual,
+    barForecast,
+    barActualColor,
 }: {
     title: string;
-    value: string;
-    subtitle?: string;
     trend?: 'up' | 'down' | 'neutral';
     trendLabel?: string;
-    icon: React.ElementType;
-}) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-muted-foreground text-xs font-medium sm:text-sm">{title}</CardTitle>
-            <Icon className="text-muted-foreground size-4" />
-        </CardHeader>
-        <CardContent>
-            <div className="truncate text-xl font-bold sm:text-2xl">{value}</div>
-            {(subtitle || trendLabel) && (
-                <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
-                    {trend && (
-                        <span className={cn('flex items-center', trend === 'up' && 'text-emerald-600', trend === 'down' && 'text-rose-600')}>
-                            {trend === 'up' ? <ArrowUpRight className="size-3" /> : trend === 'down' ? <ArrowDownRight className="size-3" /> : null}
-                            {trendLabel}
-                        </span>
-                    )}
-                    {subtitle && <span className="truncate">{subtitle}</span>}
-                </div>
-            )}
-        </CardContent>
-    </Card>
-);
+    barActual?: number;
+    barForecast?: number;
+    barActualColor?: string;
+}) => {
+    const aColor = barActualColor ?? 'hsl(45 93% 47%)';
+    const hasBars = barActual != null && barForecast != null;
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                <CardTitle className="text-muted-foreground text-xs font-medium sm:text-sm">{title}</CardTitle>
+                {trend && trendLabel && (
+                    <span className={cn('flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium',
+                        trend === 'up' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600',
+                    )}>
+                        {trend === 'up' ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                        {trendLabel}
+                    </span>
+                )}
+            </CardHeader>
+            <CardContent className="space-y-2">
+                {hasBars && (
+                    <>
+                        <div className="text-xl font-bold tabular-nums sm:text-2xl">${formatAmount(barActual)}</div>
+                        <BulletChart actual={barActual} forecast={barForecast} actualColor={aColor} />
+                        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                            <span className="inline-block h-0.5 w-3 bg-white/80 dark:bg-white/70" />
+                            <span>Forecast: ${formatAmount(barForecast)}</span>
+                        </div>
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
 
 const SortButton = ({
     label,
@@ -297,172 +313,79 @@ const SortButton = ({
 
 const MobileDataCard = ({
     row,
-    months,
+    activeMonth,
     type,
-    onChartClick,
 }: {
     row: ComparisonRow;
-    months: string[];
+    activeMonth: string;
     type: 'cost' | 'revenue';
-    onChartClick: (title: string, actuals: Array<number | null>, forecasts: Array<number | null>) => void;
 }) => {
-    const [expanded, setExpanded] = useState(false);
-    const rowActuals = months.map((m) => row.months?.[m]?.actual ?? null);
-    const rowForecasts = months.map((m) => row.months?.[m]?.forecast ?? null);
-
-    const totalActual = rowActuals.reduce((sum, v) => sum + (v ?? 0), 0);
-    const totalForecast = rowForecasts.reduce((sum, v) => sum + (v ?? 0), 0);
-    const totalVariance = totalForecast - totalActual;
+    const cell = row.months?.[activeMonth];
+    const variance = cell?.forecast != null ? cell.forecast - cell.actual : null;
+    const variancePct = variance != null && cell?.actual ? (variance / cell.actual) * 100 : null;
 
     return (
         <Card className="overflow-hidden">
-            <button type="button" className="w-full text-left" onClick={() => setExpanded(!expanded)}>
-                <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                            <CardTitle className="text-sm font-semibold">{row.cost_item}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 truncate text-xs">{row.cost_item_description}</p>
-                        </div>
-                        <ChevronRight className={cn('text-muted-foreground size-4 shrink-0 transition-transform', expanded && 'rotate-90')} />
+            <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                        <CardTitle className="text-sm font-semibold">{row.cost_item}</CardTitle>
+                        <p className="text-muted-foreground mt-0.5 truncate text-xs">{row.cost_item_description}</p>
                     </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <p className="text-muted-foreground text-xs">Actual</p>
-                                <p className="text-sm font-semibold tabular-nums">${formatAmount(totalActual)}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground text-xs">Forecast</p>
-                                <p className="text-muted-foreground text-sm font-medium tabular-nums">${formatAmount(totalForecast)}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground text-xs">Variance</p>
-                                <VarianceIndicator variance={totalVariance} variancePct={null} type={type} compact />
-                            </div>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onChartClick(`${row.cost_item} - ${row.cost_item_description}`, rowActuals, rowForecasts);
-                            }}
-                        >
-                            <Sparkline actuals={rowActuals} forecasts={rowForecasts} width={60} height={24} />
-                        </Button>
+                    <MiniBarChart actual={cell?.actual ?? null} forecast={cell?.forecast ?? null} actualColor={type === 'revenue' ? 'hsl(142 71% 45%)' : undefined} width={64} height={24} />
+                </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <p className="text-muted-foreground text-xs">Forecast</p>
+                        <p className="text-muted-foreground text-sm font-medium tabular-nums">${formatAmount(cell?.forecast)}</p>
                     </div>
-                </CardContent>
-            </button>
-
-            {expanded && (
-                <div className="bg-muted/30 border-t px-4 py-3">
-                    <p className="text-muted-foreground mb-2 text-xs font-medium">Monthly Breakdown</p>
-                    <div className="space-y-2">
-                        {months.map((month) => {
-                            const cell = row.months?.[month];
-                            const variance = cell?.forecast != null ? cell.forecast - cell.actual : null;
-                            const variancePct = variance != null && cell?.actual ? (variance / cell.actual) * 100 : null;
-
-                            return (
-                                <div key={month} className="flex items-center justify-between text-sm">
-                                    <span className="font-medium">{formatMonthLabel(month)}</span>
-                                    <div className="flex items-center gap-3 tabular-nums">
-                                        <span className="w-16 text-right">{formatAmount(cell?.actual)}</span>
-                                        <span className="text-muted-foreground w-16 text-right">{formatAmount(cell?.forecast)}</span>
-                                        <span className="w-20">
-                                            <VarianceIndicator variance={variance} variancePct={variancePct} type={type} compact />
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div>
+                        <p className="text-muted-foreground text-xs">Actual</p>
+                        <p className="text-sm font-semibold tabular-nums">${formatAmount(cell?.actual)}</p>
+                    </div>
+                    <div>
+                        <p className="text-muted-foreground text-xs">Variance</p>
+                        <VarianceIndicator variance={variance} variancePct={variancePct} type={type} compact />
                     </div>
                 </div>
-            )}
+            </CardContent>
         </Card>
     );
 };
 
 const MobileTotalsCard = ({
-    totals,
+    monthTotal,
     type,
-    onChartClick,
 }: {
-    totals: MonthTotal[];
+    monthTotal: MonthTotal | undefined;
     type: 'cost' | 'revenue';
-    onChartClick: (title: string, actuals: Array<number | null>, forecasts: Array<number | null>) => void;
 }) => {
-    const [expanded, setExpanded] = useState(false);
-    const totalActual = totals.reduce((sum, t) => sum + (t.actual ?? 0), 0);
-    const totalForecast = totals.reduce((sum, t) => sum + (t.forecast ?? 0), 0);
-    const totalVariance = totalForecast - totalActual;
-
     return (
         <Card className="bg-muted/50 overflow-hidden">
-            <button type="button" className="w-full text-left" onClick={() => setExpanded(!expanded)}>
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                        <CardTitle className="text-sm font-bold">Total</CardTitle>
-                        <ChevronRight className={cn('text-muted-foreground size-4 transition-transform', expanded && 'rotate-90')} />
+            <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm font-bold">Total</CardTitle>
+                    <MiniBarChart actual={monthTotal?.actual ?? null} forecast={monthTotal?.forecast ?? null} actualColor={type === 'revenue' ? 'hsl(142 71% 45%)' : undefined} width={64} height={24} />
+                </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <p className="text-muted-foreground text-xs">Forecast</p>
+                        <p className="text-muted-foreground text-sm font-semibold tabular-nums">${formatAmount(monthTotal?.forecast)}</p>
                     </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <p className="text-muted-foreground text-xs">Actual</p>
-                                <p className="text-sm font-bold tabular-nums">${formatAmount(totalActual)}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground text-xs">Forecast</p>
-                                <p className="text-muted-foreground text-sm font-semibold tabular-nums">${formatAmount(totalForecast)}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground text-xs">Variance</p>
-                                <VarianceIndicator variance={totalVariance} variancePct={null} type={type} compact />
-                            </div>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onChartClick(
-                                    `${type === 'cost' ? 'Cost' : 'Revenue'} Total`,
-                                    totals.map((t) => t.actual),
-                                    totals.map((t) => t.forecast),
-                                );
-                            }}
-                        >
-                            <Sparkline actuals={totals.map((t) => t.actual)} forecasts={totals.map((t) => t.forecast)} width={60} height={24} />
-                        </Button>
+                    <div>
+                        <p className="text-muted-foreground text-xs">Actual</p>
+                        <p className="text-sm font-bold tabular-nums">${formatAmount(monthTotal?.actual)}</p>
                     </div>
-                </CardContent>
-            </button>
-
-            {expanded && (
-                <div className="bg-background border-t px-4 py-3">
-                    <p className="text-muted-foreground mb-2 text-xs font-medium">Monthly Breakdown</p>
-                    <div className="space-y-2">
-                        {totals.map((total) => (
-                            <div key={total.month} className="flex items-center justify-between text-sm">
-                                <span className="font-medium">{formatMonthLabel(total.month)}</span>
-                                <div className="flex items-center gap-3 tabular-nums">
-                                    <span className="w-16 text-right font-semibold">{formatAmount(total.actual)}</span>
-                                    <span className="text-muted-foreground w-16 text-right">{formatAmount(total.forecast)}</span>
-                                    <span className="w-20">
-                                        <VarianceIndicator variance={total.variance} variancePct={total.variancePct} type={type} compact />
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
+                    <div>
+                        <p className="text-muted-foreground text-xs">Variance</p>
+                        <VarianceIndicator variance={monthTotal?.variance ?? null} variancePct={monthTotal?.variancePct ?? null} type={type} compact />
                     </div>
                 </div>
-            )}
+            </CardContent>
         </Card>
     );
 };
@@ -483,6 +406,9 @@ type EmailDataType = {
     revenueAssessment: { text: string; level: 'green' | 'amber' | 'red' };
     costAssessment: { text: string; level: 'green' | 'amber' | 'red' };
 };
+
+const escHtml = (str: string): string =>
+    str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const eFmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const ePct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
@@ -577,10 +503,11 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
     const hasModerate = assessments.some((a) => a.level === 'amber');
 
     // Outlook-compatible variance row (uses bgcolor + font color attributes)
-    const varRow = (label: string, actual: number, forecast: number, indent = false, bold = false) => {
+    // isCost: for cost rows, positive diff (overspend) is bad → red; for revenue/margin, positive diff is good → green
+    const varRow = (label: string, actual: number, forecast: number, indent = false, bold = false, isCost = false) => {
         const diff = actual - forecast;
         const diffPct = forecast !== 0 ? (diff / forecast) * 100 : 0;
-        const c = eColor(diff);
+        const c = eColor(isCost ? -diff : diff);
         const fw = bold ? 'font-weight:bold;' : '';
         const pl = indent ? 'padding-left:28px;' : '';
         return `<tr>
@@ -621,7 +548,7 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
     // Labour variances rows
     const labourVarRows = (labourSummary?.templateVariances ?? []).map((t, i) =>
         `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
-            <td style="padding:6px 10px;"><font color="#374151">${t.name} &mdash; ${t.weekEnding}</font></td>
+            <td style="padding:6px 10px;"><font color="#374151">${escHtml(t.name)} &mdash; ${escHtml(t.weekEnding)}</font></td>
             <td align="right" style="padding:6px 10px;">${eFmt(t.actual)}</td>
             <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(t.forecast)}</font></td>
             <td align="right" style="padding:6px 10px;"><font color="${eColor(t.variance)}"><b>${eDiff(t.variance)}</b> / ${ePct(t.variancePct)}</font></td>
@@ -631,7 +558,7 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
     // Material variances rows
     const matVarRows = data.sigMaterials.map((m, i) =>
         `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
-            <td style="padding:6px 10px;"><font color="#374151">${m.label}</font></td>
+            <td style="padding:6px 10px;"><font color="#374151">${escHtml(m.label)}</font></td>
             <td align="right" style="padding:6px 10px;">${eFmt(m.actual)}</td>
             <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(m.forecast)}</font></td>
             <td align="right" style="padding:6px 10px;"><font color="${eColor(m.diff)}"><b>${eDiff(m.diff)}</b> / ${ePct(m.diffPct)}</font></td>
@@ -658,14 +585,14 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
 <table cellpadding="0" cellspacing="0" border="0" width="100%">
 <tr><td bgcolor="#1e3a5f" style="padding:20px 24px;">
     <font color="#94a3b8" style="font-size:11px;text-transform:uppercase;letter-spacing:1px;">FORECAST VS ACTUAL REPORT</font><br>
-    <font color="#ffffff" style="font-size:20px;font-weight:bold;">${data.jobName}</font><br>
-    <font color="#bfdbfe" style="font-size:14px;">${data.monthLabel}</font>
+    <font color="#ffffff" style="font-size:20px;font-weight:bold;">${escHtml(data.jobName)}</font><br>
+    <font color="#bfdbfe" style="font-size:14px;">${escHtml(data.monthLabel)}</font>
 </td></tr>
 </table>
 
 <br>
 <p><font color="#374151">Hi Team,</font></p>
-<p><font color="#374151">Please find below a summary of Forecast vs Actual performance for <b>${data.monthLabel}</b>.</font></p>
+<p><font color="#374151">Please find below a summary of Forecast vs Actual performance for <b>${escHtml(data.monthLabel)}</b>.</font></p>
 
 <!-- Overall Highlights -->
 <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -687,9 +614,9 @@ ${heading('Financial Position')}
     <th align="right" style="padding:10px 12px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VAR (%)</font></th>
 </tr>
 ${varRow('Revenue', data.revenue.actual, data.revenue.forecast)}
-${varRow('Total Cost', data.totalCostActual, data.totalCostForecast)}
-${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Labour', data.labour.actual, data.labour.forecast, true)}
-${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Materials &amp; Other', data.materials.actual, data.materials.forecast, true)}
+${varRow('Total Cost', data.totalCostActual, data.totalCostForecast, false, false, true)}
+${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Labour', data.labour.actual, data.labour.forecast, true, false, true)}
+${varRow('&nbsp;&nbsp;&nbsp;&nbsp;Materials &amp; Other', data.materials.actual, data.materials.forecast, true, false, true)}
 <tr bgcolor="#f1f5f9">
     <td style="padding:10px 12px;font-weight:bold;"><font color="#1e293b">Gross Margin</font></td>
     <td align="right" style="padding:10px 12px;font-weight:bold;">${eFmt(data.marginActual)}</td>
@@ -752,7 +679,10 @@ ${heading('Management Actions')}
 </table>`;
 }
 
-export default function CompareForecastShow({ comparisonData, months, selectedForecastMonth, latestForecastMonth, jobNumber, locationId, locationName, labourSummary }: Props) {
+export default function CompareForecastShow({ comparisonData, months, selectedForecastMonth, latestForecastMonth, jobNumber, locationId, locationName, labourSummary, availableForecasts, selectedForecastId, forecastSourceMonth }: Props) {
+    const { auth } = usePage<SharedData>().props;
+    const userEmail = auth.user.email;
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
         { title: `Job ${jobNumber ?? ''}`, href: `/locations/${locationId}` },
@@ -763,12 +693,6 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
     const [searchQuery, setSearchQuery] = useState('');
     const [costSort, setCostSort] = useState<SortState>(null);
     const [revenueSort, setRevenueSort] = useState<SortState>(null);
-    const [chartDialog, setChartDialog] = useState<{
-        open: boolean;
-        title: string;
-        actuals: Array<number | null>;
-        forecasts: Array<number | null>;
-    }>({ open: false, title: '', actuals: [], forecasts: [] });
 
     const activeMonth = selectedForecastMonth ?? '';
     const showOutdatedNotice = Boolean(selectedForecastMonth && latestForecastMonth && selectedForecastMonth !== latestForecastMonth);
@@ -785,7 +709,19 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
 
     const handleMonthChange = (value: string) => {
         if (!value) return;
-        router.get(`/location/${locationId}/compare-forecast-actuals`, { month: value }, { preserveScroll: true });
+        const params: Record<string, string | number> = { month: value };
+        if (selectedForecastId) {
+            params.forecast_id = selectedForecastId;
+        }
+        router.get(`/location/${locationId}/compare-forecast-actuals`, params, { preserveScroll: true });
+    };
+
+    const handleForecastSourceChange = (value: string) => {
+        const params: Record<string, string | number> = { month: activeMonth };
+        if (value !== 'auto') {
+            params.forecast_id = parseInt(value);
+        }
+        router.get(`/location/${locationId}/compare-forecast-actuals`, params, { preserveScroll: true });
     };
 
     const filterRows = (rows: ComparisonRow[]): ComparisonRow[] => {
@@ -844,16 +780,28 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
     const costTotals = useMemo(() => buildMonthTotals(costRows, months), [costRows, months]);
     const revenueTotals = useMemo(() => buildMonthTotals(revenueRows, months), [revenueRows, months]);
 
+    // Unfiltered totals for KPI cards — these should not change when searching
+    const allCostTotals = useMemo(() => buildMonthTotals(comparisonData?.cost ?? [], months), [comparisonData?.cost, months]);
+    const allRevenueTotals = useMemo(() => buildMonthTotals(comparisonData?.revenue ?? [], months), [comparisonData?.revenue, months]);
+
     const summaryStats = useMemo(() => {
-        const totalActualCost = costTotals.reduce((sum, t) => sum + (t.actual ?? 0), 0);
-        const totalForecastCost = costTotals.reduce((sum, t) => sum + (t.forecast ?? 0), 0);
-        const totalActualRevenue = revenueTotals.reduce((sum, t) => sum + (t.actual ?? 0), 0);
-        const totalForecastRevenue = revenueTotals.reduce((sum, t) => sum + (t.forecast ?? 0), 0);
+        const costMonth = allCostTotals.find((t) => t.month === activeMonth);
+        const revMonth = allRevenueTotals.find((t) => t.month === activeMonth);
+
+        const totalActualCost = costMonth?.actual ?? 0;
+        const totalForecastCost = costMonth?.forecast ?? 0;
+        const totalActualRevenue = revMonth?.actual ?? 0;
+        const totalForecastRevenue = revMonth?.forecast ?? 0;
 
         const costVariance = totalForecastCost - totalActualCost;
         const revenueVariance = totalForecastRevenue - totalActualRevenue;
         const costVariancePct = totalActualCost !== 0 ? (costVariance / totalActualCost) * 100 : 0;
         const revenueVariancePct = totalActualRevenue !== 0 ? (revenueVariance / totalActualRevenue) * 100 : 0;
+
+        const margin = totalActualRevenue - totalActualCost;
+        const forecastMargin = totalForecastRevenue - totalForecastCost;
+        const marginVariance = margin - forecastMargin;
+        const marginVariancePct = forecastMargin !== 0 ? (marginVariance / Math.abs(forecastMargin)) * 100 : 0;
 
         return {
             totalActualCost,
@@ -864,13 +812,21 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
             revenueVariance,
             costVariancePct,
             revenueVariancePct,
-            margin: totalActualRevenue - totalActualCost,
+            margin,
+            forecastMargin,
+            marginVariance,
+            marginVariancePct,
         };
-    }, [costTotals, revenueTotals]);
+    }, [allCostTotals, allRevenueTotals, activeMonth]);
 
     // --- Email report data ---
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    useEffect(() => {
+        return () => timersRef.current.forEach(clearTimeout);
+    }, []);
 
     const emailData = useMemo(() => {
         const allCostRows = comparisonData?.cost ?? [];
@@ -906,7 +862,13 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
         const monthLabel = selectedForecastMonth
             ? (() => {
                   const [y, m] = selectedForecastMonth.split('-');
-                  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                  const actualsLabel = new Date(Number(y), Number(m) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                  if (forecastSourceMonth && forecastSourceMonth !== selectedForecastMonth) {
+                      const [fy, fm] = forecastSourceMonth.split('-');
+                      const forecastLabel = new Date(Number(fy), Number(fm) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                      return `${actualsLabel} (vs ${forecastLabel} forecast)`;
+                  }
+                  return actualsLabel;
               })()
             : '[Month Year]';
 
@@ -961,7 +923,7 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
             revenueAssessment: assessRevenue(),
             costAssessment: assessCost(),
         };
-    }, [comparisonData, months, selectedForecastMonth, locationName, jobNumber, labourSummary]);
+    }, [comparisonData, months, selectedForecastMonth, forecastSourceMonth, locationName, jobNumber]);
 
     const handleCopyAndEmail = useCallback(async () => {
         const html = buildEmailHtml(emailData, labourSummary ?? null);
@@ -970,11 +932,11 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                 new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) }),
             ]);
             setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            timersRef.current.push(setTimeout(() => setCopied(false), 2000));
             // Open mailto with subject + recipients only (body pasted by user)
             const subject = `${emailData.jobName} - Monthly Forecast vs Actual - ${emailData.monthLabel}`;
-            const mailtoUrl = `mailto:talha@superiorgroup.com.au?subject=${encodeURIComponent(subject)}`;
-            setTimeout(() => { window.location.href = mailtoUrl; }, 300);
+            const mailtoUrl = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}`;
+            timersRef.current.push(setTimeout(() => { window.location.href = mailtoUrl; }, 300));
         } catch {
             // Fallback: create a temporary element for manual selection
             const tmp = document.createElement('div');
@@ -991,117 +953,37 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
         }
     }, [emailData, labourSummary]);
 
-    const openChart = (title: string, actuals: Array<number | null>, forecasts: Array<number | null>) => {
-        setChartDialog({ open: true, title, actuals, forecasts });
-    };
+    const renderDesktopTable = (type: 'cost' | 'revenue', rows: ComparisonRow[], totals: MonthTotal[], sort: SortState) => {
+        const monthTotal = totals.find((t) => t.month === activeMonth);
+        const barColor = type === 'revenue' ? 'hsl(142 71% 45%)' : undefined;
 
-    const chartData = chartDialog.open
-        ? {
-              labels: months.map(formatMonthLabel),
-              datasets: [
-                  {
-                      label: 'Actual',
-                      data: chartDialog.actuals,
-                      borderColor: 'hsl(45 93% 47%)',
-                      backgroundColor: 'hsla(45, 93%, 47%, 0.1)',
-                      borderWidth: 2.5,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      pointHoverRadius: 6,
-                      spanGaps: true,
-                      fill: true,
-                  },
-                  {
-                      label: 'Forecast',
-                      data: chartDialog.forecasts,
-                      borderColor: 'hsl(221 83% 53%)',
-                      backgroundColor: 'hsla(221, 83%, 53%, 0.1)',
-                      borderWidth: 2.5,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      pointHoverRadius: 6,
-                      spanGaps: true,
-                      borderDash: [6, 4],
-                      fill: true,
-                  },
-              ],
-          }
-        : null;
-
-    const chartOptions: ChartOptions<'line'> = {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: {
-                position: 'top',
-                labels: { usePointStyle: true, boxWidth: 8, padding: 16 },
-            },
-            tooltip: {
-                backgroundColor: 'hsl(0 0% 100%)',
-                titleColor: 'hsl(222 47% 11%)',
-                bodyColor: 'hsl(222 47% 11%)',
-                borderColor: 'hsl(214 32% 91%)',
-                borderWidth: 1,
-                padding: 12,
-                cornerRadius: 8,
-                callbacks: {
-                    label: (context) => `${context.dataset.label}: ${formatAmount(context.raw as number)}`,
-                },
-            },
-        },
-        scales: {
-            x: { grid: { display: false } },
-            y: {
-                grid: { color: 'hsl(214 32% 91%)' },
-                ticks: { callback: (value) => formatAmount(Number(value)) },
-            },
-        },
-    };
-
-    const renderDesktopTable = (type: 'cost' | 'revenue', rows: ComparisonRow[], totals: MonthTotal[], sort: SortState) => (
-        <div className="bg-card overflow-hidden rounded-lg border sm:max-w-4xl md:max-w-5xl lg:max-w-full">
-            <div className="overflow-x-auto">
+        return (
+            <div className="bg-card overflow-hidden rounded-lg border">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableHead className="w-[100px] lg:w-[120px]">
+                            <TableHead className="w-[100px]">
                                 <SortButton label="Code" sortKey="cost_item" currentSort={sort} onSort={(key) => toggleSort(type, key)} />
                             </TableHead>
-                            <TableHead className="min-w-[150px] lg:min-w-[200px]">
+                            <TableHead>
                                 <SortButton label="Description" sortKey="description" currentSort={sort} onSort={(key) => toggleSort(type, key)} />
                             </TableHead>
-                            {months.map((month) => (
-                                <TableHead key={month} className="text-center" colSpan={3}>
-                                    <SortButton
-                                        label={formatMonthLabel(month)}
-                                        sortKey={`month:${month}:actual`}
-                                        currentSort={sort}
-                                        onSort={(key) => toggleSort(type, key)}
-                                    />
-                                </TableHead>
-                            ))}
-                            <TableHead className="w-[100px] text-center lg:w-[120px]">Trend</TableHead>
-                        </TableRow>
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                            <TableHead />
-                            <TableHead />
-                            {months.map((month) => (
-                                <TableHead key={`sub-${month}`} colSpan={3}>
-                                    <div className="text-muted-foreground flex justify-end gap-2 text-xs lg:gap-4">
-                                        <span>Actual</span>
-                                        <span>Forecast</span>
-                                        <span>Var</span>
-                                    </div>
-                                </TableHead>
-                            ))}
-                            <TableHead />
+                            <TableHead className="w-[120px] text-right">
+                                <SortButton label="Forecast" sortKey={`month:${activeMonth}:forecast`} currentSort={sort} onSort={(key) => toggleSort(type, key)} />
+                            </TableHead>
+                            <TableHead className="w-[120px] text-right">
+                                <SortButton label="Actual" sortKey={`month:${activeMonth}:actual`} currentSort={sort} onSort={(key) => toggleSort(type, key)} />
+                            </TableHead>
+                            <TableHead className="w-[140px] text-right">
+                                <SortButton label="Variance" sortKey={`month:${activeMonth}:variance`} currentSort={sort} onSort={(key) => toggleSort(type, key)} />
+                            </TableHead>
+                            <TableHead className="w-[240px] text-center">F vs A</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3 + months.length * 3} className="h-32 text-center">
+                                <TableCell colSpan={6} className="h-32 text-center">
                                     <div className="text-muted-foreground flex flex-col items-center gap-2">
                                         <BarChart3 className="size-8 opacity-50" />
                                         <span>No data available</span>
@@ -1111,101 +993,48 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                         ) : (
                             <>
                                 {rows.map((row) => {
-                                    const rowActuals = months.map((m) => row.months?.[m]?.actual ?? null);
-                                    const rowForecasts = months.map((m) => row.months?.[m]?.forecast ?? null);
+                                    const cell = row.months?.[activeMonth];
+                                    const variance = cell?.forecast != null ? cell.forecast - cell.actual : null;
+                                    const variancePct = variance != null && cell?.actual ? (variance / cell.actual) * 100 : null;
 
                                     return (
                                         <TableRow key={row.cost_item}>
                                             <TableCell className="font-medium">{row.cost_item}</TableCell>
-                                            <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                                            <TableCell className="text-muted-foreground truncate">
                                                 {row.cost_item_description}
                                             </TableCell>
-                                            {months.map((month) => {
-                                                const cell = row.months?.[month];
-                                                const variance = cell?.forecast != null ? cell.forecast - cell.actual : null;
-                                                const variancePct = variance != null && cell?.actual ? (variance / cell.actual) * 100 : null;
-
-                                                return (
-                                                    <TableCell key={month} colSpan={3}>
-                                                        <div className="flex justify-end gap-2 text-right text-sm tabular-nums lg:gap-4">
-                                                            <span className="w-16 lg:w-20">{formatAmount(cell?.actual)}</span>
-                                                            <span className="text-muted-foreground w-16 lg:w-20">{formatAmount(cell?.forecast)}</span>
-                                                            <span className="w-20 lg:w-24">
-                                                                <VarianceIndicator
-                                                                    variance={variance}
-                                                                    variancePct={variancePct}
-                                                                    type={type}
-                                                                    compact
-                                                                />
-                                                            </span>
-                                                        </div>
-                                                    </TableCell>
-                                                );
-                                            })}
-                                            <TableCell>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 w-full"
-                                                            onClick={() =>
-                                                                openChart(`${row.cost_item} - ${row.cost_item_description}`, rowActuals, rowForecasts)
-                                                            }
-                                                        >
-                                                            <Sparkline actuals={rowActuals} forecasts={rowForecasts} width={80} />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Click to expand chart</TooltipContent>
-                                                </Tooltip>
+                                            <TableCell className="text-muted-foreground text-right text-sm tabular-nums">
+                                                {formatAmount(cell?.forecast)}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm tabular-nums">
+                                                {formatAmount(cell?.actual)}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm tabular-nums">
+                                                <VarianceIndicator variance={variance} variancePct={variancePct} type={type} />
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <MiniBarChart actual={cell?.actual ?? null} forecast={cell?.forecast ?? null} actualColor={barColor} width={140} height={24} className="mx-auto" />
                                             </TableCell>
                                         </TableRow>
                                     );
                                 })}
                                 <TableRow className="bg-muted/50 hover:bg-muted/50 font-medium">
                                     <TableCell colSpan={2}>Total</TableCell>
-                                    {totals.map((total) => (
-                                        <TableCell key={total.month} colSpan={3}>
-                                            <div className="flex justify-end gap-2 text-right text-sm tabular-nums lg:gap-4">
-                                                <span className="w-16 font-semibold lg:w-20">{formatAmount(total.actual)}</span>
-                                                <span className="text-muted-foreground w-16 font-semibold lg:w-20">
-                                                    {formatAmount(total.forecast)}
-                                                </span>
-                                                <span className="w-20 lg:w-24">
-                                                    <VarianceIndicator
-                                                        variance={total.variance}
-                                                        variancePct={total.variancePct}
-                                                        type={type}
-                                                        compact
-                                                    />
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                    ))}
-                                    <TableCell>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 w-full"
-                                                    onClick={() =>
-                                                        openChart(
-                                                            `${type === 'cost' ? 'Cost' : 'Revenue'} Total`,
-                                                            totals.map((t) => t.actual),
-                                                            totals.map((t) => t.forecast),
-                                                        )
-                                                    }
-                                                >
-                                                    <Sparkline
-                                                        actuals={totals.map((t) => t.actual)}
-                                                        forecasts={totals.map((t) => t.forecast)}
-                                                        width={80}
-                                                    />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Click to expand chart</TooltipContent>
-                                        </Tooltip>
+                                    <TableCell className="text-muted-foreground text-right text-sm font-semibold tabular-nums">
+                                        {formatAmount(monthTotal?.forecast)}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm font-semibold tabular-nums">
+                                        {formatAmount(monthTotal?.actual)}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm tabular-nums">
+                                        <VarianceIndicator
+                                            variance={monthTotal?.variance ?? null}
+                                            variancePct={monthTotal?.variancePct ?? null}
+                                            type={type}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <MiniBarChart actual={monthTotal?.actual ?? null} forecast={monthTotal?.forecast ?? null} actualColor={barColor} width={140} height={24} className="mx-auto" />
                                     </TableCell>
                                 </TableRow>
                             </>
@@ -1213,40 +1042,52 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                     </TableBody>
                 </Table>
             </div>
-        </div>
-    );
+        );
+    };
 
-    const renderMobileCards = (type: 'cost' | 'revenue', rows: ComparisonRow[], totals: MonthTotal[]) => (
-        <div className="space-y-3">
-            {rows.length === 0 ? (
-                <Card>
-                    <CardContent className="text-muted-foreground flex flex-col items-center justify-center py-12">
-                        <BarChart3 className="mb-2 size-8 opacity-50" />
-                        <span>No data available</span>
-                    </CardContent>
-                </Card>
-            ) : (
-                <>
-                    {rows.map((row) => (
-                        <MobileDataCard key={row.cost_item} row={row} months={months} type={type} onChartClick={openChart} />
-                    ))}
-                    <MobileTotalsCard totals={totals} type={type} onChartClick={openChart} />
-                </>
-            )}
-        </div>
-    );
+    const renderMobileCards = (type: 'cost' | 'revenue', rows: ComparisonRow[], totals: MonthTotal[]) => {
+        const monthTotal = totals.find((t) => t.month === activeMonth);
+
+        return (
+            <div className="space-y-3">
+                {rows.length === 0 ? (
+                    <Card>
+                        <CardContent className="text-muted-foreground flex flex-col items-center justify-center py-12">
+                            <BarChart3 className="mb-2 size-8 opacity-50" />
+                            <span>No data available</span>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <>
+                        {rows.map((row) => (
+                            <MobileDataCard key={row.cost_item} row={row} activeMonth={activeMonth} type={type} />
+                        ))}
+                        <MobileTotalsCard monthTotal={monthTotal} type={type} />
+                    </>
+                )}
+            </div>
+        );
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Forecast vs Actuals" />
 
             <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
-                {showOutdatedNotice && (
+                {showOutdatedNotice && !selectedForecastId && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
                         <div className="text-sm font-medium">Forecast may be outdated</div>
                         <div className="mt-1 text-xs md:text-sm">
                             This view is using the {formatMonthLabel(selectedForecastMonth)} forecast. Latest is{' '}
                             {formatMonthLabel(latestForecastMonth)}. This view may use outdated data from a previous forecast.
+                        </div>
+                    </div>
+                )}
+                {selectedForecastId && forecastSourceMonth && forecastSourceMonth !== activeMonth && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                        <div className="text-sm font-medium">Cross-month comparison</div>
+                        <div className="mt-1 text-xs md:text-sm">
+                            Showing {formatMonthLabel(activeMonth)} actuals compared against the {formatMonthLabel(forecastSourceMonth)} forecast.
                         </div>
                     </div>
                 )}
@@ -1257,35 +1098,64 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                         <p className="text-muted-foreground text-xs md:text-sm">Compare forecasted values against actual performance</p>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="bg-card flex items-center rounded-lg border">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 rounded-r-none"
-                                onClick={() => handleMonthChange(addMonths(activeMonth, -1))}
-                                disabled={!activeMonth}
-                            >
-                                <ArrowLeft className="size-4" />
-                            </Button>
-                            <div className="flex min-w-0 items-center gap-2 border-x px-2 md:px-3">
-                                <Calendar className="text-muted-foreground hidden size-4 shrink-0 sm:block" />
-                                <input
-                                    type="month"
-                                    value={activeMonth}
-                                    onChange={(e) => handleMonthChange(e.target.value)}
-                                    className="h-9 min-w-0 border-0 bg-transparent text-sm font-medium focus:outline-none"
-                                />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="bg-card flex items-center rounded-lg border">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 rounded-r-none"
+                                    onClick={() => handleMonthChange(addMonths(activeMonth, -1))}
+                                    disabled={!activeMonth}
+                                >
+                                    <ArrowLeft className="size-4" />
+                                </Button>
+                                <div className="flex min-w-0 items-center gap-2 border-x px-2 md:px-3">
+                                    <Calendar className="text-muted-foreground hidden size-4 shrink-0 sm:block" />
+                                    <input
+                                        type="month"
+                                        value={activeMonth}
+                                        onChange={(e) => handleMonthChange(e.target.value)}
+                                        className="h-9 min-w-0 border-0 bg-transparent text-sm font-medium focus:outline-none"
+                                    />
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 rounded-l-none"
+                                    onClick={() => handleMonthChange(addMonths(activeMonth, 1))}
+                                    disabled={!activeMonth}
+                                >
+                                    <ArrowRight className="size-4" />
+                                </Button>
                             </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 rounded-l-none"
-                                onClick={() => handleMonthChange(addMonths(activeMonth, 1))}
-                                disabled={!activeMonth}
-                            >
-                                <ArrowRight className="size-4" />
-                            </Button>
+
+                            {availableForecasts.length > 0 && (
+                                <div className="bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                                    <span className="text-muted-foreground whitespace-nowrap text-xs font-medium">Forecast:</span>
+                                    <Select
+                                        value={selectedForecastId?.toString() ?? 'auto'}
+                                        onValueChange={handleForecastSourceChange}
+                                    >
+                                        <SelectTrigger className="h-8 min-w-[160px] border-0 bg-transparent shadow-none">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="auto">Auto (match actuals month)</SelectItem>
+                                            {availableForecasts.map((forecast) => (
+                                                <SelectItem key={forecast.id} value={forecast.id.toString()}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span>{forecast.forecast_month_label}</span>
+                                                        <Badge variant="outline" className="text-xs capitalize">
+                                                            {forecast.status}
+                                                        </Badge>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex w-full gap-2 sm:w-auto">
@@ -1304,29 +1174,29 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                 </div>
 
                 {/* KPI Cards */}
-                <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3">
                     <KPICard
-                        title="Total Actual Cost"
-                        value={`$${formatAmount(summaryStats.totalActualCost)}`}
+                        title="Total Cost"
                         trend={summaryStats.costVariance >= 0 ? 'up' : 'down'}
                         trendLabel={formatPercent(summaryStats.costVariancePct)}
-                        subtitle="vs forecast"
-                        icon={DollarSign}
+                        barActual={summaryStats.totalActualCost}
+                        barForecast={summaryStats.totalForecastCost}
                     />
                     <KPICard
-                        title="Total Actual Revenue"
-                        value={`$${formatAmount(summaryStats.totalActualRevenue)}`}
-                        trend={summaryStats.revenueVariance >= 0 ? 'up' : 'down'}
-                        trendLabel={formatPercent(summaryStats.revenueVariancePct)}
-                        subtitle="vs forecast"
-                        icon={TrendingUp}
+                        title="Total Revenue"
+                        trend={summaryStats.revenueVariance <= 0 ? 'up' : 'down'}
+                        trendLabel={formatPercent(-summaryStats.revenueVariancePct)}
+                        barActual={summaryStats.totalActualRevenue}
+                        barForecast={summaryStats.totalForecastRevenue}
+                        barActualColor="hsl(142 71% 45%)"
                     />
-                    <KPICard title="Gross Margin" value={`$${formatAmount(summaryStats.margin)}`} subtitle="Revenue - Cost" icon={BarChart3} />
                     <KPICard
-                        title="Periods Analyzed"
-                        value={String(months.length)}
-                        subtitle={selectedForecastMonth ? `Forecast: ${formatMonthLabel(selectedForecastMonth)}` : 'No forecast'}
-                        icon={Calendar}
+                        title="Gross Margin"
+                        trend={summaryStats.marginVariance >= 0 ? 'up' : 'down'}
+                        trendLabel={formatPercent(summaryStats.marginVariancePct)}
+                        barActual={summaryStats.margin}
+                        barForecast={summaryStats.forecastMargin}
+                        barActualColor="hsl(142 71% 45%)"
                     />
                 </div>
 
@@ -1408,16 +1278,6 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                 </div>
             </div>
 
-            {/* Chart Dialog */}
-            <Dialog open={chartDialog.open} onOpenChange={(open) => setChartDialog((prev) => ({ ...prev, open }))}>
-                <DialogContent className="w-[95vw] max-w-4xl">
-                    <DialogHeader>
-                        <DialogTitle className="pr-6 text-base sm:text-lg">{chartDialog.title}</DialogTitle>
-                    </DialogHeader>
-                    <div className="h-[50vh] w-full sm:h-[400px]">{chartData && <Line data={chartData} options={chartOptions} />}</div>
-                </DialogContent>
-            </Dialog>
-
             {/* Email Preview Dialog */}
             <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
                 <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
@@ -1435,7 +1295,7 @@ export default function CompareForecastShow({ comparisonData, months, selectedFo
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => {
                             const subject = `${emailData.jobName} - Monthly Forecast vs Actual - ${emailData.monthLabel}`;
-                            window.location.href = `mailto:talha@superiorgroup.com.au?subject=${encodeURIComponent(subject)}`;
+                            window.location.href = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}`;
                         }} className="gap-2">
                             <ExternalLink className="size-4" />
                             Open Email Only

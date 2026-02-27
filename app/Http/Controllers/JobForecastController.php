@@ -533,12 +533,23 @@ class JobForecastController extends Controller
         $jobNumber = $locationModel->external_id;
         $locationName = $locationModel->name;
         $month = $request->query('month');
+        $forecastId = $request->query('forecast_id') ? (int) $request->query('forecast_id') : null;
         $latestForecast = JobForecast::where('job_number', $jobNumber)
             ->orderBy('forecast_month', 'desc')
             ->first();
         $latestForecastMonth = $latestForecast
             ? Carbon::parse($latestForecast->forecast_month)->format('Y-m')
             : null;
+
+        $availableForecasts = JobForecast::where('job_number', $jobNumber)
+            ->orderBy('forecast_month', 'desc')
+            ->get(['id', 'forecast_month', 'status'])
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'forecast_month' => $f->forecast_month->format('Y-m'),
+                'forecast_month_label' => $f->forecast_month->format('F Y'),
+                'status' => $f->status,
+            ]);
 
         if (! $month) {
             return Inertia::render('compare-forecast/show', [
@@ -553,14 +564,25 @@ class JobForecastController extends Controller
                 'locationId' => $location,
                 'locationName' => $locationName,
                 'labourSummary' => null,
+                'availableForecasts' => $availableForecasts,
+                'selectedForecastId' => null,
+                'forecastSourceMonth' => null,
             ]);
         }
 
         $forecastMonth = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
-        $jobForecast = JobForecast::with('data')
-            ->where('forecast_month', $forecastMonth->format('Y-m-d'))
-            ->where('job_number', $jobNumber)
-            ->first();
+
+        if ($forecastId) {
+            $jobForecast = JobForecast::with('data')
+                ->where('id', $forecastId)
+                ->where('job_number', $jobNumber)
+                ->first();
+        } else {
+            $jobForecast = JobForecast::with('data')
+                ->where('forecast_month', $forecastMonth->format('Y-m-d'))
+                ->where('job_number', $jobNumber)
+                ->first();
+        }
 
         $forecastData = $jobForecast
             ? $jobForecast->data->groupBy(function ($item) {
@@ -741,6 +763,9 @@ class JobForecastController extends Controller
             'locationId' => $location,
             'locationName' => $locationName,
             'labourSummary' => $labourSummary,
+            'availableForecasts' => $availableForecasts,
+            'selectedForecastId' => $forecastId,
+            'forecastSourceMonth' => $jobForecast?->forecast_month?->format('Y-m'),
         ]);
     }
 
