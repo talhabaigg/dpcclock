@@ -54,7 +54,11 @@ class SyncController extends Controller
             ->pluck('id')
             ->toArray();
 
-        $drawingScope = fn ($q) => $q->whereIn('project_id', $projectIds);
+        $drawingScope = fn ($q) => $q->whereIn('project_id', $projectIds)
+            ->where(function ($q2) {
+                $q2->where('status', Drawing::STATUS_ACTIVE)
+                   ->orWhereNull('status');
+            });
 
         $changes = [
             'projects' => $this->pullTable(
@@ -63,7 +67,11 @@ class SyncController extends Controller
                 fn ($record) => $this->formatProject($record)
             ),
             'drawings' => $this->pullTable(
-                Drawing::whereIn('project_id', $projectIds),
+                Drawing::whereIn('project_id', $projectIds)
+                    ->where(function ($q) {
+                        $q->where('status', Drawing::STATUS_ACTIVE)
+                          ->orWhereNull('status');
+                    }),
                 $since,
                 fn ($record) => $this->formatDrawing($record)
             ),
@@ -111,6 +119,10 @@ class SyncController extends Controller
 
         return response()->json([
             'drawings' => Drawing::whereIn('project_id', $projectIds)
+                ->where(function ($q) {
+                    $q->where('status', Drawing::STATUS_ACTIVE)
+                      ->orWhereNull('status');
+                })
                 ->whereNotNull('watermelon_id')
                 ->pluck('watermelon_id')
                 ->toArray(),
