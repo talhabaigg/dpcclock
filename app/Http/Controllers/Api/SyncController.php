@@ -99,6 +99,33 @@ class SyncController extends Controller
     }
 
     /**
+     * Return all active (non-trashed) watermelon_ids per table.
+     * The client uses this to detect and remove orphaned local records
+     * that were hard-deleted or missed by the sync protocol.
+     */
+    public function activeIds(Request $request)
+    {
+        $projectIds = Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS)
+            ->pluck('id')
+            ->toArray();
+
+        return response()->json([
+            'drawings' => Drawing::whereIn('project_id', $projectIds)
+                ->whereNotNull('watermelon_id')
+                ->pluck('watermelon_id')
+                ->toArray(),
+            'projects' => Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS)
+                ->whereNotNull('watermelon_id')
+                ->pluck('watermelon_id')
+                ->toArray(),
+            'observations' => DrawingObservation::whereHas('drawing', fn ($q) => $q->whereIn('project_id', $projectIds))
+                ->whereNotNull('watermelon_id')
+                ->pluck('watermelon_id')
+                ->toArray(),
+        ]);
+    }
+
+    /**
      * Push local changes from WatermelonDB to server.
      *
      * Writable tables: observations, measurement_statuses, segment_statuses.
@@ -173,13 +200,13 @@ class SyncController extends Controller
             ->where('created_at', '<=', $since)
             ->get();
 
-        // Deleted: soft-deleted records since last pull (only for models with SoftDeletes)
-        // Assign watermelon_id to any trashed records missing one, so the client can identify them.
+        // Deleted: ALL soft-deleted records with a watermelon_id (not just since $since).
+        // This ensures clients that missed a deletion window still get the signal.
+        // WatermelonDB safely ignores delete requests for records that don't exist locally.
         $deleted = [];
         if ($softDeletes) {
             $trashedRecords = (clone $query)
                 ->onlyTrashed()
-                ->where('deleted_at', '>', $since)
                 ->get();
 
             foreach ($trashedRecords as $record) {

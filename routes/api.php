@@ -96,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // WatermelonDB sync endpoints
     Route::get('sync/pull', [SyncController::class, 'pull'])->name('api.sync.pull');
     Route::post('sync/push', [SyncController::class, 'push'])->name('api.sync.push');
+    Route::get('sync/active-ids', [SyncController::class, 'activeIds'])->name('api.sync.active-ids');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])
