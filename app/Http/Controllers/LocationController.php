@@ -400,6 +400,32 @@ class LocationController extends Controller
                 ->toArray();
         }
 
+        // Payroll hours by worktype — sum clock hours grouped by worktype name
+        $payrollHoursByWorktype = [];
+        if ($location->eh_location_id) {
+            $plLocationIds = isset($locationIds) ? $locationIds
+                : Location::where('eh_parent_id', $location->eh_location_id)
+                    ->pluck('eh_location_id')
+                    ->push($location->eh_location_id)
+                    ->unique()
+                    ->values()
+                    ->toArray();
+
+            $payrollHoursByWorktype = DB::table('clocks')
+                ->join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+                ->whereIn('clocks.eh_location_id', $plLocationIds)
+                ->where('clocks.status', 'processed')
+                ->whereNotNull('clocks.clock_out')
+                ->select(
+                    'worktypes.name as worktype',
+                    DB::raw('SUM(clocks.hours_worked) as total_hours')
+                )
+                ->groupBy('worktypes.name')
+                ->get()
+                ->mapWithKeys(fn($r) => [$r->worktype => round((float) $r->total_hours, 2)])
+                ->toArray();
+        }
+
         // Production Analysis — Premier costs from job_cost_details
         $dashSettings = $location->dashboard_settings ?? [];
         $premierWagesItems = $dashSettings['analysis_premier_wages_items'] ?? ['01-01'];
@@ -453,6 +479,7 @@ class LocationController extends Controller
             'varianceTrend' => $varianceTrend,
             'premierCostByCategory' => $premierCostByCategory,
             'premierLatestDate' => $premierLatestDate,
+            'payrollHoursByWorktype' => $payrollHoursByWorktype,
         ]);
     }
 
@@ -467,6 +494,12 @@ class LocationController extends Controller
             'analysis_leading_hands_codes.*' => 'string|max:50',
             'analysis_labourer_codes' => 'nullable|array',
             'analysis_labourer_codes.*' => 'string|max:50',
+            'analysis_foreman_worktypes' => 'nullable|array',
+            'analysis_foreman_worktypes.*' => 'string|max:100',
+            'analysis_leading_hands_worktypes' => 'nullable|array',
+            'analysis_leading_hands_worktypes.*' => 'string|max:100',
+            'analysis_labourer_worktypes' => 'nullable|array',
+            'analysis_labourer_worktypes.*' => 'string|max:100',
             'analysis_premier_wages_items' => 'nullable|array',
             'analysis_premier_wages_items.*' => 'string|max:20',
             'analysis_premier_foreman_items' => 'nullable|array',
@@ -496,6 +529,7 @@ class LocationController extends Controller
         $allowedKeys = [
             'safety_cost_code', 'weather_cost_code',
             'analysis_foreman_codes', 'analysis_leading_hands_codes', 'analysis_labourer_codes',
+            'analysis_foreman_worktypes', 'analysis_leading_hands_worktypes', 'analysis_labourer_worktypes',
             'analysis_premier_wages_items', 'analysis_premier_foreman_items',
             'analysis_premier_lh_items', 'analysis_premier_labourer_items',
             'dpc_hourly_rate', 'dpc_rates',

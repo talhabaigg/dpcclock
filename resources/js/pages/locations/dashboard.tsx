@@ -96,6 +96,7 @@ interface DashboardProps {
     varianceTrend: VarianceTrendPoint[];
     premierCostByCategory: { wages: number; foreman: number; leading_hands: number; labourer: number };
     premierLatestDate: string | null;
+    payrollHoursByWorktype: Record<string, number>;
 }
 
 function formatReportDate(dateStr: string): string {
@@ -106,7 +107,7 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
@@ -371,6 +372,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
                         premierLatestDate={premierLatestDate ?? undefined}
                         reportDate={productionUploads.find((u) => u.id === selectedUploadId)?.report_date}
+                        payrollHoursByWorktype={payrollHoursByWorktype}
                     />
                 )}
             </div>

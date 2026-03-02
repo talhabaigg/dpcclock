@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { AlertTriangle, ChevronDown, Info, Search, Settings2, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Columns, Info, Search, Settings2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,9 @@ interface DashboardSettings {
     analysis_foreman_codes?: string[];
     analysis_leading_hands_codes?: string[];
     analysis_labourer_codes?: string[];
+    analysis_foreman_worktypes?: string[];
+    analysis_leading_hands_worktypes?: string[];
+    analysis_labourer_worktypes?: string[];
     [key: string]: unknown;
 }
 
@@ -45,6 +48,7 @@ interface ProductionAnalysisProps {
     dashboardSettings: DashboardSettings | null;
     premierLatestDate?: string;
     reportDate?: string;
+    payrollHoursByWorktype: Record<string, number>;
 }
 
 const CATEGORIES: { key: Category; label: string }[] = [
@@ -182,6 +186,124 @@ function CodePicker({
     );
 }
 
+function WorktypePicker({
+    label,
+    settingKey,
+    locationId,
+    availableWorktypes,
+    selectedWorktypes,
+    onWorktypesChange,
+}: {
+    label: string;
+    settingKey: string;
+    locationId: number;
+    availableWorktypes: string[];
+    selectedWorktypes: string[];
+    onWorktypesChange: (worktypes: string[]) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [search, setSearch] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const filtered = useMemo(() => {
+        if (!search) return availableWorktypes;
+        const lc = search.toLowerCase();
+        return availableWorktypes.filter((wt) => wt.toLowerCase().includes(lc));
+    }, [availableWorktypes, search]);
+
+    const toggleWorktype = async (wt: string) => {
+        const next = selectedWorktypes.includes(wt)
+            ? selectedWorktypes.filter((w) => w !== wt)
+            : [...selectedWorktypes, wt];
+        onWorktypesChange(next);
+        setSaving(true);
+        try {
+            await api.put(`/locations/${locationId}/dashboard-settings`, { [settingKey]: next });
+        } catch {
+            toast.error('Failed to save setting.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="rounded-lg border overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setExpanded((p) => !p)}
+                className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-muted/50 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{label}</span>
+                    {selectedWorktypes.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                            {selectedWorktypes.length} mapped
+                        </Badge>
+                    )}
+                    {saving && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
+                </div>
+                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
+            </button>
+
+            {selectedWorktypes.length > 0 && !expanded && (
+                <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
+                    {selectedWorktypes.map((wt) => (
+                        <Badge key={wt} variant="secondary" className="text-xs h-6 gap-1 px-2">
+                            {wt}
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleWorktype(wt); }}
+                                className="rounded-full hover:bg-muted-foreground/20 p-0.5 -mr-0.5"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    ))}
+                </div>
+            )}
+
+            {expanded && (
+                <div className="border-t">
+                    <div className="p-2">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input
+                                placeholder="Search worktypes..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="h-8 pl-8 text-xs"
+                            />
+                        </div>
+                    </div>
+                    <ScrollArea className="h-[180px]">
+                        <div className="px-1 pb-1">
+                            {filtered.length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-4">No matches</p>
+                            )}
+                            {filtered.map((wt) => {
+                                const checked = selectedWorktypes.includes(wt);
+                                return (
+                                    <label
+                                        key={wt}
+                                        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+                                    >
+                                        <Checkbox
+                                            checked={checked}
+                                            onCheckedChange={() => toggleWorktype(wt)}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-xs">{wt}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </ScrollArea>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function ProductionAnalysis({
     locationId,
     productionCostCodes,
@@ -190,12 +312,22 @@ export default function ProductionAnalysis({
     dashboardSettings,
     premierLatestDate,
     reportDate,
+    payrollHoursByWorktype,
 }: ProductionAnalysisProps) {
     const settings = dashboardSettings ?? {};
 
     const [foremanCodes, setForemanCodes] = useState<string[]>(settings.analysis_foreman_codes ?? []);
     const [leadingHandsCodes, setLeadingHandsCodes] = useState<string[]>(settings.analysis_leading_hands_codes ?? []);
     const [labourerCodes, setLabourerCodes] = useState<string[]>(settings.analysis_labourer_codes ?? []);
+    const [foremanWorktypes, setForemanWorktypes] = useState<string[]>(settings.analysis_foreman_worktypes ?? []);
+    const [leadingHandsWorktypes, setLeadingHandsWorktypes] = useState<string[]>(settings.analysis_leading_hands_worktypes ?? []);
+    const [labourerWorktypes, setLabourerWorktypes] = useState<string[]>(settings.analysis_labourer_worktypes ?? []);
+    const [showPayrollColumns, setShowPayrollColumns] = useState(false);
+
+    const availableWorktypeNames = useMemo(
+        () => Object.keys(payrollHoursByWorktype).sort(),
+        [payrollHoursByWorktype],
+    );
 
     const dpcRateSettings = (settings.dpc_rates as Record<string, number> | undefined) ?? {};
     const [dpcRates, setDpcRates] = useState<Record<Category, string>>({
@@ -230,7 +362,7 @@ export default function ProductionAnalysis({
         setDpcRates((prev) => ({ ...prev, [key]: value }));
     };
 
-    // Categorize production lines into hours by category
+    // Categorize production lines into DPC hours by category
     const hoursByCategory = useMemo(() => {
         const result: Record<Category, number> = { wages: 0, foreman: 0, leading_hands: 0, labourer: 0 };
         for (const line of productionLines) {
@@ -248,20 +380,58 @@ export default function ProductionAnalysis({
         return result;
     }, [productionLines, foremanCodes, leadingHandsCodes, labourerCodes]);
 
+    // Categorize payroll (clock) hours by category — match worktypes to categories
+    const payrollByCategory = useMemo(() => {
+        const result: Record<Category, number> = { wages: 0, foreman: 0, leading_hands: 0, labourer: 0 };
+        const assignedWorktypes = new Set<string>();
+
+        for (const wt of foremanWorktypes) {
+            if (payrollHoursByWorktype[wt] != null) {
+                result.foreman += payrollHoursByWorktype[wt];
+                assignedWorktypes.add(wt);
+            }
+        }
+        for (const wt of leadingHandsWorktypes) {
+            if (payrollHoursByWorktype[wt] != null) {
+                result.leading_hands += payrollHoursByWorktype[wt];
+                assignedWorktypes.add(wt);
+            }
+        }
+        for (const wt of labourerWorktypes) {
+            if (payrollHoursByWorktype[wt] != null) {
+                result.labourer += payrollHoursByWorktype[wt];
+                assignedWorktypes.add(wt);
+            }
+        }
+
+        // Remaining (unassigned) worktypes go to wages
+        for (const [worktype, hours] of Object.entries(payrollHoursByWorktype)) {
+            if (!assignedWorktypes.has(worktype)) {
+                result.wages += hours;
+            }
+        }
+
+        return result;
+    }, [payrollHoursByWorktype, foremanWorktypes, leadingHandsWorktypes, labourerWorktypes]);
+
     // Build analysis rows
     const rows = useMemo(() => {
         return CATEGORIES.map(({ key, label }) => {
-            const paidHours = hoursByCategory[key];
+            const paidDpcHours = hoursByCategory[key];
+            const paidPayrollHours = payrollByCategory[key];
+            const diffHours = paidDpcHours - paidPayrollHours;
             const premierCost = premierCostByCategory[key];
-            const actualHourlyRate = paidHours > 0 ? premierCost / paidHours : 0;
+            const actualHourlyRate = paidDpcHours > 0 ? premierCost / paidDpcHours : 0;
             const rate = parsedRates[key];
-            const dpcSpent = rate * paidHours;
+            const dpcSpent = rate * paidDpcHours;
             const variance = dpcSpent - premierCost;
 
             return {
                 key,
                 category: label,
-                paidHours,
+                paidDpcHours,
+                paidPayrollHours,
+                diffHours,
                 premierCost,
                 actualHourlyRate,
                 dpcHourlyRate: rate,
@@ -269,23 +439,27 @@ export default function ProductionAnalysis({
                 variance,
             };
         });
-    }, [hoursByCategory, premierCostByCategory, parsedRates]);
+    }, [hoursByCategory, payrollByCategory, premierCostByCategory, parsedRates]);
 
     const totals = useMemo(() => {
         const t = {
-            paidHours: 0,
+            paidDpcHours: 0,
+            paidPayrollHours: 0,
             premierCost: 0,
             dpcSpent: 0,
         };
         for (const r of rows) {
-            t.paidHours += r.paidHours;
+            t.paidDpcHours += r.paidDpcHours;
+            t.paidPayrollHours += r.paidPayrollHours;
             t.premierCost += r.premierCost;
             t.dpcSpent += r.dpcSpent;
         }
+        const diffHours = t.paidDpcHours - t.paidPayrollHours;
         return {
             ...t,
-            actualHourlyRate: t.paidHours > 0 ? t.premierCost / t.paidHours : 0,
-            dpcHourlyRate: t.paidHours > 0 ? t.dpcSpent / t.paidHours : 0,
+            diffHours,
+            actualHourlyRate: t.paidDpcHours > 0 ? t.premierCost / t.paidDpcHours : 0,
+            dpcHourlyRate: t.paidDpcHours > 0 ? t.dpcSpent / t.paidDpcHours : 0,
             variance: t.dpcSpent - t.premierCost,
         };
     }, [rows]);
@@ -304,6 +478,16 @@ export default function ProductionAnalysis({
             {/* Toolbar */}
             <div className="flex items-center justify-between shrink-0">
                 <span className="text-xs font-semibold">DPC Analysis</span>
+                <div className="flex items-center gap-1.5">
+                <Button
+                    variant={showPayrollColumns ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => setShowPayrollColumns((p) => !p)}
+                >
+                    <Columns className="h-3.5 w-3.5" />
+                    Payroll Comparison
+                </Button>
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
@@ -356,6 +540,48 @@ export default function ProductionAnalysis({
 
                             <Separator />
 
+                            {/* Worktype Mapping (for payroll hours) */}
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="text-sm font-semibold">Worktype Mapping</h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Assign payroll worktypes to each category for the Payroll Comparison columns. Unmapped worktypes count as Wages.
+                                    </p>
+                                </div>
+                                {availableWorktypeNames.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground italic">No payroll clock data available for this project.</p>
+                                ) : (
+                                    <>
+                                        <WorktypePicker
+                                            label="Foreman"
+                                            settingKey="analysis_foreman_worktypes"
+                                            locationId={locationId}
+                                            availableWorktypes={availableWorktypeNames}
+                                            selectedWorktypes={foremanWorktypes}
+                                            onWorktypesChange={setForemanWorktypes}
+                                        />
+                                        <WorktypePicker
+                                            label="Leading Hands"
+                                            settingKey="analysis_leading_hands_worktypes"
+                                            locationId={locationId}
+                                            availableWorktypes={availableWorktypeNames}
+                                            selectedWorktypes={leadingHandsWorktypes}
+                                            onWorktypesChange={setLeadingHandsWorktypes}
+                                        />
+                                        <WorktypePicker
+                                            label="Labourer"
+                                            settingKey="analysis_labourer_worktypes"
+                                            locationId={locationId}
+                                            availableWorktypes={availableWorktypeNames}
+                                            selectedWorktypes={labourerWorktypes}
+                                            onWorktypesChange={setLabourerWorktypes}
+                                        />
+                                    </>
+                                )}
+                            </div>
+
+                            <Separator />
+
                             {/* DPC Hourly Rates */}
                             <div className="space-y-3">
                                 <div>
@@ -397,6 +623,7 @@ export default function ProductionAnalysis({
                         </div>
                     </SheetContent>
                 </Sheet>
+                </div>
             </div>
 
             {/* Date context banner */}
@@ -440,7 +667,13 @@ export default function ProductionAnalysis({
                         <TableHeader className="sticky top-0 z-10 bg-background">
                             <TableRow>
                                 <TableHead className="text-xs font-semibold min-w-[120px]">DPC Analysis</TableHead>
-                                <TableHead className="text-right text-xs font-semibold min-w-[100px]">Paid Hours</TableHead>
+                                <TableHead className="text-right text-xs font-semibold min-w-[100px]">Paid DPC Hours</TableHead>
+                                {showPayrollColumns && (
+                                    <TableHead className="text-right text-xs font-semibold min-w-[120px]">Paid Payroll Hours</TableHead>
+                                )}
+                                {showPayrollColumns && (
+                                    <TableHead className="text-right text-xs font-semibold min-w-[100px]">Diff Hours</TableHead>
+                                )}
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">Premier Cost $</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">Actual Hourly Rate</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">DPC Hourly Rate</TableHead>
@@ -450,13 +683,23 @@ export default function ProductionAnalysis({
                         </TableHeader>
                         <TableBody>
                             {rows.map((row) => {
-                                const isBlankHours = row.paidHours === 0;
+                                const isBlankHours = row.paidDpcHours === 0;
                                 return (
                                     <TableRow key={row.category}>
                                         <TableCell className="text-xs font-medium pl-6">{row.category}</TableCell>
                                         <TableCell className="text-right tabular-nums text-xs">
-                                            {isBlankHours ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidHours)}
+                                            {isBlankHours ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidDpcHours)}
                                         </TableCell>
+                                        {showPayrollColumns && (
+                                            <TableCell className="text-right tabular-nums text-xs">
+                                                {row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidPayrollHours)}
+                                            </TableCell>
+                                        )}
+                                        {showPayrollColumns && (
+                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                                {isBlankHours && row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.diffHours)}
+                                            </TableCell>
+                                        )}
                                         <TableCell className="text-right tabular-nums text-xs">
                                             {row.premierCost === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmtDollar(row.premierCost)}
                                         </TableCell>
@@ -500,13 +743,21 @@ export default function ProductionAnalysis({
                         <TableFooter className="sticky bottom-0 bg-muted">
                             <TableRow className="font-semibold">
                                 <TableCell className="text-xs">Total</TableCell>
-                                <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidHours)}</TableCell>
+                                <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidDpcHours)}</TableCell>
+                                {showPayrollColumns && (
+                                    <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidPayrollHours)}</TableCell>
+                                )}
+                                {showPayrollColumns && (
+                                    <TableCell className={cn('text-right tabular-nums text-xs', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                        {fmt(totals.diffHours)}
+                                    </TableCell>
+                                )}
                                 <TableCell className="text-right tabular-nums text-xs">{fmtDollar(totals.premierCost)}</TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">
-                                    {totals.paidHours > 0 ? fmtDollar(totals.actualHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
+                                    {totals.paidDpcHours > 0 ? fmtDollar(totals.actualHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">
-                                    {totals.paidHours > 0 && totals.dpcSpent > 0 ? fmtDollar(totals.dpcHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
+                                    {totals.paidDpcHours > 0 && totals.dpcSpent > 0 ? fmtDollar(totals.dpcHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">{fmtDollar(totals.dpcSpent)}</TableCell>
                                 <TableCell className={cn('text-right tabular-nums text-xs', totals.variance < 0 ? 'text-destructive' : '')}>
