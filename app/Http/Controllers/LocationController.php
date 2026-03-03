@@ -494,6 +494,8 @@ class LocationController extends Controller
             'analysis_leading_hands_codes.*' => 'string|max:50',
             'analysis_labourer_codes' => 'nullable|array',
             'analysis_labourer_codes.*' => 'string|max:50',
+            'analysis_wages_worktypes' => 'nullable|array',
+            'analysis_wages_worktypes.*' => 'string|max:100',
             'analysis_foreman_worktypes' => 'nullable|array',
             'analysis_foreman_worktypes.*' => 'string|max:100',
             'analysis_leading_hands_worktypes' => 'nullable|array',
@@ -529,7 +531,7 @@ class LocationController extends Controller
         $allowedKeys = [
             'safety_cost_code', 'weather_cost_code',
             'analysis_foreman_codes', 'analysis_leading_hands_codes', 'analysis_labourer_codes',
-            'analysis_foreman_worktypes', 'analysis_leading_hands_worktypes', 'analysis_labourer_worktypes',
+            'analysis_wages_worktypes', 'analysis_foreman_worktypes', 'analysis_leading_hands_worktypes', 'analysis_labourer_worktypes',
             'analysis_premier_wages_items', 'analysis_premier_foreman_items',
             'analysis_premier_lh_items', 'analysis_premier_labourer_items',
             'dpc_hourly_rate', 'dpc_rates',

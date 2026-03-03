@@ -20,6 +20,7 @@ interface DashboardSettings {
     analysis_foreman_codes?: string[];
     analysis_leading_hands_codes?: string[];
     analysis_labourer_codes?: string[];
+    analysis_wages_worktypes?: string[];
     analysis_foreman_worktypes?: string[];
     analysis_leading_hands_worktypes?: string[];
     analysis_labourer_worktypes?: string[];
@@ -319,6 +320,7 @@ export default function ProductionAnalysis({
     const [foremanCodes, setForemanCodes] = useState<string[]>(settings.analysis_foreman_codes ?? []);
     const [leadingHandsCodes, setLeadingHandsCodes] = useState<string[]>(settings.analysis_leading_hands_codes ?? []);
     const [labourerCodes, setLabourerCodes] = useState<string[]>(settings.analysis_labourer_codes ?? []);
+    const [wagesWorktypes, setWagesWorktypes] = useState<string[]>(settings.analysis_wages_worktypes ?? []);
     const [foremanWorktypes, setForemanWorktypes] = useState<string[]>(settings.analysis_foreman_worktypes ?? []);
     const [leadingHandsWorktypes, setLeadingHandsWorktypes] = useState<string[]>(settings.analysis_leading_hands_worktypes ?? []);
     const [labourerWorktypes, setLabourerWorktypes] = useState<string[]>(settings.analysis_labourer_worktypes ?? []);
@@ -383,36 +385,31 @@ export default function ProductionAnalysis({
     // Categorize payroll (clock) hours by category — match worktypes to categories
     const payrollByCategory = useMemo(() => {
         const result: Record<Category, number> = { wages: 0, foreman: 0, leading_hands: 0, labourer: 0 };
-        const assignedWorktypes = new Set<string>();
 
+        for (const wt of wagesWorktypes) {
+            if (payrollHoursByWorktype[wt] != null) {
+                result.wages += payrollHoursByWorktype[wt];
+            }
+        }
         for (const wt of foremanWorktypes) {
             if (payrollHoursByWorktype[wt] != null) {
                 result.foreman += payrollHoursByWorktype[wt];
-                assignedWorktypes.add(wt);
             }
         }
         for (const wt of leadingHandsWorktypes) {
             if (payrollHoursByWorktype[wt] != null) {
                 result.leading_hands += payrollHoursByWorktype[wt];
-                assignedWorktypes.add(wt);
             }
         }
         for (const wt of labourerWorktypes) {
             if (payrollHoursByWorktype[wt] != null) {
                 result.labourer += payrollHoursByWorktype[wt];
-                assignedWorktypes.add(wt);
             }
         }
 
-        // Remaining (unassigned) worktypes go to wages
-        for (const [worktype, hours] of Object.entries(payrollHoursByWorktype)) {
-            if (!assignedWorktypes.has(worktype)) {
-                result.wages += hours;
-            }
-        }
-
+        // Unmapped worktypes are excluded (may be leaves, etc.)
         return result;
-    }, [payrollHoursByWorktype, foremanWorktypes, leadingHandsWorktypes, labourerWorktypes]);
+    }, [payrollHoursByWorktype, wagesWorktypes, foremanWorktypes, leadingHandsWorktypes, labourerWorktypes]);
 
     // Build analysis rows
     const rows = useMemo(() => {
@@ -422,6 +419,8 @@ export default function ProductionAnalysis({
             const diffHours = paidDpcHours - paidPayrollHours;
             const premierCost = premierCostByCategory[key];
             const actualHourlyRate = paidDpcHours > 0 ? premierCost / paidDpcHours : 0;
+            const payrollHourlyRate = paidPayrollHours > 0 ? premierCost / paidPayrollHours : 0;
+            const rateDiff = payrollHourlyRate - actualHourlyRate;
             const rate = parsedRates[key];
             const dpcSpent = rate * paidDpcHours;
             const variance = dpcSpent - premierCost;
@@ -434,6 +433,8 @@ export default function ProductionAnalysis({
                 diffHours,
                 premierCost,
                 actualHourlyRate,
+                payrollHourlyRate,
+                rateDiff,
                 dpcHourlyRate: rate,
                 dpcSpent,
                 variance,
@@ -455,10 +456,14 @@ export default function ProductionAnalysis({
             t.dpcSpent += r.dpcSpent;
         }
         const diffHours = t.paidDpcHours - t.paidPayrollHours;
+        const actualHourlyRate = t.paidDpcHours > 0 ? t.premierCost / t.paidDpcHours : 0;
+        const payrollHourlyRate = t.paidPayrollHours > 0 ? t.premierCost / t.paidPayrollHours : 0;
         return {
             ...t,
             diffHours,
-            actualHourlyRate: t.paidDpcHours > 0 ? t.premierCost / t.paidDpcHours : 0,
+            actualHourlyRate,
+            payrollHourlyRate,
+            rateDiff: payrollHourlyRate - actualHourlyRate,
             dpcHourlyRate: t.paidDpcHours > 0 ? t.dpcSpent / t.paidDpcHours : 0,
             variance: t.dpcSpent - t.premierCost,
         };
@@ -545,13 +550,21 @@ export default function ProductionAnalysis({
                                 <div>
                                     <h4 className="text-sm font-semibold">Worktype Mapping</h4>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Assign payroll worktypes to each category for the Payroll Comparison columns. Unmapped worktypes count as Wages.
+                                        Assign payroll worktypes to each category for the Payroll Comparison columns. Unmapped worktypes are excluded (e.g. leaves).
                                     </p>
                                 </div>
                                 {availableWorktypeNames.length === 0 ? (
                                     <p className="text-xs text-muted-foreground italic">No payroll clock data available for this project.</p>
                                 ) : (
                                     <>
+                                        <WorktypePicker
+                                            label="Wages"
+                                            settingKey="analysis_wages_worktypes"
+                                            locationId={locationId}
+                                            availableWorktypes={availableWorktypeNames}
+                                            selectedWorktypes={wagesWorktypes}
+                                            onWorktypesChange={setWagesWorktypes}
+                                        />
                                         <WorktypePicker
                                             label="Foreman"
                                             settingKey="analysis_foreman_worktypes"
@@ -669,13 +682,19 @@ export default function ProductionAnalysis({
                                 <TableHead className="text-xs font-semibold min-w-[120px]">DPC Analysis</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[100px]">Paid DPC Hours</TableHead>
                                 {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[120px]">Paid Payroll Hours</TableHead>
+                                    <TableHead className="text-right text-xs font-semibold min-w-[120px] bg-amber-50 dark:bg-amber-950/30">Paid Payroll Hours</TableHead>
                                 )}
                                 {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[100px]">Diff Hours</TableHead>
+                                    <TableHead className="text-right text-xs font-semibold min-w-[100px] bg-amber-50 dark:bg-amber-950/30">Diff Hours</TableHead>
                                 )}
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">Premier Cost $</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">Actual Hourly Rate</TableHead>
+                                {showPayrollColumns && (
+                                    <TableHead className="text-right text-xs font-semibold min-w-[120px] bg-amber-50 dark:bg-amber-950/30">Payroll Hourly Rate</TableHead>
+                                )}
+                                {showPayrollColumns && (
+                                    <TableHead className="text-right text-xs font-semibold min-w-[100px] bg-amber-50 dark:bg-amber-950/30">Rate Diff</TableHead>
+                                )}
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">DPC Hourly Rate</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">DPC Spent ($)</TableHead>
                                 <TableHead className="text-right text-xs font-semibold min-w-[120px]">Variance ($)</TableHead>
@@ -691,12 +710,12 @@ export default function ProductionAnalysis({
                                             {isBlankHours ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidDpcHours)}
                                         </TableCell>
                                         {showPayrollColumns && (
-                                            <TableCell className="text-right tabular-nums text-xs">
+                                            <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
                                                 {row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidPayrollHours)}
                                             </TableCell>
                                         )}
                                         {showPayrollColumns && (
-                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
                                                 {isBlankHours && row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.diffHours)}
                                             </TableCell>
                                         )}
@@ -710,6 +729,24 @@ export default function ProductionAnalysis({
                                                 fmtDollar(row.actualHourlyRate)
                                             )}
                                         </TableCell>
+                                        {showPayrollColumns && (
+                                            <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
+                                                {row.paidPayrollHours === 0 || row.premierCost === 0 ? (
+                                                    <span className="text-muted-foreground">(Blank)</span>
+                                                ) : (
+                                                    fmtDollar(row.payrollHourlyRate)
+                                                )}
+                                            </TableCell>
+                                        )}
+                                        {showPayrollColumns && (
+                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.rateDiff < 0 ? 'text-destructive' : row.rateDiff > 0 ? 'text-emerald-600' : '')}>
+                                                {(isBlankHours && row.paidPayrollHours === 0) || row.premierCost === 0 ? (
+                                                    <span className="text-muted-foreground">(Blank)</span>
+                                                ) : (
+                                                    fmtDollarSigned(row.rateDiff)
+                                                )}
+                                            </TableCell>
+                                        )}
                                         <TableCell className="text-right tabular-nums text-xs">
                                             {isBlankHours || row.dpcHourlyRate === 0 ? (
                                                 <span className="text-muted-foreground">(Blank)</span>
@@ -745,10 +782,10 @@ export default function ProductionAnalysis({
                                 <TableCell className="text-xs">Total</TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidDpcHours)}</TableCell>
                                 {showPayrollColumns && (
-                                    <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidPayrollHours)}</TableCell>
+                                    <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">{fmt(totals.paidPayrollHours)}</TableCell>
                                 )}
                                 {showPayrollColumns && (
-                                    <TableCell className={cn('text-right tabular-nums text-xs', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                    <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
                                         {fmt(totals.diffHours)}
                                     </TableCell>
                                 )}
@@ -756,6 +793,16 @@ export default function ProductionAnalysis({
                                 <TableCell className="text-right tabular-nums text-xs">
                                     {totals.paidDpcHours > 0 ? fmtDollar(totals.actualHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
+                                {showPayrollColumns && (
+                                    <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">
+                                        {totals.paidPayrollHours > 0 && totals.premierCost > 0 ? fmtDollar(totals.payrollHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
+                                    </TableCell>
+                                )}
+                                {showPayrollColumns && (
+                                    <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.rateDiff < 0 ? 'text-destructive' : totals.rateDiff > 0 ? 'text-emerald-600' : '')}>
+                                        {totals.paidDpcHours > 0 || totals.paidPayrollHours > 0 ? fmtDollarSigned(totals.rateDiff) : <span className="text-muted-foreground">(Blank)</span>}
+                                    </TableCell>
+                                )}
                                 <TableCell className="text-right tabular-nums text-xs">
                                     {totals.paidDpcHours > 0 && totals.dpcSpent > 0 ? fmtDollar(totals.dpcHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
