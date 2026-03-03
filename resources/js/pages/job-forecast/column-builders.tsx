@@ -14,6 +14,7 @@ interface ColumnBuilderParams {
     updateRowCell: (rowKey: string, field: string, value: any) => void;
     isLocked?: boolean;
     currentMonth?: string;
+    useActualsForCurrentMonth?: boolean;
 }
 
 export function buildCostColumnDefs({
@@ -25,6 +26,7 @@ export function buildCostColumnDefs({
     updateRowCell,
     isLocked = false,
     currentMonth,
+    useActualsForCurrentMonth = false,
 }: ColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
         trendColDef,
@@ -74,6 +76,7 @@ export function buildCostColumnDefs({
             headerName: 'Final $',
             field: 'budget',
             filter: false,
+            sortable: true,
             width: 140,
             type: 'numericColumn',
             valueFormatter: (p: any) => (p.value == null ? '0' : Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 0 })),
@@ -98,6 +101,7 @@ export function buildCostColumnDefs({
                             headerName: '$',
                             colId: 'actuals_total',
                             filter: false,
+                            sortable: true,
                             type: 'numericColumn',
                             resizable: false,
                             width: 90,
@@ -111,6 +115,7 @@ export function buildCostColumnDefs({
                             headerName: '%',
                             colId: 'actuals_total_pct',
                             filter: false,
+                            sortable: true,
                             width: 70,
                             type: 'numericColumn',
                             headerClass: 'ag-right-aligned-header',
@@ -144,6 +149,7 @@ export function buildCostColumnDefs({
                                 field: m,
                                 width: 120,
                                 editable: false,
+                                sortable: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
                                 cellClass: isCurrentMonth ? 'text-right border-l-2 border-sky-400' : 'text-right',
@@ -155,6 +161,7 @@ export function buildCostColumnDefs({
                                 colId: `${m}__pct`,
                                 width: 90,
                                 editable: false,
+                                sortable: true,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
@@ -214,6 +221,7 @@ export function buildCostColumnDefs({
                             headerName: '$',
                             colId: 'forecast_total_amt',
                             filter: false,
+                            sortable: true,
                             type: 'numericColumn',
                             resizable: false,
                             width: 90,
@@ -238,6 +246,7 @@ export function buildCostColumnDefs({
                             headerName: '%',
                             colId: 'forecast_total_pct',
                             filter: false,
+                            sortable: true,
                             width: 70,
                             type: 'numericColumn',
                             headerClass: 'ag-right-aligned-header',
@@ -276,6 +285,7 @@ export function buildCostColumnDefs({
                                 field: isOverlapMonth ? `forecast_${m}` : m,
                                 width: 120,
                                 editable: (params) => !isLocked && !params.node.rowPinned,
+                                sortable: true,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 headerClass: 'ag-right-aligned-header',
@@ -301,6 +311,7 @@ export function buildCostColumnDefs({
                                 colId: `${m}__pct`,
                                 width: 90,
                                 editable: (params) => !isLocked && !params.node.rowPinned,
+                                sortable: true,
                                 singleClickEdit: true,
                                 type: 'numericColumn',
                                 cellClass: isCurrentMonth
@@ -388,20 +399,21 @@ export function buildCostColumnDefs({
             valueGetter: (p: any) => {
                 const budget = Number(p.data?.budget ?? 0) || 0;
 
-                // Calculate actuals, excluding current month if it has a forecast
+                // Calculate actuals
                 let actuals = 0;
                 for (const dm of displayMonths) {
-                    if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                        // Skip current month actual, we'll use forecast instead
-                        continue;
-                    }
+                    // Skip current month actual when using forecast for remaining
+                    if (!useActualsForCurrentMonth && dm === currentMonth) continue;
                     actuals += Number(p.data?.[dm] ?? 0) || 0;
                 }
 
-                // Calculate forecast, checking for forecast_ prefix for current month
+                // Calculate forecast (skip current month forecast when using actuals)
                 let forecast = 0;
                 for (const fm of forecastMonths) {
-                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
+                    if (useActualsForCurrentMonth && fm === currentMonth) continue;
+                    const forecastField = `forecast_${fm}`;
+                    const forecastVal = p.data?.[forecastField];
+                    const fieldName = forecastVal !== undefined && forecastVal !== null ? forecastField : fm;
                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                 }
 
@@ -429,6 +441,7 @@ export function buildRevenueColumnDefs({
     revenueTotals,
     isLocked = false,
     currentMonth,
+    useActualsForCurrentMonth = false,
 }: RevenueColumnBuilderParams): (ColDef | ColGroupDef)[] {
     return [
         trendColDef,
@@ -819,20 +832,21 @@ export function buildRevenueColumnDefs({
             valueGetter: (p: any) => {
                 const budget = Number(p.data?.contract_sum_to_date ?? 0) || 0;
 
-                // Calculate actuals, excluding current month if it has a forecast
+                // Calculate actuals
                 let actuals = 0;
                 for (const dm of displayMonths) {
-                    if (dm === currentMonth && forecastMonths.includes(currentMonth)) {
-                        // Skip current month actual, we'll use forecast instead
-                        continue;
-                    }
+                    // Skip current month actual when using forecast for remaining
+                    if (!useActualsForCurrentMonth && dm === currentMonth) continue;
                     actuals += Number(p.data?.[dm] ?? 0) || 0;
                 }
 
-                // Calculate forecast, checking for forecast_ prefix for current month
+                // Calculate forecast (skip current month forecast when using actuals)
                 let forecast = 0;
                 for (const fm of forecastMonths) {
-                    const fieldName = p.data?.[`forecast_${fm}`] !== undefined ? `forecast_${fm}` : fm;
+                    if (useActualsForCurrentMonth && fm === currentMonth) continue;
+                    const forecastField = `forecast_${fm}`;
+                    const forecastVal = p.data?.[forecastField];
+                    const fieldName = forecastVal !== undefined && forecastVal !== null ? forecastField : fm;
                     forecast += Number(p.data?.[fieldName] ?? 0) || 0;
                 }
 

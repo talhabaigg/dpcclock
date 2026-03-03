@@ -5,6 +5,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
@@ -72,6 +73,7 @@ const ShowJobForecastPage = ({
     availableForecastMonths,
     selectedForecastMonth: initialForecastMonth,
     isLocked = false,
+    useActualsForCurrentMonth: initialUseActuals = false,
     locationId,
     forecastProjectId,
     jobName,
@@ -109,6 +111,9 @@ const ShowJobForecastPage = ({
     const [isWorkflowProcessing, setIsWorkflowProcessing] = useState(false);
     const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
     const [rejectionNote, setRejectionNote] = useState('');
+
+    // Toggle: use actuals vs forecast for current month in remaining calculation
+    const [useActualsForCurrentMonth, setUseActualsForCurrentMonth] = useState(initialUseActuals);
 
     // Editing is locked if: forecast project OR locked OR workflow says not editable
     const isEditingLocked = !isForecastProject && (isLocked || (forecastWorkflow && !forecastWorkflow.isEditable));
@@ -886,6 +891,7 @@ const ShowJobForecastPage = ({
             updateRowCell: updateCostRowCell,
             isLocked: isEditingLocked,
             currentMonth,
+            useActualsForCurrentMonth,
         });
 
         // Add checkbox selection column for forecast projects
@@ -916,6 +922,7 @@ const ShowJobForecastPage = ({
         isForecastProject,
         isEditingLocked,
         currentMonth,
+        useActualsForCurrentMonth,
     ]);
 
     const defaultColDef = useMemo(
@@ -938,6 +945,7 @@ const ShowJobForecastPage = ({
         budgetField: 'budget',
         description: 'Total Costs',
         currentMonth,
+        useActualsForCurrentMonth,
     });
 
     const pinnedBottomRevenueRowData = usePinnedRowData({
@@ -947,6 +955,7 @@ const ShowJobForecastPage = ({
         budgetField: 'contract_sum_to_date',
         description: 'Total Revenue',
         currentMonth,
+        useActualsForCurrentMonth,
     });
 
     const revenueColDefs = useMemo(() => {
@@ -961,6 +970,7 @@ const ShowJobForecastPage = ({
             revenueTotals: pinnedBottomRevenueRowData[0],
             isLocked: isEditingLocked,
             currentMonth,
+            useActualsForCurrentMonth,
         });
 
         // Add checkbox selection column for forecast projects
@@ -992,6 +1002,7 @@ const ShowJobForecastPage = ({
         isForecastProject,
         isEditingLocked,
         currentMonth,
+        useActualsForCurrentMonth,
     ]);
 
     // Calculate profit row (Revenue - Cost)
@@ -1018,7 +1029,11 @@ const ShowJobForecastPage = ({
         }
 
         // Calculate totals
-        profitRow.actuals_total = displayMonths.reduce((sum, m) => sum + (Number(profitRow[m]) || 0), 0);
+        profitRow.actuals_total = displayMonths.reduce((sum, m) => {
+            // Skip current month actual when it's also a forecast month (forecast takes priority)
+            if (m === currentMonth && forecastMonths.includes(m)) return sum;
+            return sum + (Number(profitRow[m]) || 0);
+        }, 0);
 
         profitRow.forecast_total = forecastMonths.reduce((sum, m) => {
             const fieldName = currentMonth && m === currentMonth ? `forecast_${m}` : m;
@@ -1789,6 +1804,44 @@ const ShowJobForecastPage = ({
                                     </TooltipTrigger>
                                     <TooltipContent>Forecast v/s Actual</TooltipContent>
                                 </Tooltip>
+
+                                {/* Toggle: Use Actuals vs Forecast for current month remaining */}
+                                {!isForecastProject && currentMonth && (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <span className="hidden text-[10px] text-muted-foreground lg:inline">Current month $ figures</span>
+                                        <ToggleGroup
+                                            type="single"
+                                            value={useActualsForCurrentMonth ? 'actuals' : 'forecast'}
+                                            onValueChange={(value) => {
+                                                if (value && value !== (useActualsForCurrentMonth ? 'actuals' : 'forecast')) {
+                                                    const newUseActuals = value === 'actuals';
+                                                    setUseActualsForCurrentMonth(newUseActuals);
+                                                    if (locationId && selectedForecastMonth) {
+                                                        router.post(
+                                                            `/location/${locationId}/job-forecast/toggle-use-actuals`,
+                                                            { forecast_month: selectedForecastMonth, use_actuals_for_current_month: newUseActuals },
+                                                            { preserveScroll: true, preserveState: true },
+                                                        );
+                                                    }
+                                                }
+                                            }}
+                                            className="h-5 rounded border dark:border-gray-600"
+                                        >
+                                            <ToggleGroupItem
+                                                value="forecast"
+                                                className="h-4 px-1 text-[9px] font-normal data-[state=on]:bg-blue-500 data-[state=on]:text-white"
+                                            >
+                                                Forecast
+                                            </ToggleGroupItem>
+                                            <ToggleGroupItem
+                                                value="actuals"
+                                                className="h-4 px-1 text-[9px] font-normal data-[state=on]:bg-amber-500 data-[state=on]:text-white"
+                                            >
+                                                Actuals
+                                            </ToggleGroupItem>
+                                        </ToggleGroup>
+                                    </div>
+                                )}
                             </TooltipProvider>
                         </div>
 
@@ -2220,7 +2273,6 @@ const ShowJobForecastPage = ({
                                 rowData={costGridData}
                                 columnDefs={costColDefs}
                                 defaultColDef={defaultColDef}
-                                animateRows
                                 pinnedBottomRowData={pinnedBottomRowData}
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}
@@ -2306,7 +2358,6 @@ const ShowJobForecastPage = ({
                                 rowData={revenueGridData}
                                 columnDefs={revenueColDefs}
                                 defaultColDef={defaultColDef}
-                                animateRows
                                 pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
                                 stopEditingWhenCellsLoseFocus
                                 suppressColumnVirtualisation={true}

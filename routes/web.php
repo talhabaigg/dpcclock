@@ -462,6 +462,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:forecast.edit')->group(function () {
         Route::post('/location/{location}/job-forecast', [JobForecastController::class, 'store'])->name('jobForecast.store');
         Route::post('/location/{location}/job-forecast/lock', [JobForecastController::class, 'toggleLock'])->name('jobForecast.lock');
+        Route::post('/location/{location}/job-forecast/toggle-use-actuals', [JobForecastController::class, 'toggleUseActuals'])->name('jobForecast.toggleUseActuals');
         Route::post('/location/{location}/job-forecast/copy-from-previous', [JobForecastController::class, 'copyFromPreviousMonth'])->name('jobForecast.copyFromPrevious');
         Route::post('/location/{location}/job-forecast/summary-comments', [JobForecastController::class, 'updateSummaryComments'])->name('jobForecast.summaryComments');
     });

@@ -319,6 +319,7 @@ class JobForecastController extends Controller
             'availableForecastMonths' => $availableForecastMonths,
             'selectedForecastMonth' => $selectedForecastMonth,
             'isLocked' => $isLocked,
+            'useActualsForCurrentMonth' => $jobForecast ? (bool) $jobForecast->use_actuals_for_current_month : false,
             'locationId' => $id,
             'jobName' => $jobName,
             'jobNumber' => $jobNumber,
@@ -357,17 +358,23 @@ class JobForecastController extends Controller
         $forecastMonth = $validated['forecast_month'];
         $user = Auth::user();
 
-        $jobForecast = JobForecast::firstOrCreate(
-            [
+        $year = substr($forecastMonth, 0, 4);
+        $month = substr($forecastMonth, 5, 2);
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', $year)
+            ->whereMonth('forecast_month', $month)
+            ->first();
+
+        if (! $jobForecast) {
+            $jobForecast = JobForecast::create([
                 'job_number' => $jobNumber,
-                'forecast_month' => (new \DateTime($forecastMonth)),
-            ],
-            [
+                'forecast_month' => new \DateTime($forecastMonth.'-01'),
                 'is_locked' => false,
                 'status' => JobForecast::STATUS_DRAFT,
                 'created_by' => $user->id,
-            ]
-        );
+            ]);
+        }
 
         // Check if forecast is editable (based on status, not just lock)
         if (! $jobForecast->isEditable()) {
@@ -510,21 +517,66 @@ class JobForecastController extends Controller
         ]);
 
         $jobNumber = Location::where('id', $id)->value('external_id');
+        $year = substr($validated['forecast_month'], 0, 4);
+        $month = substr($validated['forecast_month'], 5, 2);
 
-        $jobForecast = JobForecast::firstOrCreate(
-            [
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', $year)
+            ->whereMonth('forecast_month', $month)
+            ->first();
+
+        if (! $jobForecast) {
+            $jobForecast = JobForecast::create([
                 'job_number' => $jobNumber,
-                'forecast_month' => (new \DateTime($validated['forecast_month'])),
-            ],
-            [
+                'forecast_month' => new \DateTime($validated['forecast_month'].'-01'),
                 'is_locked' => false,
-            ]
-        );
+            ]);
+        }
 
         $jobForecast->is_locked = (bool) $validated['is_locked'];
+
+        // When unlocking a finalized/submitted forecast, revert status to draft
+        if (! $jobForecast->is_locked && ! $jobForecast->isEditable()) {
+            $jobForecast->status = JobForecast::STATUS_DRAFT;
+            $jobForecast->finalized_by = null;
+            $jobForecast->finalized_at = null;
+            $jobForecast->submitted_by = null;
+            $jobForecast->submitted_at = null;
+        }
+
         $jobForecast->save();
 
         return redirect()->back()->with('success', $jobForecast->is_locked ? 'Forecast locked.' : 'Forecast unlocked.');
+    }
+
+    public function toggleUseActuals(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'forecast_month' => 'required|date_format:Y-m',
+            'use_actuals_for_current_month' => 'required|boolean',
+        ]);
+
+        $jobNumber = Location::where('id', $id)->value('external_id');
+        $year = substr($validated['forecast_month'], 0, 4);
+        $month = substr($validated['forecast_month'], 5, 2);
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', $year)
+            ->whereMonth('forecast_month', $month)
+            ->first();
+
+        if (! $jobForecast) {
+            $jobForecast = JobForecast::create([
+                'job_number' => $jobNumber,
+                'forecast_month' => new \DateTime($validated['forecast_month'].'-01'),
+                'is_locked' => false,
+            ]);
+        }
+
+        $jobForecast->use_actuals_for_current_month = (bool) $validated['use_actuals_for_current_month'];
+        $jobForecast->save();
+
+        return redirect()->back();
     }
 
     public function compareForecast($location, Request $request)
@@ -925,17 +977,23 @@ class JobForecastController extends Controller
         $jobNumber = Location::where('id', $id)->value('external_id');
         $user = Auth::user();
 
-        $jobForecast = JobForecast::firstOrCreate(
-            [
+        $year = substr($validated['forecast_month'], 0, 4);
+        $month = substr($validated['forecast_month'], 5, 2);
+
+        $jobForecast = JobForecast::where('job_number', $jobNumber)
+            ->whereYear('forecast_month', $year)
+            ->whereMonth('forecast_month', $month)
+            ->first();
+
+        if (! $jobForecast) {
+            $jobForecast = JobForecast::create([
                 'job_number' => $jobNumber,
-                'forecast_month' => (new \DateTime($validated['forecast_month'])),
-            ],
-            [
+                'forecast_month' => new \DateTime($validated['forecast_month'].'-01'),
                 'is_locked' => false,
                 'status' => JobForecast::STATUS_DRAFT,
                 'created_by' => $user->id,
-            ]
-        );
+            ]);
+        }
 
         // Check if forecast is editable
         if (! $jobForecast->isEditable()) {

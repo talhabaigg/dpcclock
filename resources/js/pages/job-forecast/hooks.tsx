@@ -194,9 +194,10 @@ interface UsePinnedRowDataProps {
     budgetField: 'budget' | 'contract_sum_to_date';
     description: string;
     currentMonth?: string;
+    useActualsForCurrentMonth?: boolean;
 }
 
-export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budgetField, description, currentMonth }: UsePinnedRowDataProps) {
+export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budgetField, description, currentMonth, useActualsForCurrentMonth = false }: UsePinnedRowDataProps) {
     return useMemo(() => {
         if (!gridData?.length) return [];
 
@@ -209,8 +210,10 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
         for (const m of displayMonths) totals[m] = 0;
         for (const m of forecastMonths) {
             totals[m] = 0;
-            // Only initialize forecast_ prefix field for the current month
-            if (m === currentMonth) {
+            // Only initialize forecast_ prefix for true overlap months (month has actual data
+            // from Premier AND is a forecast month). This prevents creating a phantom forecast_
+            // field with 0 that masks the real forecast values stored in the regular field.
+            if (displayMonths.includes(m)) {
                 totals[`forecast_${m}`] = 0;
             }
         }
@@ -225,15 +228,22 @@ export function usePinnedRowData({ gridData, displayMonths, forecastMonths, budg
             totals[budgetField] += Number(r?.[budgetField] ?? 0) || 0;
         }
 
-        totals.actuals_total = displayMonths.reduce((sum, m) => sum + (Number(totals[m]) || 0), 0);
+        totals.actuals_total = displayMonths.reduce((sum, m) => {
+            // Skip current month actual when using forecast for remaining
+            if (!useActualsForCurrentMonth && m === currentMonth) return sum;
+            return sum + (Number(totals[m]) || 0);
+        }, 0);
         totals.forecast_total = forecastMonths.reduce((sum, m) => {
-            // Check if this month has a forecast_ prefix field
-            const fieldName = totals[`forecast_${m}`] !== undefined ? `forecast_${m}` : m;
+            // Skip current month forecast when using actuals for remaining
+            if (useActualsForCurrentMonth && m === currentMonth) return sum;
+            const forecastField = `forecast_${m}`;
+            const forecastVal = totals[forecastField];
+            const fieldName = forecastVal !== undefined && forecastVal !== null ? forecastField : m;
             return sum + (Number(totals[fieldName]) || 0);
         }, 0);
 
         return [totals];
-    }, [gridData, displayMonths, forecastMonths, budgetField, description, currentMonth]);
+    }, [gridData, displayMonths, forecastMonths, budgetField, description, currentMonth, useActualsForCurrentMonth]);
 }
 
 interface UseChartRowsProps {

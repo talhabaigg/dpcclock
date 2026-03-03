@@ -14,6 +14,7 @@ class JobForecast extends Model
         'job_number',
         'forecast_month',
         'is_locked',
+        'use_actuals_for_current_month',
         'status',
         'created_by',
         'updated_by',
@@ -28,6 +29,7 @@ class JobForecast extends Model
     protected $casts = [
         'forecast_month' => 'date',
         'is_locked' => 'boolean',
+        'use_actuals_for_current_month' => 'boolean',
         'submitted_at' => 'datetime',
         'finalized_at' => 'datetime',
     ];
