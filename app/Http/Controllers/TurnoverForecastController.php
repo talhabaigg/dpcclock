@@ -53,7 +53,7 @@ class TurnoverForecastController extends Controller
 
         // Get all locations with job numbers, filtered by kiosk access
         $user = Auth::user();
-        $locationsQuery = Location::where(function ($query) {
+        $locationsQuery = Location::open()->where(function ($query) {
             $query->where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
         })->whereNotNull('external_id');
 

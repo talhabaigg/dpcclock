@@ -12,15 +12,17 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowUpDown,
     ChartColumnIncreasing,
@@ -33,9 +35,12 @@ import {
     Eye,
     FileImage,
     Heart,
+    Loader2,
+    Lock,
     MapPin,
     Pencil,
     RefreshCcw,
+    RotateCcw,
     XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -54,6 +59,7 @@ type Location = {
     external_id: string;
     eh_parent_id: string | null;
     state: string | null;
+    closed_at: string | null;
     subLocations: Array<{
         id: number;
         name: string;
@@ -74,8 +80,8 @@ const companyTabs = [
     { value: '1198645', label: 'Greenline' },
 ];
 
-function getLocationActions(location: Location) {
-    return [
+function getLocationActions(location: Location, canClose: boolean) {
+    const actions = [
         {
             group: 'View',
             items: [
@@ -101,10 +107,29 @@ function getLocationActions(location: Location) {
             ],
         },
     ];
+
+    if (canClose) {
+        const closeItem = location.closed_at
+            ? { href: '#reopen', icon: RotateCcw, label: 'Reopen Project', action: 'reopen' as const }
+            : { href: '#close', icon: Lock, label: 'Close Project', action: 'close' as const };
+        actions[2].items.push(closeItem);
+    }
+
+    return actions;
 }
 
-function LocationActions({ location }: { location: Location }) {
-    const actions = getLocationActions(location);
+type ActionItem = { href: string; icon: React.ComponentType<{ className?: string }>; label: string; action?: 'close' | 'reopen' };
+
+function LocationActions({
+    location,
+    canClose,
+    onCloseReopen,
+}: {
+    location: Location;
+    canClose: boolean;
+    onCloseReopen: (location: Location, action: 'close' | 'reopen') => void;
+}) {
+    const actions = getLocationActions(location, canClose);
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -119,14 +144,29 @@ function LocationActions({ location }: { location: Location }) {
                         {gi > 0 && <DropdownMenuSeparator />}
                         <DropdownMenuLabel className={gi === 0 ? '' : 'text-muted-foreground text-xs'}>{group.group}</DropdownMenuLabel>
                         {gi === 0 && <DropdownMenuSeparator />}
-                        {group.items.map((item) => (
-                            <Link key={item.label} href={item.href}>
-                                <DropdownMenuItem className="gap-2">
-                                    <item.icon className="h-4 w-4" />
-                                    {item.label}
-                                </DropdownMenuItem>
-                            </Link>
-                        ))}
+                        {group.items.map((item) => {
+                            const typedItem = item as ActionItem;
+                            if (typedItem.action) {
+                                return (
+                                    <DropdownMenuItem
+                                        key={typedItem.label}
+                                        className="gap-2"
+                                        onClick={() => onCloseReopen(location, typedItem.action!)}
+                                    >
+                                        <typedItem.icon className="h-4 w-4" />
+                                        {typedItem.label}
+                                    </DropdownMenuItem>
+                                );
+                            }
+                            return (
+                                <Link key={typedItem.label} href={typedItem.href}>
+                                    <DropdownMenuItem className="gap-2">
+                                        <typedItem.icon className="h-4 w-4" />
+                                        {typedItem.label}
+                                    </DropdownMenuItem>
+                                </Link>
+                            );
+                        })}
                     </div>
                 ))}
             </DropdownMenuContent>
@@ -134,8 +174,16 @@ function LocationActions({ location }: { location: Location }) {
     );
 }
 
-function LocationActionsMobile({ location }: { location: Location }) {
-    const actions = getLocationActions(location);
+function LocationActionsMobile({
+    location,
+    canClose,
+    onCloseReopen,
+}: {
+    location: Location;
+    canClose: boolean;
+    onCloseReopen: (location: Location, action: 'close' | 'reopen') => void;
+}) {
+    const actions = getLocationActions(location, canClose);
     return (
         <Sheet>
             <SheetTrigger asChild>
@@ -153,16 +201,31 @@ function LocationActionsMobile({ location }: { location: Location }) {
                         <div key={group.group}>
                             {gi > 0 && <Separator className="my-2" />}
                             <p className="text-muted-foreground mb-1 px-3 text-xs font-medium">{group.group}</p>
-                            {group.items.map((item) => (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
-                                >
-                                    <item.icon className="text-muted-foreground h-4 w-4" />
-                                    {item.label}
-                                </Link>
-                            ))}
+                            {group.items.map((item) => {
+                                const typedItem = item as ActionItem;
+                                if (typedItem.action) {
+                                    return (
+                                        <button
+                                            key={typedItem.label}
+                                            onClick={() => onCloseReopen(location, typedItem.action!)}
+                                            className="hover:bg-accent flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                                        >
+                                            <typedItem.icon className="text-muted-foreground h-4 w-4" />
+                                            {typedItem.label}
+                                        </button>
+                                    );
+                                }
+                                return (
+                                    <Link
+                                        key={typedItem.label}
+                                        href={typedItem.href}
+                                        className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                                    >
+                                        <typedItem.icon className="text-muted-foreground h-4 w-4" />
+                                        {typedItem.label}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     ))}
                 </nav>
@@ -172,22 +235,59 @@ function LocationActionsMobile({ location }: { location: Location }) {
 }
 
 export default function LocationsList() {
-    const { locations, flash, auth } = usePage<{
+    const { locations, flash, auth, showClosed: initialShowClosed, can } = usePage<{
         locations: Location[];
         flash: { success?: string; error?: string };
         auth: { user: { roles?: Array<{ name: string }> } };
+        showClosed?: boolean;
+        can?: { closeProjects?: boolean };
     }>().props;
 
+    const canClose = can?.closeProjects ?? false;
     const isLoading = false;
     const [open, setOpen] = useState(isLoading);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<string>(() => localStorage.getItem('companySelected') ?? 'all');
+    const [showClosed, setShowClosed] = useState(initialShowClosed ?? false);
+    const [closeDialog, setCloseDialog] = useState<{ location: Location; action: 'close' | 'reopen' } | null>(null);
+    const [closingMessage, setClosingMessage] = useState<string | null>(null);
 
     const { sortedItems: sortedLocations, handleSort } = useSortableData<Location>(locations, { field: 'name', order: 'asc' });
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
         localStorage.setItem('companySelected', value);
+    };
+
+    const handleToggleClosed = (checked: boolean) => {
+        setShowClosed(checked);
+        router.get('/locations', checked ? { show_closed: '1' } : {}, {
+            preserveState: true,
+            replace: true,
+        });
+    };
+
+    const handleCloseReopen = (location: Location, action: 'close' | 'reopen') => {
+        if (action === 'close') {
+            setCloseDialog({ location, action });
+        } else {
+            setClosingMessage('Reopening project...');
+            router.post(`/locations/${location.id}/reopen`, {}, {
+                preserveScroll: true,
+                onFinish: () => setClosingMessage(null),
+            });
+        }
+    };
+
+    const confirmClose = () => {
+        if (!closeDialog) return;
+        const locationId = closeDialog.location.id;
+        setCloseDialog(null);
+        setClosingMessage('Closing project...');
+        router.post(`/locations/${locationId}/close`, {}, {
+            preserveScroll: true,
+            onFinish: () => setClosingMessage(null),
+        });
     };
 
     const companyFilteredLocations = useMemo(() => {
@@ -258,6 +358,10 @@ export default function LocationsList() {
 
                         {/* Search + actions inline on wide containers */}
                         <div className="ml-auto hidden items-center gap-2 @3xl:flex">
+                            <div className="flex items-center gap-2">
+                                <Switch id="show-closed" checked={showClosed} onCheckedChange={handleToggleClosed} />
+                                <Label htmlFor="show-closed" className="text-muted-foreground text-sm">Show Closed</Label>
+                            </div>
                             <div className="relative w-64">
                                 <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                             </div>
@@ -284,6 +388,10 @@ export default function LocationsList() {
                             <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                         </div>
                         <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
+                                <Switch id="show-closed-mobile" checked={showClosed} onCheckedChange={handleToggleClosed} />
+                                <Label htmlFor="show-closed-mobile" className="text-muted-foreground text-sm whitespace-nowrap">Show Closed</Label>
+                            </div>
                             <Link href="/locations/sync" method="get" className="flex-1">
                                 <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
                                     <RefreshCcw className="h-4 w-4" />
@@ -338,12 +446,17 @@ export default function LocationsList() {
                         {/* Card layout for narrow containers */}
                         <div className="@3xl:hidden flex flex-col gap-2">
                             {filteredLocations.map((location) => (
-                                <div key={location.id} className="rounded-lg border p-4">
+                                <div key={location.id} className={`rounded-lg border p-4 ${location.closed_at ? 'opacity-60' : ''}`}>
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
-                                            <Link href={`locations/${location.id}`} className="font-medium hover:underline">
-                                                {location.name}
-                                            </Link>
+                                            <div className="flex items-center gap-2">
+                                                <Link href={`locations/${location.id}`} className="font-medium hover:underline">
+                                                    {location.name}
+                                                </Link>
+                                                {location.closed_at && (
+                                                    <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">Closed</Badge>
+                                                )}
+                                            </div>
                                             <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                                 <span className="font-mono">{location.eh_location_id}</span>
                                                 {location.external_id && <span className="font-mono">{location.external_id}</span>}
@@ -351,7 +464,7 @@ export default function LocationsList() {
                                         </div>
                                         <div className="flex shrink-0 items-center gap-1">
                                             {location.state && <Badge variant="secondary">{location.state}</Badge>}
-                                            <LocationActionsMobile location={location} />
+                                            <LocationActionsMobile location={location} canClose={canClose} onCloseReopen={handleCloseReopen} />
                                         </div>
                                     </div>
                                 </div>
@@ -397,14 +510,19 @@ export default function LocationsList() {
                                 </TableHeader>
                                 <TableBody>
                                     {filteredLocations.map((location) => (
-                                        <TableRow key={location.id}>
+                                        <TableRow key={location.id} className={location.closed_at ? 'opacity-60' : ''}>
                                             <TableCell className="text-muted-foreground overflow-hidden truncate pl-4 font-mono text-xs">
                                                 {location.eh_location_id}
                                             </TableCell>
                                             <TableCell className="overflow-hidden whitespace-normal font-medium">
-                                                <Link href={`locations/${location.id}`} className="hover:underline">
-                                                    {location.name}
-                                                </Link>
+                                                <div className="flex items-center gap-2">
+                                                    <Link href={`locations/${location.id}`} className="hover:underline">
+                                                        {location.name}
+                                                    </Link>
+                                                    {location.closed_at && (
+                                                        <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">Closed</Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell className="overflow-hidden truncate">
                                                 {location.state && <Badge variant="secondary">{location.state}</Badge>}
@@ -453,7 +571,7 @@ export default function LocationsList() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="pr-4">
-                                                <LocationActions location={location} />
+                                                <LocationActions location={location} canClose={canClose} onCloseReopen={handleCloseReopen} />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -465,6 +583,37 @@ export default function LocationsList() {
             </div>
 
             <LoadingDialog open={open} setOpen={setOpen} />
+
+            {/* Inline overlay for close/reopen — avoids Radix portal issues with Inertia */}
+            {closingMessage && (
+                <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="bg-background flex flex-col items-center gap-2 rounded-lg border p-6 shadow-lg">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <p className="text-sm font-medium">{closingMessage}</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Close Project Confirmation — inline to avoid Radix portal/aria-hidden issues with Inertia */}
+            {closeDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-background w-full max-w-md rounded-lg border p-6 shadow-lg">
+                        <h2 className="text-lg font-semibold">Close Project</h2>
+                        <p className="text-muted-foreground mt-2 text-sm">
+                            Are you sure you want to close <strong>{closeDialog.location.name}</strong>? This will hide the project and all its
+                            associated data from listing views. You can reopen it later.
+                        </p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setCloseDialog(null)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmClose}>
+                                Close Project
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

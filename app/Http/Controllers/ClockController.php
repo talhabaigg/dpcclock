@@ -115,6 +115,7 @@ class ClockController extends Controller
         $locations = $kiosks
             ->pluck('location')           // Kiosk location (may be null)
             ->filter()
+            ->filter(fn ($loc) => $loc->closed_at === null) // Exclude closed locations
             ->map(function ($loc) {
                 // Prefer parent if present
                 $parent = $loc->parent ?: $loc;
@@ -227,7 +228,7 @@ class ClockController extends Controller
                 $clock->locations = $locations ?? $kiosk?->location->external_id; // locations added for Location selector unique for each line to keep kiosks separate
             }
         }
-        $locations = Location::pluck('external_id')->toArray(); // all locations for validation if no kiosk selected
+        $locations = Location::open()->pluck('external_id')->toArray(); // all locations for validation if no kiosk selected
 
         // dd($clocks);
         return Inertia::render('timesheets/edit2', [

@@ -39,7 +39,7 @@ class PurchasingController extends Controller
         $costCodes = CostCode::select('id', 'code', 'description')->ordered()->get();
 
         // Group OR conditions properly
-        $locationsQuery = Location::where(function ($query) {
+        $locationsQuery = Location::open()->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
                 ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
@@ -246,7 +246,7 @@ class PurchasingController extends Controller
             'statuses' => Requisition::distinct()->pluck('status')->filter()->values(),
             'suppliers' => Supplier::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('supplier_number'))
                 ->pluck('name')->filter()->values(),
-            'locations' => Location::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('project_number'))
+            'locations' => Location::open()->whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('project_number'))
                 ->pluck('name')->filter()->values(),
             'creators' => \App\Models\User::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('created_by'))
                 ->pluck('name')->filter()->values(),
@@ -731,7 +731,9 @@ class PurchasingController extends Controller
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();
-        $locations = Location::where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093)->get();
+        $locations = Location::open()->where(function ($q) {
+            $q->where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
+        })->get();
         $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         return Inertia::render('purchasing/create', [

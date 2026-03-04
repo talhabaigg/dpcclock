@@ -6,6 +6,7 @@ use App\Events\EmployeeClockedEvent;
 use App\Models\Clock;
 use App\Models\Employee;
 use App\Models\Kiosk;
+use App\Models\Location;
 use App\Models\TimesheetEvent;
 use App\Models\User;
 use App\Services\KioskService;
@@ -34,15 +35,21 @@ class KioskController extends Controller
 
     public function index()
     {
+        $openLocationIds = Location::open()->pluck('id');
+
         if (Auth::user()->hasRole('admin')) {
-            $kiosks = Kiosk::with('location', 'employees')->get();
+            $kiosks = Kiosk::with('location', 'employees')
+                ->whereHas('location', fn ($q) => $q->whereIn('id', $openLocationIds))
+                ->get();
 
             return Inertia::render('kiosks/index', [
                 'kiosks' => $kiosks,
             ]);
         }
 
-        $kiosks = Auth::user()->managedKiosks()->with('location', 'employees')->get();
+        $kiosks = Auth::user()->managedKiosks()->with('location', 'employees')
+            ->whereHas('location', fn ($q) => $q->whereIn('id', $openLocationIds))
+            ->get();
 
         return Inertia::render('kiosks/index', [
             'kiosks' => $kiosks,

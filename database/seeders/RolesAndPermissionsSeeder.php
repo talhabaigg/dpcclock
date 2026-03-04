@@ -47,6 +47,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.create' => 'Create new locations',
             'locations.edit' => 'Edit locations',
             'locations.delete' => 'Delete locations',
+            'locations.close' => 'Close and reopen projects',
             'locations.sync' => 'Sync locations from external system',
             'locations.load-job-data' => 'Load job data from Premier',
         ],
@@ -259,6 +260,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.view',
             'locations.create',
             'locations.edit',
+            'locations.close',
             'locations.sync',
             // Kiosks
             'kiosks.view',

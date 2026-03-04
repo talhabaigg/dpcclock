@@ -28,7 +28,7 @@ class LabourForecastController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $locationsQuery = Location::where(function ($query) {
+        $locationsQuery = Location::open()->where(function ($query) {
             $query->where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
         })->whereNotNull('external_id');
 

@@ -49,8 +49,9 @@ class SyncController extends Controller
         // Snapshot timestamp BEFORE querying (ensures consistency)
         $timestamp = now();
 
-        // Get allowed project IDs for this user
-        $projectIds = Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS)
+        // Get allowed project IDs for this user (exclude closed projects)
+        $projectIds = Location::open()
+            ->whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS)
             ->pluck('id')
             ->toArray();
 
@@ -62,7 +63,7 @@ class SyncController extends Controller
 
         $changes = [
             'projects' => $this->pullTable(
-                Location::whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS),
+                Location::open()->whereIn('eh_parent_id', self::ALLOWED_PARENT_IDS),
                 $since,
                 fn ($record) => $this->formatProject($record)
             ),

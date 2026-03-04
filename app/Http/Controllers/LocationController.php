@@ -20,10 +20,23 @@ class LocationController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $showClosed = $request->boolean('show_closed', false);
+
         // Fetch primary locations
-        $locations = Location::with('worktypes')->where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093)->get();
+        $query = Location::with('worktypes')
+            ->where(function ($q) {
+                $q->where('eh_parent_id', 1149031)
+                  ->orWhere('eh_parent_id', 1198645)
+                  ->orWhere('eh_parent_id', 1249093);
+            });
+
+        if (! $showClosed) {
+            $query->open();
+        }
+
+        $locations = $query->get();
 
         // Fetch sub-locations for each primary location
         foreach ($locations as $location) {
@@ -32,6 +45,10 @@ class LocationController extends Controller
 
         return Inertia::render('locations/index', [
             'locations' => $locations,
+            'showClosed' => $showClosed,
+            'can' => [
+                'closeProjects' => auth()->user()->can('locations.close'),
+            ],
         ]);
     }
 
@@ -304,7 +321,8 @@ class LocationController extends Controller
         }
 
         // Get all locations with job summaries for the selector
-        $availableLocations = Location::with('jobSummary')
+        $availableLocations = Location::open()
+            ->with('jobSummary')
             ->whereHas('jobSummary')
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '')
@@ -660,6 +678,26 @@ class LocationController extends Controller
     public function destroy(Location $location)
     {
         //
+    }
+
+    public function close(Location $location)
+    {
+        $location->update([
+            'closed_at' => now(),
+            'closed_by' => auth()->id(),
+        ]);
+
+        return back()->with('success', "{$location->name} has been closed.");
+    }
+
+    public function reopen(Location $location)
+    {
+        $location->update([
+            'closed_at' => null,
+            'closed_by' => null,
+        ]);
+
+        return back()->with('success', "{$location->name} has been reopened.");
     }
 
     public function sync()

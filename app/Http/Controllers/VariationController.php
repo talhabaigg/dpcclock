@@ -44,12 +44,15 @@ class VariationController extends Controller
         // Location scope — when accessed via /locations/{location}/variations
         if ($location) {
             $query->where('location_id', $location->id);
+        } else {
+            // Hide variations for closed locations
+            $query->whereHas('location', fn ($q) => $q->open());
         }
 
         // Permission-based filtering for managers
         if ($user->hasRole('manager')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
-            $locationIds = Location::whereIn('eh_location_id', $ehLocationIds)->pluck('id');
+            $locationIds = Location::open()->whereIn('eh_location_id', $ehLocationIds)->pluck('id');
             $query->whereIn('location_id', $locationIds);
         }
 
@@ -143,7 +146,7 @@ class VariationController extends Controller
     public function create()
     {
         $user = auth()->user();
-        $locationsQuery = Location::with([
+        $locationsQuery = Location::open()->with([
             'costCodes.costType',
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)
@@ -157,7 +160,6 @@ class VariationController extends Controller
         }
 
         $locations = $locationsQuery->get();
-        // dd($locations);
 
         $costCodes = CostCode::with('costType')->orderBy('code')->get();
 
@@ -183,7 +185,7 @@ class VariationController extends Controller
     {
         $variation = Variation::with('lineItems', 'location', 'pricingItems.condition.conditionType')->findOrFail($id);
         $user = auth()->user();
-        $locationsQuery = Location::with([
+        $locationsQuery = Location::open()->with([
             'costCodes.costType',
         ])->where(function ($query) {
             $query->where('eh_parent_id', 1149031)

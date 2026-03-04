@@ -17,11 +17,34 @@ class Location extends Model
         'external_id',
         'state',
         'dashboard_settings',
+        'closed_at',
+        'closed_by',
     ];
 
     protected $casts = [
         'dashboard_settings' => 'array',
+        'closed_at' => 'datetime',
     ];
+
+    public function scopeOpen($query)
+    {
+        return $query->whereNull('closed_at');
+    }
+
+    public function scopeClosed($query)
+    {
+        return $query->whereNotNull('closed_at');
+    }
+
+    public function getIsClosedAttribute(): bool
+    {
+        return $this->closed_at !== null;
+    }
+
+    public function closedByUser()
+    {
+        return $this->belongsTo(User::class, 'closed_by');
+    }
 
     public function worktypes()
     {

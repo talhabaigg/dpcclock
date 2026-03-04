@@ -164,6 +164,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.edit');
     Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy')
         ->middleware('permission:locations.delete');
+    Route::post('/locations/{location}/close', [LocationController::class, 'close'])->name('locations.close')
+        ->middleware('permission:locations.close');
+    Route::post('/locations/{location}/reopen', [LocationController::class, 'reopen'])->name('locations.reopen')
+        ->middleware('permission:locations.close');
     Route::post('sub-locations', [LocationController::class, 'createSubLocation'])->name('sub-locations.create')
         ->middleware('permission:locations.create');
 
