@@ -51,6 +51,15 @@ class ProjectIncomeCalculator
             ? ($thisMonthProfit / $thisMonthIncome) * 100
             : 0;
 
+        // Calculate previous month values
+        $previousMonthDate = $asOfDate->copy()->subMonth()->endOfMonth();
+        $prevMonthCost = $this->calculateMonthCost($location, $previousMonthDate);
+        $prevMonthIncome = $this->calculateMonthIncome($location, $previousMonthDate);
+        $prevMonthProfit = $prevMonthIncome - $prevMonthCost;
+        $prevMonthProfitPercent = $prevMonthIncome > 0
+            ? ($prevMonthProfit / $prevMonthIncome) * 100
+            : 0;
+
         // Calculate remaining balance (current contract - project to date)
         $remainingIncome = $currentIncome - $projectToDateIncome;
         $remainingCost = $currentCost - $projectToDateCost;
@@ -77,6 +86,12 @@ class ProjectIncomeCalculator
                 'cost' => $thisMonthCost,
                 'profit' => $thisMonthProfit,
                 'profitPercent' => $thisMonthProfitPercent,
+            ],
+            'previousMonth' => [
+                'income' => $prevMonthIncome,
+                'cost' => $prevMonthCost,
+                'profit' => $prevMonthProfit,
+                'profitPercent' => $prevMonthProfitPercent,
             ],
             'projectToDate' => [
                 'income' => $projectToDateIncome,
@@ -175,6 +190,50 @@ class ProjectIncomeCalculator
     }
 
     /**
+     * Calculate costs for a specific month (full month).
+     */
+    private function calculateMonthCost(Location $location, Carbon $dateInMonth): float
+    {
+        if (!$location->external_id) {
+            return 0;
+        }
+
+        $monthStart = $dateInMonth->copy()->startOfMonth();
+        $monthEnd = $dateInMonth->copy()->endOfMonth();
+
+        return (float) DB::table('job_cost_details')
+            ->where('job_number', $location->external_id)
+            ->whereNotNull('transaction_date')
+            ->whereBetween('transaction_date', [
+                $monthStart->format('Y-m-d'),
+                $monthEnd->format('Y-m-d')
+            ])
+            ->sum('amount') ?? 0;
+    }
+
+    /**
+     * Calculate income for a specific month (full month).
+     */
+    private function calculateMonthIncome(Location $location, Carbon $dateInMonth): float
+    {
+        if (!$location->external_id) {
+            return 0;
+        }
+
+        $monthStart = $dateInMonth->copy()->startOfMonth();
+        $monthEnd = $dateInMonth->copy()->endOfMonth();
+
+        return (float) DB::table('ar_progress_billing_summaries')
+            ->where('job_number', $location->external_id)
+            ->whereBetween('period_end_date', [
+                $monthStart->format('Y-m-d'),
+                $monthEnd->format('Y-m-d')
+            ])
+            ->where('active', 1)
+            ->sum('this_app_work_completed') ?? 0;
+    }
+
+    /**
      * Return empty data structure when no job summary exists.
      */
     private function getEmptyData(): array
@@ -190,6 +249,7 @@ class ProjectIncomeCalculator
             'originalContractSum' => $empty,
             'currentContractSum' => $empty,
             'thisMonth' => $empty,
+            'previousMonth' => $empty,
             'projectToDate' => $empty,
             'remainingBalance' => $empty,
         ];

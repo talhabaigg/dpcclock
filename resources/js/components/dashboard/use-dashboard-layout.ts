@@ -89,6 +89,7 @@ export function useDashboardLayout(locationId: number, savedSettings: GridLayout
 
     return {
         layouts,
+        setLayouts,
         hiddenWidgets,
         isEditing,
         setIsEditing,

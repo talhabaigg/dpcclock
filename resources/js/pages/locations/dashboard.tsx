@@ -42,6 +42,7 @@ interface ProjectIncomeData {
     originalContractSum: { income: number; cost: number; profit: number; profitPercent: number };
     currentContractSum: { income: number; cost: number; profit: number; profitPercent: number };
     thisMonth: { income: number; cost: number; profit: number; profitPercent: number };
+    previousMonth: { income: number; cost: number; profit: number; profitPercent: number };
     projectToDate: { income: number; cost: number; profit: number; profitPercent: number };
     remainingBalance: { income: number; cost: number; profit: number; profitPercent: number };
 }
@@ -52,6 +53,7 @@ interface VariationRow {
     value: number;
     percent_of_total: number;
     aging_over_30: number | null;
+    aging_over_30_value: number | null;
 }
 
 interface ProductionUploadOption {
@@ -86,6 +88,7 @@ interface DashboardProps {
         by_type: { worktype: string; count: number }[];
         weekly_trend: { week_ending: string; month: string; count: number }[];
         total_workers: number;
+        prev_workers: number;
     } | null;
     availableLocations: AvailableLocation[];
     productionCostCodes: ProductionCostCode[] | null;
@@ -97,6 +100,7 @@ interface DashboardProps {
     premierCostByCategory: { wages: number; foreman: number; leading_hands: number; labourer: number };
     premierLatestDate: string | null;
     payrollHoursByWorktype: Record<string, number>;
+    dpcPercentComplete: number | null;
 }
 
 function formatReportDate(dateStr: string): string {
@@ -107,7 +111,7 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
@@ -302,6 +306,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         productionCostCodes={productionCostCodes}
                         industrialActionHours={industrialActionHours}
                         dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
+                        dpcPercentComplete={dpcPercentComplete}
                     />
                 )}
 

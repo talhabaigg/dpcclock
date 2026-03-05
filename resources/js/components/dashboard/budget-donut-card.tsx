@@ -26,15 +26,21 @@ interface BudgetDonutCardProps {
     isEditing?: boolean;
 }
 
-const COLORS = {
-    used: 'hsl(224, 76%, 30%)',
-    remaining: 'hsl(217, 91%, 60%)',
-};
+// Neutral by default, warn only when it matters
+function getSemanticColor(percent: number) {
+    if (percent > 100) return { used: 'hsl(0, 72%, 51%)', text: 'text-red-600 dark:text-red-400' };       // over budget
+    if (percent >= 90) return { used: 'hsl(38, 92%, 50%)', text: 'text-amber-600 dark:text-amber-400' };  // approaching limit
+    return { used: 'hsl(217, 91%, 60%)', text: 'text-muted-foreground' };                                 // normal
+}
 
-const chartConfig = {
-    used: { label: 'Used Hrs', color: COLORS.used },
-    remaining: { label: 'Remaining', color: COLORS.remaining },
-} satisfies ChartConfig;
+const TRACK_COLOR = 'hsl(var(--muted))';
+
+function getChartConfig(usedColor: string): ChartConfig {
+    return {
+        used: { label: 'Used Hrs', color: usedColor },
+        remaining: { label: 'Remaining', color: TRACK_COLOR },
+    };
+}
 
 function fmt(val: number): string {
     return val.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
@@ -70,6 +76,15 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
 
     const hasData = selected && selected.est_hours > 0;
     const usedPercent = hasData ? Math.round((selected.used_hours / selected.est_hours) * 100) : 0;
+    const semantic = getSemanticColor(usedPercent);
+    const chartConfig = getChartConfig(semantic.used);
+
+    // Narrative context line
+    const contextLine = hasData
+        ? selected.remaining_hours >= 0
+            ? `${fmt(selected.remaining_hours)} hrs left`
+            : `${fmt(Math.abs(selected.remaining_hours))} hrs over`
+        : '';
 
     return (
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
@@ -128,8 +143,8 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
                 ) : !hasData ? (
                     <span className="text-[11px] text-muted-foreground">No hours for this code</span>
                 ) : (
-                    <div className="w-full flex-1 min-h-0">
-                        <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
+                    <div className="w-full flex-1 min-h-0 flex flex-col">
+                        <ChartContainer config={chartConfig} className="flex-1 min-h-0 w-full aspect-auto">
                                 <PieChart>
                                     <Pie
                                         data={pieData}
@@ -137,28 +152,15 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
                                         nameKey="name"
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius="45%"
-                                        outerRadius="80%"
-                                        paddingAngle={2}
+                                        innerRadius="50%"
+                                        outerRadius="85%"
+                                        paddingAngle={0}
                                         strokeWidth={0}
                                         startAngle={90}
                                         endAngle={-270}
-                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
-                                            const RADIAN = Math.PI / 180;
-                                            const radius = (innerRadius as number) + ((outerRadius as number) - (innerRadius as number)) * 0.5;
-                                            const x = (cx as number) + radius * Math.cos(-midAngle * RADIAN);
-                                            const y = (cy as number) + radius * Math.sin(-midAngle * RADIAN);
-                                            return (
-                                                <text x={x} y={y} textAnchor="middle" dominantBaseline="central" className="fill-white text-[10px] font-semibold">
-                                                    {fmt(value)}
-                                                </text>
-                                            );
-                                        }}
-                                        labelLine={false}
                                     >
-                                        {pieData.map((entry) => (
-                                            <Cell key={entry.key} fill={COLORS[entry.key as keyof typeof COLORS]} />
-                                        ))}
+                                        <Cell key="used" fill={semantic.used} />
+                                        <Cell key="remaining" fill={TRACK_COLOR} />
                                         <Label
                                             content={({ viewBox }) => {
                                                 if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
@@ -185,6 +187,9 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
                                     />
                                 </PieChart>
                         </ChartContainer>
+                        <p className={cn('text-[10px] tabular-nums text-center pb-1.5 leading-none', semantic.text)}>
+                            {contextLine}
+                        </p>
                     </div>
                 )}
             </CardContent>

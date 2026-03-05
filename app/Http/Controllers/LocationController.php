@@ -183,12 +183,17 @@ class LocationController extends Controller
 
         $totalVariations = $variationsSummary->sum('qty');
 
-        // Aging >30 days count for 'PENDING' type with status = Approved only
-        $agingCount = Variation::where('location_id', $location->id)
-            ->where('type', 'PENDING')
-            ->where('status', 'Approved')
-            ->where('co_date', '<=', now()->subDays(30))
-            ->count();
+        // Aging >30 days for 'PENDING' type with status = Approved only
+        $agingStats = DB::table('variations')
+            ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
+            ->where('variations.location_id', $location->id)
+            ->where('variations.type', 'PENDING')
+            ->where('variations.status', 'Approved')
+            ->whereNull('variations.deleted_at')
+            ->where('variations.co_date', '<=', now()->subDays(30))
+            ->selectRaw('COUNT(DISTINCT variations.id) as count')
+            ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')
+            ->first();
 
         $variationsSummaryData = $variationsSummary->map(fn($row) => [
             'type' => $row->type ?? 'Unknown',
@@ -197,7 +202,8 @@ class LocationController extends Controller
             'percent_of_total' => $totalVariations > 0
                 ? round(($row->qty / $totalVariations) * 100, 1)
                 : 0,
-            'aging_over_30' => strtoupper($row->type) === 'PENDING' ? $agingCount : null,
+            'aging_over_30' => strtoupper($row->type) === 'PENDING' ? (int) $agingStats->count : null,
+            'aging_over_30_value' => strtoupper($row->type) === 'PENDING' ? round((float) $agingStats->value, 2) : null,
         ])->values()->toArray();
 
         // Labour budget utilization by cost item
@@ -313,10 +319,20 @@ class LocationController extends Controller
                 ->distinct('eh_employee_id')
                 ->count('eh_employee_id');
 
+            // Previous 30-day window (31-60 days ago) for delta
+            $prevWorkers = (int) DB::table('clocks')
+                ->whereIn('eh_location_id', $locationIds)
+                ->where('status', 'processed')
+                ->whereNotNull('clock_out')
+                ->whereBetween('clock_in', [now()->subDays(60), now()->subDays(30)])
+                ->distinct('eh_employee_id')
+                ->count('eh_employee_id');
+
             $employeesOnSite = [
                 'by_type' => $byType,
                 'weekly_trend' => $weeklyTrend,
                 'total_workers' => $totalWorkers,
+                'prev_workers' => $prevWorkers,
             ];
         }
 
@@ -367,6 +383,7 @@ class LocationController extends Controller
 
         $productionCostCodes = [];
         $productionLines = [];
+        $dpcPercentComplete = null;
 
         if ($selectedUpload) {
             $productionCostCodes = ProductionUploadLine::where('production_upload_id', $selectedUpload->id)
@@ -392,6 +409,19 @@ class LocationController extends Controller
                 ->toArray();
 
             $productionLines = $selectedUpload->lines()->get();
+
+            // DPC overall % complete: weighted by est_hours
+            $totals = ProductionUploadLine::where('production_upload_id', $selectedUpload->id)
+                ->where('cost_code', '!=', '')
+                ->select(
+                    DB::raw('SUM(earned_hours) as total_earned'),
+                    DB::raw('SUM(est_hours) as total_est'),
+                )
+                ->first();
+
+            $dpcPercentComplete = $totals && $totals->total_est > 0
+                ? round(((float) $totals->total_earned / (float) $totals->total_est) * 100, 2)
+                : null;
         }
 
         // Variance trend across ALL uploads — grouped by report_date + area + cost_code
@@ -498,6 +528,7 @@ class LocationController extends Controller
             'premierCostByCategory' => $premierCostByCategory,
             'premierLatestDate' => $premierLatestDate,
             'payrollHoursByWorktype' => $payrollHoursByWorktype,
+            'dpcPercentComplete' => $dpcPercentComplete,
         ]);
     }
 

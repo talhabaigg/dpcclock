@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { JobSummary, Location } from '@/types';
 import FieldLabel from './field-label';
 
 interface TimelineData {
@@ -14,16 +13,11 @@ interface TimelineData {
 }
 
 interface ProjectDetailsCardProps {
-    location: Location & {
-        job_summary?: JobSummary;
-    };
     timelineData: TimelineData | null;
     isEditing?: boolean;
 }
 
-export default function ProjectDetailsCard({ location, timelineData, isEditing }: ProjectDetailsCardProps) {
-    const jobSummary = location.job_summary;
-
+export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectDetailsCardProps) {
     // Calculate delays and overruns
     const calculateStartDelay = () => {
         if (!timelineData?.start_date || !timelineData?.actual_start_date) return null;
@@ -83,25 +77,6 @@ export default function ProjectDetailsCard({ location, timelineData, isEditing }
             <CardContent className="p-0 mt-0 flex-1 min-h-0 overflow-hidden">
                 <table className="w-full h-full border-collapse text-[11px]">
                     <tbody>
-                        {/* Name */}
-                        <tr className="border-b hover:bg-muted/30 transition-colors">
-                            <td className="py-0.5 px-2 font-medium w-[240px]">Name</td>
-                            <td className="py-0.5 px-2">{location.name}</td>
-                        </tr>
-
-                        {/* PM */}
-                        <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
-                            <td className="py-0.5 px-2 font-medium">
-                                <FieldLabel
-                                    label="PM"
-                                    helpText="Project Manager assigned to this location. Sourced from Premier ERP."
-                                />
-                            </td>
-                            <td className="py-0.5 px-2">
-                                {(location as any).project_manager || (jobSummary as any)?.project_manager || '-'}
-                            </td>
-                        </tr>
-
                         {timelineData && (
                             <>
                                 {/* Date Headers */}

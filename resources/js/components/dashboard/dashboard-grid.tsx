@@ -1,5 +1,5 @@
 import { GridLayout, useContainerWidth, noCompactor, type LayoutItem as RGLLayoutItem } from 'react-grid-layout';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -12,13 +12,17 @@ import type { LabourBudgetRow } from './labour-budget-card';
 import type { Location, JobSummary } from '@/types';
 
 import ProjectDetailsCard from './project-details-card';
+import MarginHealthCard from './margin-health-card';
+import ThisMonthCard from './this-month-card';
 import OtherItemsCard from './other-items-card';
 import ProjectIncomeCard from './project-income-card';
 import VariationsCard from './variations-card';
 import LabourBudgetCard from './labour-budget-card';
-import VendorCommitmentsCard from './vendor-commitments-card';
+import POCommitmentsCard from './po-commitments-card';
+import SCCommitmentsCard from './sc-commitments-card';
 import EmployeesOnSiteCard from './employees-on-site-card';
 import BudgetSafetyCard from './budget-safety-card';
+import ClaimVsProductionCard from './claim-vs-production-card';
 import BudgetWeatherCard from './budget-weather-card';
 import IndustrialActionCard from './industrial-action-card';
 
@@ -29,6 +33,7 @@ interface ProjectIncomeData {
     originalContractSum: { income: number; cost: number; profit: number; profitPercent: number };
     currentContractSum: { income: number; cost: number; profit: number; profitPercent: number };
     thisMonth: { income: number; cost: number; profit: number; profitPercent: number };
+    previousMonth: { income: number; cost: number; profit: number; profitPercent: number };
     projectToDate: { income: number; cost: number; profit: number; profitPercent: number };
     remainingBalance: { income: number; cost: number; profit: number; profitPercent: number };
 }
@@ -39,6 +44,7 @@ interface VariationRow {
     value: number;
     percent_of_total: number;
     aging_over_30: number | null;
+    aging_over_30_value: number | null;
 }
 
 interface TimelineData {
@@ -70,15 +76,16 @@ export interface DashboardGridProps {
     productionCostCodes: ProductionCostCode[] | null;
     industrialActionHours: number;
     dashboardSettings: Record<string, unknown> | null;
+    dpcPercentComplete: number | null;
 }
 
 function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean) {
     const ds = props.dashboardSettings as Record<string, string> | null;
     switch (id) {
         case 'project-details':
-            return <ProjectDetailsCard location={props.location} timelineData={props.timelineData} isEditing={isEditing} />;
+            return <ProjectDetailsCard timelineData={props.timelineData} isEditing={isEditing} />;
         case 'variations':
-            return <VariationsCard data={props.variationsSummary} isEditing={isEditing} />;
+            return <VariationsCard data={props.variationsSummary} originalContractIncome={props.projectIncomeData?.originalContractSum?.income} isEditing={isEditing} />;
         case 'budget-safety':
             return (
                 <BudgetSafetyCard
@@ -99,12 +106,32 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
                     isEditing={isEditing}
                 />
             );
+        case 'margin-health':
+            return <MarginHealthCard location={props.location} isEditing={isEditing} />;
+        case 'this-month':
+            return <ThisMonthCard thisMonth={props.projectIncomeData.thisMonth} previousMonth={props.projectIncomeData.previousMonth} isEditing={isEditing} />;
         case 'other-items':
             return <OtherItemsCard location={props.location} claimedToDate={props.claimedToDate} cashRetention={props.cashRetention} isEditing={isEditing} />;
-        case 'vendor-commitments':
-            return <VendorCommitmentsCard data={props.vendorCommitmentsSummary} isEditing={isEditing} />;
+        case 'po-commitments':
+            return <POCommitmentsCard value={props.vendorCommitmentsSummary?.po_outstanding ?? null} isEditing={isEditing} />;
+        case 'sc-commitments':
+            return <SCCommitmentsCard data={props.vendorCommitmentsSummary ? { sc_outstanding: props.vendorCommitmentsSummary.sc_outstanding, sc_summary: props.vendorCommitmentsSummary.sc_summary } : null} isEditing={isEditing} />;
         case 'employees-on-site':
             return <EmployeesOnSiteCard data={props.employeesOnSite} isEditing={isEditing} />;
+        case 'claim-vs-production': {
+            const currentIncome = props.projectIncomeData.currentContractSum.income;
+            const ptdIncome = props.projectIncomeData.projectToDate.income;
+            const claimedPct = currentIncome > 0 ? (ptdIncome / currentIncome) * 100 : 0;
+            return (
+                <ClaimVsProductionCard
+                    claimedPercent={claimedPct}
+                    dpcPercentComplete={props.dpcPercentComplete}
+                    currentContractIncome={currentIncome}
+                    actualClaimedAmount={ptdIncome}
+                    isEditing={isEditing}
+                />
+            );
+        }
         case 'project-income':
             return <ProjectIncomeCard data={props.projectIncomeData} isEditing={isEditing} />;
         case 'labour-budget':
@@ -112,6 +139,17 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
         default:
             return <div className="flex items-center justify-center h-full text-muted-foreground text-xs">Unknown widget</div>;
     }
+}
+
+interface DragStartState {
+    id: string;
+    startX: number;
+    startY: number;
+    startClientX: number;
+    startClientY: number;
+    positions: Map<string, { x: number; y: number }>;
+    /** Companion DOM elements + their original CSS transform */
+    companions: Map<string, { el: HTMLElement; origTransform: string }>;
 }
 
 export default function DashboardGrid(props: DashboardGridProps) {
@@ -134,11 +172,186 @@ export default function DashboardGrid(props: DashboardGridProps) {
     }, []);
 
     // Calculate rowHeight so GRID_ROWS rows fit the container height
-    // (containerHeight - (GRID_ROWS - 1) * marginY) / GRID_ROWS
     const rowHeight = useMemo(() => {
-        if (gridHeight <= 0) return 50; // fallback
+        if (gridHeight <= 0) return 50;
         return Math.floor((gridHeight - (GRID_ROWS - 1) * GRID_MARGIN[1]) / GRID_ROWS);
     }, [gridHeight]);
+
+    // ── Multi-select state ──
+    const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
+    const dragStartRef = useRef<DragStartState | null>(null);
+    const wasDraggingRef = useRef(false);
+
+    // Clear selection when leaving edit mode
+    useEffect(() => {
+        if (!isEditing) setSelectedWidgets(new Set());
+    }, [isEditing]);
+
+    // Escape key to deselect all
+    useEffect(() => {
+        if (!isEditing) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setSelectedWidgets(new Set());
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isEditing]);
+
+    // Widget mousedown: Ctrl/Cmd+click toggles, plain click selects
+    const handleWidgetMouseDown = useCallback(
+        (e: React.MouseEvent, widgetId: string) => {
+            if (!isEditing) return;
+            if ((e.target as HTMLElement).closest('.react-resizable-handle')) return;
+
+            wasDraggingRef.current = false;
+
+            if (e.ctrlKey || e.metaKey) {
+                setSelectedWidgets((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(widgetId)) next.delete(widgetId);
+                    else next.add(widgetId);
+                    return next;
+                });
+                return;
+            }
+
+            // If widget is not yet selected, single-select it
+            if (!selectedWidgets.has(widgetId)) {
+                setSelectedWidgets(new Set([widgetId]));
+            }
+            // If already selected: keep current selection (allows multi-drag)
+        },
+        [isEditing, selectedWidgets],
+    );
+
+    // Widget click: after a non-drag click on a selected widget in a group, reduce to single-select
+    const handleWidgetClick = useCallback(
+        (e: React.MouseEvent, widgetId: string) => {
+            if (!isEditing || wasDraggingRef.current) return;
+            if (e.ctrlKey || e.metaKey) return;
+
+            if (selectedWidgets.size > 1 && selectedWidgets.has(widgetId)) {
+                setSelectedWidgets(new Set([widgetId]));
+            }
+        },
+        [isEditing, selectedWidgets],
+    );
+
+    // Click on grid background to deselect
+    const handleBackgroundClick = useCallback(
+        (e: React.MouseEvent) => {
+            if (!isEditing) return;
+            const target = e.target as HTMLElement;
+            if (target.classList.contains('react-grid-layout') || target === e.currentTarget) {
+                setSelectedWidgets(new Set());
+            }
+        },
+        [isEditing],
+    );
+
+    // ── Drag handlers for multi-select ──
+    // RGL ignores layout-prop changes while a drag is active (`if (activeDrag) return;`),
+    // so we move companion widgets by directly manipulating their DOM transforms and
+    // commit the final grid positions on drag stop.
+
+    const handleDragStart = useCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (_layout: any[], _oldItem: any, newItem: any, _ph: any, event: any) => {
+            wasDraggingRef.current = true;
+
+            if (!newItem || selectedWidgets.size < 2 || !selectedWidgets.has(newItem.i)) {
+                dragStartRef.current = null;
+                return;
+            }
+
+            const mouseEvent = event as MouseEvent;
+
+            // Save original grid positions
+            const positions = new Map<string, { x: number; y: number }>();
+            for (const item of layouts) {
+                if (selectedWidgets.has(item.i)) {
+                    positions.set(item.i, { x: item.x, y: item.y });
+                }
+            }
+
+            // Grab companion DOM elements (RGL adds .react-grid-item to our outer div via cloneElement)
+            const companions = new Map<string, { el: HTMLElement; origTransform: string }>();
+            for (const [id] of positions) {
+                if (id === newItem.i) continue;
+                const el = document.querySelector(`[data-widget-id="${id}"]`) as HTMLElement | null;
+                if (el) {
+                    companions.set(id, { el, origTransform: el.style.transform });
+                }
+            }
+
+            dragStartRef.current = {
+                id: newItem.i,
+                startX: newItem.x,
+                startY: newItem.y,
+                startClientX: mouseEvent.clientX,
+                startClientY: mouseEvent.clientY,
+                positions,
+                companions,
+            };
+        },
+        [selectedWidgets, layouts],
+    );
+
+    // Smooth pixel-level companion movement via direct DOM transform
+    const handleDrag = useCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (_layout: any[], _oldItem: any, _newItem: any, _ph: any, event: any) => {
+            if (!dragStartRef.current) return;
+
+            const mouseEvent = event as MouseEvent;
+            const dx = mouseEvent.clientX - dragStartRef.current.startClientX;
+            const dy = mouseEvent.clientY - dragStartRef.current.startClientY;
+
+            dragStartRef.current.companions.forEach(({ el, origTransform }) => {
+                el.style.transform = `${origTransform} translate(${dx}px, ${dy}px)`;
+                el.style.zIndex = '3';
+            });
+        },
+        [],
+    );
+
+    // Finalize companion positions on drag stop and persist
+    const handleDragStop = useCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (layout: any[], _oldItem: any, newItem: any) => {
+            if (!dragStartRef.current || !newItem) {
+                dragStartRef.current = null;
+                return;
+            }
+
+            // Reset companion DOM transforms — RGL will reposition from the new layout
+            dragStartRef.current.companions.forEach(({ el, origTransform }) => {
+                el.style.transform = origTransform;
+                el.style.zIndex = '';
+            });
+
+            // Compute grid-level delta and apply to companion layout items
+            const deltaX = newItem.x - dragStartRef.current.startX;
+            const deltaY = newItem.y - dragStartRef.current.startY;
+
+            const finalLayout = (layout as LayoutItem[]).map((item) => {
+                if (item.i === newItem.i || !selectedWidgets.has(item.i)) return item;
+
+                const origPos = dragStartRef.current!.positions.get(item.i);
+                if (!origPos) return item;
+
+                return {
+                    ...item,
+                    x: Math.max(0, Math.min(GRID_COLS - item.w, origPos.x + deltaX)),
+                    y: Math.max(0, origPos.y + deltaY),
+                };
+            });
+
+            dragStartRef.current = null;
+            onLayoutChange(finalLayout);
+        },
+        [selectedWidgets, onLayoutChange],
+    );
 
     const visibleLayouts = useMemo(() => {
         return layouts
@@ -150,6 +363,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
     }, [layouts, hiddenWidgets, isEditing]);
 
     const hiddenCount = hiddenWidgets.length;
+    const selectedCount = selectedWidgets.size;
 
     return (
         <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-auto" ref={containerRef}>
@@ -207,6 +421,12 @@ export default function DashboardGrid(props: DashboardGridProps) {
                             <RotateCcw className="h-3 w-3" />
                             Reset
                         </Button>
+
+                        {selectedCount > 1 && (
+                            <span className="text-[10px] text-muted-foreground ml-1">
+                                {selectedCount} selected — drag to move together
+                            </span>
+                        )}
                     </>
                 )}
             </div>
@@ -216,6 +436,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
                 <div
                     ref={gridRef}
                     className={cn('flex-1 min-h-0 relative', isEditing ? 'overflow-auto' : 'overflow-hidden')}
+                    onClick={handleBackgroundClick}
                 >
                     {/* AWS-style pill slot placeholders */}
                     {isEditing && (
@@ -252,19 +473,34 @@ export default function DashboardGrid(props: DashboardGridProps) {
                         resizeConfig={{
                             enabled: isEditing,
                         }}
+                        onDragStart={handleDragStart}
+                        onDrag={handleDrag}
+                        onDragStop={handleDragStop}
                         onLayoutChange={(layout) => {
-                            if (isEditing) onLayoutChange(layout as unknown as LayoutItem[]);
+                            // Suppress during multi-select drag to avoid overwriting companion positions
+                            if (isEditing && !dragStartRef.current) {
+                                onLayoutChange(layout as unknown as LayoutItem[]);
+                            }
                         }}
                     >
                         {visibleLayouts.map((item) => (
                             <div
                                 key={item.i}
+                                data-widget-id={item.i}
                                 className={cn(
                                     'group relative',
-                                    isEditing && 'ring-2 ring-primary/20 rounded-lg',
+                                    isEditing && 'rounded-lg',
+                                    isEditing && selectedWidgets.has(item.i)
+                                        ? 'ring-2 ring-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]'
+                                        : isEditing && 'ring-2 ring-primary/20',
                                 )}
                             >
-                                <div className="w-full h-full overflow-hidden">
+                                {/* Inner div keeps our handlers — outer div's onMouseDown gets overridden by react-draggable */}
+                                <div
+                                    className="w-full h-full overflow-hidden"
+                                    onMouseDown={(e) => handleWidgetMouseDown(e, item.i)}
+                                    onClick={(e) => handleWidgetClick(e, item.i)}
+                                >
                                     {renderWidget(item.i, props, isEditing)}
                                 </div>
                             </div>
