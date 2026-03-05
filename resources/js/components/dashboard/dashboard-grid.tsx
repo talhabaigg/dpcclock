@@ -255,7 +255,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
     // commit the final grid positions on drag stop.
 
     const handleDragStart = useCallback(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (_layout: any[], _oldItem: any, newItem: any, _ph: any, event: any) => {
             wasDraggingRef.current = true;
 
@@ -299,7 +299,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
 
     // Smooth pixel-level companion movement via direct DOM transform
     const handleDrag = useCallback(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (_layout: any[], _oldItem: any, _newItem: any, _ph: any, event: any) => {
             if (!dragStartRef.current) return;
 
@@ -317,7 +317,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
 
     // Finalize companion positions on drag stop and persist
     const handleDragStop = useCallback(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (layout: any[], _oldItem: any, newItem: any) => {
             if (!dragStartRef.current || !newItem) {
                 dragStartRef.current = null;

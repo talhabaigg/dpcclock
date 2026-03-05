@@ -65,36 +65,22 @@ const TYPE_COLORS = [
 export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSiteCardProps) {
     const [range, setRange] = useState<TimeRange>('All');
 
-    if (!data) {
-        return (
-            <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
-                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
-                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                        <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-2 text-[11px] text-muted-foreground flex-1">
-                    No timesheet data available
-                </CardContent>
-            </Card>
-        );
-    }
-
     // Delta calculation
-    const total = data.total_workers ?? 0;
-    const prev = data.prev_workers ?? 0;
+    const total = data?.total_workers ?? 0;
+    const prev = data?.prev_workers ?? 0;
     const delta = total - prev;
     const deltaPct = prev > 0 ? Math.round((delta / prev) * 100) : null;
 
     // Filter weekly trend by selected time range
     const filteredTrend = useMemo(() => {
+        if (!data) return [];
         if (range === 'All') return data.weekly_trend;
 
         const months = range === '1M' ? 1 : range === '3M' ? 3 : 6;
         const cutoff = format(subMonths(new Date(), months), 'yyyy-MM-dd');
 
         return data.weekly_trend.filter((row) => row.week_ending >= cutoff);
-    }, [data.weekly_trend, range]);
+    }, [data?.weekly_trend, range]);
 
     // Trend data for chart — show month labels on first week of each month,
     // but skip labels when too many months to avoid overlap
@@ -120,6 +106,21 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
             };
         });
     }, [filteredTrend]);
+
+    if (!data) {
+        return (
+            <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
+                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
+                        <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-2 text-[11px] text-muted-foreground flex-1">
+                    No timesheet data available
+                </CardContent>
+            </Card>
+        );
+    }
 
     const lastPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
 
