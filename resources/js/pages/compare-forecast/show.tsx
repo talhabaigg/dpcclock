@@ -410,7 +410,7 @@ type EmailDataType = {
 const escHtml = (str: string): string =>
     str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const eFmt = (v: number) => `$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const eFmt = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const ePct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 const eDiff = (d: number) => `${d >= 0 ? '+' : '-'}$${Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const eColor = (d: number) => (d < 0 ? '#dc2626' : '#16a34a');
@@ -519,7 +519,7 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
         </tr>`;
     };
 
-    // Ops row
+    // Ops row (cost-driver metrics: negate for color — exceeding forecast = red)
     const opsRow = (label: string, actual: string, forecast: string, unit = '') => {
         const a = parseFloat(actual), f = parseFloat(forecast);
         const diffPct = f !== 0 ? ((a - f) / f) * 100 : 0;
@@ -527,7 +527,7 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
             <td style="padding:6px 12px;border-bottom:1px solid #d1d5db;font-weight:bold;"><font color="#374151">${label}</font></td>
             <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;">${actual}${unit}</td>
             <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;"><font color="#6b7280">${forecast}${unit}</font></td>
-            <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;"><font color="${eColor(diffPct)}"><b>${ePct(diffPct)}</b></font></td>
+            <td align="right" style="padding:6px 12px;border-bottom:1px solid #d1d5db;"><font color="${eColor(-diffPct)}"><b>${ePct(diffPct)}</b></font></td>
         </tr>`;
     };
 
@@ -545,23 +545,23 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
             <tr><td style="border-left:4px solid #2563eb;padding:4px 0 4px 12px;font-size:15px;font-weight:bold;"><font color="#1e293b">${text}</font></td></tr>
         </table>`;
 
-    // Labour variances rows
+    // Labour variances rows (cost items: negate for color — overspend = red)
     const labourVarRows = (labourSummary?.templateVariances ?? []).map((t, i) =>
         `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
             <td style="padding:6px 10px;"><font color="#374151">${escHtml(t.name)} &mdash; ${escHtml(t.weekEnding)}</font></td>
             <td align="right" style="padding:6px 10px;">${eFmt(t.actual)}</td>
             <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(t.forecast)}</font></td>
-            <td align="right" style="padding:6px 10px;"><font color="${eColor(t.variance)}"><b>${eDiff(t.variance)}</b> / ${ePct(t.variancePct)}</font></td>
+            <td align="right" style="padding:6px 10px;"><font color="${eColor(-t.variance)}"><b>${eDiff(t.variance)}</b> / ${ePct(t.variancePct)}</font></td>
         </tr>`
     ).join('');
 
-    // Material variances rows
+    // Material variances rows (cost items: negate for color — overspend = red)
     const matVarRows = data.sigMaterials.map((m, i) =>
         `<tr${i % 2 === 1 ? ' bgcolor="#f9fafb"' : ''}>
             <td style="padding:6px 10px;"><font color="#374151">${escHtml(m.label)}</font></td>
             <td align="right" style="padding:6px 10px;">${eFmt(m.actual)}</td>
             <td align="right" style="padding:6px 10px;"><font color="#6b7280">${eFmt(m.forecast)}</font></td>
-            <td align="right" style="padding:6px 10px;"><font color="${eColor(m.diff)}"><b>${eDiff(m.diff)}</b> / ${ePct(m.diffPct)}</font></td>
+            <td align="right" style="padding:6px 10px;"><font color="${eColor(-m.diff)}"><b>${eDiff(m.diff)}</b> / ${ePct(m.diffPct)}</font></td>
         </tr>`
     ).join('');
 
@@ -581,18 +581,8 @@ function buildEmailHtml(data: EmailDataType, labourSummary: LabourSummary | null
     return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1a2e;">
 <tr><td>
 
-<!-- Header Banner -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%">
-<tr><td bgcolor="#1e3a5f" style="padding:20px 24px;">
-    <font color="#94a3b8" style="font-size:11px;text-transform:uppercase;letter-spacing:1px;">FORECAST VS ACTUAL REPORT</font><br>
-    <font color="#ffffff" style="font-size:20px;font-weight:bold;">${escHtml(data.jobName)}</font><br>
-    <font color="#bfdbfe" style="font-size:14px;">${escHtml(data.monthLabel)}</font>
-</td></tr>
-</table>
-
-<br>
 <p><font color="#374151">Hi Team,</font></p>
-<p><font color="#374151">Please find below a summary of Forecast vs Actual performance for <b>${escHtml(data.monthLabel)}</b>.</font></p>
+<p><font color="#374151">Please find below a summary of Forecast vs Actual performance for <b>${escHtml(data.jobName)}</b> &mdash; <b>${escHtml(data.monthLabel)}</b>.</font></p>
 
 <!-- Overall Highlights -->
 <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -645,11 +635,25 @@ ${heading('Significant Variances')}
 <p style="font-size:12px;margin-bottom:8px;"><font color="#6b7280">Threshold: Absolute Variance &gt;15% and &gt;$1k</font></p>
 
 <p style="font-size:13px;margin-bottom:4px;"><font color="#475569"><b>Labour</b></font></p>
-${labourVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">${labourVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant labour variances.</font></p>`}
+${labourVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">
+<tr bgcolor="#f1f5f9">
+    <th align="left" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ITEM</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ACTUAL</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">FORECAST</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VARIANCE</font></th>
+</tr>
+${labourVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant labour variances.</font></p>`}
 
 <br>
 <p style="font-size:13px;margin-bottom:4px;"><font color="#475569"><b>Materials &amp; Other Costs</b></font></p>
-${matVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">${matVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant material variances.</font></p>`}
+${matVarRows ? `<table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:12px;">
+<tr bgcolor="#f1f5f9">
+    <th align="left" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ITEM</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">ACTUAL</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">FORECAST</font></th>
+    <th align="right" style="padding:6px 10px;border-bottom:2px solid #d1d5db;"><font color="#64748b" style="font-size:11px;">VARIANCE</font></th>
+</tr>
+${matVarRows}</table>` : `<p style="font-size:12px;margin-left:8px;"><font color="#9ca3af">No significant material variances.</font></p>`}
 
 ${heading('Forecast Accuracy Assessment')}
 <table cellpadding="0" cellspacing="0" border="1" bordercolor="#d1d5db" width="100%" style="border-collapse:collapse;font-size:13px;">
