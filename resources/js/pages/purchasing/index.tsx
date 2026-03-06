@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,8 +14,9 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -23,6 +25,8 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
+    Check,
+    ChevronsUpDown,
     CirclePlus,
     Copy,
     EllipsisVertical,
@@ -30,6 +34,7 @@ import {
     FileText,
     LayoutGrid,
     LayoutList,
+    ListFilter,
     Search,
     SlidersHorizontal,
     SquarePlus,
@@ -40,7 +45,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import CardsIndex from './index-partials/cardsIndex';
 import CostRangeSlider from './index-partials/costRangeSlider';
-import { SelectFilter } from './index-partials/selectFilter';
 import { CostRange, FilterOptions, Filters, RequisitionData } from './index-partials/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -359,11 +363,13 @@ export default function RequisitionList() {
                                 <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
                             </div>
                         </div>
-                        <ActiveFilterBadges
-                            activeFilters={activeFilters}
-                            filters={filters}
-                            updateFilter={updateFilter}
-                        />
+                        {totalActiveFilters > 0 && (
+                            <ActiveFilterBadges
+                                activeFilters={activeFilters}
+                                filters={filters}
+                                updateFilter={updateFilter}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -614,6 +620,79 @@ export default function RequisitionList() {
     );
 }
 
+// ── Combobox Filter (searchable dropdown) ─────────────────────────────
+function ComboboxFilter({
+    label,
+    options,
+    value,
+    onChange,
+}: {
+    label: string;
+    options: string[];
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className={cn(
+                        'h-9 w-full justify-between font-normal',
+                        !value && 'text-muted-foreground',
+                    )}
+                >
+                    <span className="truncate">{value || `Select ${label.toLowerCase()}...`}</span>
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                    <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
+                    <CommandList>
+                        <CommandEmpty>No results found.</CommandEmpty>
+                        <CommandGroup>
+                            {value && (
+                                <CommandItem
+                                    onSelect={() => {
+                                        onChange('');
+                                        setOpen(false);
+                                    }}
+                                    className="text-muted-foreground justify-center text-xs"
+                                >
+                                    <X className="mr-1 h-3 w-3" />
+                                    Clear
+                                </CommandItem>
+                            )}
+                            {options.map((option) => (
+                                <CommandItem
+                                    key={option}
+                                    onSelect={() => {
+                                        onChange(option === value ? '' : option);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            'mr-2 h-3.5 w-3.5',
+                                            value === option ? 'opacity-100' : 'opacity-0',
+                                        )}
+                                    />
+                                    <span className="truncate">{option}</span>
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 // ── Filter Sheet Button ───────────────────────────────────────────────
 function FilterSheetButton({
     totalActiveFilters,
@@ -647,72 +726,87 @@ function FilterSheetButton({
                     )}
                 </Button>
             </SheetTrigger>
-            <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-                <SheetHeader className="pb-4">
-                    <SheetTitle>Filter Requisitions</SheetTitle>
-                </SheetHeader>
-                <SheetDescription asChild>
-                    <div className="space-y-6">
-                        {/* Templates only */}
-                        <div className="flex items-center gap-3 rounded-lg border p-4">
-                            <Checkbox
-                                checked={filters.templates_only}
-                                onCheckedChange={(checked) => updateFilter('templates_only', checked === true)}
-                                id="filter-templates"
-                            />
-                            <Label htmlFor="filter-templates" className="cursor-pointer text-sm font-medium">
-                                Show templates only
-                            </Label>
-                        </div>
-
-                        <Separator />
-
-                        {/* Select filters */}
-                        <div className="space-y-4">
-                            {filterDefinitions.map(({ key, label, options }) => (
-                                <div key={key}>
-                                    <Label htmlFor={`filter-${key}`} className="text-muted-foreground mb-2 block text-xs font-medium uppercase tracking-wider">
-                                        {label}
-                                    </Label>
-                                    <SelectFilter
-                                        filterName={`Filter by ${label}`}
-                                        options={options.map((val) => ({ value: val, label: val }))}
-                                        onChange={(val) => updateFilter(key, val)}
-                                        value={(filters[key] as string) ?? ''}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        <Separator />
-
-                        {/* Cost range */}
-                        <div>
-                            <Label className="text-muted-foreground mb-3 block text-xs font-medium uppercase tracking-wider">
-                                Requisition Value Range
-                            </Label>
-                            <CostRangeSlider
-                                min={costRange.min}
-                                max={costRange.max}
-                                value={localCostRange}
-                                onChange={handleCostRangeChange}
-                            />
-                        </div>
-
+            <SheetContent className="w-full overflow-y-auto sm:max-w-sm">
+                <SheetHeader>
+                    <div className="flex items-center justify-between">
+                        <SheetTitle>Filters</SheetTitle>
                         {totalActiveFilters > 0 && (
-                            <Button variant="outline" onClick={clearAllFilters} className="text-destructive hover:text-destructive w-full gap-2">
-                                <X className="h-4 w-4" />
-                                Clear All Filters
+                            <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground h-auto px-2 py-1 text-xs">
+                                Clear all
                             </Button>
                         )}
                     </div>
-                </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex flex-col gap-5 px-4 pb-6">
+                    {/* Templates toggle */}
+                    <label
+                        htmlFor="filter-templates"
+                        className={cn(
+                            'flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+                            filters.templates_only && 'border-primary/30 bg-primary/5',
+                        )}
+                    >
+                        <Checkbox
+                            checked={filters.templates_only}
+                            onCheckedChange={(checked) => updateFilter('templates_only', checked === true)}
+                            id="filter-templates"
+                        />
+                        <div>
+                            <span className="text-sm font-medium">Templates only</span>
+                            <p className="text-muted-foreground text-xs">Show only template requisitions</p>
+                        </div>
+                    </label>
+
+                    {/* Searchable select filters */}
+                    {filterDefinitions.map(({ key, label, options }) => (
+                        <div key={key} className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-medium">{label}</Label>
+                                {(filters[key] as string) && (
+                                    <button
+                                        onClick={() => updateFilter(key, '')}
+                                        className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                            <ComboboxFilter
+                                label={label}
+                                options={options}
+                                value={(filters[key] as string) ?? ''}
+                                onChange={(val) => updateFilter(key, val)}
+                            />
+                        </div>
+                    ))}
+
+                    {/* Cost range */}
+                    <div className="space-y-3">
+                        <Label className="text-sm font-medium">Value Range</Label>
+                        <CostRangeSlider
+                            min={costRange.min}
+                            max={costRange.max}
+                            value={localCostRange}
+                            onChange={handleCostRangeChange}
+                        />
+                    </div>
+                </div>
             </SheetContent>
         </Sheet>
     );
 }
 
-// ── Active Filter Badges ──────────────────────────────────────────────
+// ── Active Filter Badges (mobile) ─────────────────────────────────────
+const filterLabels: Record<string, string> = {
+    status: 'Status',
+    supplier: 'Supplier',
+    location: 'Location',
+    creator: 'Creator',
+    deliver_to: 'Deliver To',
+    contact: 'Contact',
+};
+
 function ActiveFilterBadges({
     activeFilters,
     filters,
@@ -726,11 +820,13 @@ function ActiveFilterBadges({
 
     return (
         <div className="flex flex-wrap items-center gap-1.5">
+            <ListFilter className="text-muted-foreground h-3.5 w-3.5" />
             {activeFilters.map(([key, value]) => (
-                <Badge key={key} variant="secondary" className="gap-1.5 pr-1.5">
-                    <span className="max-w-24 truncate text-xs sm:max-w-36">{String(value)}</span>
+                <Badge key={key} variant="secondary" className="gap-1 pr-1">
+                    <span className="text-muted-foreground text-[10px] uppercase">{filterLabels[key] || key}:</span>
+                    <span className="max-w-28 truncate text-xs">{String(value)}</span>
                     <button
-                        className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                        className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
                         onClick={() => updateFilter(key as keyof Filters, null)}
                     >
                         <X className="h-3 w-3" />
@@ -738,10 +834,10 @@ function ActiveFilterBadges({
                 </Badge>
             ))}
             {filters.templates_only && (
-                <Badge variant="secondary" className="gap-1.5 pr-1.5">
+                <Badge variant="secondary" className="gap-1 pr-1">
                     <span className="text-xs">Templates Only</span>
                     <button
-                        className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                        className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
                         onClick={() => updateFilter('templates_only', false)}
                     >
                         <X className="h-3 w-3" />

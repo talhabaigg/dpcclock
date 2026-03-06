@@ -1,5 +1,12 @@
 <?php
 
+use App\Models\QueueJobLog;
+
+// Clean up queue job logs older than 24 hours
+Schedule::call(function () {
+    QueueJobLog::where('logged_at', '<', now()->subHours(24))->delete();
+})->hourly();
+
 Schedule::command('app:sync-timesheets')
     ->everyFifteenMinutes()
     ->timezone('Australia/Brisbane');

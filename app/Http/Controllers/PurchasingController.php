@@ -1032,6 +1032,13 @@ class PurchasingController extends Controller
         }
 
         try {
+            // Ensure Premier PO lines are cached before comparing
+            $premierService = new PremierPurchaseOrderService;
+            $cachedLines = \App\Models\PremierPoLine::where('premier_po_id', $requisition->premier_po_id)->count();
+            if ($cachedLines === 0) {
+                $premierService->syncNow($requisition->premier_po_id, $requisition->id);
+            }
+
             $comparisonService = new POComparisonService;
             $comparison = $comparisonService->compare($requisition);
 
@@ -1045,27 +1052,109 @@ class PurchasingController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
+            $userMessage = str_contains($e->getMessage(), 'Premier API returned status')
+                ? $e->getMessage()
+                : 'Failed to connect to Premier. Please try again in a moment.';
+
             return response()->json([
-                'error' => 'Failed to fetch comparison data: '.$e->getMessage(),
+                'error' => $userMessage,
                 'can_compare' => false,
             ], 500);
         }
     }
 
     /**
-     * Refresh comparison data (clear cache and re-fetch)
+     * Refresh comparison data (clear cache and re-fetch).
+     * If premier_po_id is missing, attempt to find it by PO number from Premier.
      */
     public function refreshComparison($id)
     {
         $requisition = Requisition::findOrFail($id);
 
-        if (! $requisition->premier_po_id) {
-            return response()->json(['error' => 'No Premier PO ID'], 400);
+        // If premier_po_id is missing but we have a po_number, try to find it from Premier
+        if (! $requisition->premier_po_id && $requisition->po_number) {
+            $this->backfillPremierPoId($requisition);
+            $requisition->refresh();
         }
 
-        $premierService = new PremierPurchaseOrderService;
-        $premierService->clearCache($requisition->premier_po_id);
+        if (! $requisition->premier_po_id) {
+            return response()->json(['error' => 'Could not find this PO in Premier. Ensure the requisition has been sent first.'], 400);
+        }
+
+        try {
+            $premierService = new PremierPurchaseOrderService;
+            $premierService->clearCache($requisition->premier_po_id);
+
+            // Delete stale local data and re-sync from API
+            \App\Models\PremierPoLine::where('premier_po_id', $requisition->premier_po_id)->delete();
+            $premierService->syncNow($requisition->premier_po_id, $requisition->id);
+        } catch (\Exception $e) {
+            Log::error('Refresh comparison sync failed', [
+                'requisition_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to refresh from Premier. Please try again in a moment.',
+                'can_compare' => false,
+            ], 500);
+        }
 
         return $this->getComparison($id);
+    }
+
+    /**
+     * Try to find and set the Premier PO ID by matching PO number.
+     */
+    private function backfillPremierPoId(Requisition $requisition): void
+    {
+        try {
+            $authService = new PremierAuthenticationService;
+            $token = $authService->getAccessToken();
+            $baseUrl = config('premier.swagger_api.base_url');
+            $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(30)
+                ->get("{$baseUrl}/api/PurchaseOrder/GetPurchaseOrders", [
+                    'companyId' => $companyId,
+                    'pageSize' => 1000,
+                ]);
+
+            if ($response->failed()) {
+                Log::warning('BackfillPremierPoId: API request failed', ['requisition_id' => $requisition->id]);
+
+                return;
+            }
+
+            $poNumber = $requisition->po_number;
+
+            foreach ($response->json('Data') ?? [] as $po) {
+                $premierPoNumber = preg_replace('/^PO/i', '', $po['PONumber'] ?? '');
+                if ($premierPoNumber === $poNumber && ! empty($po['PurchaseOrderId'])) {
+                    $requisition->premier_po_id = $po['PurchaseOrderId'];
+                    $requisition->save();
+
+                    Log::info('BackfillPremierPoId: Found and linked', [
+                        'requisition_id' => $requisition->id,
+                        'po_number' => $poNumber,
+                        'premier_po_id' => $po['PurchaseOrderId'],
+                    ]);
+
+                    return;
+                }
+            }
+
+            Log::info('BackfillPremierPoId: PO not found in Premier', [
+                'requisition_id' => $requisition->id,
+                'po_number' => $poNumber,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('BackfillPremierPoId: Exception', [
+                'requisition_id' => $requisition->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

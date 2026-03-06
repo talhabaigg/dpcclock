@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ArPostedInvoice;
+use App\Models\DataSyncLog;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,36 +18,32 @@ class LoadArPostedInvoices implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The number of times the job may be attempted.
-     *
-     * @var int
-     */
+    private const JOB_NAME = 'ar_posted_invoices';
+
     public $tries;
 
-    /**
-     * The number of seconds the job can run before timing out.
-     *
-     * @var int
-     */
     public $timeout;
 
-    /**
-     * Create a new job instance.
-     */
-    public function __construct()
+    public bool $forceFullSync;
+
+    public function __construct(bool $forceFullSync = false)
     {
         $this->tries = config('premier.jobs.retry_times', 3);
         $this->timeout = config('premier.jobs.timeout', 600);
+        $this->forceFullSync = $forceFullSync;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
         $startTime = now();
-        Log::info('LoadArPostedInvoices: Job started');
+        $syncLog = DataSyncLog::firstOrNew(['job_name' => self::JOB_NAME]);
+        $lastDate = $this->forceFullSync ? null : $syncLog->last_filter_value;
+        $isIncremental = $lastDate !== null;
+
+        Log::info('LoadArPostedInvoices: Job started', [
+            'mode' => $isIncremental ? 'incremental' : 'full',
+            'filter_from' => $lastDate,
+        ]);
 
         try {
             $baseUrl = config('premier.api.base_url').config('premier.endpoints.ar_posted_invoices');
@@ -55,13 +52,26 @@ class LoadArPostedInvoices implements ShouldQueue
             $skip = 0;
             $totalProcessed = 0;
             $isFirstBatch = true;
+            $maxDate = $lastDate;
+
+            $filterParam = '';
+            if ($isIncremental) {
+                $filterParam = "\$filter=Transaction_Date ge datetime'".$lastDate."T00:00:00'&";
+            }
+
+            // Delete overlap records before fetching (incremental mode)
+            if ($isIncremental) {
+                $deleted = ArPostedInvoice::where('transaction_date', '>=', $lastDate)->delete();
+                Log::info('LoadArPostedInvoices: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+            }
 
             do {
-                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
+                $url = $baseUrl.'?'.$filterParam.'$top='.$pageSize.'&$skip='.$skip;
 
                 Log::info('LoadArPostedInvoices: Fetching page', [
                     'skip' => $skip,
                     'top' => $pageSize,
+                    'incremental' => $isIncremental,
                 ]);
 
                 $response = Http::timeout(config('premier.api.timeout', 300))
@@ -98,7 +108,7 @@ class LoadArPostedInvoices implements ShouldQueue
 
                 $rowCount = count($rows);
 
-                if ($rowCount === 0 && $isFirstBatch) {
+                if ($rowCount === 0 && $isFirstBatch && ! $isIncremental) {
                     Log::warning('LoadArPostedInvoices: ERP returned 0 rows, skipping database update');
 
                     return;
@@ -113,10 +123,10 @@ class LoadArPostedInvoices implements ShouldQueue
                     'skip' => $skip,
                 ]);
 
-                if ($isFirstBatch) {
+                if ($isFirstBatch && ! $isIncremental) {
                     ArPostedInvoice::query()->delete();
-                    $isFirstBatch = false;
                 }
+                $isFirstBatch = false;
 
                 $chunks = array_chunk($rows, $insertBatchSize);
                 unset($rows);
@@ -124,7 +134,13 @@ class LoadArPostedInvoices implements ShouldQueue
                 foreach ($chunks as $chunk) {
                     $data = [];
                     foreach ($chunk as $r) {
-                        $data[] = $this->mapRowToRecord($r);
+                        $record = $this->mapRowToRecord($r);
+
+                        if ($record['transaction_date'] && ($maxDate === null || $record['transaction_date'] > $maxDate)) {
+                            $maxDate = $record['transaction_date'];
+                        }
+
+                        $data[] = $record;
                     }
                     ArPostedInvoice::insert($data);
                     unset($data);
@@ -138,9 +154,17 @@ class LoadArPostedInvoices implements ShouldQueue
 
             } while ($rowCount === $pageSize);
 
+            // Update sync log
+            $syncLog->last_successful_sync = now();
+            $syncLog->last_filter_value = $maxDate;
+            $syncLog->records_synced = $totalProcessed;
+            $syncLog->save();
+
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadArPostedInvoices: Job completed successfully', [
+                'mode' => $isIncremental ? 'incremental' : 'full',
                 'records_processed' => $totalProcessed,
+                'max_date' => $maxDate,
                 'duration_seconds' => $duration,
             ]);
 
@@ -155,9 +179,6 @@ class LoadArPostedInvoices implements ShouldQueue
         }
     }
 
-    /**
-     * Map an API row to a database record.
-     */
     private function mapRowToRecord(array $r): array
     {
         return [
@@ -193,9 +214,6 @@ class LoadArPostedInvoices implements ShouldQueue
         ];
     }
 
-    /**
-     * Parse OData date format /Date(milliseconds)/ to date string.
-     */
     private function parseODataDate(?string $dateString): ?string
     {
         if (empty($dateString)) {
@@ -209,9 +227,6 @@ class LoadArPostedInvoices implements ShouldQueue
         return null;
     }
 
-    /**
-     * Handle a job failure.
-     */
     public function failed(Throwable $exception): void
     {
         Log::error('LoadArPostedInvoices: Job failed permanently after all retries', [
@@ -220,9 +235,6 @@ class LoadArPostedInvoices implements ShouldQueue
         ]);
     }
 
-    /**
-     * Calculate the number of seconds to wait before retrying the job.
-     */
     public function backoff(): array
     {
         return [60, 120, 240];

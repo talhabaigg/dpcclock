@@ -896,6 +896,85 @@ class LocationController extends Controller
     }
 
     /**
+     * Return sync status for all Premier data jobs.
+     */
+    public function syncStatus()
+    {
+        $jobMap = [
+            'job_summaries' => ['label' => 'Job Summaries', 'class' => \App\Jobs\LoadJobSummaries::class],
+            'job_cost_data' => ['label' => 'Job Cost Details', 'class' => \App\Jobs\LoadJobCostData::class],
+            'job_report_by_cost_item' => ['label' => 'Job Report by Cost Item', 'class' => \App\Jobs\LoadJobReportByCostItemAndCostTypes::class],
+            'ar_progress_billing' => ['label' => 'AR Progress Billing', 'class' => \App\Jobs\LoadArProgressBillingSummaries::class],
+            'ar_posted_invoices' => ['label' => 'AR Posted Invoices', 'class' => \App\Jobs\LoadArPostedInvoices::class],
+            'ap_posted_invoices' => ['label' => 'AP Posted Invoices', 'class' => \App\Jobs\LoadApPostedInvoices::class],
+            'ap_posted_invoice_lines' => ['label' => 'AP Posted Invoice Lines', 'class' => \App\Jobs\LoadApPostedInvoiceLines::class],
+            'job_vendor_commitments' => ['label' => 'Job Vendor Commitments', 'class' => \App\Jobs\LoadJobVendorCommitments::class],
+        ];
+
+        $syncLogs = \App\Models\DataSyncLog::all()->keyBy('job_name');
+
+        $jobs = [];
+        foreach ($jobMap as $key => $meta) {
+            $log = $syncLogs->get($key);
+            $jobs[] = [
+                'key' => $key,
+                'label' => $meta['label'],
+                'last_synced_at' => $log?->last_successful_sync?->toIso8601String(),
+                'last_filter_value' => $log?->last_filter_value,
+                'records_synced' => $log?->records_synced ?? 0,
+            ];
+        }
+
+        return response()->json($jobs);
+    }
+
+    /**
+     * Dispatch selected Premier data sync jobs.
+     */
+    public function dispatchSyncJobs(Request $request)
+    {
+        $validated = $request->validate([
+            'jobs' => 'required|array|min:1',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments',
+            'force_full' => 'boolean',
+        ]);
+
+        $forceFullSync = $validated['force_full'] ?? false;
+
+        $jobClassMap = [
+            'job_summaries' => \App\Jobs\LoadJobSummaries::class,
+            'job_cost_data' => \App\Jobs\LoadJobCostData::class,
+            'job_report_by_cost_item' => \App\Jobs\LoadJobReportByCostItemAndCostTypes::class,
+            'ar_progress_billing' => \App\Jobs\LoadArProgressBillingSummaries::class,
+            'ar_posted_invoices' => \App\Jobs\LoadArPostedInvoices::class,
+            'ap_posted_invoices' => \App\Jobs\LoadApPostedInvoices::class,
+            'ap_posted_invoice_lines' => \App\Jobs\LoadApPostedInvoiceLines::class,
+            'job_vendor_commitments' => \App\Jobs\LoadJobVendorCommitments::class,
+        ];
+
+        $dispatched = [];
+        foreach ($validated['jobs'] as $jobKey) {
+            $class = $jobClassMap[$jobKey];
+            // Jobs that support forceFullSync parameter
+            $supportsForce = in_array($jobKey, [
+                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices',
+            ]);
+
+            if ($supportsForce) {
+                $class::dispatch($forceFullSync);
+            } else {
+                $class::dispatch();
+            }
+            $dispatched[] = $jobKey;
+        }
+
+        return response()->json([
+            'message' => count($dispatched).' job(s) dispatched.',
+            'dispatched' => $dispatched,
+        ]);
+    }
+
+    /**
      * Attach material items to a location with pricing configuration.
      */
     public function attachMaterials(Request $request, Location $location)

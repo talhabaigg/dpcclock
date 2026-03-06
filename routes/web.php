@@ -140,6 +140,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.sync');
     Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
         ->middleware('permission:locations.load-job-data');
+    Route::get('/data-sync', fn () => \Inertia\Inertia::render('data-sync/index'))->name('data-sync.index')
+        ->middleware('permission:locations.load-job-data');
+    Route::get('/locations/sync-status', [LocationController::class, 'syncStatus'])->name('locations.syncStatus')
+        ->middleware('permission:locations.load-job-data');
+    Route::post('/locations/sync-jobs', [LocationController::class, 'dispatchSyncJobs'])->name('locations.syncJobs')
+        ->middleware('permission:locations.load-job-data');
     Route::get('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
         ->middleware('permission:timesheets.sync');
     Route::middleware('permission:locations.view')->group(function () {
@@ -794,6 +800,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/queue-status/clear-failed', [QueueStatusController::class, 'clearFailed'])->name('queueStatus.clearFailed')
         ->middleware('role:admin');
     Route::post('/queue-status/clear-logs', [QueueStatusController::class, 'clearLogs'])->name('queueStatus.clearLogs')
+        ->middleware('role:admin');
+    Route::get('/queue-status/view-logs', [QueueStatusController::class, 'viewLogs'])->name('queueStatus.viewLogs')
+        ->middleware('role:admin');
+    Route::get('/queue-status/download-logs', [QueueStatusController::class, 'downloadLogs'])->name('queueStatus.downloadLogs')
         ->middleware('role:admin');
 
     // Role & Permission Management (Admin only)

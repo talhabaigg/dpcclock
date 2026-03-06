@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\DataSyncLog;
 use App\Models\JobReportByCostItemAndCostType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -124,6 +125,11 @@ class LoadJobReportByCostItemAndCostTypes implements ShouldQueue
                     JobReportByCostItemAndCostType::insert($chunk);
                 }
             });
+
+            DataSyncLog::updateOrCreate(
+                ['job_name' => 'job_report_by_cost_item'],
+                ['last_successful_sync' => now(), 'records_synced' => count($data)]
+            );
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobReportByCostItemAndCostTypes: Job completed successfully', [

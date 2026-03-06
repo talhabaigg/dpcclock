@@ -28,6 +28,7 @@ import {
     LayoutGrid,
     PersonStanding,
     Pickaxe,
+    RefreshCcw,
     RefreshCw,
     Settings,
     Shield,
@@ -171,6 +172,12 @@ const documents = [
                 url: '/pay-rate-templates',
                 icon: DollarSign,
                 permission: 'materials.view',
+            },
+            {
+                name: 'Premier Sync',
+                url: '/data-sync',
+                icon: RefreshCcw,
+                permission: 'locations.load-job-data',
             },
             {
                 name: 'Supplier Categories',

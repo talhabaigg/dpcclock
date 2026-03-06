@@ -1,14 +1,15 @@
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import Echo from 'laravel-echo';
-import { Activity, CheckCircle2, Clock, FileX2, RefreshCw, Trash2, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, Download, Eye, FileText, Loader2, MoreVertical, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Queue Status', href: '/queue-status' }];
 
@@ -33,9 +34,13 @@ type QueueJob = {
 
 type QueueStats = {
     pending: QueueJob[];
+    processing: QueueJob[];
+    completed: QueueJob[];
     failed: QueueJob[];
     stats: {
         pending_count: number;
+        processing_count: number;
+        completed_count: number;
         failed_count: number;
     };
 };
@@ -44,13 +49,171 @@ type QueueStatusProps = {
     initialJobs: QueueStats;
 };
 
+const LANE_CONFIG = {
+    pending: {
+        label: 'Pending',
+        icon: Clock,
+        headerBg: 'bg-amber-50 dark:bg-amber-950/30',
+        headerBorder: 'border-amber-200 dark:border-amber-800',
+        badgeBg: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+        cardBorder: 'border-amber-100 dark:border-amber-900/50',
+        iconColor: 'text-amber-500',
+        dot: 'bg-amber-400',
+    },
+    processing: {
+        label: 'Processing',
+        icon: RefreshCw,
+        headerBg: 'bg-blue-50 dark:bg-blue-950/30',
+        headerBorder: 'border-blue-200 dark:border-blue-800',
+        badgeBg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+        cardBorder: 'border-blue-100 dark:border-blue-900/50',
+        iconColor: 'text-blue-500',
+        dot: 'bg-blue-400',
+    },
+    completed: {
+        label: 'Completed',
+        icon: CheckCircle2,
+        headerBg: 'bg-emerald-50 dark:bg-emerald-950/30',
+        headerBorder: 'border-emerald-200 dark:border-emerald-800',
+        badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+        cardBorder: 'border-emerald-100 dark:border-emerald-900/50',
+        iconColor: 'text-emerald-500',
+        dot: 'bg-emerald-400',
+    },
+    failed: {
+        label: 'Failed',
+        icon: XCircle,
+        headerBg: 'bg-red-50 dark:bg-red-950/30',
+        headerBorder: 'border-red-200 dark:border-red-800',
+        badgeBg: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+        cardBorder: 'border-red-100 dark:border-red-900/50',
+        iconColor: 'text-red-500',
+        dot: 'bg-red-400',
+    },
+} as const;
+
+function JobCard({
+    job,
+    lane,
+    onClick,
+}: {
+    job: QueueJob;
+    lane: keyof typeof LANE_CONFIG;
+    onClick?: () => void;
+}) {
+    const config = LANE_CONFIG[lane];
+    const formatDate = (dateStr?: string) => {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        }).format(date);
+    };
+
+    const time =
+        formatDate(job.timestamp) ||
+        formatDate(job.failed_at) ||
+        formatDate(job.created_at) ||
+        null;
+
+    return (
+        <div
+            className={`rounded-lg border bg-white p-3 shadow-sm transition-shadow dark:bg-gray-900 ${config.cardBorder} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+            onClick={onClick}
+        >
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+                <span className="text-sm font-medium leading-tight">{job.name}</span>
+                {lane === 'processing' && (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
+                )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+                {(job.queue || job.metadata?.queue) && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        {job.metadata?.queue || job.queue}
+                    </span>
+                )}
+                {job.attempts != null && job.attempts > 0 && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        attempt {job.metadata?.attempts || job.attempts}
+                    </span>
+                )}
+            </div>
+            {lane === 'failed' && job.message && (
+                <p className="mt-1.5 line-clamp-2 text-[11px] leading-tight text-red-600 dark:text-red-400">
+                    {job.message}
+                </p>
+            )}
+            {time && (
+                <p className="text-muted-foreground mt-2 text-[10px]">{time}</p>
+            )}
+        </div>
+    );
+}
+
+function KanbanLane({
+    lane,
+    jobs,
+    onJobClick,
+}: {
+    lane: keyof typeof LANE_CONFIG;
+    jobs: QueueJob[];
+    onJobClick?: (job: QueueJob) => void;
+}) {
+    const config = LANE_CONFIG[lane];
+    const Icon = config.icon;
+
+    return (
+        <div className="flex min-w-[280px] flex-1 flex-col rounded-xl border bg-gray-50/50 dark:border-gray-800 dark:bg-gray-950/50">
+            {/* Lane header */}
+            <div className={`flex items-center gap-2 rounded-t-xl border-b px-4 py-3 ${config.headerBg} ${config.headerBorder}`}>
+                <div className={`flex h-6 w-6 items-center justify-center rounded-md ${config.badgeBg}`}>
+                    <Icon className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-sm font-semibold">{config.label}</span>
+                <Badge variant="secondary" className={`ml-auto ${config.badgeBg}`}>
+                    {jobs.length}
+                </Badge>
+            </div>
+
+            {/* Lane body */}
+            <ScrollArea className="flex-1" style={{ height: 'calc(100vh - 220px)' }}>
+                <div className="space-y-2 p-3">
+                    {jobs.length === 0 && (
+                        <div className="text-muted-foreground flex flex-col items-center justify-center py-8 text-center">
+                            <Icon className="mb-2 h-8 w-8 opacity-20" />
+                            <span className="text-xs">No {config.label.toLowerCase()} jobs</span>
+                        </div>
+                    )}
+                    {jobs.map((job) => (
+                        <JobCard
+                            key={job.id}
+                            job={job}
+                            lane={lane}
+                            onClick={onJobClick ? () => onJobClick(job) : undefined}
+                        />
+                    ))}
+                </div>
+            </ScrollArea>
+        </div>
+    );
+}
+
 export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     const [jobs, setJobs] = useState<QueueStats>(initialJobs);
-    const [processingJobs, setProcessingJobs] = useState<QueueJob[]>([]);
-    const [recentlyCompleted, setRecentlyCompleted] = useState<QueueJob[]>([]);
+    const [processingJobs, setProcessingJobs] = useState<QueueJob[]>(initialJobs.processing || []);
+    const [completedJobs, setCompletedJobs] = useState<QueueJob[]>(initialJobs.completed || []);
     const [isConnected, setIsConnected] = useState(false);
     const [selectedFailedJob, setSelectedFailedJob] = useState<QueueJob | null>(null);
     const [clearing, setClearing] = useState<string | null>(null);
+    const [logViewer, setLogViewer] = useState<{ open: boolean; content: string; size: number; truncated: boolean; loading: boolean }>({
+        open: false, content: '', size: 0, truncated: false, loading: false,
+    });
+    const logEndRef = useRef<HTMLDivElement>(null);
 
     const handleClear = async (action: 'clear-queue' | 'clear-failed' | 'clear-logs') => {
         setClearing(action);
@@ -59,7 +222,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                 },
             });
             const data = await response.json();
@@ -76,8 +239,31 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
         }
     };
 
+    const handleViewLogs = async () => {
+        setLogViewer((prev) => ({ ...prev, open: true, loading: true }));
+        try {
+            const response = await fetch('/queue-status/view-logs');
+            const data = await response.json();
+            setLogViewer({ open: true, content: data.content || '', size: data.size || 0, truncated: data.truncated || false, loading: false });
+            setTimeout(() => logEndRef.current?.scrollIntoView(), 100);
+        } catch {
+            setLogViewer((prev) => ({ ...prev, content: 'Failed to load logs.', loading: false }));
+        }
+    };
+
+    const handleDownloadLogs = () => {
+        window.location.href = '/queue-status/download-logs';
+    };
+
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
     useEffect(() => {
-        // Initialize Pusher and Laravel Echo
         window.Pusher = Pusher;
 
         const echo = new Echo({
@@ -90,29 +276,13 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             disableStats: true,
         });
 
-        // Add connection state listeners
-        echo.connector.pusher.connection.bind('connected', () => {
-            setIsConnected(true);
-        });
+        echo.connector.pusher.connection.bind('connected', () => setIsConnected(true));
+        echo.connector.pusher.connection.bind('error', () => setIsConnected(false));
+        echo.connector.pusher.connection.bind('disconnected', () => setIsConnected(false));
 
-        echo.connector.pusher.connection.bind('error', () => {
-            setIsConnected(false);
-        });
-
-        echo.connector.pusher.connection.bind('disconnected', () => {
-            setIsConnected(false);
-        });
-
-        // Listen to queue status channel
         const channel = echo.channel('queue-status');
-
-        channel.subscribed(() => {
-            setIsConnected(true);
-        });
-
-        channel.error(() => {
-            setIsConnected(false);
-        });
+        channel.subscribed(() => setIsConnected(true));
+        channel.error(() => setIsConnected(false));
 
         channel.listen(
             '.job.status.updated',
@@ -127,13 +297,10 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 };
 
                 if (event.status === 'processing') {
-                    // Add to processing jobs
                     setProcessingJobs((prev) => {
                         const filtered = prev.filter((j) => j.id !== event.job_id);
                         return [newJob, ...filtered];
                     });
-
-                    // Remove from pending jobs
                     setJobs((prev) => ({
                         ...prev,
                         pending: prev.pending.filter((j) => j.id !== event.job_id),
@@ -143,19 +310,13 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                         },
                     }));
                 } else if (event.status === 'completed') {
-                    // Remove from processing - match by either ID or name
                     setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
-
-                    // Add to recently completed
-                    setRecentlyCompleted((prev) => {
+                    setCompletedJobs((prev) => {
                         const filtered = prev.filter((j) => j.id !== event.job_id);
-                        return [newJob, ...filtered].slice(0, 20); // Keep last 20
+                        return [newJob, ...filtered];
                     });
                 } else if (event.status === 'failed') {
-                    // Remove from processing - match by ID
                     setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
-
-                    // Remove from pending too, in case it was still there
                     setJobs((prev) => ({
                         ...prev,
                         pending: prev.pending.filter((j) => j.id !== event.job_id),
@@ -177,37 +338,6 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
         };
     }, []);
 
-    const getStatusIcon = (status: QueueJob['status']) => {
-        switch (status) {
-            case 'pending':
-                return <Clock className="h-4 w-4 text-gray-500" />;
-            case 'processing':
-                return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
-            case 'completed':
-                return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-            case 'failed':
-                return <XCircle className="h-4 w-4 text-red-500" />;
-            default:
-                return null;
-        }
-    };
-
-    const getStatusBadge = (status: QueueJob['status']) => {
-        const baseClasses = 'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold';
-        switch (status) {
-            case 'pending':
-                return `${baseClasses} bg-gray-100 text-gray-800`;
-            case 'processing':
-                return `${baseClasses} bg-blue-100 text-blue-800`;
-            case 'completed':
-                return `${baseClasses} bg-green-100 text-green-800`;
-            case 'failed':
-                return `${baseClasses} bg-red-100 text-red-800`;
-            default:
-                return baseClasses;
-        }
-    };
-
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '-';
         const date = new Date(dateStr);
@@ -224,267 +354,74 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Queue Status" />
 
-            <div className="m-4 space-y-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Queue Status Monitor</h1>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleClear('clear-queue')}
-                                disabled={clearing !== null}
-                            >
-                                <Trash2 className="mr-1 h-4 w-4" />
-                                {clearing === 'clear-queue' ? 'Clearing...' : 'Clear Queue'}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleClear('clear-failed')}
-                                disabled={clearing !== null}
-                            >
-                                <XCircle className="mr-1 h-4 w-4" />
-                                {clearing === 'clear-failed' ? 'Clearing...' : 'Clear Failed'}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleClear('clear-logs')}
-                                disabled={clearing !== null}
-                            >
-                                <FileX2 className="mr-1 h-4 w-4" />
-                                {clearing === 'clear-logs' ? 'Clearing...' : 'Clear Logs'}
-                            </Button>
+            <div className="flex h-full flex-col overflow-hidden">
+                {/* Top bar */}
+                <div className="flex items-center justify-between border-b px-4 py-3">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-lg font-semibold">Queue Monitor</h1>
+                        <div className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full ${isConnected ? 'animate-pulse bg-emerald-400' : 'bg-red-400'}`} />
+                            <span className="text-muted-foreground text-xs">
+                                {isConnected ? 'Live' : 'Disconnected'}
+                            </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Activity className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-red-500'}`} />
-                            <span className="text-muted-foreground text-sm">{isConnected ? 'Connected to real-time updates' : 'Connecting...'}</span>
-                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={handleViewLogs}>
+                            <Eye className="mr-1 h-3.5 w-3.5" />
+                            View Logs
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleDownloadLogs}>
+                            <Download className="mr-1 h-3.5 w-3.5" />
+                            Download Logs
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" disabled={clearing !== null}>
+                                    <MoreVertical className="mr-1 h-3.5 w-3.5" />
+                                    {clearing ? 'Clearing...' : 'Actions'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleClear('clear-queue')}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Clear Pending Queue
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleClear('clear-failed')}>
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Clear Failed Jobs
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleClear('clear-logs')} className="text-red-600 focus:text-red-600">
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Clear Log File
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid gap-4 md:grid-cols-4">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">Pending</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{jobs.stats.pending_count}</div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">Processing</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{processingJobs.length}</div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">Recently Completed</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{recentlyCompleted.length}</div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-muted-foreground text-sm font-medium">Failed</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{jobs.stats.failed_count}</div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Processing Jobs */}
-                {processingJobs.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Currently Processing</CardTitle>
-                            <CardDescription>Jobs that are currently running</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Job Name</TableHead>
-                                        <TableHead>Queue</TableHead>
-                                        <TableHead>Attempts</TableHead>
-                                        <TableHead>Started At</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {processingJobs.map((job) => (
-                                        <TableRow key={job.id}>
-                                            <TableCell>
-                                                <span className={getStatusBadge(job.status)}>
-                                                    {getStatusIcon(job.status)}
-                                                    {job.status}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="font-medium">{job.name}</TableCell>
-                                            <TableCell>{job.metadata?.queue || job.queue || '-'}</TableCell>
-                                            <TableCell>{job.metadata?.attempts || '-'}</TableCell>
-                                            <TableCell>{formatDate(job.timestamp)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Pending Jobs */}
-                {jobs.pending.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Pending Jobs</CardTitle>
-                            <CardDescription>Jobs waiting to be processed</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Job Name</TableHead>
-                                        <TableHead>Queue</TableHead>
-                                        <TableHead>Attempts</TableHead>
-                                        <TableHead>Created At</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {jobs.pending.slice(0, 50).map((job) => (
-                                        <TableRow key={job.id}>
-                                            <TableCell>
-                                                <span className={getStatusBadge(job.status)}>
-                                                    {getStatusIcon(job.status)}
-                                                    {job.status}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="font-medium">{job.name}</TableCell>
-                                            <TableCell>{job.queue || '-'}</TableCell>
-                                            <TableCell>{job.attempts || 0}</TableCell>
-                                            <TableCell>{formatDate(job.created_at)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Recently Completed */}
-                {recentlyCompleted.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Recently Completed</CardTitle>
-                            <CardDescription>Jobs that finished successfully (last 20)</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Job Name</TableHead>
-                                        <TableHead>Queue</TableHead>
-                                        <TableHead>Completed At</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {recentlyCompleted.map((job) => (
-                                        <TableRow key={job.id}>
-                                            <TableCell>
-                                                <span className={getStatusBadge(job.status)}>
-                                                    {getStatusIcon(job.status)}
-                                                    {job.status}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="font-medium">{job.name}</TableCell>
-                                            <TableCell>{job.metadata?.queue || '-'}</TableCell>
-                                            <TableCell>{formatDate(job.timestamp)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Failed Jobs */}
-                {jobs.failed.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Failed Jobs</CardTitle>
-                            <CardDescription>Jobs that encountered errors</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Job Name</TableHead>
-                                        <TableHead>Queue</TableHead>
-                                        <TableHead>Error Message</TableHead>
-                                        <TableHead>Failed At</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {jobs.failed.map((job) => (
-                                        <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelectedFailedJob(job)}>
-                                            <TableCell>
-                                                <span className={getStatusBadge(job.status)}>
-                                                    {getStatusIcon(job.status)}
-                                                    {job.status}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="font-medium">{job.name}</TableCell>
-                                            <TableCell>{job.queue || '-'}</TableCell>
-                                            <TableCell className="max-w-xs truncate text-sm text-red-600">{job.message || '-'}</TableCell>
-                                            <TableCell>{formatDate(job.failed_at || job.timestamp)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Connection Status Warning */}
+                {/* Reverb disconnected warning */}
                 {!isConnected && (
-                    <Card className="border-yellow-200 bg-yellow-50">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-2 text-yellow-800">
-                                <Activity className="h-5 w-5" />
-                                <div>
-                                    <p className="font-semibold">Real-time updates unavailable</p>
-                                    <p className="text-sm">
-                                        Make sure Laravel Reverb is running:{' '}
-                                        <code className="rounded bg-yellow-100 px-1">php artisan reverb:start</code>
-                                    </p>
-                                    <p className="mt-1 text-sm">Currently showing initial job list. Jobs will update in real-time once connected.</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="flex items-center gap-2 border-b bg-amber-50 px-4 py-2 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                        <Activity className="h-4 w-4 shrink-0" />
+                        <span className="text-xs">
+                            Real-time updates unavailable. Start Reverb: <code className="rounded bg-amber-100 px-1 dark:bg-amber-900">php artisan reverb:start</code>
+                        </span>
+                    </div>
                 )}
 
-                {/* Empty State */}
-                {jobs.pending.length === 0 && processingJobs.length === 0 && recentlyCompleted.length === 0 && jobs.failed.length === 0 && (
-                    <Card>
-                        <CardContent className="text-muted-foreground py-8 text-center">
-                            <Activity className="mx-auto mb-2 h-12 w-12 opacity-50" />
-                            <p>No queue jobs to display. The queue is empty.</p>
-                        </CardContent>
-                    </Card>
-                )}
+                {/* Kanban board */}
+                <div className="flex flex-1 gap-4 overflow-x-auto p-4">
+                    <KanbanLane lane="pending" jobs={jobs.pending} />
+                    <KanbanLane lane="processing" jobs={processingJobs} />
+                    <KanbanLane lane="completed" jobs={completedJobs} />
+                    <KanbanLane
+                        lane="failed"
+                        jobs={jobs.failed}
+                        onJobClick={setSelectedFailedJob}
+                    />
+                </div>
             </div>
 
             {/* Failed Job Details Dialog */}
@@ -499,35 +436,73 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                     {selectedFailedJob && (
                         <div className="space-y-4">
                             <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Job Name</h3>
-                                <p className="text-base break-words">{selectedFailedJob.name}</p>
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Job Name</h3>
+                                <p className="break-words text-base">{selectedFailedJob.name}</p>
                             </div>
                             <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Job ID</h3>
-                                <p className="font-mono text-sm break-all text-gray-600">{selectedFailedJob.id}</p>
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Job ID</h3>
+                                <p className="break-all font-mono text-sm text-gray-600 dark:text-gray-400">{selectedFailedJob.id}</p>
                             </div>
                             <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Queue</h3>
-                                <p className="text-sm break-words">{selectedFailedJob.queue || selectedFailedJob.metadata?.queue || 'default'}</p>
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Queue</h3>
+                                <p className="break-words text-sm">{selectedFailedJob.queue || selectedFailedJob.metadata?.queue || 'default'}</p>
                             </div>
                             <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Failed At</h3>
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Failed At</h3>
                                 <p className="text-sm">{formatDate(selectedFailedJob.failed_at || selectedFailedJob.timestamp)}</p>
                             </div>
                             {selectedFailedJob.metadata?.exception && (
                                 <div>
-                                    <h3 className="mb-1 text-sm font-semibold text-gray-700">Exception Type</h3>
-                                    <p className="font-mono text-sm break-all text-gray-600">{selectedFailedJob.metadata.exception}</p>
+                                    <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Exception Type</h3>
+                                    <p className="break-all font-mono text-sm text-gray-600 dark:text-gray-400">{selectedFailedJob.metadata.exception}</p>
                                 </div>
                             )}
                             <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Error Message</h3>
-                                <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-md bg-red-50 p-3">
-                                    <pre className="text-xs break-words whitespace-pre-wrap text-red-900">
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Error Message</h3>
+                                <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-md bg-red-50 p-3 dark:bg-red-950/30">
+                                    <pre className="break-words whitespace-pre-wrap text-xs text-red-900 dark:text-red-200">
                                         {selectedFailedJob.message || 'No error message available'}
                                     </pre>
                                 </div>
                             </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+            {/* Log Viewer Dialog */}
+            <Dialog open={logViewer.open} onOpenChange={(open) => !open && setLogViewer((prev) => ({ ...prev, open: false }))}>
+                <DialogContent className="flex h-[90vh] min-w-full flex-col overflow-hidden">
+                    <DialogHeader className="shrink-0">
+                        <div className="flex items-center justify-between pr-8">
+                            <DialogTitle className="flex items-center gap-2">
+                                <FileText className="h-5 w-5" />
+                                Portal Log
+                                {logViewer.size > 0 && (
+                                    <span className="text-muted-foreground text-xs font-normal">
+                                        ({formatBytes(logViewer.size)})
+                                        {logViewer.truncated && ' - showing last 500KB'}
+                                    </span>
+                                )}
+                            </DialogTitle>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDownloadLogs} title="Download Full Log">
+                                <Download className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </DialogHeader>
+                    {logViewer.loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                    ) : logViewer.content ? (
+                        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-gray-950">
+                            <pre className="whitespace-pre-wrap break-words p-4 text-xs leading-relaxed text-gray-200">
+                                {logViewer.content}
+                                <div ref={logEndRef} />
+                            </pre>
+                        </div>
+                    ) : (
+                        <div className="text-muted-foreground py-12 text-center text-sm">
+                            Log file is empty.
                         </div>
                     )}
                 </DialogContent>

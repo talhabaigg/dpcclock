@@ -30,7 +30,6 @@ import {
     ClockAlert,
     Code2,
     DollarSign,
-    Download,
     EllipsisVertical,
     Eye,
     FileImage,
@@ -235,10 +234,9 @@ function LocationActionsMobile({
 }
 
 export default function LocationsList() {
-    const { locations, flash, auth, showClosed: initialShowClosed, can } = usePage<{
+    const { locations, flash, showClosed: initialShowClosed, can } = usePage<{
         locations: Location[];
         flash: { success?: string; error?: string };
-        auth: { user: { roles?: Array<{ name: string }> } };
         showClosed?: boolean;
         can?: { closeProjects?: boolean };
     }>().props;
@@ -316,8 +314,6 @@ export default function LocationsList() {
         return counts;
     }, [sortedLocations]);
 
-    const isAdmin = auth?.user?.roles?.some((role) => role.name === 'admin') ?? false;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
@@ -371,14 +367,6 @@ export default function LocationsList() {
                                     Sync Locations
                                 </Button>
                             </Link>
-                            {isAdmin && (
-                                <Link href="/locations/load-job-data" method="get">
-                                    <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                                        <Download className="h-4 w-4" />
-                                        Load Job Data
-                                    </Button>
-                                </Link>
-                            )}
                         </div>
                     </div>
 
@@ -398,14 +386,6 @@ export default function LocationsList() {
                                     Sync
                                 </Button>
                             </Link>
-                            {isAdmin && (
-                                <Link href="/locations/load-job-data" method="get" className="flex-1">
-                                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setOpen(true)}>
-                                        <Download className="h-4 w-4" />
-                                        Load Jobs
-                                    </Button>
-                                </Link>
-                            )}
                         </div>
                     </div>
                 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\DataSyncLog;
 use App\Models\JobVendorCommitment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -138,6 +139,11 @@ class LoadJobVendorCommitments implements ShouldQueue
                     JobVendorCommitment::insert($chunk);
                 }
             });
+
+            DataSyncLog::updateOrCreate(
+                ['job_name' => 'job_vendor_commitments'],
+                ['last_successful_sync' => now(), 'records_synced' => count($data)]
+            );
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobVendorCommitments: Job completed successfully', [

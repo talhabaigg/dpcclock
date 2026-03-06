@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\DataSyncLog;
 use App\Models\JobSummary;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -141,6 +142,11 @@ class LoadJobSummaries implements ShouldQueue
                     JobSummary::insert($chunk);
                 }
             });
+
+            DataSyncLog::updateOrCreate(
+                ['job_name' => 'job_summaries'],
+                ['last_successful_sync' => now(), 'records_synced' => count($data)]
+            );
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadJobSummaries: Job completed successfully', [

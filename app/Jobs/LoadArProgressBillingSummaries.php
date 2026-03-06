@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ArProgressBillingSummary;
+use App\Models\DataSyncLog;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -143,6 +144,11 @@ class LoadArProgressBillingSummaries implements ShouldQueue
                 gc_collect_cycles();
 
             } while ($rowCount === $pageSize); // Continue if we got a full page
+
+            DataSyncLog::updateOrCreate(
+                ['job_name' => 'ar_progress_billing'],
+                ['last_successful_sync' => now(), 'records_synced' => $totalProcessed]
+            );
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadArProgressBillingSummaries: Job completed successfully', [

@@ -141,14 +141,10 @@ class PremierPurchaseOrderService
     public function fetchFromPremierApi(string $premierPoId): array
     {
         try {
-            $token = $this->authService->getAccessToken();
-
-            $response = Http::withToken($token)
-                ->acceptJson()
-                ->get("{$this->baseUrl}/api/PurchaseOrder/GetPurchaseOrderLines", [
-                    'purchaseOrderId' => $premierPoId,
-                    'pageSize' => 1000, // Default might be 1, so request more
-                ]);
+            $response = $this->makeAuthenticatedRequest('GET', '/api/PurchaseOrder/GetPurchaseOrderLines', [
+                'purchaseOrderId' => $premierPoId,
+                'pageSize' => 1000,
+            ]);
 
             if ($response->failed()) {
                 Log::error('Failed to fetch Premier PO lines', [
@@ -156,7 +152,7 @@ class PremierPurchaseOrderService
                     'status' => $response->status(),
                     'response' => $response->body(),
                 ]);
-                throw new \Exception('Failed to fetch Purchase Order lines from Premier: '.$response->body());
+                throw new \Exception('Premier API returned status '.$response->status().'. The service may be temporarily unavailable.');
             }
 
             // Response structure: Data contains array of arrays
@@ -226,13 +222,9 @@ class PremierPurchaseOrderService
      */
     public function getDeletedPurchaseOrderLineIds(string $premierPoId): array
     {
-        $token = $this->authService->getAccessToken();
-
-        $response = Http::withToken($token)
-            ->acceptJson()
-            ->get("{$this->baseUrl}/api/PurchaseOrder/GetDeletedPurchaseOrderLineIds", [
-                'purchaseOrderId' => $premierPoId,
-            ]);
+        $response = $this->makeAuthenticatedRequest('GET', '/api/PurchaseOrder/GetDeletedPurchaseOrderLineIds', [
+            'purchaseOrderId' => $premierPoId,
+        ]);
 
         if ($response->failed()) {
             Log::warning('Failed to fetch deleted PO line IDs', [
@@ -286,6 +278,33 @@ class PremierPurchaseOrderService
                 'invoice_unique_id' => $line->invoice_unique_id,
             ];
         })->values()->toArray();
+    }
+
+    /**
+     * Make an authenticated request to Premier API with retry on 401 (stale token).
+     */
+    protected function makeAuthenticatedRequest(string $method, string $endpoint, array $params = []): \Illuminate\Http\Client\Response
+    {
+        $token = $this->authService->getAccessToken();
+
+        $response = Http::withToken($token)
+            ->acceptJson()
+            ->timeout(30)
+            ->get("{$this->baseUrl}{$endpoint}", $params);
+
+        // If 401, clear stale token, re-authenticate, and retry once
+        if ($response->status() === 401) {
+            Log::warning('Premier API returned 401, refreshing token and retrying', ['endpoint' => $endpoint]);
+            $this->authService->clearToken();
+            $token = $this->authService->getAccessToken();
+
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(30)
+                ->get("{$this->baseUrl}{$endpoint}", $params);
+        }
+
+        return $response;
     }
 
     /**
@@ -377,13 +396,9 @@ class PremierPurchaseOrderService
     public function fetchHeaderFromPremierApi(string $premierPoId): ?array
     {
         try {
-            $token = $this->authService->getAccessToken();
-
-            $response = Http::withToken($token)
-                ->acceptJson()
-                ->get("{$this->baseUrl}/api/PurchaseOrder/GetPurchaseOrder", [
-                    'purchaseOrderId' => $premierPoId,
-                ]);
+            $response = $this->makeAuthenticatedRequest('GET', '/api/PurchaseOrder/GetPurchaseOrder', [
+                'purchaseOrderId' => $premierPoId,
+            ]);
 
             if ($response->failed()) {
                 Log::warning('Failed to fetch Premier PO header', [

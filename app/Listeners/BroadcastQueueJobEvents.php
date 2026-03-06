@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Events\QueueJobStatusUpdated;
+use App\Models\QueueJobLog;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -10,12 +11,15 @@ use Illuminate\Support\Str;
 
 class BroadcastQueueJobEvents
 {
-    /**
-     * Handle job processing event.
-     */
     public function handleJobProcessing(JobProcessing $event): void
     {
         $jobName = $this->extractJobName($event->job->payload());
+
+        $this->log($event->job->getJobId(), $jobName, 'processing', 'Job is currently running', [
+            'queue' => $event->job->getQueue(),
+            'connection' => $event->connectionName,
+            'attempts' => $event->job->attempts(),
+        ]);
 
         event(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
@@ -30,12 +34,14 @@ class BroadcastQueueJobEvents
         ));
     }
 
-    /**
-     * Handle job processed event.
-     */
     public function handleJobProcessed(JobProcessed $event): void
     {
         $jobName = $this->extractJobName($event->job->payload());
+
+        $this->log($event->job->getJobId(), $jobName, 'completed', 'Job completed successfully', [
+            'queue' => $event->job->getQueue(),
+            'connection' => $event->connectionName,
+        ]);
 
         event(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
@@ -49,12 +55,15 @@ class BroadcastQueueJobEvents
         ));
     }
 
-    /**
-     * Handle job failed event.
-     */
     public function handleJobFailed(JobFailed $event): void
     {
         $jobName = $this->extractJobName($event->job->payload());
+
+        $this->log($event->job->getJobId(), $jobName, 'failed', $event->exception->getMessage(), [
+            'queue' => $event->job->getQueue(),
+            'connection' => $event->connectionName,
+            'exception' => get_class($event->exception),
+        ]);
 
         event(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
@@ -69,14 +78,25 @@ class BroadcastQueueJobEvents
         ));
     }
 
-    /**
-     * Extract job name from payload.
-     */
+    protected function log(string $jobId, string $jobName, string $status, string $message, array $metadata): void
+    {
+        QueueJobLog::create([
+            'job_id' => $jobId,
+            'job_name' => $jobName,
+            'queue' => $metadata['queue'] ?? null,
+            'connection' => $metadata['connection'] ?? null,
+            'status' => $status,
+            'message' => $message,
+            'attempts' => $metadata['attempts'] ?? 0,
+            'exception_class' => $metadata['exception'] ?? null,
+            'logged_at' => now(),
+        ]);
+    }
+
     protected function extractJobName(array $payload): string
     {
         $displayName = $payload['displayName'] ?? 'Unknown Job';
 
-        // If it's a class name, get just the class name without namespace
         if (Str::contains($displayName, '\\')) {
             return class_basename($displayName);
         }

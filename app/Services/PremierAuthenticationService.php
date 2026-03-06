@@ -56,4 +56,12 @@ class PremierAuthenticationService
 
         throw new \Exception('Failed to authenticate with Jonas Premier API.');
     }
+
+    /**
+     * Clear the cached token (used when API returns 401 to force re-auth).
+     */
+    public function clearToken(): void
+    {
+        Cache::forget($this->cacheKey);
+    }
 }

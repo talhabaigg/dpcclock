@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ApPostedInvoiceLine;
+use App\Models\DataSyncLog;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,36 +18,32 @@ class LoadApPostedInvoiceLines implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The number of times the job may be attempted.
-     *
-     * @var int
-     */
+    private const JOB_NAME = 'ap_posted_invoice_lines';
+
     public $tries;
 
-    /**
-     * The number of seconds the job can run before timing out.
-     *
-     * @var int
-     */
     public $timeout;
 
-    /**
-     * Create a new job instance.
-     */
-    public function __construct()
+    public bool $forceFullSync;
+
+    public function __construct(bool $forceFullSync = false)
     {
         $this->tries = config('premier.jobs.retry_times', 3);
         $this->timeout = config('premier.jobs.timeout', 600);
+        $this->forceFullSync = $forceFullSync;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
         $startTime = now();
-        Log::info('LoadApPostedInvoiceLines: Job started');
+        $syncLog = DataSyncLog::firstOrNew(['job_name' => self::JOB_NAME]);
+        $lastDate = $this->forceFullSync ? null : $syncLog->last_filter_value;
+        $isIncremental = $lastDate !== null;
+
+        Log::info('LoadApPostedInvoiceLines: Job started', [
+            'mode' => $isIncremental ? 'incremental' : 'full',
+            'filter_from' => $lastDate,
+        ]);
 
         try {
             $baseUrl = config('premier.api.base_url').config('premier.endpoints.ap_posted_invoice_lines');
@@ -55,13 +52,26 @@ class LoadApPostedInvoiceLines implements ShouldQueue
             $skip = 0;
             $totalProcessed = 0;
             $isFirstBatch = true;
+            $maxDate = $lastDate;
+
+            $filterParam = '';
+            if ($isIncremental) {
+                $filterParam = "\$filter=Transaction_Date ge datetime'".$lastDate."T00:00:00'&";
+            }
+
+            // Delete overlap records before fetching (incremental mode)
+            if ($isIncremental) {
+                $deleted = ApPostedInvoiceLine::where('transaction_date', '>=', $lastDate)->delete();
+                Log::info('LoadApPostedInvoiceLines: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+            }
 
             do {
-                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
+                $url = $baseUrl.'?'.$filterParam.'$top='.$pageSize.'&$skip='.$skip;
 
                 Log::info('LoadApPostedInvoiceLines: Fetching page', [
                     'skip' => $skip,
                     'top' => $pageSize,
+                    'incremental' => $isIncremental,
                 ]);
 
                 $response = Http::timeout(config('premier.api.timeout', 300))
@@ -98,7 +108,7 @@ class LoadApPostedInvoiceLines implements ShouldQueue
 
                 $rowCount = count($rows);
 
-                if ($rowCount === 0 && $isFirstBatch) {
+                if ($rowCount === 0 && $isFirstBatch && ! $isIncremental) {
                     Log::warning('LoadApPostedInvoiceLines: ERP returned 0 rows, skipping database update');
 
                     return;
@@ -113,10 +123,10 @@ class LoadApPostedInvoiceLines implements ShouldQueue
                     'skip' => $skip,
                 ]);
 
-                if ($isFirstBatch) {
+                if ($isFirstBatch && ! $isIncremental) {
                     ApPostedInvoiceLine::query()->delete();
-                    $isFirstBatch = false;
                 }
+                $isFirstBatch = false;
 
                 $chunks = array_chunk($rows, $insertBatchSize);
                 unset($rows);
@@ -124,7 +134,13 @@ class LoadApPostedInvoiceLines implements ShouldQueue
                 foreach ($chunks as $chunk) {
                     $data = [];
                     foreach ($chunk as $r) {
-                        $data[] = $this->mapRowToRecord($r);
+                        $record = $this->mapRowToRecord($r);
+
+                        if ($record['transaction_date'] && ($maxDate === null || $record['transaction_date'] > $maxDate)) {
+                            $maxDate = $record['transaction_date'];
+                        }
+
+                        $data[] = $record;
                     }
                     ApPostedInvoiceLine::insert($data);
                     unset($data);
@@ -138,9 +154,17 @@ class LoadApPostedInvoiceLines implements ShouldQueue
 
             } while ($rowCount === $pageSize);
 
+            // Update sync log
+            $syncLog->last_successful_sync = now();
+            $syncLog->last_filter_value = $maxDate;
+            $syncLog->records_synced = $totalProcessed;
+            $syncLog->save();
+
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadApPostedInvoiceLines: Job completed successfully', [
+                'mode' => $isIncremental ? 'incremental' : 'full',
                 'records_processed' => $totalProcessed,
+                'max_date' => $maxDate,
                 'duration_seconds' => $duration,
             ]);
 
@@ -155,9 +179,6 @@ class LoadApPostedInvoiceLines implements ShouldQueue
         }
     }
 
-    /**
-     * Map an API row to a database record.
-     */
     private function mapRowToRecord(array $r): array
     {
         return [
@@ -206,9 +227,6 @@ class LoadApPostedInvoiceLines implements ShouldQueue
         ];
     }
 
-    /**
-     * Parse OData date format /Date(milliseconds)/ to date string.
-     */
     private function parseODataDate(?string $dateString): ?string
     {
         if (empty($dateString)) {
@@ -222,9 +240,6 @@ class LoadApPostedInvoiceLines implements ShouldQueue
         return null;
     }
 
-    /**
-     * Handle a job failure.
-     */
     public function failed(Throwable $exception): void
     {
         Log::error('LoadApPostedInvoiceLines: Job failed permanently after all retries', [
@@ -233,9 +248,6 @@ class LoadApPostedInvoiceLines implements ShouldQueue
         ]);
     }
 
-    /**
-     * Calculate the number of seconds to wait before retrying the job.
-     */
     public function backoff(): array
     {
         return [60, 120, 240];
