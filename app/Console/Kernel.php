@@ -10,6 +10,8 @@ use App\Jobs\LoadJobCostData;
 use App\Jobs\LoadJobReportByCostItemAndCostTypes;
 use App\Jobs\LoadJobSummaries;
 use App\Jobs\LoadJobVendorCommitments;
+use App\Jobs\LoadTimesheetsFromEH;
+use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -60,6 +62,16 @@ class Kernel extends ConsoleKernel
 
         $schedule->job(LoadJobVendorCommitments::class)
             ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Employment Hero Timesheet Sync - Daily
+        $schedule->call(function () {
+            $tz = 'Australia/Brisbane';
+            $weekEnding = Carbon::now($tz)->endOfWeek(Carbon::FRIDAY)->format('d-m-Y');
+            dispatch(new LoadTimesheetsFromEH($weekEnding));
+        })
+            ->dailyAt('05:00')
             ->withoutOverlapping()
             ->runInBackground();
     }
