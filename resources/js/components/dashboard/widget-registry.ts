@@ -88,8 +88,8 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     {
         id: 'sc-commitments',
         label: 'SC Commitments',
-        minW: 3,
-        minH: 2,
+        minW: 1,
+        minH: 1,
         defaultLayout: { x: 8, y: 2, w: 2, h: 2 },
     },
     {
@@ -118,7 +118,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         label: 'Budget Utilization',
         minW: 2,
         minH: 2,
-        defaultLayout: { x: 0, y: 6, w: 8, h: 4 },
+        defaultLayout: { x: 0, y: 6, w: 10, h: 4 },
     },
 ];
 
