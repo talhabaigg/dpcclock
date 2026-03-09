@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, X } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
@@ -116,6 +117,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
+    const [reportOpen, setReportOpen] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -251,18 +253,40 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     {productionUploads.length > 0 && (
                         <div className="flex items-center gap-1">
                             <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">Report:</span>
-                            <Select value={selectedUploadId?.toString() ?? ''} onValueChange={handleUploadChange}>
-                                <SelectTrigger className="h-7 w-[120px] sm:w-[160px] text-xs">
-                                    <SelectValue placeholder="Report" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {productionUploads.map((u) => (
-                                        <SelectItem key={u.id} value={u.id.toString()}>
-                                            {formatReportDate(u.report_date)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Popover open={reportOpen} onOpenChange={setReportOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-7 w-[120px] sm:w-[160px] justify-between text-xs font-normal">
+                                        {selectedUploadId
+                                            ? formatReportDate(productionUploads.find((u) => u.id === selectedUploadId)?.report_date ?? '')
+                                            : 'Select report'}
+                                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[200px] p-0" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Search date..." className="h-8 text-xs" />
+                                        <CommandList>
+                                            <CommandEmpty>No reports found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {productionUploads.map((u) => (
+                                                    <CommandItem
+                                                        key={u.id}
+                                                        value={formatReportDate(u.report_date)}
+                                                        onSelect={() => {
+                                                            handleUploadChange(u.id.toString());
+                                                            setReportOpen(false);
+                                                        }}
+                                                        className="text-xs"
+                                                    >
+                                                        <Check className={cn('mr-1.5 h-3 w-3', selectedUploadId === u.id ? 'opacity-100' : 'opacity-0')} />
+                                                        {formatReportDate(u.report_date)}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     )}
 

@@ -177,26 +177,24 @@ class LocationController extends Controller
         $projectIncomeCalculator = new \App\Services\ProjectIncomeCalculator();
         $projectIncomeData = $projectIncomeCalculator->calculate($location, $asOfDate);
 
-        // Calculate variations summary grouped by type (status = Approved only)
+        // Calculate variations summary grouped by status and type
         $variationsSummary = DB::table('variations')
             ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
             ->where('variations.location_id', $location->id)
-            ->where('variations.status', 'Approved')
             ->whereNull('variations.deleted_at')
-            ->select('variations.type')
+            ->select('variations.status', 'variations.type')
             ->selectRaw('COUNT(DISTINCT variations.id) as qty')
             ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')
-            ->groupBy('variations.type')
+            ->groupBy('variations.status', 'variations.type')
             ->get();
 
         $totalVariations = $variationsSummary->sum('qty');
 
-        // Aging >30 days for 'PENDING' type with status = Approved only
+        // Aging >30 days for 'PENDING' type variations
         $agingStats = DB::table('variations')
             ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
             ->where('variations.location_id', $location->id)
             ->where('variations.type', 'PENDING')
-            ->where('variations.status', 'Approved')
             ->whereNull('variations.deleted_at')
             ->where('variations.co_date', '<=', now()->subDays(30))
             ->selectRaw('COUNT(DISTINCT variations.id) as count')
@@ -204,6 +202,7 @@ class LocationController extends Controller
             ->first();
 
         $variationsSummaryData = $variationsSummary->map(fn($row) => [
+            'status' => $row->status ?? 'Unknown',
             'type' => $row->type ?? 'Unknown',
             'qty' => (int) $row->qty,
             'value' => round((float) $row->value, 2),

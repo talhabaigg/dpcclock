@@ -85,7 +85,7 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
         case 'project-details':
             return <ProjectDetailsCard timelineData={props.timelineData} isEditing={isEditing} />;
         case 'variations':
-            return <VariationsCard data={props.variationsSummary} originalContractIncome={props.projectIncomeData?.originalContractSum?.income} isEditing={isEditing} />;
+            return <VariationsCard data={props.variationsSummary} locationId={props.location?.id} originalContractIncome={props.projectIncomeData?.originalContractSum?.income} isEditing={isEditing} />;
         case 'budget-safety':
             return (
                 <BudgetSafetyCard
