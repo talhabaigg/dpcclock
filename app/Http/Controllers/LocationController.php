@@ -153,6 +153,14 @@ class LocationController extends Controller
     {
         $location->load('jobSummary', 'vendorCommitments');
 
+        // Append forecast cost from job report (sum of estimate_at_completion)
+        if ($location->jobSummary && $location->external_id) {
+            $forecastCost = DB::table('job_report_by_cost_items_and_cost_types')
+                ->where('job_number', $location->external_id)
+                ->sum('estimate_at_completion');
+            $location->jobSummary->setAttribute('forecast_cost', (float) $forecastCost);
+        }
+
         // Get the "as of" date from query params, default to today
         $asOfDate = $request->input('as_of_date')
             ? \Carbon\Carbon::parse($request->input('as_of_date'))

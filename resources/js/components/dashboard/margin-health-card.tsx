@@ -61,9 +61,10 @@ export default function MarginHealthCard({ location, isEditing }: MarginHealthCa
             ? ((jobSummary.original_estimate_revenue - jobSummary.original_estimate_cost) / jobSummary.original_estimate_revenue) * 100
             : null;
 
+    const forecastCost = jobSummary.forecast_cost ?? jobSummary.current_estimate_cost;
     const forecastMargin =
         jobSummary.current_estimate_revenue && jobSummary.current_estimate_revenue !== 0
-            ? ((jobSummary.current_estimate_revenue - jobSummary.current_estimate_cost) / jobSummary.current_estimate_revenue) * 100
+            ? ((jobSummary.current_estimate_revenue - forecastCost) / jobSummary.current_estimate_revenue) * 100
             : null;
 
     const delta = originalMargin !== null && forecastMargin !== null ? forecastMargin - originalMargin : null;

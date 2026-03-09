@@ -57,6 +57,7 @@ export interface JobSummary {
     original_estimate_revenue: number;
     current_estimate_revenue: number;
     over_under_billing: number;
+    forecast_cost: number | null;
     created_at: string;
     updated_at: string;
 }

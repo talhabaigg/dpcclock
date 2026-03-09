@@ -27,9 +27,13 @@ class ProjectIncomeCalculator
             ? ($originalProfit / $originalIncome) * 100
             : 0;
 
-        // Current Contract Sum - from job summary current estimates
+        // Current Contract Sum - income from job summary, cost from job report estimate at completion
         $currentIncome = (float) ($jobSummary->current_estimate_revenue ?? 0);
-        $currentCost = (float) ($jobSummary->current_estimate_cost ?? 0);
+        $currentCost = $location->external_id
+            ? (float) DB::table('job_report_by_cost_items_and_cost_types')
+                ->where('job_number', $location->external_id)
+                ->sum('estimate_at_completion')
+            : 0;
         $currentProfit = $currentIncome - $currentCost;
         $currentProfitPercent = $currentIncome > 0
             ? ($currentProfit / $currentIncome) * 100
