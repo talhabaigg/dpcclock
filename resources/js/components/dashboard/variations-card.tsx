@@ -63,7 +63,11 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     const toggleExpand = (status: string) => {
         setExpandedStatuses((prev) => {
             const next = new Set(prev);
-            next.has(status) ? next.delete(status) : next.add(status);
+            if (next.has(status)) {
+                next.delete(status);
+            } else {
+                next.add(status);
+            }
             return next;
         });
     };
