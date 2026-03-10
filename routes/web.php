@@ -273,6 +273,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:requisitions.edit')->group(function () {
         Route::get('/requisition/{id}/edit', [PurchasingController::class, 'edit'])->name('requisition.edit');
         Route::put('/requisition/{requisition}', [PurchasingController::class, 'update'])->name('requisition.update');
+        Route::post('/requisition/{id}/delivery-organization', [PurchasingController::class, 'saveDeliveryOrganization'])->name('requisition.saveDeliveryOrganization');
         Route::get('/requisition/{id}/toggle-requisition-template', [PurchasingController::class, 'toggleRequisitionTemplate'])->name('requisition.toggle-template');
         Route::post('/requisition/{id}/notes', [RequisitionNoteController::class, 'store'])->name('requisition.addNote');
         Route::get('/location/{locationId}/req-header/edit', [RequisitionHeaderTemplateController::class, 'edit'])->name('location.req-header.edit');

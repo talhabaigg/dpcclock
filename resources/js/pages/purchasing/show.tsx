@@ -53,6 +53,7 @@ import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
 import ComparisonTab from './show-partials/ComparisonTab';
 import { SmartPricingCards } from './show-partials/SmartPricingCards';
 import { SmartPricingWizard } from '@/components/SmartPricingWizard';
+import { DeliveryOrganizationPanel } from './show-partials/DeliveryOrganizationPanel';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -103,6 +104,7 @@ export default function RequisitionShow() {
                 price_list: string;
                 is_locked: boolean;
                 resolution_context: any;
+                deliver_to?: string | null;
             }[];
             line_items_sum_total_cost: number;
         };
@@ -806,6 +808,13 @@ export default function RequisitionShow() {
                                         <GitCompare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Compare
                                     </TabsTrigger>
+                                    <TabsTrigger
+                                        value="delivery"
+                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
+                                    >
+                                        <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                        Delivery
+                                    </TabsTrigger>
                                 </TabsList>
 
                                 {/* Line Items Tab */}
@@ -1129,6 +1138,11 @@ export default function RequisitionShow() {
                                 {/* Compare Tab */}
                                 <TabsContent value="compare" className="mt-0">
                                     <ComparisonTab requisitionId={requisition.id} premierPoId={requisition.premier_po_id} />
+                                </TabsContent>
+
+                                {/* Delivery Organization Tab */}
+                                <TabsContent value="delivery" className="mt-0">
+                                    <DeliveryOrganizationPanel requisitionId={requisition.id} lineItems={requisition.line_items} />
                                 </TabsContent>
                             </Tabs>
                         </div>

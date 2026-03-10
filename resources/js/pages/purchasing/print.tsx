@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
-import { useEffect } from 'react';
+import { Fragment, useEffect, useMemo } from 'react';
 
 export default function RequisitionPrint() {
     const { requisition, printedBy, printedAt } = usePage().props as unknown as {
@@ -25,9 +25,11 @@ export default function RequisitionPrint() {
             creator: { name: string };
             line_items: {
                 id: number;
+                serial_number: number;
                 code: string;
                 description: string;
                 qty: number;
+                deliver_to?: string | null;
             }[];
         };
     };
@@ -48,6 +50,33 @@ export default function RequisitionPrint() {
     }, []);
 
     const itemCount = requisition.line_items?.length || 0;
+
+    // Group line items by deliver_to
+    const groupedItems = useMemo(() => {
+        const groups = new Map<string, typeof requisition.line_items>();
+
+        for (const item of requisition.line_items || []) {
+            const location = item.deliver_to || 'No Location Specified';
+            if (!groups.has(location)) {
+                groups.set(location, []);
+            }
+            groups.get(location)!.push(item);
+        }
+
+        // Sort groups by minimum serial_number of items in each group
+        return Array.from(groups.entries())
+            .map(([location, items]) => {
+                // Sort items within each group by serial_number
+                const sortedItems = items.sort((a, b) => a.serial_number - b.serial_number);
+                return [location, sortedItems] as [string, typeof items];
+            })
+            .sort(([, itemsA], [, itemsB]) => {
+                // Sort groups by minimum serial_number
+                const minA = Math.min(...itemsA.map((i) => i.serial_number));
+                const minB = Math.min(...itemsB.map((i) => i.serial_number));
+                return minA - minB;
+            });
+    }, [requisition.line_items]);
 
     return (
         <>
@@ -214,13 +243,27 @@ export default function RequisitionPrint() {
                             </tr>
                         </thead>
                         <tbody>
-                            {requisition.line_items?.map((item, index) => (
-                                <tr key={item.id} className="border-b border-slate-200">
-                                    <td className="py-2.5 pr-2 text-slate-500">{index + 1}</td>
-                                    <td className="py-2.5 pr-4 font-mono text-xs text-slate-700">{item.code}</td>
-                                    <td className="py-2.5 pr-4 text-slate-800">{item.description}</td>
-                                    <td className="py-2.5 text-right font-semibold text-slate-900 tabular-nums">{item.qty}</td>
-                                </tr>
+                            {groupedItems.map(([location, items]) => (
+                                <Fragment key={location}>
+                                    {/* Delivery location header */}
+                                    <tr className="border-t-2 border-slate-300 bg-slate-100">
+                                        <td colSpan={4} className="py-2 px-3 font-bold text-slate-700">
+                                            {location !== 'No Location Specified'
+                                                ? `Pack these items for delivery to ${location}`
+                                                : `${location} (${items.length} items)`
+                                            }
+                                        </td>
+                                    </tr>
+                                    {/* Items for this location */}
+                                    {items.map((item, index) => (
+                                        <tr key={item.id} className="border-b border-slate-200">
+                                            <td className="py-2.5 pr-2 text-slate-500">{index + 1}</td>
+                                            <td className="py-2.5 pr-4 font-mono text-xs text-slate-700">{item.code}</td>
+                                            <td className="py-2.5 pr-4 text-slate-800">{item.description}</td>
+                                            <td className="py-2.5 text-right font-semibold text-slate-900 tabular-nums">{item.qty}</td>
+                                        </tr>
+                                    ))}
+                                </Fragment>
                             ))}
                         </tbody>
                         <tfoot>

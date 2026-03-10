@@ -176,13 +176,42 @@
 
                 <td>Qty</td>
             </tr>
-            @foreach ($requisition->lineItems as $line)
-                <tr class="item">
-                    <td>{{ $line['code'] }}-
-                        {{ $line['description'] }}</td>
+            @php
+                // Group line items by deliver_to
+                $groupedItems = $requisition->lineItems->groupBy(function($item) {
+                    return $item->deliver_to ?: 'No Location Specified';
+                });
 
-                    <td>{{ number_format($line['qty'], 2) }}</td>
+                // Sort groups by minimum serial_number of items in each group
+                $sortedGroups = $groupedItems->map(function($items) {
+                    // Sort items within each group by serial_number
+                    return $items->sortBy('serial_number');
+                })->sortBy(function($items) {
+                    // Sort groups by minimum serial_number
+                    return $items->min('serial_number') ?? PHP_INT_MAX;
+                });
+            @endphp
+
+            @foreach ($sortedGroups as $location => $items)
+                {{-- Delivery location header --}}
+                <tr class="heading">
+                    <td colspan="2" style="background-color: #f1f1f1; padding: 8px; font-weight: bold;">
+                        @if($location !== 'No Location Specified')
+                            Pack these items for delivery to {{ $location }}
+                        @else
+                            {{ $location }} ({{ $items->count() }} items)
+                        @endif
+                    </td>
                 </tr>
+                {{-- Items for this location --}}
+                @foreach ($items as $line)
+                    <tr class="item">
+                        <td>{{ $line['code'] }}-
+                            {{ $line['description'] }}</td>
+
+                        <td>{{ number_format($line['qty'], 2) }}</td>
+                    </tr>
+                @endforeach
             @endforeach
 
 

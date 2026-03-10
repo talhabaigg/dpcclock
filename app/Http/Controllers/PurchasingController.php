@@ -790,6 +790,36 @@ class PurchasingController extends Controller
         return redirect()->route('requisition.show', $requisition->id)->with('success', 'Requisition updated.');
     }
 
+    public function saveDeliveryOrganization(Request $request, $id)
+    {
+        $requisition = Requisition::with('lineItems')->findOrFail($id);
+
+        $validated = $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:requisition_line_items,id',
+            'items.*.deliver_to' => 'nullable|string|max:255',
+            'items.*.serial_number' => 'required|integer|min:1',
+        ]);
+
+        // Update each line item's deliver_to and serial_number fields
+        foreach ($validated['items'] as $itemData) {
+            $lineItem = $requisition->lineItems->find($itemData['id']);
+            if ($lineItem) {
+                $lineItem->deliver_to = $itemData['deliver_to'];
+                $lineItem->serial_number = $itemData['serial_number'];
+                $lineItem->save();
+            }
+        }
+
+        activity()
+            ->performedOn($requisition)
+            ->causedBy(auth()->user())
+            ->event('delivery organization saved')
+            ->log("Delivery organization updated for requisition #{$requisition->id}");
+
+        return back()->with('success', 'Delivery organization saved successfully.');
+    }
+
     public function __invoke(Requisition $requisition)
     {
         $pdf = pdf::loadView('requisition.pdf', [

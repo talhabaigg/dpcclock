@@ -23,6 +23,7 @@ class RequisitionLineItem extends Model
         'price_list',
         'is_locked',
         'resolution_context',
+        'deliver_to',
     ];
 
     protected $casts = [
