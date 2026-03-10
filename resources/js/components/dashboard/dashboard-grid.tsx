@@ -1,12 +1,7 @@
 import { GridLayout, useContainerWidth, noCompactor, type LayoutItem as RGLLayoutItem } from 'react-grid-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { GRID_COLS, GRID_ROWS, GRID_MARGIN, WIDGET_REGISTRY, type LayoutItem } from './widget-registry';
-import { useDashboardLayout, type GridLayoutSettings } from './use-dashboard-layout';
+import { GRID_COLS, GRID_ROWS, GRID_MARGIN, type LayoutItem } from './widget-registry';
 import type { ProductionCostCode } from './budget-safety-card';
 import type { LabourBudgetRow } from './labour-budget-card';
 import type { Location, JobSummary } from '@/types';
@@ -77,6 +72,13 @@ export interface DashboardGridProps {
     industrialActionHours: number;
     dashboardSettings: Record<string, unknown> | null;
     dpcPercentComplete: number | null;
+    isEditing: boolean;
+    layouts: LayoutItem[];
+    hiddenWidgets: string[];
+    onLayoutChange: (newLayout: LayoutItem[]) => void;
+    selectedWidgets: Set<string>;
+    setSelectedWidgets: React.Dispatch<React.SetStateAction<Set<string>>>;
+    isFixedLayout: boolean;
 }
 
 function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean) {
@@ -153,10 +155,7 @@ interface DragStartState {
 }
 
 export default function DashboardGrid(props: DashboardGridProps) {
-    const { layouts, hiddenWidgets, isEditing, setIsEditing, onLayoutChange, toggleWidget, resetLayout } = useDashboardLayout(
-        props.location.id,
-        props.dashboardSettings as GridLayoutSettings | null,
-    );
+    const { isEditing, layouts, hiddenWidgets, onLayoutChange, selectedWidgets, setSelectedWidgets, isFixedLayout } = props;
 
     const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1280 });
     const [gridHeight, setGridHeight] = useState(0);
@@ -178,14 +177,13 @@ export default function DashboardGrid(props: DashboardGridProps) {
     }, [gridHeight]);
 
     // ── Multi-select state ──
-    const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
     const dragStartRef = useRef<DragStartState | null>(null);
     const wasDraggingRef = useRef(false);
 
     // Clear selection when leaving edit mode
     useEffect(() => {
         if (!isEditing) setSelectedWidgets(new Set());
-    }, [isEditing]);
+    }, [isEditing, setSelectedWidgets]);
 
     // Escape key to deselect all
     useEffect(() => {
@@ -195,7 +193,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [isEditing]);
+    }, [isEditing, setSelectedWidgets]);
 
     // Widget mousedown: Ctrl/Cmd+click toggles, plain click selects
     const handleWidgetMouseDown = useCallback(
@@ -362,75 +360,27 @@ export default function DashboardGrid(props: DashboardGridProps) {
             }));
     }, [layouts, hiddenWidgets, isEditing]);
 
-    const hiddenCount = hiddenWidgets.length;
-    const selectedCount = selectedWidgets.size;
+    // Fixed mobile layout: stack widgets vertically
+    if (isFixedLayout) {
+        return (
+            <div className="flex flex-col gap-2 overflow-auto pb-4" ref={containerRef}>
+                {visibleLayouts
+                    .sort((a, b) => {
+                        // Sort by y position, then x position for mobile view
+                        if (a.y !== b.y) return a.y - b.y;
+                        return a.x - b.x;
+                    })
+                    .map((item) => (
+                        <div key={item.i} className="w-full">
+                            {renderWidget(item.i, props, false)}
+                        </div>
+                    ))}
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-auto" ref={containerRef}>
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 mb-1 shrink-0">
-                <Button
-                    variant={isEditing ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    onClick={() => setIsEditing(!isEditing)}
-                >
-                    <Pencil className="h-3 w-3" />
-                    {isEditing ? 'Done' : 'Edit Layout'}
-                </Button>
-
-                {isEditing && (
-                    <>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                                    {hiddenCount > 0 ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                    Widgets
-                                    {hiddenCount > 0 && (
-                                        <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
-                                            {WIDGET_REGISTRY.length - hiddenCount}/{WIDGET_REGISTRY.length}
-                                        </span>
-                                    )}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[240px] p-2" align="start">
-                                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Toggle widget visibility</p>
-                                <div className="space-y-1">
-                                    {WIDGET_REGISTRY.map((w) => {
-                                        const isHidden = hiddenWidgets.includes(w.id);
-                                        return (
-                                            <button
-                                                key={w.id}
-                                                type="button"
-                                                onClick={() => toggleWidget(w.id)}
-                                                className={cn(
-                                                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
-                                                    isHidden && 'opacity-50',
-                                                )}
-                                            >
-                                                <Switch checked={!isHidden} className="scale-75" />
-                                                <span className={cn('truncate', isHidden && 'line-through')}>{w.label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-
-                        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={resetLayout}>
-                            <RotateCcw className="h-3 w-3" />
-                            Reset
-                        </Button>
-
-                        {selectedCount > 1 && (
-                            <span className="text-[10px] text-muted-foreground ml-1">
-                                {selectedCount} selected — drag to move together
-                            </span>
-                        )}
-                    </>
-                )}
-            </div>
-
             {/* Grid */}
             {mounted && (
                 <div

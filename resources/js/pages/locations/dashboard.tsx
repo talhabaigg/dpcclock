@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, JobSummary, Location } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import DashboardGrid from '@/components/dashboard/dashboard-grid';
 import { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
 import { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
@@ -11,19 +11,17 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Download, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, X } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 import ProductionAnalysis from './production-analysis';
+import { useDashboardLayout, type GridLayoutSettings } from '@/components/dashboard/use-dashboard-layout';
+import { WIDGET_REGISTRY } from '@/components/dashboard/widget-registry';
+import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 interface TimelineData {
     start_date: string;
@@ -118,6 +116,14 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
     const [reportOpen, setReportOpen] = useState(false);
+    const [jobSelectorOpen, setJobSelectorOpen] = useState(false);
+    const [widgetsOpen, setWidgetsOpen] = useState(false);
+    const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
+
+    // Dashboard layout hook
+    const { layouts, hiddenWidgets, isEditing, setIsEditing, onLayoutChange, toggleWidget, resetLayout, isFixedLayout } = useDashboardLayout(
+        location.dashboard_settings as GridLayoutSettings | null,
+    );
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -218,101 +224,197 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
             <div className="p-1.5 sm:p-2 flex flex-col gap-1.5 sm:gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden min-w-0">
 
                 {/* ── Top bar with tabs + filters ── */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 bg-card rounded-lg border p-2">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="h-7">
-                            <TabsTrigger value="dashboard" className="text-xs h-5 px-2">Dashboard</TabsTrigger>
-                            <TabsTrigger value="production-data" className="text-xs h-5 px-2">Production</TabsTrigger>
-                            <TabsTrigger value="analysis" className="text-xs h-5 px-2">Analysis</TabsTrigger>
+                        <TabsList className="h-8">
+                            <TabsTrigger value="dashboard" className="text-xs h-6 px-3">Dashboard</TabsTrigger>
+                            <TabsTrigger value="production-data" className="text-xs h-6 px-3">Production</TabsTrigger>
+                            <TabsTrigger value="analysis" className="text-xs h-6 px-3">Analysis</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
-                    <div className="hidden sm:block flex-1" />
+                    <div className="hidden sm:block h-6 w-px bg-border" />
 
-                    <div className="flex items-center gap-1">
-                        <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">As of Date:</span>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePreviousMonth}>
-                            <ChevronLeft className="h-3 w-3" />
-                        </Button>
-                        <Popover>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Job:</span>
+                        <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn('h-7 w-[120px] sm:w-[150px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
-                                    <CalendarIcon className="mr-1 sm:mr-1.5 h-3 w-3" />
-                                    {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
+                                <Button variant="outline" role="combobox" aria-expanded={jobSelectorOpen} className="h-8 w-full sm:w-[180px] justify-between text-xs font-medium">
+                                    {location.external_id}
+                                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start" onKeyDown={handleKeyDown}>
-                                <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                            <PopoverContent className="w-[250px] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search jobs..." className="h-9 text-xs" />
+                                    <CommandList>
+                                        <CommandEmpty>No jobs found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {availableLocations.map((loc) => (
+                                                <CommandItem
+                                                    key={loc.id}
+                                                    value={`${loc.external_id} ${loc.name}`}
+                                                    onSelect={() => {
+                                                        handleLocationChange(loc.id.toString());
+                                                        setJobSelectorOpen(false);
+                                                    }}
+                                                    className="text-xs"
+                                                >
+                                                    <Check className={cn('mr-2 h-3.5 w-3.5', location.id === loc.id ? 'opacity-100' : 'opacity-0')} />
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{loc.external_id}</span>
+                                                        <span className="text-[10px] text-muted-foreground truncate">{loc.name}</span>
+                                                    </div>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
                             </PopoverContent>
                         </Popover>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextMonth}>
-                            <ChevronRight className="h-3 w-3" />
-                        </Button>
+                    </div>
+
+                    <div className="hidden sm:block flex-1" />
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
+                        <div className="flex items-center gap-1">
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePreviousMonth}>
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn('h-8 w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
+                                        <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                                        {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end" onKeyDown={handleKeyDown}>
+                                    <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                                </PopoverContent>
+                            </Popover>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
+                                <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
                     </div>
 
                     {productionUploads.length > 0 && (
-                        <div className="flex items-center gap-1">
-                            <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">Report:</span>
-                            <Popover open={reportOpen} onOpenChange={setReportOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-7 w-[120px] sm:w-[160px] justify-between text-xs font-normal">
-                                        {selectedUploadId
-                                            ? formatReportDate(productionUploads.find((u) => u.id === selectedUploadId)?.report_date ?? '')
-                                            : 'Select report'}
-                                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[200px] p-0" align="start">
-                                    <Command>
-                                        <CommandInput placeholder="Search date..." className="h-8 text-xs" />
-                                        <CommandList>
-                                            <CommandEmpty>No reports found.</CommandEmpty>
-                                            <CommandGroup>
-                                                {productionUploads.map((u) => (
-                                                    <CommandItem
-                                                        key={u.id}
-                                                        value={formatReportDate(u.report_date)}
-                                                        onSelect={() => {
-                                                            handleUploadChange(u.id.toString());
-                                                            setReportOpen(false);
-                                                        }}
-                                                        className="text-xs"
-                                                    >
-                                                        <Check className={cn('mr-1.5 h-3 w-3', selectedUploadId === u.id ? 'opacity-100' : 'opacity-0')} />
-                                                        {formatReportDate(u.report_date)}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
+                        <>
+                            <div className="hidden sm:block h-6 w-px bg-border" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Report:</span>
+                                <Popover open={reportOpen} onOpenChange={setReportOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-8 w-full sm:w-[160px] justify-between text-xs font-normal">
+                                            {selectedUploadId
+                                                ? formatReportDate(productionUploads.find((u) => u.id === selectedUploadId)?.report_date ?? '')
+                                                : 'Select report'}
+                                            <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[220px] p-0" align="end">
+                                        <Command>
+                                            <CommandInput placeholder="Search date..." className="h-9 text-xs" />
+                                            <CommandList>
+                                                <CommandEmpty>No reports found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {productionUploads.map((u) => (
+                                                        <CommandItem
+                                                            key={u.id}
+                                                            value={formatReportDate(u.report_date)}
+                                                            onSelect={() => {
+                                                                handleUploadChange(u.id.toString());
+                                                                setReportOpen(false);
+                                                            }}
+                                                            className="text-xs"
+                                                        >
+                                                            <Check className={cn('mr-2 h-3.5 w-3.5', selectedUploadId === u.id ? 'opacity-100' : 'opacity-0')} />
+                                                            {formatReportDate(u.report_date)}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </>
                     )}
 
-                    <div className="flex items-center gap-1">
-                        <span className="hidden sm:inline text-xs font-medium whitespace-nowrap">Job:</span>
-                        <Select value={location.id.toString()} onValueChange={handleLocationChange}>
-                            <SelectTrigger className="h-7 w-[100px] sm:w-[140px] text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableLocations.map((loc) => (
-                                    <SelectItem key={loc.id} value={loc.id.toString()}>{loc.external_id}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {activeTab === 'dashboard' && !isFixedLayout && (
+                        <>
+                            <div className="hidden sm:block h-6 w-px bg-border" />
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 opacity-40 hover:opacity-100"
+                                            onClick={() => setIsEditing(!isEditing)}
+                                        >
+                                            <Pencil className="h-3 w-3" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p className="text-xs">{isEditing ? 'Done editing' : 'Edit layout'}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
 
-                    <Link href={`/locations/${location.id}/load-timesheets`}>
-                        <Button variant="outline" size="icon" className="h-7 w-7 sm:hidden">
-                            <Download className="h-3 w-3" />
-                        </Button>
-                        <Button variant="outline" size="sm" className="hidden sm:inline-flex h-7 gap-1 text-xs px-2">
-                            <Download className="h-3 w-3" />
-                            Load Timesheets
-                        </Button>
-                    </Link>
+                            {isEditing && (
+                                <>
+                                    <Popover open={widgetsOpen} onOpenChange={setWidgetsOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
+                                                {hiddenWidgets.length > 0 ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                                Widgets
+                                                {hiddenWidgets.length > 0 && (
+                                                    <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
+                                                        {WIDGET_REGISTRY.length - hiddenWidgets.length}/{WIDGET_REGISTRY.length}
+                                                    </span>
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[240px] p-2" align="end">
+                                            <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Toggle widget visibility</p>
+                                            <div className="space-y-1">
+                                                {WIDGET_REGISTRY.map((w) => {
+                                                    const isHidden = hiddenWidgets.includes(w.id);
+                                                    return (
+                                                        <button
+                                                            key={w.id}
+                                                            type="button"
+                                                            onClick={() => toggleWidget(w.id)}
+                                                            className={cn(
+                                                                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
+                                                                isHidden && 'opacity-50',
+                                                            )}
+                                                        >
+                                                            <Switch checked={!isHidden} className="scale-75" />
+                                                            <span className={cn('truncate', isHidden && 'line-through')}>{w.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+
+                                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs px-2" onClick={resetLayout}>
+                                        <RotateCcw className="h-3 w-3" />
+                                        Reset
+                                    </Button>
+
+                                    {selectedWidgets.size > 1 && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                            {selectedWidgets.size} selected — drag to move together
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
                 </div>
 
                 {/* ── Dashboard tab ── */}
@@ -331,6 +433,13 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         industrialActionHours={industrialActionHours}
                         dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
                         dpcPercentComplete={dpcPercentComplete}
+                        isEditing={isEditing}
+                        layouts={layouts}
+                        hiddenWidgets={hiddenWidgets}
+                        onLayoutChange={onLayoutChange}
+                        selectedWidgets={selectedWidgets}
+                        setSelectedWidgets={setSelectedWidgets}
+                        isFixedLayout={isFixedLayout}
                     />
                 )}
 
@@ -355,7 +464,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                         <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
                                         <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={40} />
                                         <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
-                                        <Tooltip
+                                        <RechartsTooltip
                                             contentStyle={{ fontSize: 11, borderRadius: 6 }}
                                             formatter={(value: number) => [value.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }), 'Variance']}
                                             labelFormatter={(label) => `Report: ${label}`}
