@@ -11,6 +11,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -147,7 +148,7 @@ type GeneralCostsModalProps = {
     newCost: Partial<GeneralCost>;
     onNewCostChange: (cost: Partial<GeneralCost>) => void;
     onAdd: () => void;
-    onDelete: (id: number) => void;
+    onDelete: (id: number, onComplete?: () => void) => void;
 };
 
 export const GeneralCostsModal = ({
@@ -161,146 +162,220 @@ export const GeneralCostsModal = ({
     onAdd,
     onDelete,
 }: GeneralCostsModalProps) => {
-    const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
-    const handleConfirmDelete = () => {
-        if (deleteId !== null) {
-            onDelete(deleteId);
-            setDeleteId(null);
-        }
+    const handleConfirmDelete = (id: number) => {
+        setIsDeleting(true);
+        onDelete(id, () => {
+            setIsDeleting(false);
+            setConfirmDeleteId(null);
+        });
     };
 
     return (
         <>
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-                <DialogHeader>
-                    <DialogTitle>General Transactions</DialogTitle>
-                    <DialogDescription>Manage recurring and one-off cash flow transactions.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-6">
-                    {generalCosts.length > 0 && (
-                        <div className="space-y-3">
-                            <Label>Active Transactions</Label>
-                            <div className="max-h-48 space-y-2 overflow-y-auto">
-                                {generalCosts.map((cost) => (
-                                    <div key={cost.id} className="bg-muted flex items-center justify-between rounded-lg p-3">
-                                        <div className="space-y-1">
-                                            <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-                                                {cost.name}
-                                                <Badge
-                                                    variant={cost.flow_type === 'cash_in' ? 'secondary' : 'outline'}
-                                                    className="text-[10px] tracking-wide uppercase"
-                                                >
-                                                    {cost.flow_type === 'cash_in' ? 'In' : 'Out'}
-                                                </Badge>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>General Transactions</DialogTitle>
+                        <DialogDescription>Manage recurring and one-off cash flow transactions.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-6">
+                        {generalCosts.length > 0 && (
+                            <div className="space-y-3">
+                                <Label>Active Transactions</Label>
+                                <div className="max-h-48 space-y-2 overflow-y-auto">
+                                    {generalCosts.map((cost) => {
+                                        const isConfirming = confirmDeleteId === cost.id;
+                                        return (
+                                            <div
+                                                key={cost.id}
+                                                className={cn(
+                                                    'flex items-center justify-between rounded-lg p-3 transition-colors',
+                                                    isConfirming
+                                                        ? 'bg-destructive/10 border-2 border-destructive'
+                                                        : 'bg-muted'
+                                                )}
+                                            >
+                                                {isConfirming ? (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <div className="text-destructive text-sm font-medium">
+                                                                Delete "{cost.name}"?
+                                                            </div>
+                                                            <div className="text-muted-foreground text-xs">
+                                                                This action cannot be undone
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setConfirmDeleteId(null)}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                onClick={() => handleConfirmDelete(cost.id)}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                {isDeleting ? 'Deleting...' : 'Delete'}
+                                                            </Button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <div className="text-foreground flex items-center gap-2 text-sm font-medium">
+                                                                {cost.name}
+                                                                <Badge
+                                                                    variant={cost.flow_type === 'cash_in' ? 'secondary' : 'outline'}
+                                                                    className="text-[10px] tracking-wide uppercase"
+                                                                >
+                                                                    {cost.flow_type === 'cash_in' ? 'In' : 'Out'}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="text-muted-foreground text-xs">
+                                                                ${cost.amount.toLocaleString()}{' '}
+                                                                {cost.type === 'recurring'
+                                                                    ? `/ ${frequencies[cost.frequency ?? 'monthly']}`
+                                                                    : '(one-off)'}
+                                                                {cost.category && ` · ${categories[cost.category]}`}
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => setConfirmDeleteId(cost.id)}
+                                                            disabled={isDeleting || confirmDeleteId !== null}
+                                                            className="text-destructive hover:text-destructive"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
-                                            <div className="text-muted-foreground text-xs">
-                                                ${cost.amount.toLocaleString()}{' '}
-                                                {cost.type === 'recurring' ? `/ ${frequencies[cost.frequency ?? 'monthly']}` : '(one-off)'}
-                                                {cost.category && ` · ${categories[cost.category]}`}
-                                            </div>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => setDeleteId(cost.id)}
-                                            className="text-destructive hover:text-destructive"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <Separator />
-
-                    <div className="space-y-4">
-                        <Label>Add New Transaction</Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs" htmlFor="cost-name">Name *</Label>
-                                <Input
-                                    id="cost-name"
-                                    type="text"
-                                    value={newCost.name ?? ''}
-                                    onChange={(e) => onNewCostChange({ ...newCost, name: e.target.value })}
-                                    placeholder="e.g., Office Rent"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs" htmlFor="cost-amount">Amount *</Label>
-                                <div className="relative">
-                                    <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
-                                    <Input
-                                        id="cost-amount"
-                                        type="number"
-                                        value={newCost.amount ?? ''}
-                                        onChange={(e) =>
-                                            onNewCostChange({
-                                                ...newCost,
-                                                amount: parseFloat(e.target.value) || 0,
-                                            })
-                                        }
-                                        className="pl-8"
-                                        placeholder="0.00"
-                                    />
+                                        );
+                                    })}
                                 </div>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Type</Label>
-                                <Select
-                                    value={newCost.type ?? 'recurring'}
-                                    onValueChange={(value) =>
-                                        onNewCostChange({
-                                            ...newCost,
-                                            type: value as 'one_off' | 'recurring',
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="recurring">Recurring</SelectItem>
-                                        <SelectItem value="one_off">One-off</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Cash Flow</Label>
-                                <Select
-                                    value={newCost.flow_type ?? 'cash_out'}
-                                    onValueChange={(value) =>
-                                        onNewCostChange({
-                                            ...newCost,
-                                            flow_type: value as 'cash_in' | 'cash_out',
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Cash flow" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="cash_out">Cash Out</SelectItem>
-                                        <SelectItem value="cash_in">Cash In</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {newCost.type === 'recurring' && (
+                        )}
+
+                        <Separator />
+
+                        <div className="space-y-4">
+                            <Label>Add New Transaction</Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs">Frequency</Label>
+                                    <Label className="text-xs" htmlFor="cost-name">Name *</Label>
+                                    <Input
+                                        id="cost-name"
+                                        type="text"
+                                        value={newCost.name ?? ''}
+                                        onChange={(e) => onNewCostChange({ ...newCost, name: e.target.value })}
+                                        placeholder="e.g., Office Rent"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs" htmlFor="cost-amount">Amount *</Label>
+                                    <div className="relative">
+                                        <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                                        <Input
+                                            id="cost-amount"
+                                            type="number"
+                                            value={newCost.amount ?? ''}
+                                            onChange={(e) =>
+                                                onNewCostChange({
+                                                    ...newCost,
+                                                    amount: parseFloat(e.target.value) || 0,
+                                                })
+                                            }
+                                            className="pl-8"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Type</Label>
                                     <Select
-                                        value={newCost.frequency ?? 'monthly'}
-                                        onValueChange={(value) => onNewCostChange({ ...newCost, frequency: value })}
+                                        value={newCost.type ?? 'recurring'}
+                                        onValueChange={(value) =>
+                                            onNewCostChange({
+                                                ...newCost,
+                                                type: value as 'one_off' | 'recurring',
+                                            })
+                                        }
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select frequency" />
+                                            <SelectValue placeholder="Select type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Object.entries(frequencies).map(([key, label]) => (
+                                            <SelectItem value="recurring">Recurring</SelectItem>
+                                            <SelectItem value="one_off">One-off</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Cash Flow</Label>
+                                    <Select
+                                        value={newCost.flow_type ?? 'cash_out'}
+                                        onValueChange={(value) =>
+                                            onNewCostChange({
+                                                ...newCost,
+                                                flow_type: value as 'cash_in' | 'cash_out',
+                                            })
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Cash flow" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="cash_out">Cash Out</SelectItem>
+                                            <SelectItem value="cash_in">Cash In</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {newCost.type === 'recurring' && (
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Frequency</Label>
+                                        <Select
+                                            value={newCost.frequency ?? 'monthly'}
+                                            onValueChange={(value) => onNewCostChange({ ...newCost, frequency: value })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select frequency" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(frequencies).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>
+                                                        {label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Category</Label>
+                                    <Select
+                                        value={newCost.category ?? 'none'}
+                                        onValueChange={(value) =>
+                                            onNewCostChange({
+                                                ...newCost,
+                                                category: value === 'none' ? '' : value,
+                                            })
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Select category</SelectItem>
+                                            {Object.entries(categories).map(([key, label]) => (
                                                 <SelectItem key={key} value={key}>
                                                     {label}
                                                 </SelectItem>
@@ -308,92 +383,50 @@ export const GeneralCostsModal = ({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Category</Label>
-                                <Select
-                                    value={newCost.category ?? 'none'}
-                                    onValueChange={(value) =>
-                                        onNewCostChange({
-                                            ...newCost,
-                                            category: value === 'none' ? '' : value,
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select category" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Select category</SelectItem>
-                                        {Object.entries(categories).map(([key, label]) => (
-                                            <SelectItem key={key} value={key}>
-                                                {label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs" htmlFor="cost-start-date">Start Date *</Label>
-                                <Input
-                                    id="cost-start-date"
-                                    type="date"
-                                    value={newCost.start_date ?? ''}
-                                    onChange={(e) => onNewCostChange({ ...newCost, start_date: e.target.value })}
-                                />
-                            </div>
-                            {newCost.type === 'recurring' && (
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs" htmlFor="cost-end-date">End Date</Label>
+                                    <Label className="text-xs" htmlFor="cost-start-date">Start Date *</Label>
                                     <Input
-                                        id="cost-end-date"
+                                        id="cost-start-date"
                                         type="date"
-                                        value={newCost.end_date ?? ''}
-                                        onChange={(e) => onNewCostChange({ ...newCost, end_date: e.target.value })}
+                                        value={newCost.start_date ?? ''}
+                                        onChange={(e) => onNewCostChange({ ...newCost, start_date: e.target.value })}
                                     />
                                 </div>
-                            )}
-                            <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                <Checkbox
-                                    id="includes-gst"
-                                    checked={newCost.includes_gst ?? true}
-                                    onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
-                                />
-                                <Label htmlFor="includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                {newCost.type === 'recurring' && (
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs" htmlFor="cost-end-date">End Date</Label>
+                                        <Input
+                                            id="cost-end-date"
+                                            type="date"
+                                            value={newCost.end_date ?? ''}
+                                            onChange={(e) => onNewCostChange({ ...newCost, end_date: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+                                <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
+                                    <Checkbox
+                                        id="includes-gst"
+                                        checked={newCost.includes_gst ?? true}
+                                        onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
+                                    />
+                                    <Label htmlFor="includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
+                                <Button onClick={onAdd} disabled={!newCost.name || !newCost.amount || !newCost.start_date || isDeleting}>
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Add Transaction
+                                </Button>
                             </div>
                         </div>
-                        <div className="flex justify-end">
-                            <Button onClick={onAdd} disabled={!newCost.name || !newCost.amount || !newCost.start_date}>
-                                <Plus className="mr-1 h-4 w-4" />
-                                Add Transaction
-                            </Button>
-                        </div>
                     </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Close
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={deleteId !== null} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Are you sure you want to delete this transaction? This action cannot be undone.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Delete
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeleting}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 };
@@ -452,7 +485,7 @@ const SplitTable = ({
     onSplitChange,
     onRemoveSplit,
 }: {
-    splits: Array<{ amount: number; [key: string]: unknown }>;
+    splits: Array<{ amount: number;[key: string]: unknown }>;
     monthOptions: string[];
     monthColumnLabel: string;
     emptyMessage: string;
@@ -1374,180 +1407,180 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
     };
 
     return (
-    <>
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] sm:max-w-5xl">
-                <DialogHeader>
-                    <DialogTitle>Retention Settings</DialogTitle>
-                    <DialogDescription>
-                        Retention rates per job, auto-inferred from Premier ERP progress billing data. Override to set custom rates.
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-h-[90vh] sm:max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>Retention Settings</DialogTitle>
+                        <DialogDescription>
+                            Retention rates per job, auto-inferred from Premier ERP progress billing data. Override to set custom rates.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <ScrollArea className="max-h-[60vh]">
-                    <div className="overflow-x-auto">
-                    <Table className="min-w-[700px]">
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="text-xs">Job</TableHead>
-                                <TableHead className="text-right text-xs">Rate %</TableHead>
-                                <TableHead className="text-right text-xs">Cap %</TableHead>
-                                <TableHead className="text-right text-xs">Contract</TableHead>
-                                <TableHead className="text-right text-xs">Retained</TableHead>
-                                <TableHead className="text-xs">Cap Status</TableHead>
-                                <TableHead className="text-xs">Release</TableHead>
-                                <TableHead className="text-xs">Source</TableHead>
-                                <TableHead className="w-[80px] text-xs">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {retentionSummary.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
-                                        No jobs with retention data found. Retention data is loaded from Premier ERP progress billing summaries.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                            {retentionSummary.map((job) => {
-                                const isEditing = editingJob === job.job_number;
-                                return (
-                                    <TableRow key={job.job_number}>
-                                        <TableCell className="font-mono text-sm">{job.job_number}</TableCell>
-                                        <TableCell className="text-right">
-                                            {isEditing ? (
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    max="100"
-                                                    value={editRate}
-                                                    onChange={(e) => setEditRate(Number(e.target.value))}
-                                                    className="h-8 w-20 text-right"
-                                                />
-                                            ) : (
-                                                `${job.retention_rate.toFixed(1)}%`
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {isEditing ? (
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    max="100"
-                                                    value={editCap}
-                                                    onChange={(e) => setEditCap(Number(e.target.value))}
-                                                    className="h-8 w-20 text-right"
-                                                />
-                                            ) : (
-                                                `${job.retention_cap_pct.toFixed(1)}%`
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm">
-                                            {job.contract_sum > 0 ? `$${formatAmount(job.contract_sum)}` : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm">
-                                            {job.retainage_to_date > 0 ? `$${formatAmount(job.retainage_to_date)}` : '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            {job.cap_reached ? (
-                                                <Badge variant="secondary">
-                                                    Cap Reached
-                                                </Badge>
-                                            ) : job.contract_sum > 0 ? (
-                                                <Badge variant="outline">
-                                                    {((job.retainage_to_date / (job.contract_sum * (job.retention_cap_pct / 100))) * 100).toFixed(0)}% of
-                                                    cap
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {isEditing ? (
-                                                <Input
-                                                    type="date"
-                                                    value={editReleaseDate}
-                                                    onChange={(e) => setEditReleaseDate(e.target.value)}
-                                                    className="h-8 w-36"
-                                                />
-                                            ) : job.release_date ? (
-                                                <span className="text-sm">{job.release_date}</span>
-                                            ) : (
-                                                <span className="text-muted-foreground text-sm">Not set</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={job.is_auto ? 'outline' : 'default'} className="text-xs">
-                                                {job.is_auto ? 'Auto' : 'Override'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                {isEditing ? (
-                                                    <>
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => saveEdit(job.job_number)}>
-                                                            <Save className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
-                                                            <RotateCcw className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => startEdit(job)}>
-                                                            Edit
-                                                        </Button>
-                                                        {!job.is_auto && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-7 w-7"
-                                                                onClick={() => setConfirmResetJob(job.job_number)}
-                                                                title="Reset to auto-inferred"
-                                                            >
-                                                                <RotateCcw className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-                                        </TableCell>
+                    <ScrollArea className="max-h-[60vh]">
+                        <div className="overflow-x-auto">
+                            <Table className="min-w-[700px]">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="text-xs">Job</TableHead>
+                                        <TableHead className="text-right text-xs">Rate %</TableHead>
+                                        <TableHead className="text-right text-xs">Cap %</TableHead>
+                                        <TableHead className="text-right text-xs">Contract</TableHead>
+                                        <TableHead className="text-right text-xs">Retained</TableHead>
+                                        <TableHead className="text-xs">Cap Status</TableHead>
+                                        <TableHead className="text-xs">Release</TableHead>
+                                        <TableHead className="text-xs">Source</TableHead>
+                                        <TableHead className="w-[80px] text-xs">Actions</TableHead>
                                     </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                    </div>
-                </ScrollArea>
+                                </TableHeader>
+                                <TableBody>
+                                    {retentionSummary.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                                                No jobs with retention data found. Retention data is loaded from Premier ERP progress billing summaries.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    {retentionSummary.map((job) => {
+                                        const isEditing = editingJob === job.job_number;
+                                        return (
+                                            <TableRow key={job.job_number}>
+                                                <TableCell className="font-mono text-sm">{job.job_number}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {isEditing ? (
+                                                        <Input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            max="100"
+                                                            value={editRate}
+                                                            onChange={(e) => setEditRate(Number(e.target.value))}
+                                                            className="h-8 w-20 text-right"
+                                                        />
+                                                    ) : (
+                                                        `${job.retention_rate.toFixed(1)}%`
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {isEditing ? (
+                                                        <Input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            max="100"
+                                                            value={editCap}
+                                                            onChange={(e) => setEditCap(Number(e.target.value))}
+                                                            className="h-8 w-20 text-right"
+                                                        />
+                                                    ) : (
+                                                        `${job.retention_cap_pct.toFixed(1)}%`
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm">
+                                                    {job.contract_sum > 0 ? `$${formatAmount(job.contract_sum)}` : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm">
+                                                    {job.retainage_to_date > 0 ? `$${formatAmount(job.retainage_to_date)}` : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {job.cap_reached ? (
+                                                        <Badge variant="secondary">
+                                                            Cap Reached
+                                                        </Badge>
+                                                    ) : job.contract_sum > 0 ? (
+                                                        <Badge variant="outline">
+                                                            {((job.retainage_to_date / (job.contract_sum * (job.retention_cap_pct / 100))) * 100).toFixed(0)}% of
+                                                            cap
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {isEditing ? (
+                                                        <Input
+                                                            type="date"
+                                                            value={editReleaseDate}
+                                                            onChange={(e) => setEditReleaseDate(e.target.value)}
+                                                            className="h-8 w-36"
+                                                        />
+                                                    ) : job.release_date ? (
+                                                        <span className="text-sm">{job.release_date}</span>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">Not set</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={job.is_auto ? 'outline' : 'default'} className="text-xs">
+                                                        {job.is_auto ? 'Auto' : 'Override'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex gap-1">
+                                                        {isEditing ? (
+                                                            <>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => saveEdit(job.job_number)}>
+                                                                    <Save className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
+                                                                    <RotateCcw className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => startEdit(job)}>
+                                                                    Edit
+                                                                </Button>
+                                                                {!job.is_auto && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-7 w-7"
+                                                                        onClick={() => setConfirmResetJob(job.job_number)}
+                                                                        title="Reset to auto-inferred"
+                                                                    >
+                                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </ScrollArea>
 
-                <DialogFooter className="flex-col sm:flex-row gap-2">
-                    <p className="text-muted-foreground mr-auto text-[10px] sm:text-xs">
-                        Auto rates inferred from Premier ERP. Override to set custom terms.
-                    </p>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} className="h-8 text-xs">
-                        Close
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                    <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <p className="text-muted-foreground mr-auto text-[10px] sm:text-xs">
+                            Auto rates inferred from Premier ERP. Override to set custom terms.
+                        </p>
+                        <Button variant="outline" onClick={() => onOpenChange(false)} className="h-8 text-xs">
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-        <AlertDialog open={confirmResetJob !== null} onOpenChange={(open) => { if (!open) setConfirmResetJob(null); }}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Reset to Auto-Inferred Rate?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This will remove the manual override for job {confirmResetJob} and revert to the rate inferred from Premier ERP billing data.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => confirmResetJob && resetToAuto(confirmResetJob)}>
-                        Reset to Auto
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    </>
+            <AlertDialog open={confirmResetJob !== null} onOpenChange={(open) => { if (!open) setConfirmResetJob(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Reset to Auto-Inferred Rate?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will remove the manual override for job {confirmResetJob} and revert to the rate inferred from Premier ERP billing data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => confirmResetJob && resetToAuto(confirmResetJob)}>
+                            Reset to Auto
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 };

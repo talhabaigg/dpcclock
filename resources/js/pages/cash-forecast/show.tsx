@@ -183,6 +183,9 @@ const ShowCashForecast = ({
 
     const handleAddGeneralCost = () => {
         if (!newCost.name || !newCost.amount || !newCost.start_date) return;
+
+        console.log('Adding general cost:', newCost);
+
         router.post(
             '/cash-forecast/general-costs',
             {
@@ -191,7 +194,14 @@ const ShowCashForecast = ({
             },
             {
                 preserveScroll: true,
+                preserveState: true,
+                only: ['generalCosts', 'months'],
+                onStart: () => {
+                    console.log('Add request started');
+                },
                 onSuccess: () => {
+                    console.log('Add successful');
+                    toast.success('Transaction added successfully');
                     setNewCost({
                         type: 'recurring',
                         frequency: 'monthly',
@@ -200,16 +210,67 @@ const ShowCashForecast = ({
                         start_date: new Date().toISOString().split('T')[0],
                     });
                 },
-                onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to add general cost'),
+                onError: (errors) => {
+                    console.error('Add error:', errors);
+                    toast.error(Object.values(errors).flat().join(', ') || 'Failed to add general cost');
+                },
+                onFinish: () => {
+                    console.log('Add request finished');
+                },
             },
         );
     };
 
-    const handleDeleteGeneralCost = (id: number) => {
-        router.delete(`/cash-forecast/general-costs/${id}`, {
-            preserveScroll: true,
-            onError: (errors) => toast.error(Object.values(errors).flat().join(', ') || 'Failed to delete general cost'),
-        });
+    const handleDeleteGeneralCost = (id: number, onComplete?: () => void) => {
+        if (!id) {
+            toast.error('Invalid transaction ID');
+            onComplete?.();
+            return;
+        }
+
+        console.log('Deleting general cost:', id);
+
+        // Set a timeout to catch hanging requests
+        const timeout = setTimeout(() => {
+            console.error('Delete request timed out');
+            toast.error('Request timed out. Please try again.');
+            onComplete?.();
+        }, 10000); // 10 second timeout
+
+        try {
+            router.delete(`/cash-forecast/general-costs/${id}`, {
+                preserveScroll: true,
+                preserveState: true,
+                only: ['generalCosts', 'months'],
+                onStart: () => {
+                    console.log('Delete request started');
+                },
+                onSuccess: () => {
+                    clearTimeout(timeout);
+                    console.log('Delete successful');
+                    toast.success('Transaction deleted successfully');
+                    onComplete?.();
+                },
+                onError: (errors) => {
+                    clearTimeout(timeout);
+                    console.error('Delete error:', errors);
+                    const errorMessage = typeof errors === 'object' && errors !== null
+                        ? Object.values(errors).flat().join(', ')
+                        : 'Failed to delete general cost';
+                    toast.error(errorMessage || 'Failed to delete general cost');
+                    onComplete?.();
+                },
+                onFinish: () => {
+                    clearTimeout(timeout);
+                    console.log('Delete request finished');
+                },
+            });
+        } catch (error) {
+            clearTimeout(timeout);
+            console.error('Exception during delete:', error);
+            toast.error('An unexpected error occurred');
+            onComplete?.();
+        }
     };
 
     const handlePrint = () => {
@@ -690,16 +751,16 @@ const ShowCashForecast = ({
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuItem onClick={() => setShowGeneralCosts(true)}>
+                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowGeneralCosts(true), 100)}>
                                     <Plus className="mr-2 h-4 w-4" />
                                     General Transactions
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setShowGstBreakdown(true)}>
+                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowGstBreakdown(true), 100)}>
                                     <Receipt className="mr-2 h-4 w-4" />
                                     GST Breakdown
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowRetention(true)}>
+                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowRetention(true), 100)}>
                                     <Shield className="mr-2 h-4 w-4" />
                                     Retention
                                 </DropdownMenuItem>
@@ -711,7 +772,7 @@ const ShowCashForecast = ({
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
                                         {vendorDelayHook.getVendors().map((vendor) => (
-                                            <DropdownMenuItem key={vendor} onClick={() => vendorDelayHook.openModal(vendor)}>
+                                            <DropdownMenuItem key={vendor} onSelect={() => setTimeout(() => vendorDelayHook.openModal(vendor), 100)}>
                                                 {vendor}
                                             </DropdownMenuItem>
                                         ))}
@@ -719,11 +780,11 @@ const ShowCashForecast = ({
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setShowPaymentRules(true)}>
+                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowPaymentRules(true), 100)}>
                                     <HelpCircle className="mr-2 h-4 w-4" />
                                     Payment Timing Rules
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowSettings(true)}>
+                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowSettings(true), 100)}>
                                     <Settings className="mr-2 h-4 w-4" />
                                     Settings
                                 </DropdownMenuItem>
