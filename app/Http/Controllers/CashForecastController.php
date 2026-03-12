@@ -122,17 +122,18 @@ class CashForecastController extends Controller
         $generalCostRows = $this->getGeneralCostRows($allMonths);
         $transformedRows = $transformedRows->concat($generalCostRows);
 
-        $gstPayableRows = $this->calculateQuarterlyGstPayable($transformedRows, $rules);
-
-        // For GST breakdown, include historical general costs to capture past quarters
+        // Include historical general costs so GST payable and GST breakdown use the same data.
+        // Without this, quarters that straddle the 12-month window boundary (e.g. Q1 when
+        // the window starts in March) would be missing Jan-Feb general cost GST.
         $historicalGeneralCostRows = $this->getGeneralCostRows($allMonths, true);
-        $rowsForGstBreakdown = $transformedRows->concat(
-            // Add historical general costs that aren't already in transformedRows
+        $allRowsForGst = $transformedRows->concat(
             $historicalGeneralCostRows->filter(function ($row) use ($allMonths) {
                 return ! in_array($row->month, $allMonths);
             })
         );
-        $gstBreakdown = $this->calculateGstBreakdown($rowsForGstBreakdown, $rules, $costCodeDescriptions);
+
+        $gstPayableRows = $this->calculateQuarterlyGstPayable($allRowsForGst, $rules);
+        $gstBreakdown = $this->calculateGstBreakdown($allRowsForGst, $rules, $costCodeDescriptions);
 
         $allMonthsWithCostSummary = $this->buildMonthHierarchy(
             $allMonths,
@@ -1431,7 +1432,7 @@ class CashForecastController extends Controller
     private function formatBreakdownRows($transformedRows, string $cashInCode, array $costCodeDescriptions): array
     {
         return $transformedRows->map(function ($row) use ($cashInCode, $costCodeDescriptions) {
-            $isCashIn = (($row->flow_type ?? null) === 'cash_in') || ($row->cost_item === $cashInCode);
+            $isCashIn = (($row->flow_type ?? null) === 'cash_in') || ($row->cost_item === $cashInCode) || ($row->cost_item === 'RET-HELD');
             $gstRate = (float) ($row->gst_rate ?? 0);
             $grossAmount = (float) $row->forecast_amount;
 
@@ -1477,7 +1478,7 @@ class CashForecastController extends Controller
 
     /**
      * RULE 5: Quarterly GST calculation
-     * GST is calculated on CASH BASIS (after delays are applied).
+     * GST is calculated on ACCRUAL BASIS (using source month when cost was incurred).
      * Net GST (collected - paid) is due the month after quarter ends.
      * Q1 (Jan-Mar) -> paid in April
      * Q2 (Apr-Jun) -> paid in July
@@ -1507,6 +1508,7 @@ class CashForecastController extends Controller
                 return $carry;
             }
 
+            // Use accrual date (source_month = when cost was incurred)
             $monthKey = $row->source_month ?? $row->month;
 
             if (! isset($carry[$monthKey])) {
@@ -1611,6 +1613,7 @@ class CashForecastController extends Controller
                 continue;
             }
 
+            // Use accrual date (source_month = when cost was incurred)
             $monthKey = $row->source_month ?? $row->month;
             $date = Carbon::createFromFormat('Y-m', $monthKey);
             $quarterKey = $date->year.'-Q'.$date->quarter;
