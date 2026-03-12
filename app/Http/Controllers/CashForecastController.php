@@ -1489,10 +1489,17 @@ class CashForecastController extends Controller
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
         $gstPayableCode = $rules['gst_payable_code'] ?? 'GST-PAYABLE';
+        $currentMonth = Carbon::now()->format('Y-m');
 
         // Group GST by month using actual GST amounts where available, otherwise calculate from rate
         // This uses cash-method dates (delays already applied)
-        $monthlyGst = $forecastRows->reduce(function ($carry, $row) use ($cashInCode) {
+        $monthlyGst = $forecastRows->reduce(function ($carry, $row) use ($cashInCode, $currentMonth) {
+            // For past months, only use actuals — forecasts are unreliable when invoices are finalized
+            $sourceMonth = $row->source_month ?? $row->month;
+            if ($sourceMonth < $currentMonth && ($row->source ?? 'forecast') === 'forecast') {
+                return $carry;
+            }
+
             // Use actual GST amount if available (from AR Posted Invoices), otherwise calculate from rate
             $gstAmount = 0.0;
             if (isset($row->actual_gst_amount) && $row->actual_gst_amount !== null) {
@@ -1593,11 +1600,18 @@ class CashForecastController extends Controller
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
         $payMonths = $rules['gst_pay_months'] ?? [];
+        $currentMonth = Carbon::now()->format('Y-m');
 
         // Collect detailed GST transactions grouped by quarter
         $quarterDetails = [];
 
         foreach ($forecastRows as $row) {
+            // For past months, only use actuals — forecasts are unreliable when invoices are finalized
+            $sourceMonth = $row->source_month ?? $row->month;
+            if ($sourceMonth < $currentMonth && ($row->source ?? 'forecast') === 'forecast') {
+                continue;
+            }
+
             // Use actual GST amount if available (from AR Posted Invoices), otherwise calculate from rate
             $gstAmount = 0.0;
             if (isset($row->actual_gst_amount) && $row->actual_gst_amount !== null) {
