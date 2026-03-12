@@ -97,8 +97,6 @@ export const getValueCellClass = (params: CellClassParams): string => {
         classes.push('font-bold', 'bg-slate-100', 'dark:bg-slate-800');
     } else if (isLabourRow(params)) {
         classes.push('bg-purple-50', 'dark:bg-purple-900/30');
-    } else if (rowType === 'cost') {
-        classes.push('bg-amber-50/50', 'dark:bg-amber-950/20');
     } else if (rowType === 'profit') {
         if (typeof params.value === 'number') {
             if (params.value >= 0) {
@@ -128,11 +126,8 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
         } else if (isLabourRow(params)) {
             classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
         } else if (rowType === 'cost') {
-            classes.push('bg-amber-50/50', 'dark:bg-amber-950/20');
-            if (data?.isActualMonth?.[month]) {
-                classes.push('font-medium');
-            } else {
-                classes.push('italic', 'text-slate-500', 'dark:text-slate-400');
+            if (!data?.isActualMonth?.[month]) {
+                classes.push('italic');
             }
         } else if (rowType === 'profit' || rowType === 'variance') {
             if (typeof params.value === 'number') {
@@ -142,10 +137,8 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
                     classes.push('text-red-700', 'dark:text-red-400');
                 }
             }
-            if (isActual) {
-                classes.push('bg-emerald-50/50', 'dark:bg-emerald-950/20');
-            } else {
-                classes.push('bg-blue-50/50', 'dark:bg-blue-950/20', 'italic');
+            if (!isActual) {
+                classes.push('italic');
             }
         } else if (rowType === 'target') {
             classes.push('bg-violet-50/50', 'dark:bg-violet-950/20', 'text-violet-700', 'dark:text-violet-400');
@@ -222,9 +215,10 @@ export const getPinnedCellClass = (params: CellClassParams): string => {
         classes.push('font-bold', 'bg-slate-100', 'dark:bg-slate-800');
     } else if (isLabourRow(params)) {
         classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
-    } else if (rowType === 'cost' || rowType === 'profit') {
-        // Indent child rows
-        classes.push('pl-6', 'text-slate-500', 'dark:text-slate-400', 'text-sm');
+    } else if (rowType === 'cost') {
+        classes.push('pl-6', 'text-muted-foreground', 'text-xs');
+    } else if (rowType === 'profit') {
+        classes.push('pl-6', 'text-xs');
     } else if (rowType === 'revenue' && params.data?.projectType !== 'summary') {
         classes.push('text-blue-600', 'dark:text-blue-400', 'hover:underline', 'cursor-pointer');
     }

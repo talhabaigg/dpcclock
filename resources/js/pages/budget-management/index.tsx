@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -136,55 +136,49 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid gap-4 sm:grid-cols-3">
-                    <Card className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Total Annual Target</p>
-                                    <p className="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
-                                        {formatCurrency(totalTarget)}
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">{currentFYLabel}</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-                                    <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Total Annual Target</CardDescription>
+                                <span className="text-muted-foreground/60"><Target className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
+                                {formatCurrency(totalTarget)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">{currentFYLabel}</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-l-4 border-l-emerald-500">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Monthly Average</p>
-                                    <p className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                                        {formatCompactCurrency(monthlyAverage)}
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">Per active month</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                                    <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Monthly Average</CardDescription>
+                                <span className="text-muted-foreground/60"><TrendingUp className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
+                                {formatCompactCurrency(monthlyAverage)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">Per active month</p>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-l-4 border-l-purple-500">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Months Configured</p>
-                                    <p className="text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">
-                                        {filledMonths} <span className="text-muted-foreground text-base font-normal">/ 12</span>
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">With targets set</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                                    <Calculator className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Months Configured</CardDescription>
+                                <span className="text-muted-foreground/60"><Calculator className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
+                                {filledMonths} <span className="text-muted-foreground text-xs font-normal sm:text-sm">/ 12</span>
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">With targets set</p>
                         </CardContent>
                     </Card>
                 </div>

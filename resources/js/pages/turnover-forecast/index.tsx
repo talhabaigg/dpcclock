@@ -481,7 +481,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                                 <strong>Work in Hand:</strong> Forecasted revenue for months without actuals
                                             </li>
                                             <li>
-                                                <strong>Budget marker:</strong> Cumulative budget target to current month
+                                                <strong>Budget marker:</strong> Cumulative budget to current month
                                             </li>
                                         </ul>
                                         <p className="text-muted-foreground/80 border-t pt-1 text-xs">
@@ -537,7 +537,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                                 <span>{formatPercent(totalFY, turnoverTargetFYTotal)}% incl. forecast</span>
                                             </>
                                         ) : (
-                                            'No targets set'
+                                            'No budget set'
                                         )}
                                     </div>
                                 </div>
@@ -559,7 +559,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                             <h4 className="mb-1 font-semibold">Completed Turnover YTD</h4>
                                             <div className="text-lg font-bold">{formatCurrency(completedTurnoverYTD)}</div>
                                             <p className="text-muted-foreground text-sm">
-                                                {formatPercent(completedTurnoverYTD, targetBaseline)}% of target &middot; Actual billed
+                                                {formatPercent(completedTurnoverYTD, targetBaseline)}% of budget &middot; Actual billed
                                             </p>
                                         </HoverCardContent>
                                     </HoverCard>
@@ -574,7 +574,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                             <h4 className="mb-1 font-semibold">Work in Hand</h4>
                                             <div className="text-lg font-bold">{formatCurrency(workInHandFY)}</div>
                                             <p className="text-muted-foreground text-sm">
-                                                {formatPercent(workInHandFY, targetBaseline)}% of target &middot; Forecasted revenue
+                                                {formatPercent(workInHandFY, targetBaseline)}% of budget &middot; Forecasted revenue
                                             </p>
                                         </HoverCardContent>
                                     </HoverCard>
@@ -594,7 +594,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                         <HoverCardContent className="w-64" side="top">
                                             <h4 className="mb-1 font-semibold">Budget YTD</h4>
                                             <div className="text-lg font-bold">{formatCurrency(targetTurnoverYTD)}</div>
-                                            <p className="text-muted-foreground text-sm">Cumulative monthly targets to date</p>
+                                            <p className="text-muted-foreground text-sm">Cumulative monthly budget to date</p>
                                         </HoverCardContent>
                                     </HoverCard>
                                 )}
@@ -615,7 +615,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                         Budget YTD
                                     </span>
                                 </div>
-                                {remainingTargetToAchieve > 0 && <span>{formatCurrency(remainingTargetToAchieve)} to target</span>}
+                                {remainingTargetToAchieve > 0 && <span>{formatCurrency(remainingTargetToAchieve)} to budget</span>}
                             </div>
                         </div>
 
@@ -635,10 +635,10 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 )}
                                 <span>
                                     <span className="sm:hidden">
-                                        {formatCurrency(Math.abs(ytdVariance))} {isAheadOfBudget ? 'ahead of' : 'below'} target
+                                        {formatCurrency(Math.abs(ytdVariance))} {isAheadOfBudget ? 'ahead of' : 'below'} budget
                                     </span>
                                     <span className="hidden sm:inline">
-                                        YTD Actual vs Target: {formatCurrency(Math.abs(ytdVariance))}{' '}
+                                        YTD Actual vs Budget: {formatCurrency(Math.abs(ytdVariance))}{' '}
                                         {isAheadOfBudget ? 'ahead' : 'below'}
                                     </span>
                                     <span className="ml-1 opacity-75">
@@ -649,21 +649,6 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                             </div>
                         )}
 
-                        {/* FY time progress */}
-                        {fyTimeProgress && (
-                            <div className="space-y-1.5">
-                                <div className="text-muted-foreground flex items-center justify-between text-xs">
-                                    <span>Financial Year Progress</span>
-                                    <span>{fyTimeProgress.percent}% elapsed</span>
-                                </div>
-                                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                    <div
-                                        className="h-full rounded-full bg-slate-400 transition-all dark:bg-slate-500"
-                                        style={{ width: `${fyTimeProgress.percent}%` }}
-                                    />
-                                </div>
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
 
@@ -689,23 +674,6 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                             />
                         </div>
                     ))}
-
-                {/* Footer info */}
-                <div className="text-muted-foreground text-sm">
-                    <p>
-                        Showing {filteredData.length} of {data.length} projects
-                        <span className="mx-2">|</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                            SWCP: {filteredData.filter((d) => d.company === 'SWCP').length}
-                        </span>
-                        <span className="mx-1">/</span>
-                        <span className="text-blue-600 dark:text-blue-400">GRE: {filteredData.filter((d) => d.company === 'GRE').length}</span>
-                        <span className="mx-1">/</span>
-                        <span className="text-violet-600 dark:text-violet-400">
-                            Forecast: {filteredData.filter((d) => d.company === 'Forecast').length}
-                        </span>
-                    </p>
-                </div>
             </div>
 
             {/* Filter Dialog */}

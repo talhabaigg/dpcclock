@@ -1,11 +1,10 @@
 import { Button } from '@/components/ui/button';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, HelpCircle, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -40,23 +39,14 @@ interface HeaderWithHelpProps {
 
 function HeaderWithHelp({ displayName, helpText }: HeaderWithHelpProps) {
     return (
-        <div className="flex items-center gap-1">
-            <span>{displayName}</span>
-            <HoverCard openDelay={200}>
-                <HoverCardTrigger asChild>
-                    <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground inline-flex items-center justify-center transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <HelpCircle className="h-3.5 w-3.5" />
-                    </button>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-72 text-sm font-normal" side="bottom">
-                    {helpText}
-                </HoverCardContent>
-            </HoverCard>
-        </div>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="cursor-help hover:underline hover:decoration-dotted hover:underline-offset-4">{displayName}</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-72 text-sm font-normal" side="bottom">
+                {helpText}
+            </TooltipContent>
+        </Tooltip>
     );
 }
 
@@ -283,6 +273,9 @@ export function UnifiedForecastGrid({
                         if (params.value < 0) {
                             return 'text-right text-red-600 dark:text-red-400 font-bold bg-red-100 dark:bg-red-900/40';
                         }
+                        if (!params.value) {
+                            return 'text-right';
+                        }
                         return 'text-right text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/30';
                     },
                 },
@@ -296,6 +289,7 @@ export function UnifiedForecastGrid({
                     field: 'forecastStatus',
                     width: 130,
                     hide: hiddenColumns.has('forecastStatus'),
+                    cellStyle: { display: 'flex', alignItems: 'center' },
                     cellRenderer: (params: { data: UnifiedRow }) => {
                         const rowData = params.data;
                         if (rowData?.rowType !== 'revenue' || rowData?.projectType === 'total' || rowData?.projectType === 'summary') {
@@ -316,7 +310,8 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('toDate'),
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        return formatCurrency(params.value);
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
@@ -333,7 +328,8 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('contractFY'),
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        return formatCurrency(params.value);
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
@@ -350,7 +346,8 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('totalValue'),
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        return formatCurrency(params.value);
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
@@ -367,7 +364,8 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('remainingFY'),
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        return formatCurrency(params.value);
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
@@ -384,7 +382,8 @@ export function UnifiedForecastGrid({
                     hide: hiddenColumns.has('remainingTotal'),
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        return formatCurrency(params.value);
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
                     type: 'numericColumn',
                     cellClass: getValueCellClass,
@@ -413,7 +412,9 @@ export function UnifiedForecastGrid({
                     return '';
                 }
 
-                return <span style={{ paddingRight: 4 }}>{formatCurrency(params.value)}</span>;
+                // Show cost values as negative (deduction)
+                const displayValue = rowData?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                return <span style={{ paddingRight: 4 }}>{formatCurrency(displayValue)}</span>;
             },
         }));
 
@@ -694,13 +695,16 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             </div>
 
             {/* Grid */}
-            <div className="ag-theme-shadcn bg-card overflow-hidden rounded-xl border shadow-sm">
+            <div
+                className="ag-theme-shadcn bg-card overflow-hidden rounded-xl border shadow-sm"
+                style={viewMode === 'expanded' ? { height: `${height}px` } : undefined}
+            >
                 <AgGridReact
                     ref={gridRef}
                     rowData={rowData}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    domLayout="autoHeight"
+                    domLayout={viewMode === 'expanded' ? 'normal' : 'autoHeight'}
                     theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
                     getRowId={getRowId}
                     getRowHeight={getRowHeight}

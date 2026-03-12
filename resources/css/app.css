@@ -284,19 +284,15 @@
 }
 
 .forecast-row-cost {
-    background-color: rgba(251, 191, 36, 0.05) !important;
-}
-
-.dark .forecast-row-cost {
-    background-color: rgba(251, 191, 36, 0.08) !important;
+    opacity: 0.65;
 }
 
 .forecast-row-profit {
-    background-color: rgba(59, 130, 246, 0.05) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 .dark .forecast-row-profit {
-    background-color: rgba(59, 130, 246, 0.08) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .forecast-row-target {

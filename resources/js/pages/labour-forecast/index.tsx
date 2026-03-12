@@ -1,5 +1,5 @@
 import InputSearch from '@/components/inputSearch';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
@@ -98,74 +98,66 @@ const LabourForecastIndex = ({ locations, currentWeekEnding }: LabourForecastInd
 
             <div className="flex flex-col gap-6 p-4 md:p-6">
                 {/* Summary Cards - Focused on operational metrics */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
                     {/* Total Jobs */}
-                    <Card className="border-l-4 border-l-slate-400">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Total Jobs</p>
-                                    <p className="text-3xl font-bold tracking-tight">{stats.totalJobs}</p>
-                                    <p className="text-muted-foreground mt-1 text-xs">{stats.jobsStaffedThisWeek} staffed this week</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                                    <Building2 className="h-6 w-6 text-slate-600 dark:text-slate-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Total Jobs</CardDescription>
+                                <span className="text-muted-foreground/60"><Building2 className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">{stats.totalJobs}</CardTitle>
+                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">{stats.jobsStaffedThisWeek} staffed this week</p>
                         </CardContent>
                     </Card>
 
                     {/* Weekly Headcount */}
-                    <Card className="border-l-4 border-l-indigo-500">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Weekly Headcount</p>
-                                    <p className="text-3xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400">
-                                        {stats.totalHeadcount.toLocaleString()}
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">W/E {currentWeekEnding}</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30">
-                                    <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Weekly Headcount</CardDescription>
+                                <span className="text-muted-foreground/60"><Users className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">
+                                {stats.totalHeadcount.toLocaleString()}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">W/E {currentWeekEnding}</p>
                         </CardContent>
                     </Card>
 
                     {/* Weekly Labour Cost */}
-                    <Card className="border-l-4 border-l-emerald-500">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Weekly Labour Cost</p>
-                                    <p className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                                        {formatCurrency(stats.totalCost)}
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">W/E {currentWeekEnding}</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                                    <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Weekly Labour Cost</CardDescription>
+                                <span className="text-muted-foreground/60"><DollarSign className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">
+                                {formatCurrency(stats.totalCost)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">W/E {currentWeekEnding}</p>
                         </CardContent>
                     </Card>
 
                     {/* Average Cost Per Head */}
-                    <Card className="border-l-4 border-l-amber-500">
-                        <CardContent className="p-4">
+                    <Card className="gap-0 overflow-hidden py-0">
+                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-muted-foreground text-sm font-medium">Avg Cost / Head</p>
-                                    <p className="text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-                                        {formatCurrency(stats.avgCostPerHead)}
-                                    </p>
-                                    <p className="text-muted-foreground mt-1 text-xs">Per week</p>
-                                </div>
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-                                    <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                                </div>
+                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Avg Cost / Head</CardDescription>
+                                <span className="text-muted-foreground/60"><TrendingUp className="h-4 w-4" /></span>
                             </div>
+                        </CardHeader>
+                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
+                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">
+                                {formatCurrency(stats.avgCostPerHead)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">Per week</p>
                         </CardContent>
                     </Card>
                 </div>
