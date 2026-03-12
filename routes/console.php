@@ -1,6 +1,16 @@
 <?php
 
+use App\Jobs\LoadApPostedInvoiceLines;
+use App\Jobs\LoadApPostedInvoices;
+use App\Jobs\LoadArPostedInvoices;
+use App\Jobs\LoadArProgressBillingSummaries;
+use App\Jobs\LoadJobCostData;
+use App\Jobs\LoadJobReportByCostItemAndCostTypes;
+use App\Jobs\LoadJobSummaries;
+use App\Jobs\LoadJobVendorCommitments;
+use App\Jobs\LoadTimesheetsFromEH;
 use App\Models\QueueJobLog;
+use Carbon\Carbon;
 
 // Clean up queue job logs older than 24 hours
 Schedule::call(function () {
@@ -14,3 +24,48 @@ Schedule::command('app:backup-database')->dailyAt('23:00')->timezone('Australia/
 Schedule::command('app:send-kiosk-clocked-in-notification')->hourly()
     ->timezone('Australia/Brisbane')
     ->between('15:00', '17:30');
+
+// Premier Data Syncs - Daily
+Schedule::job(LoadJobSummaries::class)
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+Schedule::job(LoadJobCostData::class)
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+Schedule::job(LoadApPostedInvoices::class)
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+Schedule::job(LoadApPostedInvoiceLines::class)
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+// Premier Data Syncs - Weekly
+Schedule::job(LoadJobReportByCostItemAndCostTypes::class)
+    ->weeklyOn(1, '05:00')  // Monday at 5:00 AM
+    ->withoutOverlapping();
+
+// Premier Data Syncs - Monthly
+Schedule::job(LoadArProgressBillingSummaries::class)
+    ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
+    ->withoutOverlapping();
+
+Schedule::job(LoadArPostedInvoices::class)
+    ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
+    ->withoutOverlapping();
+
+Schedule::job(LoadJobVendorCommitments::class)
+    ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
+    ->withoutOverlapping();
+
+// Employment Hero Timesheet Sync - Daily
+Schedule::call(function () {
+    $tz = 'Australia/Brisbane';
+    $weekEnding = Carbon::now($tz)->endOfWeek(Carbon::FRIDAY)->format('d-m-Y');
+    dispatch(new LoadTimesheetsFromEH($weekEnding));
+})
+    ->name('load-timesheets-from-eh')
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
