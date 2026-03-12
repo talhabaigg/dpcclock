@@ -1,333 +1,295 @@
-# Cash Flow Forecast — Requirements Document
+# Cash Flow Forecast — Business Requirements
 
 **Feature:** 12-Month Rolling Cash Flow Forecast
 **Status:** Implemented
-**Access:** Cash Forecast page in sidebar navigation
-**Security:** View-only and Edit permission levels
+**Last Updated:** 2026-03-12
 
 ---
 
-## 1. Purpose
+## 1. Business Need
 
-Provide a forward-looking 12-month cash position forecast that blends actual Premier data with internal job forecasts, applies configurable payment timing rules, and presents an interactive drill-down view with manual adjustment capabilities. The goal is to give finance and management visibility into **when cash actually moves** — not just when costs are incurred or revenue is billed.
+Construction projects generate costs and revenue months before or after cash physically moves. Wages are paid weekly but PAYG tax remits monthly. Vendor invoices are paid on 30-day terms. Client progress claims are received 30–60 days after billing. Retention is withheld for months or years.
+
+Without a cash-timing view, finance and management can only see **accrued** figures — what has been incurred or billed — not **when money actually enters or leaves the bank account**. This creates blind spots in liquidity planning and increases the risk of cash shortfalls.
+
+**This feature exists to answer one question: "What will our bank balance look like over the next 12 months?"**
 
 ---
 
-## 2. Functional Requirements
+## 2. Stakeholders
 
-### FR-01: Data Blending (Actuals + Forecasts)
-
-| ID | Requirement |
-|---|---|
-| FR-01.1 | Load **actual** cost and revenue data from Premier for the **3 months preceding** the current month. |
-| FR-01.2 | Load **forecast** data from the internal Job Forecasts for the current month through 12 months forward. |
-| FR-01.3 | Load forecast data for 2 months prior to the current month as a lookback window, so delayed portions (e.g. wages tax, revenue) propagate correctly into the current/future months. |
-| FR-01.4 | The current month must use **forecast data exclusively** — no partial actuals for the current month to avoid a confusing mix. |
-| FR-01.5 | When both actuals and forecasts exist for a past month, **actuals take priority**. If an actual exists for a given job + cost item + vendor + month, the forecast for that same combination is dropped. |
-| FR-01.6 | Always use the **latest forecast** per job (most recent forecast submission). |
-
-### FR-02: Data Sources from Premier (Read-Only)
-
-| ID | Source | Data Provided |
+| Stakeholder | Role | Interest |
 |---|---|---|
-| FR-02.1 | Job Cost Details | All job costs: wages, oncosts, vendor costs — with job number, cost item, amount, vendor, and transaction date. |
-| FR-02.2 | Accounts Payable Invoices | GL overhead costs (non-job expenses like office supplies, admin) — with GL account, amount, GST, and vendor. |
-| FR-02.3 | Accounts Receivable Invoices | Revenue (client invoices billed) — with job number, subtotal ex-GST, GST, retainage, and invoice date. |
-| FR-02.4 | Progress Billing Summaries | Retention data: contract value, retainage held, and subtotals per job per progress claim. |
+| Finance Manager | Primary user | Manages cash position, plans payments, ensures liquidity |
+| General Manager | Consumer | Reviews cash position for strategic decisions |
+| Back-Office Staff | Contributor | Enters general transactions (rent, insurance), manages retention overrides |
+| Project Managers | Indirect | Their job forecasts feed into the cash forecast — they do not directly use this feature |
 
-### FR-03: Payment Timing Rules
+---
 
-The system applies configurable rules that determine **when cash actually moves** based on the type of cost or revenue.
+## 3. Scope
 
-| ID | Rule | What It Covers | When Cash Moves | GST |
-|---|---|---|---|---|
-| FR-03.1 | Wages | Base wages, apprentice wages, casual wages, subcontract labour | 70% paid same month (net wages), 30% paid next month (PAYG tax) | None |
-| FR-03.2 | Oncosts | Superannuation, payroll tax, workers comp, leave provisions | Paid next month (+1) | None |
-| FR-03.3 | Vendor / GL Costs | Materials, subcontractors, hire, office overheads (cost codes 20–98 and GL items) | Paid next month (+1) | +10% GST (or actual GST from the invoice if available) |
-| FR-03.4 | Revenue | Client progress claims | Received next month (+1) | +10% GST collected (or actual GST from invoice) |
-| FR-03.5 | Retention Held | Money withheld from progress claims as security | Same delay as revenue (+1 month), shown as negative under Cash In | None |
-| FR-03.6 | General Transactions | Rent, insurance, subscriptions, other overheads | No delay — appears in the month it falls in | Configurable per transaction |
-| FR-03.7 | GST Payable | Quarterly BAS payment to ATO | Paid in the configured quarter payment month | N/A |
-| FR-03.8 | Default | Any unmatched cost item | No delay | No calculated GST (actual invoice GST preserved if available) |
+### In Scope
+- 12-month forward cash position forecast blending actuals and forecasts
+- Payment timing rules that model when cash moves vs. when costs are incurred
+- Manual adjustments to override default timing for specific jobs, vendors, or cost items
+- General (non-project) recurring and one-off cash flow items
+- Retention tracking and release scheduling
+- Quarterly GST/BAS liability calculation
+- Drill-down from summary to transaction-level detail
+- Printable and exportable (GST) reports
 
-| ID | Additional Detail |
+### Out of Scope
+- Modifying Premier data (read-only integration)
+- Creating or editing job forecasts (separate feature)
+- Bank account reconciliation
+- Invoice generation or payment processing
+- Multi-currency support
+
+---
+
+## 4. Business Rules
+
+### BR-01: Data Priority
+
+| ID | Rule |
 |---|---|
-| FR-03.9 | The wage net/tax split ratio is configurable (default 70% net / 30% tax). |
-| FR-03.10 | The GST rate is configurable (default 10%). |
-| FR-03.11 | For actual data from Premier, the real GST amount from the invoice is used instead of calculating a percentage. |
+| BR-01.1 | The forecast covers a rolling window: 3 months of history + the current month + 11 months forward. |
+| BR-01.2 | Past months use **actual data from Premier**. The current month and all future months use **forecast data from internal Job Forecasts**. |
+| BR-01.3 | The current month never mixes actuals and forecasts — it uses forecasts exclusively to avoid a confusing partial picture. |
+| BR-01.4 | When both an actual and a forecast exist for the same job + cost item + vendor + month, the actual takes priority and the forecast is discarded. |
+| BR-01.5 | Only the most recently submitted forecast per job is used. |
+| BR-01.6 | Forecast data is loaded for 2 months prior to the current month as a lookback window, so that delayed cash flows (e.g. PAYG tax on last month's wages) propagate correctly into the current and future months. |
 
-### FR-04: Manual Adjustments
+### BR-02: Payment Timing — When Cash Actually Moves
 
-#### FR-04a: Cash In Adjustments (Revenue Timing)
+These rules translate accrual-basis figures into a cash-basis view. Each rule defines the delay between when a cost is incurred (or revenue billed) and when the corresponding cash movement occurs.
 
-| ID | Requirement |
-|---|---|
-| FR-04a.1 | Users can override when revenue for a specific job and billing month is received. |
-| FR-04a.2 | A single billing month's revenue can be split across multiple receipt months (e.g. $100K billed in Jan → $50K received Feb, $50K received Mar). |
-| FR-04a.3 | The sum of all splits must equal the source billing amount (ex-GST). The system must validate this. |
-| FR-04a.4 | Quick-action buttons for common scenarios: "Same Month", "+1 Month", "+2 Months", "+3 Months" — each sets the full amount to a single receipt month. |
-| FR-04a.5 | Users can reset adjustments to revert to default timing rules. |
-
-#### FR-04b: Cash Out Adjustments (Cost Payment Timing)
-
-| ID | Requirement |
-|---|---|
-| FR-04b.1 | Users can override when a specific job + cost item + vendor payment is made. |
-| FR-04b.2 | Payments can be split across multiple months with validation that splits sum to the source amount. |
-| FR-04b.3 | Support vendor-level adjustments — when set for "ALL" jobs, the adjustment applies proportionally to all jobs under that vendor for the given cost item and month. |
-
-#### FR-04c: Vendor Payment Delays
-
-| ID | Requirement |
-|---|---|
-| FR-04c.1 | Users can override payment timing for **all** cost items from a specific vendor in a given month. |
-| FR-04c.2 | This is a blanket override — broader than individual cost-item-level adjustments. |
-
-#### FR-04d: Adjustment Priority (Highest to Lowest)
-
-| ID | Requirement |
-|---|---|
-| FR-04d.1 | **Job-level** cash out adjustment (specific job + cost item + vendor) takes highest priority. |
-| FR-04d.2 | **Vendor-level** cash out adjustment ("ALL" jobs for a cost item + vendor) applies if no job-level override exists. |
-| FR-04d.3 | **Vendor payment delay** (all costs for a vendor across all cost items) is the broadest override. |
-| FR-04d.4 | **Default timing rules** apply when no manual adjustments exist. |
-
-### FR-05: General Transactions
-
-| ID | Requirement |
-|---|---|
-| FR-05.1 | Users can add recurring or one-off cash flow items not tracked in Premier (rent, insurance, subscriptions, expected income, etc.). |
-| FR-05.2 | Each transaction requires: Name, Amount, Type (Recurring / One-off), Direction (Cash In / Cash Out), Frequency (Weekly / Fortnightly / Monthly / Quarterly / Annually), Category, Includes GST flag, Start Date, and End Date (for recurring). |
-| FR-05.3 | Recurring transactions are automatically expanded into monthly amounts across the forecast range based on their frequency. |
-| FR-05.4 | Available categories: Rent & Lease, Utilities, Insurance, Software & IT, Professional Services, Marketing, Equipment, Travel, Training, Other. |
-| FR-05.5 | Deleted general transactions are soft-deleted (preserved for audit trail). |
-| FR-05.6 | General transactions appear in the forecast table grouped by their category. |
-
-### FR-06: Retention System
-
-| ID | Requirement |
-|---|---|
-| FR-06.1 | Automatically calculate retention rates from Premier progress billing data (retainage / subtotal ratio). |
-| FR-06.2 | Track cumulative retention held per job. |
-| FR-06.3 | Apply a retention cap — stop withholding once total retention reaches the cap percentage of the contract value. |
-| FR-06.4 | Show retention as a negative line item under Cash In, representing money invoiced but not yet received. |
-| FR-06.5 | Allow per-job manual overrides of retention rate, cap percentage, and release date. |
-| FR-06.6 | When a release date is set, all retention held up to that date is released back as a cash inflow. |
-| FR-06.7 | Users can reset overrides to revert to the auto-calculated values from Premier. |
-| FR-06.8 | Default retention rate and cap are configurable in global settings (default 5% each). |
-
-### FR-07: Quarterly GST Calculation
-
-| ID | Requirement |
-|---|---|
-| FR-07.1 | Calculate net GST per calendar quarter: GST collected on revenue minus GST paid on vendor costs. |
-| FR-07.2 | Show a GST Payable cash outflow in the configured BAS payment month for each quarter. |
-| FR-07.3 | GST payment months are configurable per quarter (e.g. Q1 Jan–Mar → paid in April). |
-| FR-07.4 | Provide a GST Breakdown report showing collected vs paid by quarter with transaction-level detail. |
-| FR-07.5 | GST Breakdown report is exportable to Excel with three sheets: Collected, Paid, Summary. |
-
-### FR-08: Configurable Settings
-
-| ID | Setting | Default | Description |
+| ID | Category | Cash Timing Rule | GST Treatment |
 |---|---|---|---|
-| FR-08.1 | Starting Balance | $0 | Opening cash position for the forecast period |
-| FR-08.2 | Starting Balance Date | Start of current month | The date the starting balance applies from |
-| FR-08.3 | GST Rate | 10% | GST rate applied to vendor costs and revenue |
-| FR-08.4 | Wage Tax Ratio | 30% | Portion of wages delayed by one month as PAYG tax |
-| FR-08.5 | Default Retention Rate | 5% | Retention percentage when no Premier data exists |
-| FR-08.6 | Default Retention Cap | 5% | Retention cap as a percentage of contract value |
-| FR-08.7 | Q1 GST Payment Month | April | When Q1 (Jan–Mar) BAS is paid |
-| FR-08.8 | Q2 GST Payment Month | August | When Q2 (Apr–Jun) BAS is paid |
-| FR-08.9 | Q3 GST Payment Month | November | When Q3 (Jul–Sep) BAS is paid |
-| FR-08.10 | Q4 GST Payment Month | February | When Q4 (Oct–Dec) BAS is paid |
+| BR-02.1 | **Wages** (cost codes 01, 03, 05, 07) | 70% paid in the same month (net wages to employees). 30% paid in the following month (PAYG tax remittance to ATO). | No GST |
+| BR-02.2 | **Labour Oncosts** (cost codes 02, 04, 06, 08) | Paid in the following month (super, payroll tax, workers comp, leave provisions). | No GST |
+| BR-02.3 | **Vendor & GL Costs** (cost codes 20–98, GL items) | Paid in the following month (materials, subcontractors, hire, office overheads). | GST at configured rate (default 10%). For actuals, use the real GST amount from the invoice. |
+| BR-02.4 | **Revenue** (cost code 99) | Received in the following month after billing. | GST collected at configured rate (default 10%). For actuals, use the real GST amount from the invoice. |
+| BR-02.5 | **Retention Held** | Same delay as revenue (+1 month). Shown as a negative cash inflow — money that was billed but withheld by the client. | No GST |
+| BR-02.6 | **General Transactions** | No delay — cash moves in the month the transaction falls in. | Configurable per transaction (user specifies whether GST is included). |
+| BR-02.7 | **GST Payable (BAS)** | Paid in the configured BAS payment month for each quarter. | N/A (this is the GST settlement itself). |
+| BR-02.8 | **Unclassified** | No delay applied. If the source invoice had GST, that amount is preserved as-is. | Actual GST only |
+
+| ID | Configurability |
+|---|---|
+| BR-02.9 | The wage net/tax split ratio is configurable (default: 70% net / 30% tax). |
+| BR-02.10 | The GST rate is configurable (default: 10%). |
+
+### BR-03: Manual Adjustment Rules
+
+Users can override default payment timing to reflect real-world situations (e.g. a client paying late, a vendor offering early-pay discounts, staged payments).
+
+| ID | Rule |
+|---|---|
+| BR-03.1 | **Revenue timing override**: A user can specify when a specific job's billing for a given month is actually received. The full amount can be moved to a different month or split across multiple months. |
+| BR-03.2 | **Cost payment override (job-level)**: A user can specify when a specific job + cost item + vendor payment is actually made. Supports splitting across months. |
+| BR-03.3 | **Cost payment override (vendor-level)**: A user can apply a timing override to ALL jobs for a given cost item + vendor + month. The system distributes the override proportionally across jobs. |
+| BR-03.4 | **Vendor payment delay**: A user can delay ALL cost items from a specific vendor in a given month. This is the broadest override. |
+| BR-03.5 | **Split validation**: When a payment or receipt is split across months, the sum of all splits must equal the original source amount (ex-GST). The system must reject invalid splits. |
+| BR-03.6 | **Reset**: Any adjustment can be reset to revert to the default timing rules. |
+
+### BR-04: Adjustment Priority
+
+When multiple overrides could apply to the same cash flow, the most specific one wins.
+
+| Priority | Override Level | Scope |
+|---|---|---|
+| 1 (highest) | Job-level cash out adjustment | Specific job + cost item + vendor |
+| 2 | Vendor-level cash out adjustment | All jobs for a cost item + vendor |
+| 3 | Vendor payment delay | All cost items for a vendor |
+| 4 (lowest) | Default timing rules | Applies when no overrides exist |
+
+### BR-05: Retention
+
+| ID | Rule |
+|---|---|
+| BR-05.1 | Retention is the portion of a progress claim withheld by the client as security. It is calculated as a percentage of the claim subtotal. |
+| BR-05.2 | The retention rate is auto-calculated from Premier progress billing data (retainage / subtotal). If no Premier data exists, the configured default rate applies (default: 5%). |
+| BR-05.3 | Retention accumulates per job. Once cumulative retention reaches the cap percentage of the contract value, no further retention is withheld on subsequent claims. Default cap: 5% of contract value. |
+| BR-05.4 | Retention appears as a **negative cash inflow** — it reduces the cash received from a progress claim. |
+| BR-05.5 | A user can set a **release date** per job. On the release date, all retention held up to that point flows back in as a positive cash inflow. |
+| BR-05.6 | Users can override retention rate, cap percentage, and release date per job, or reset to auto-calculated values from Premier. |
+
+### BR-06: GST / BAS Liability
+
+| ID | Rule |
+|---|---|
+| BR-06.1 | Each calendar quarter, the system calculates: **Net GST = GST collected on revenue - GST paid on vendor costs**. |
+| BR-06.2 | The net GST amount appears as a cash outflow in the configured BAS payment month for that quarter. |
+| BR-06.3 | BAS payment months are configurable per quarter (defaults: Q1 Jan–Mar paid in April, Q2 Apr–Jun paid in August, Q3 Jul–Sep paid in November, Q4 Oct–Dec paid in February). |
+| BR-06.4 | A quarterly GST breakdown report is available showing: GST collected (by transaction), GST paid (by transaction), and the net payable or refund. |
+| BR-06.5 | The GST breakdown report is exportable to Excel. |
+
+### BR-07: General Transactions
+
+| ID | Rule |
+|---|---|
+| BR-07.1 | Users can record cash flow items that are not tracked in Premier — rent, insurance, subscriptions, expected income, loan repayments, etc. |
+| BR-07.2 | A general transaction has: Name, Amount, Direction (Cash In or Cash Out), Type (Recurring or One-off), Frequency (Weekly / Fortnightly / Monthly / Quarterly / Annually), Category, whether GST is included, Start Date, and End Date (for recurring). |
+| BR-07.3 | Recurring transactions are automatically expanded into monthly cash flow amounts across the forecast window based on their frequency. |
+| BR-07.4 | Categories: Rent & Lease, Utilities, Insurance, Software & IT, Professional Services, Marketing, Equipment, Travel, Training, Other. |
+| BR-07.5 | Deleted transactions are soft-deleted — they are removed from the forecast but preserved for audit. |
+
+### BR-08: Forecast Calculation
+
+| ID | Rule |
+|---|---|
+| BR-08.1 | **Cash In** = Revenue received (after timing rules) + Retention released + General transaction inflows. |
+| BR-08.2 | **Cash Out** = Wages paid (after net/tax split) + Oncosts paid + Vendor costs paid + GST payable + General transaction outflows. |
+| BR-08.3 | **Net Cashflow** = Cash In - Cash Out (per month). |
+| BR-08.4 | **Running Balance** = Starting Balance + cumulative Net Cashflow through that month. |
+| BR-08.5 | **Ending Balance** = Starting Balance + total Net Cashflow across all 12 months. |
 
 ---
 
-## 3. Screen & UI Requirements
+## 5. Functional Requirements (User Capabilities)
 
-### UI-01: Summary Cards
-
-| ID | Requirement |
-|---|---|
-| UI-01.1 | Display 5 summary cards across the top: Starting Balance, Total Cash In, Total Cash Out, Net Cashflow, Ending Balance. |
-| UI-01.2 | Ending Balance = Starting Balance + Net Cashflow. |
-| UI-01.3 | Each card shows a data source indicator (Actual / Forecast / Mixed). |
-
-### UI-02: Charts
+### FR-01: View the Forecast
 
 | ID | Requirement |
 |---|---|
-| UI-02.1 | **Monthly Cash Flow Bar Chart** — green bars for cash in, red/amber bars for cash out, one pair per month. |
-| UI-02.2 | **Cumulative Cash Position Chart** — running total starting from the starting balance. Green when positive, red when negative. Shows the ending balance. |
-| UI-02.3 | **Cash Waterfall Chart** — breaks down net cashflow by cost type (Revenue, Labour, Labour Oncosts, Materials, Site Costs, General, Equipment Hire, Professional, GST, Unmapped, Overhead). User can select the month range via dropdowns. |
-| UI-02.4 | Waterfall chart includes a "View Unmapped" button linking to a page showing cost items missing a cost type classification. |
-| UI-02.5 | All three charts have a fullscreen expand button. |
-| UI-02.6 | Charts are responsive and resize correctly on different screen sizes. |
+| FR-01.1 | A user can view a 12-month rolling cash forecast showing Cash In, Cash Out, Net Cashflow, and Running Balance by month. |
+| FR-01.2 | A user can see summary totals: Starting Balance, Total Cash In, Total Cash Out, Net Cashflow, and Ending Balance. |
+| FR-01.3 | A user can distinguish whether data for a given row/month is based on actuals, forecasts, or a mix. |
+| FR-01.4 | A user can expand summary rows to see the underlying cost items, and further expand to see individual jobs or vendors. |
+| FR-01.5 | A user can drill down into any dollar amount to see the transaction-level detail that produced it, including: source month, job, vendor, timing rule applied, ex-GST amount, GST, and total. |
+| FR-01.6 | A user can identify which transactions had a timing delay applied (source month differs from display month). |
 
-### UI-03: Main Forecast Table
-
-| ID | Requirement |
-|---|---|
-| UI-03.1 | Horizontally-scrollable table with 12 month columns plus a Total column. |
-| UI-03.2 | Expandable row hierarchy: **Section** (Cash In / Cash Out) → **Cost Item** → **Job** (for revenue) or **Vendor → Job** (for costs). |
-| UI-03.3 | Click any section row to expand/collapse it. |
-| UI-03.4 | Click any cost item row to see the jobs or vendors beneath it. |
-| UI-03.5 | The **current month** column is visually highlighted with a "Current" label. |
-| UI-03.6 | Each row shows a data source badge: blue = Actual, amber = Forecast, gradient = Mixed. |
-| UI-03.7 | For vendor costs, actuals show the real vendor name; forecast data appears under "Remaining Forecast". |
-| UI-03.8 | Bottom rows show **Net Cashflow** (Cash In minus Cash Out) and **Running Balance** (cumulative from starting balance). |
-| UI-03.9 | Job and vendor rows display an "Adjust" link to open the timing adjustment dialog. |
-
-### UI-04: Amount Breakdown (Drill-Down)
+### FR-02: Adjust Payment Timing
 
 | ID | Requirement |
 |---|---|
-| UI-04.1 | Clicking any dollar amount in the table opens a breakdown showing how that number was calculated. |
-| UI-04.2 | Shows line-by-line detail: Source Month, Job, Vendor, Rule Applied, Ex-GST, GST, Total, and data source. |
-| UI-04.3 | Rows where the source month differs from the display month are highlighted (indicates a timing delay was applied). |
-| UI-04.4 | Summary totals at top: Ex-GST, GST, and Gross Total. |
-| UI-04.5 | Paginated at 50 rows for large datasets. |
+| FR-02.1 | A user can override when revenue from a specific job and billing month is received, including splitting it across multiple receipt months. |
+| FR-02.2 | A user can quickly set revenue timing to common scenarios: same month, +1, +2, or +3 months. |
+| FR-02.3 | A user can override when a cost payment for a specific job + cost item + vendor is made, including splitting across months. |
+| FR-02.4 | A user can apply a vendor-level payment delay to shift all of a vendor's costs in a given month. |
+| FR-02.5 | A user can reset any adjustment to revert to default timing rules. |
 
-### UI-05: Settings Dialog
-
-| ID | Requirement |
-|---|---|
-| UI-05.1 | Accessible via gear icon in the header toolbar. |
-| UI-05.2 | Allows editing of starting balance and GST payment months (one per quarter). |
-
-### UI-06: General Transactions Dialog
+### FR-03: Manage General Transactions
 
 | ID | Requirement |
 |---|---|
-| UI-06.1 | Accessible via "+" icon in the header toolbar. |
-| UI-06.2 | Lists all existing general transactions with edit and delete actions. |
-| UI-06.3 | Includes a form to add new transactions with all fields from FR-05.2. |
+| FR-03.1 | A user can add a new general transaction (recurring or one-off) with all required attributes. |
+| FR-03.2 | A user can edit an existing general transaction. |
+| FR-03.3 | A user can delete a general transaction (soft delete). |
 
-### UI-07: Cash In Adjustment Dialog
-
-| ID | Requirement |
-|---|---|
-| UI-07.1 | Opened from "Adjust" link on a Cash In job row. |
-| UI-07.2 | Shows the source job number and billing month. |
-| UI-07.3 | Allows adding/removing receipt month splits with dollar amounts. |
-| UI-07.4 | Validates that splits sum to the source amount. Shows a warning if exceeded. |
-| UI-07.5 | Quick-action buttons: "Same Month", "+1 Month", "+2 Months", "+3 Months". |
-| UI-07.6 | "Reset" action to clear all adjustments and revert to default timing. |
-
-### UI-08: Cash Out Adjustment Dialog
+### FR-04: Manage Retention
 
 | ID | Requirement |
 |---|---|
-| UI-08.1 | Opened from "Adjust" link on a Cash Out vendor/job row. |
-| UI-08.2 | Shows the source cost item, vendor, and amount. |
-| UI-08.3 | Allows splitting payments across multiple months with validation. |
+| FR-04.1 | A user can view all jobs with retention: rate, cap, contract value, amount retained to date, and whether the cap has been reached. |
+| FR-04.2 | A user can override the retention rate, cap percentage, or release date for a specific job. |
+| FR-04.3 | A user can reset retention overrides to revert to auto-calculated values from Premier. |
 
-### UI-09: Vendor Payment Delay Dialog
-
-| ID | Requirement |
-|---|---|
-| UI-09.1 | Accessible from the header toolbar "Vendor Delays" button. |
-| UI-09.2 | Dropdown listing all vendors with cost data. |
-| UI-09.3 | Select a source month, then add payment month splits. |
-
-### UI-10: Retention Dialog
+### FR-05: View GST / BAS Liability
 
 | ID | Requirement |
 |---|---|
-| UI-10.1 | Accessible from the header toolbar "Retention" button. |
-| UI-10.2 | Table showing all jobs with retention: rate %, cap %, contract value, retained to date, and cap status. |
-| UI-10.3 | Edit action per job to override retention rate, cap, or set a release date. |
-| UI-10.4 | "Reset to Auto" action to revert to Premier-calculated values. |
+| FR-05.1 | A user can view a quarterly breakdown of GST collected, GST paid, and net payable/refund with the BAS due date. |
+| FR-05.2 | A user can see transaction-level detail behind each quarterly GST figure, with Actual/Forecast indicators. |
+| FR-05.3 | A user can export the GST breakdown to Excel (sheets: Collected, Paid, Summary). |
 
-### UI-11: GST Breakdown Dialog
-
-| ID | Requirement |
-|---|---|
-| UI-11.1 | Accessible from the header toolbar "GST Breakdown" button. |
-| UI-11.2 | Quarterly tabs showing GST Collected, GST Paid, and Net Payable/Refund with due date. |
-| UI-11.3 | Transaction-level detail with Actual/Forecast indicators. |
-| UI-11.4 | Export to Excel button per quarter (3 sheets: Collected, Paid, Summary). |
-
-### UI-12: Payment Rules Help
+### FR-06: Configure Settings
 
 | ID | Requirement |
 |---|---|
-| UI-12.1 | Accessible via "?" help button in the header toolbar. |
-| UI-12.2 | Displays all payment timing rules in a clear card layout with plain-English explanations. |
+| FR-06.1 | A user can set the starting cash balance and the date it applies from. |
+| FR-06.2 | A user can configure the GST rate (default 10%). |
+| FR-06.3 | A user can configure the wage PAYG tax ratio (default 30%). |
+| FR-06.4 | A user can configure the default retention rate and cap (defaults 5% each). |
+| FR-06.5 | A user can configure BAS payment months for each quarter. |
 
-### UI-13: Print
-
-| ID | Requirement |
-|---|---|
-| UI-13.1 | Print button in header generates a print-friendly version of the forecast. |
-| UI-13.2 | Print version includes the charts. |
-| UI-13.3 | Print layout is clean and suited for paper output (no interactive elements). |
-
-### UI-14: Unmapped Transactions Page
+### FR-07: Review Unclassified Cost Items
 
 | ID | Requirement |
 |---|---|
-| UI-14.1 | Separate page accessible from the waterfall chart's "View Unmapped" button. |
-| UI-14.2 | Shows cost items that don't have a cost type classification, in a filterable table. |
-| UI-14.3 | Date range filtering via start/end month selectors. |
-| UI-14.4 | Columns: Month, Job, Cost Item, Description, Source (Actual/Forecast), Amount. |
+| FR-07.1 | A user can view a list of cost items that do not have a cost type classification, meaning the system cannot apply the correct timing rule. |
+| FR-07.2 | A user can filter unclassified items by date range. |
+| FR-07.3 | Each unclassified item shows: month, job, cost item code, description, data source (Actual/Forecast), and amount. |
+
+### FR-08: Print / Export
+
+| ID | Requirement |
+|---|---|
+| FR-08.1 | A user can print the forecast for offline review or distribution. |
+| FR-08.2 | The printed output includes the summary, charts, and forecast table in a format suitable for paper. |
 
 ---
 
-## 4. Non-Functional Requirements
+## 6. Data Sources
 
-| ID | Requirement |
-|---|---|
-| NFR-01 | All forecast data is computed on the server and delivered in a single page load — no secondary loading or spinners for the initial view. |
-| NFR-02 | The page must perform well with large datasets (hundreds of jobs, thousands of cost lines). Key data lookups are indexed for speed. |
-| NFR-03 | Deleted general transactions are preserved for audit trail (soft delete). |
-| NFR-04 | All editing actions (adjustments, settings, general transactions) require the Edit permission. |
-| NFR-05 | All viewing actions require the View permission. |
-| NFR-06 | Saving adjustments is atomic — if any part of the save fails, no partial changes are applied. |
-| NFR-07 | The Cash Forecast must appear in the sidebar navigation for users with the appropriate permission. |
+| Source | Type | Data Provided |
+|---|---|---|
+| Premier — Job Cost Details | Read-only, actuals | All job costs: wages, oncosts, vendor costs. Fields: job number, cost item, amount, vendor, transaction date. |
+| Premier — Accounts Payable Invoices | Read-only, actuals | GL overhead costs (non-job expenses). Fields: GL account, amount, GST, vendor. |
+| Premier — Accounts Receivable Invoices | Read-only, actuals | Revenue billed. Fields: job number, subtotal ex-GST, GST, retainage, invoice date. |
+| Premier — Progress Billing Summaries | Read-only, actuals | Retention data. Fields: contract value, retainage held, subtotals per job per progress claim. |
+| Internal Job Forecasts | Read-only, forecasts | Projected costs and revenue by job, cost item, and month. |
+| Cash Forecast Settings | Read-write | Starting balance, GST rate, wage tax ratio, retention defaults, BAS payment months. |
+| Cash Forecast Adjustments | Read-write | Manual timing overrides for revenue, costs, and vendor delays. |
+| General Transactions | Read-write | User-entered recurring/one-off cash flow items. |
+| Retention Overrides | Read-write | Per-job overrides for retention rate, cap, and release date. |
 
 ---
 
-## 5. Security & Permissions
+## 7. Non-Functional Requirements
+
+| ID | Requirement |
+|---|---|
+| NFR-01 | The full forecast must be computed server-side and delivered in a single page load — no secondary loading for the initial view. |
+| NFR-02 | The system must handle large datasets (hundreds of jobs, thousands of cost lines) without degraded performance. |
+| NFR-03 | Deleted general transactions must be preserved for audit trail (soft delete). |
+| NFR-04 | Saving adjustments must be atomic — if any part of the save fails, no partial changes are applied. |
+
+---
+
+## 8. Security & Permissions
 
 | Permission | Grants |
 |---|---|
-| View | Access the forecast page, view all data, drill down into amounts, view GST breakdown, view retention, print the report |
-| Edit | All View permissions plus: modify settings, add/edit/delete general transactions, create/reset adjustments, override retention settings |
+| View | Access the forecast, view all data, drill down, view GST breakdown, view retention, print the report |
+| Edit | All View capabilities plus: modify settings, add/edit/delete general transactions, create/reset adjustments, override retention |
 
-Typically assigned to admin and back-office roles.
-
----
-
-## 6. Cost Code Classification Reference
-
-| Code Range | Category | GST Applies | Payment Delay | Example |
-|---|---|---|---|---|
-| 01, 03, 05, 07 | Wages | No | 70% same month / 30% next month | 01-01 Base Wages |
-| 02, 04, 06, 08 | Oncosts | No | +1 month | 02-01 Superannuation |
-| 20–98 | Vendor Costs | Yes (10%) | +1 month | 42-01 Materials |
-| 99 | Revenue | Yes (10%) | +1 month | 99-99 Revenue |
-| GL codes | Overheads | Yes (10%) | +1 month | GL-6100 Office Supplies |
-| General | General Transactions | Configurable | None | Rent & Lease |
-| GST Payable | BAS Payment | N/A | Quarterly | Auto-calculated |
-| Retention Held | Retention | No | Same as revenue | Auto-calculated |
+Typically assigned to **admin** and **back-office** roles.
 
 ---
 
-## 7. Waterfall Chart Cost Type Groups
+## 9. Assumptions & Dependencies
 
-The waterfall chart groups all costs and revenue into the following categories for a high-level view:
-
-| Group | Description |
+| ID | Assumption / Dependency |
 |---|---|
-| Revenue | Client billing / progress claims |
-| Labour | Wages (base, apprentice, casual, subcontract labour) |
-| Labour Oncosts | Superannuation, payroll tax, workers comp, leave |
-| Materials | Material purchases from vendors |
-| Site Costs | Site-related vendor costs |
-| General | Rent, insurance, subscriptions, and other overheads |
-| Equipment Hire | Equipment and plant hire |
-| Professional | Professional services (engineering, consultants, etc.) |
-| GST | Quarterly GST payable to ATO |
-| Unmapped | Cost items that haven't been classified yet |
-| Overhead | GL overhead costs (non-job admin expenses) |
+| A-01 | Premier data is available and up-to-date. If Premier is unreachable, actuals will be stale. |
+| A-02 | Job forecasts are maintained by project managers. The quality of the cash forecast depends directly on the quality and timeliness of job forecast submissions. |
+| A-03 | Cost codes are correctly classified with a cost type. Unclassified cost codes will appear under "Unclassified" with no timing rule applied. |
+| A-04 | The organisation uses quarterly BAS reporting (not monthly). |
+| A-05 | All amounts are in AUD. Multi-currency is not supported. |
+| A-06 | Retention is held on the revenue side only (client withholds from us). Retention we hold on subcontractors is not modelled. |
+
+---
+
+## 10. Glossary
+
+| Term | Definition |
+|---|---|
+| **Actuals** | Real financial data from Premier (costs incurred, invoices issued). |
+| **Forecast** | Projected future costs and revenue from internal Job Forecasts. |
+| **Cash In** | Money received into the bank account (revenue collected, retention released, general inflows). |
+| **Cash Out** | Money paid from the bank account (wages, vendor payments, GST remittance, general outflows). |
+| **Timing Rule** | A business rule that determines the delay between when a cost/revenue is incurred and when cash moves. |
+| **PAYG Tax** | Pay-As-You-Go tax withheld from employee wages and remitted to the ATO monthly. |
+| **BAS** | Business Activity Statement — quarterly GST return submitted to the ATO. |
+| **Retention** | A percentage of a progress claim withheld by the client as security until project completion or a release date. |
+| **Retention Cap** | The maximum cumulative retention amount, expressed as a percentage of contract value. |
+| **Progress Claim** | A periodic invoice to the client for work completed on a project. |
+| **General Transaction** | A cash flow item not tied to a specific project or Premier data (e.g. rent, insurance). |
+| **Ex-GST** | Amount excluding Goods and Services Tax. |
+| **Oncosts** | Employer-borne costs on top of wages: superannuation, payroll tax, workers compensation, leave provisions. |
+| **Cost Code** | A two-part code (e.g. 42-01) identifying the type of cost within a project. |
+| **Cost Type** | A classification applied to a cost code that determines which timing rule and GST treatment to apply (Wages, Oncosts, Vendor, Revenue). |
+| **Premier** | The external ERP system (Premier) that is the source of truth for actuals. |

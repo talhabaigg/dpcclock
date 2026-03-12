@@ -5,6 +5,11 @@
 import type { CellClassParams, CellClassRules } from 'ag-grid-community';
 import type { RowType, UnifiedRow } from './data-transformer';
 
+const currentMonthStr = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+})();
+
 /**
  * Format currency in AUD
  */
@@ -114,7 +119,7 @@ export const getValueCellClass = (params: CellClassParams): string => {
  * Get cell class for monthly value columns
  */
 export const getMonthCellClass = (month: string, lastActualMonth: string | null) => {
-    const isActual = lastActualMonth ? month <= lastActualMonth : false;
+    const isActual = lastActualMonth ? month <= lastActualMonth && month !== currentMonthStr : false;
 
     return (params: CellClassParams): string => {
         const classes = ['text-right', 'tabular-nums', 'text-sm'];
@@ -126,7 +131,7 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
         } else if (isLabourRow(params)) {
             classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
         } else if (rowType === 'cost') {
-            if (!data?.isActualMonth?.[month]) {
+            if (month === currentMonthStr || !data?.isActualMonth?.[month]) {
                 classes.push('italic');
             }
         } else if (rowType === 'profit' || rowType === 'variance') {
@@ -143,8 +148,8 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
         } else if (rowType === 'target') {
             classes.push('bg-violet-50/50', 'dark:bg-violet-950/20', 'text-violet-700', 'dark:text-violet-400');
         } else if (rowType === 'revenue') {
-            // Check if this specific month has actual data
-            const hasActualData = data?.isActualMonth?.[month];
+            // Current month always styled as forecast (blue) since we prefer forecast over actuals
+            const hasActualData = month !== currentMonthStr && data?.isActualMonth?.[month];
             if (hasActualData) {
                 classes.push('bg-emerald-50', 'dark:bg-emerald-950/30', 'font-medium');
             } else if (params.value) {
@@ -160,7 +165,7 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
  * Get header class for monthly columns
  */
 export const getMonthHeaderClass = (month: string, lastActualMonth: string | null): string => {
-    const isActual = lastActualMonth ? month <= lastActualMonth : false;
+    const isActual = lastActualMonth ? month <= lastActualMonth && month !== currentMonthStr : false;
 
     if (isActual) {
         return 'forecast-header-actual';
