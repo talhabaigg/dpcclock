@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Printer } from 'lucide-react';
+import { ChevronDown, ChevronUp, Printer } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TurnoverRow } from './lib/data-transformer';
 
@@ -96,16 +96,27 @@ export function TurnoverPrintReport({
 }: TurnoverPrintReportProps) {
     // State for configurable overhead
     const [overheadAmount, setOverheadAmount] = useState(200000);
+    const [showProfitBreakdown, setShowProfitBreakdown] = useState(false);
 
     // Transform data for report
     const reportData = useMemo(() => {
+        const now = new Date();
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
         const transformRow = (row: TurnoverRow): ReportRow => {
-            // Get monthly values (prefer actuals over forecast)
+            // Get monthly values: current month prefers forecast; past months prefer actuals
             const monthly_values: Record<string, { value: number; isActual: boolean }> = {};
             months.forEach((month) => {
                 const actualValue = safeNumber(row.revenue_actuals?.[month]);
                 const forecastValue = safeNumber(row.revenue_forecast?.[month]);
-                if (actualValue !== 0) {
+                if (month === currentMonthStr) {
+                    // Current month: use forecast, fall back to actual if no forecast
+                    if (forecastValue !== 0) {
+                        monthly_values[month] = { value: forecastValue, isActual: false };
+                    } else {
+                        monthly_values[month] = { value: actualValue, isActual: true };
+                    }
+                } else if (actualValue !== 0) {
                     monthly_values[month] = { value: actualValue, isActual: true };
                 } else {
                     monthly_values[month] = { value: forecastValue, isActual: false };
@@ -184,17 +195,53 @@ export function TurnoverPrintReport({
             labourRequirementByMonth[month] = required;
         });
 
+        // Revenue targets calculation
+        const revenueTargets = {
+            target: {} as Record<string, number>,
+            actual: {} as Record<string, number>,
+            variance: {} as Record<string, number>,
+            targetTotal: 0,
+            actualTotal: 0,
+            varianceTotal: 0,
+        };
+
+        months.forEach((month) => {
+            let totalRevenue = 0;
+            data.forEach((row) => {
+                const actualRevenue = safeNumber(row.revenue_actuals?.[month]);
+                const forecastRevenue = safeNumber(row.revenue_forecast?.[month]);
+                if (month === currentMonthStr) {
+                    totalRevenue += forecastRevenue !== 0 ? forecastRevenue : actualRevenue;
+                } else {
+                    totalRevenue += actualRevenue || forecastRevenue;
+                }
+            });
+
+            const targetValue = safeNumber(monthlyTargets?.[month]);
+            const varianceValue = totalRevenue - targetValue;
+
+            revenueTargets.target[month] = targetValue;
+            revenueTargets.actual[month] = totalRevenue;
+            revenueTargets.variance[month] = varianceValue;
+            revenueTargets.targetTotal += targetValue;
+            revenueTargets.actualTotal += totalRevenue;
+            revenueTargets.varianceTotal += varianceValue;
+        });
+
         return {
             swcp: { rows: swcpRows, totals: swcpTotals },
             gre: { rows: greRows, totals: greTotals },
             forecast: { rows: forecastRows, totals: forecastTotals },
             combined: combinedTotals,
             labourRequirementByMonth,
+            revenueTargets,
         };
-    }, [data, months]);
+    }, [data, months, monthlyTargets]);
 
     // Widget/Summary data calculations
     const widgetData = useMemo(() => {
+        const now = new Date();
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         let completedTurnoverYTD = 0;
         let forecastWorkFY = 0;
 
@@ -203,7 +250,10 @@ export function TurnoverPrintReport({
                 const actualValue = safeNumber(row.revenue_actuals?.[month]);
                 const forecastValue = safeNumber(row.revenue_forecast?.[month]);
 
-                if (actualValue !== 0) {
+                if (month === currentMonthStr) {
+                    // Current month: treat as forecast (use forecast value, fall back to actual)
+                    forecastWorkFY += forecastValue !== 0 ? forecastValue : actualValue;
+                } else if (actualValue !== 0) {
                     completedTurnoverYTD += actualValue;
                 } else if (forecastValue !== 0) {
                     forecastWorkFY += forecastValue;
@@ -235,37 +285,77 @@ export function TurnoverPrintReport({
         return now.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
     }, []);
 
-    // Calculate sustainability metrics for next 12 months
+    // Calculate sustainability metrics for next 12 months (real projects only)
     const sustainabilityData = useMemo(() => {
         const KPI_THRESHOLD = 6; // Months threshold for sustainability
 
-        // Get the next 12 months from current date
-        const now = new Date();
-        const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        // Only include real projects (exclude forecast projects)
+        const realProjects = data.filter((row) => row.type === 'location');
 
-        // Filter to get only future months (next 12 months from allMonths)
-        const next12Months = allMonths.filter((month) => month >= currentYearMonth).slice(0, 12);
+        // Generate the next 12 months from current date (independent of selected FY)
+        const now = new Date();
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const next12Months: string[] = [];
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+            next12Months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        }
 
         let totalProfit = 0;
         let totalCost = 0;
         const monthlyProfits: Record<string, number> = {};
         const monthlyCosts: Record<string, number> = {};
 
+        // Per-job profit breakdown for hover card
+        const jobBreakdown: Array<{
+            jobName: string;
+            jobNumber: string;
+            totalProfit: number;
+            totalRevenue: number;
+            totalCost: number;
+            monthlyProfit: Record<string, number>;
+        }> = [];
+
+        // Initialize per-job tracking
+        realProjects.forEach((row) => {
+            jobBreakdown.push({
+                jobName: row.job_name,
+                jobNumber: row.job_number,
+                totalProfit: 0,
+                totalRevenue: 0,
+                totalCost: 0,
+                monthlyProfit: {},
+            });
+        });
+
         // Calculate profit and cost for each of the next 12 months
         next12Months.forEach((month) => {
             let monthRevenue = 0;
             let monthCost = 0;
 
-            data.forEach((row) => {
-                // Revenue: prefer actuals over forecast
+            realProjects.forEach((row, idx) => {
+                // Revenue: current month prefers forecast; past months prefer actuals
                 const actualRevenue = safeNumber(row.revenue_actuals?.[month]);
                 const forecastRevenue = safeNumber(row.revenue_forecast?.[month]);
-                monthRevenue += actualRevenue !== 0 ? actualRevenue : forecastRevenue;
+                const rev = month === currentMonthStr
+                    ? (forecastRevenue !== 0 ? forecastRevenue : actualRevenue)
+                    : (actualRevenue !== 0 ? actualRevenue : forecastRevenue);
+                monthRevenue += rev;
 
-                // Cost: prefer actuals over forecast
+                // Cost: current month prefers forecast (fall back to actual if no forecast); past months prefer actuals
                 const actualCost = safeNumber(row.cost_actuals?.[month]);
                 const forecastCost = safeNumber(row.cost_forecast?.[month]);
-                monthCost += actualCost !== 0 ? actualCost : forecastCost;
+                const cost = month === currentMonthStr
+                    ? (forecastCost !== 0 ? forecastCost : actualCost)
+                    : (actualCost !== 0 ? actualCost : forecastCost);
+                monthCost += cost;
+
+                // Track per-job
+                const jobProfit = rev - cost;
+                jobBreakdown[idx].totalProfit += jobProfit;
+                jobBreakdown[idx].totalRevenue += rev;
+                jobBreakdown[idx].totalCost += cost;
+                jobBreakdown[idx].monthlyProfit[month] = jobProfit;
             });
 
             const monthProfit = monthRevenue - monthCost;
@@ -274,6 +364,9 @@ export function TurnoverPrintReport({
             totalProfit += monthProfit;
             totalCost += monthCost;
         });
+
+        // Sort jobs by absolute profit contribution (largest first)
+        jobBreakdown.sort((a, b) => Math.abs(b.totalProfit) - Math.abs(a.totalProfit));
 
         const monthCount = next12Months.length || 1;
         const averageMonthlyProfit = totalProfit / monthCount;
@@ -293,8 +386,9 @@ export function TurnoverPrintReport({
             monthsSustainable,
             kpiThreshold: KPI_THRESHOLD,
             status,
+            jobBreakdown,
         };
-    }, [data, allMonths, overheadAmount]);
+    }, [data, overheadAmount]);
 
     // Calculate summary data for next 2 FYs
     const futureFYSummaries = useMemo(() => {
@@ -359,12 +453,12 @@ export function TurnoverPrintReport({
                 .map(
                     (row, idx) => `
                 <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8fafc'};">
-                    <td style="padding: 4px 6px; border: 1px solid #e2e8f0; text-align: left; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${row.job_name}</td>
+                    <td style="padding: 4px 6px 4px 20px; border: 1px solid #e2e8f0; text-align: left; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${row.job_name}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.total_contract_value)}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_order_book)}</td>
                     <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.fy_contract)}</td>
                     <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.claimed_to_date)}</td>
                     <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_for_year)}</td>
-                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.total_contract_value)}</td>
-                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_order_book)}</td>
                     ${months
                         .map((month) => {
                             const monthData = row.monthly_values[month];
@@ -383,11 +477,11 @@ export function TurnoverPrintReport({
         const generateSubtotalRow = (label: string, totals: SectionTotals, bgColor: string, textColor: string = '#1e3a5f') => `
             <tr style="background: ${bgColor}; font-weight: 600;">
                 <td style="padding: 5px 6px; border: 1px solid #e2e8f0; text-align: left; font-size: 9px; color: ${textColor};">${label}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.total_contract_value)}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_order_book)}</td>
                 <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.fy_contract)}</td>
                 <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.claimed_to_date)}</td>
                 <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_for_year)}</td>
-                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.total_contract_value)}</td>
-                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_order_book)}</td>
                 ${months
                     .map(
                         (month) =>
@@ -400,11 +494,11 @@ export function TurnoverPrintReport({
         const tableHeader = `
             <tr style="background: #334155;">
                 <th style="padding: 5px 6px; border: 1px solid #334155; text-align: left; font-size: 9px; color: white; font-weight: 600; min-width: 120px;">Job Name</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">FY Contract</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Claimed</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Rem. Year</th>
                 <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Total Value</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Order Book</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining Value</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Contract FY</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Claimed to Date</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining</th>
                 ${monthlyHeaders}
             </tr>
         `;
@@ -465,7 +559,7 @@ export function TurnoverPrintReport({
                                 <!-- SWCP Section Header -->
                                 <tr style="background: #f8fafc;">
                                     <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #1e293b; border: 1px solid #e2e8f0;">
-                                        SWCP (${reportData.swcp.rows.length} projects)
+                                        SWCP (${reportData.swcp.rows.length} jobs)
                                     </td>
                                 </tr>
                                 ${generateTableRows(reportData.swcp.rows)}
@@ -474,7 +568,7 @@ export function TurnoverPrintReport({
                                 <!-- GRE Section Header -->
                                 <tr style="background: #f1f5f9;">
                                     <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
-                                        GRE (${reportData.gre.rows.length} projects)
+                                        GRE (${reportData.gre.rows.length} jobs)
                                     </td>
                                 </tr>
                                 ${generateTableRows(reportData.gre.rows)}
@@ -503,7 +597,7 @@ export function TurnoverPrintReport({
                                 <!-- Forecast Section Header -->
                                 <tr style="background: #f1f5f9;">
                                     <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
-                                        Forecasted Projects (${reportData.forecast.rows.length} projects)
+                                        Forecasted Projects (${reportData.forecast.rows.length} jobs)
                                     </td>
                                 </tr>
                                 ${generateTableRows(reportData.forecast.rows)}
@@ -512,43 +606,38 @@ export function TurnoverPrintReport({
                         </table>
                     </div>
 
-                    <!-- Sustainability KPI Section -->
-                    <div style="margin-top: 20px; margin-bottom: 20px;">
-                        <div style="border: 2px solid ${sustainabilityData.status === 'healthy' ? '#10b981' : sustainabilityData.status === 'warning' ? '#f59e0b' : '#ef4444'}; border-radius: 8px; overflow: hidden;">
-                            <div style="background: ${sustainabilityData.status === 'healthy' ? '#059669' : sustainabilityData.status === 'warning' ? '#d97706' : '#dc2626'}; color: white; padding: 12px 16px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <h3 style="font-size: 14px; font-weight: 700; margin: 0;">
-                                            Business Sustainability Analysis (Next 12 Months)
-                                        </h3>
-                                        <p style="font-size: 11px; margin: 4px 0 0 0; opacity: 0.9;">
-                                            ${sustainabilityData.status === 'healthy' ? 'HEALTHY - Business is Sustainable' : sustainabilityData.status === 'warning' ? 'CAUTION - Monitor Closely' : 'CRITICAL - Action Required'}
-                                        </p>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <div style="font-size: 24px; font-weight: 700;">${formatNumber(sustainabilityData.monthsSustainable, 1)} months</div>
-                                        <div style="font-size: 10px; opacity: 0.9;">KPI Target: ${sustainabilityData.kpiThreshold} months</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 12px 16px; background: ${sustainabilityData.status === 'healthy' ? '#ecfdf5' : sustainabilityData.status === 'warning' ? '#fffbeb' : '#fef2f2'};">
-                                <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Total Profit (12mo)</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: ${sustainabilityData.totalProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.totalProfit)}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Monthly Overhead</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.monthlyOverhead)}</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Avg Monthly Profit</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: ${sustainabilityData.averageMonthlyProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.averageMonthlyProfit)}</div>
-                                </div>
-                            </div>
-                            <div style="background: white; border-top: 1px solid #e2e8f0; padding: 8px 16px; font-size: 9px; color: #64748b;">
-                                <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
-                            </div>
-                        </div>
+                    <!-- Revenue Targets -->
+                    <div style="margin-bottom: 25px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #334155;">
+                                    <th style="padding: 5px 6px; border: 1px solid #334155; text-align: left; font-size: 9px; color: white; font-weight: 600; min-width: 120px;">Budget</th>
+                                    <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;" colspan="5">FY Total</th>
+                                    ${monthlyHeaders}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Budget</td>
+                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
+                                    ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.target[month])}</td>`).join('')}
+                                </tr>
+                                <tr style="background: white;">
+                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Actual + Forecast</td>
+                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
+                                    ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.actual[month])}</td>`).join('')}
+                                </tr>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Variance</td>
+                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${reportData.revenueTargets.varianceTotal >= 0 ? '#047857' : '#dc2626'}; font-weight: 700;">${formatCompactCurrency(reportData.revenueTargets.varianceTotal)}</td>
+                                    ${months.map((month) => {
+                                        const v = reportData.revenueTargets.variance[month];
+                                        const color = v >= 0 ? '#047857' : '#dc2626';
+                                        return `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px; color: ${color}; font-weight: 600;">${formatCompactCurrency(v)}</td>`;
+                                    }).join('')}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
                     <!-- Widget/Summary Section -->
@@ -623,31 +712,68 @@ export function TurnoverPrintReport({
                             }
                         </div>
 
-                        <!-- Summary Stats -->
-                        <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-content: start;">
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">SWCP Projects</div>
-                                <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.swcp.rows.length}</div>
+                        <!-- Summary Stats + Sustainability -->
+                        <div style="flex: 1;">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px;">
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">SWCP Jobs</div>
+                                    <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.swcp.rows.length}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">GRE Jobs</div>
+                                    <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.gre.rows.length}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Forecast Jobs</div>
+                                    <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.forecast.rows.length}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total FY Contract</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.fy_contract)}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total Contract Value</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.total_contract_value)}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Order Book</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.remaining_order_book)}</div>
+                                </div>
                             </div>
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">GRE Projects</div>
-                                <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.gre.rows.length}</div>
-                            </div>
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Forecast Projects</div>
-                                <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.forecast.rows.length}</div>
-                            </div>
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total FY Contract</div>
-                                <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.fy_contract)}</div>
-                            </div>
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total Contract Value</div>
-                                <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.total_contract_value)}</div>
-                            </div>
-                            <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Order Book</div>
-                                <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.remaining_order_book)}</div>
+
+                            <!-- Sustainability KPI -->
+                            <div>
+                                <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                                    <div style="background: #334155; color: white; padding: 12px 16px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <h3 style="font-size: 12px; font-weight: 700; margin: 0;">Business Sustainability (Next 12 Months)</h3>
+                                                <p style="font-size: 10px; margin: 4px 0 0 0; opacity: 0.9;">${sustainabilityData.status === 'healthy' ? 'HEALTHY - Business is Sustainable' : sustainabilityData.status === 'warning' ? 'CAUTION - Monitor Closely' : 'CRITICAL - Action Required'}</p>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 22px; font-weight: 700;">${formatNumber(sustainabilityData.monthsSustainable, 1)} months</div>
+                                                <div style="font-size: 9px; opacity: 0.9;">KPI Target: ${sustainabilityData.kpiThreshold} months</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 12px 16px; background: #f8fafc;">
+                                        <div>
+                                            <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Total Profit (12mo)</div>
+                                            <div style="font-size: 13px; font-weight: 700; color: ${sustainabilityData.totalProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.totalProfit)}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Monthly Overhead</div>
+                                            <div style="font-size: 13px; font-weight: 700; color: #334155;">${formatCurrency(sustainabilityData.monthlyOverhead)}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 9px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Avg Monthly Profit</div>
+                                            <div style="font-size: 13px; font-weight: 700; color: ${sustainabilityData.averageMonthlyProfit >= 0 ? '#047857' : '#dc2626'};">${formatCurrency(sustainabilityData.averageMonthlyProfit)}</div>
+                                        </div>
+                                    </div>
+                                    <div style="background: white; border-top: 1px solid #e2e8f0; padding: 8px 16px; font-size: 9px; color: #64748b;">
+                                        <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -701,415 +827,321 @@ export function TurnoverPrintReport({
                 </DialogHeader>
 
                 <div className="space-y-6">
-                    {/* Preview Header */}
-                    <div className="border-b pb-4 text-center">
-                        <h1 className="text-2xl font-bold text-slate-800">Turnover Forecast</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Current Month: {currentMonth} | Financial Year: {fyLabel}
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b-2 border-slate-700 pb-3">
+                        <img src="/logo.png" alt="Superior Wall & Ceiling Professionals" className="h-10" />
+                        <div className="flex-1 text-center">
+                            <h1 className="text-2xl font-bold text-slate-800">Turnover Forecast</h1>
+                            <p className="text-[11px] text-slate-500">Current Month: {currentMonth} | Financial Year: {fyLabel}</p>
+                        </div>
+                        <p className="text-right text-[9px] text-slate-400">
+                            Generated: {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                     </div>
 
                     {/* Table 1: SWCP & GRE */}
-                    <div>
-                        <h2 className="mb-3 text-lg font-semibold">Current Projects</h2>
-                        <div className="overflow-x-auto rounded-lg border">
-                            <table className="w-full text-xs">
-                                <thead className="bg-slate-800 text-white">
-                                    <tr>
-                                        <th className="px-2 py-2 text-left font-semibold">Job Name</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">FY Contract</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Claimed</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Rem. Year</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Total Value</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Order Book</th>
-                                        {months.map((month) => (
-                                            <th key={month} className="px-1 py-2 text-right text-[9px] font-semibold">
-                                                {formatMonthHeader(month)}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {/* SWCP Section */}
-                                    <tr className="border-l-4 border-l-emerald-500 bg-emerald-50">
-                                        <td colSpan={6 + months.length} className="px-3 py-2 font-semibold text-emerald-800">
-                                            SWCP ({reportData.swcp.rows.length} projects)
-                                        </td>
-                                    </tr>
-                                    {reportData.swcp.rows.map((row, idx) => (
-                                        <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                            <td className="max-w-[180px] truncate border-t px-2 py-1">{row.job_name}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.claimed_to_date)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_for_year)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.total_contract_value)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_order_book)}
-                                            </td>
-                                            {months.map((month) => {
-                                                const monthData = row.monthly_values[month];
-                                                return (
-                                                    <td
-                                                        key={month}
-                                                        className={`border-t px-1 py-1 text-right text-[9px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}
-                                                    >
-                                                        {formatCompactCurrency(monthData?.value || 0)}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-xs">
+                            <thead>
+                                <tr className="bg-slate-700">
+                                    <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Job Name</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Total Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Contract FY</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Claimed to Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining</th>
+                                    {months.map((month) => (
+                                        <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
+                                            {formatMonthHeader(month)}
+                                        </th>
                                     ))}
-                                    <tr className="bg-emerald-100 font-semibold text-emerald-800">
-                                        <td className="border-t px-2 py-2">SWCP Sub-total</td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.swcp.totals.fy_contract)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.swcp.totals.claimed_to_date)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.swcp.totals.remaining_for_year)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.swcp.totals.total_contract_value)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.swcp.totals.remaining_order_book)}
-                                        </td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px]">
-                                                {formatCompactCurrency(reportData.swcp.totals.monthly_values[month] || 0)}
-                                            </td>
-                                        ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {/* SWCP Section */}
+                                <tr className="bg-slate-50">
+                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-800">
+                                        SWCP ({reportData.swcp.rows.length} jobs)
+                                    </td>
+                                </tr>
+                                {reportData.swcp.rows.map((row, idx) => (
+                                    <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                        <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        {months.map((month) => {
+                                            const monthData = row.monthly_values[month];
+                                            return (
+                                                <td key={month} className={`border border-slate-200 px-0.5 py-1 text-right text-[8px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}>
+                                                    {formatCompactCurrency(monthData?.value || 0)}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
-
-                                    {/* GRE Section */}
-                                    <tr className="border-l-4 border-l-blue-500 bg-blue-50">
-                                        <td colSpan={6 + months.length} className="px-3 py-2 font-semibold text-blue-800">
-                                            GRE ({reportData.gre.rows.length} projects)
+                                ))}
+                                <tr className="bg-slate-200 font-semibold text-slate-800">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">SWCP Sub-total</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.total_contract_value)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.fy_contract)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.claimed_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_for_year)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.swcp.totals.monthly_values[month] || 0)}
                                         </td>
-                                    </tr>
-                                    {reportData.gre.rows.map((row, idx) => (
-                                        <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                            <td className="max-w-[180px] truncate border-t px-2 py-1">{row.job_name}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.claimed_to_date)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_for_year)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.total_contract_value)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_order_book)}
-                                            </td>
-                                            {months.map((month) => {
-                                                const monthData = row.monthly_values[month];
-                                                return (
-                                                    <td
-                                                        key={month}
-                                                        className={`border-t px-1 py-1 text-right text-[9px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}
-                                                    >
-                                                        {formatCompactCurrency(monthData?.value || 0)}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
                                     ))}
-                                    <tr className="bg-blue-100 font-semibold text-blue-800">
-                                        <td className="border-t px-2 py-2">GRE Sub-total</td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.gre.totals.fy_contract)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.gre.totals.claimed_to_date)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.gre.totals.remaining_for_year)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.gre.totals.total_contract_value)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.gre.totals.remaining_order_book)}
-                                        </td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px]">
-                                                {formatCompactCurrency(reportData.gre.totals.monthly_values[month] || 0)}
-                                            </td>
-                                        ))}
-                                    </tr>
+                                </tr>
 
-                                    {/* Combined Totals */}
-                                    <tr className="bg-slate-800 font-bold text-white">
-                                        <td className="border-t px-2 py-2">Combined Total (SWCP + GRE)</td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.combined.fy_contract)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.combined.claimed_to_date)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.combined.remaining_for_year)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.combined.total_contract_value)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.combined.remaining_order_book)}
-                                        </td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px]">
-                                                {formatCompactCurrency(reportData.combined.monthly_values[month] || 0)}
-                                            </td>
-                                        ))}
+                                {/* GRE Section */}
+                                <tr className="bg-slate-100">
+                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
+                                        GRE ({reportData.gre.rows.length} jobs)
+                                    </td>
+                                </tr>
+                                {reportData.gre.rows.map((row, idx) => (
+                                    <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                        <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        {months.map((month) => {
+                                            const monthData = row.monthly_values[month];
+                                            return (
+                                                <td key={month} className={`border border-slate-200 px-0.5 py-1 text-right text-[8px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}>
+                                                    {formatCompactCurrency(monthData?.value || 0)}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
+                                ))}
+                                <tr className="bg-slate-200 font-semibold text-slate-800">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">GRE Sub-total</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.total_contract_value)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.fy_contract)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.claimed_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_for_year)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.gre.totals.monthly_values[month] || 0)}
+                                        </td>
+                                    ))}
+                                </tr>
 
-                                    {/* Labour Requirement Row */}
-                                    <tr className="bg-violet-50 text-violet-800">
-                                        <td className="border-t px-2 py-2 font-semibold">Labour Requirement</td>
-                                        <td colSpan={5} className="border-t px-2 py-2"></td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px] font-semibold">
-                                                {formatNumber(reportData.labourRequirementByMonth[month], 0)}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                                {/* Combined Totals */}
+                                <tr className="bg-slate-700 font-semibold text-white">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Combined Total (SWCP + GRE)</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.total_contract_value)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.fy_contract)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.claimed_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_for_year)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.combined.monthly_values[month] || 0)}
+                                        </td>
+                                    ))}
+                                </tr>
+
+                                {/* Labour Requirement Row */}
+                                <tr className="bg-slate-50 font-semibold text-slate-700">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Labour Requirement</td>
+                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-[9px]"></td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatNumber(reportData.labourRequirementByMonth[month], 0)}
+                                        </td>
+                                    ))}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
                     {/* Table 2: Forecasted Projects */}
-                    <div>
-                        <h2 className="mb-3 text-lg font-semibold">Forecasted Projects</h2>
-                        <div className="overflow-x-auto rounded-lg border">
-                            <table className="w-full text-xs">
-                                <thead className="bg-slate-800 text-white">
-                                    <tr>
-                                        <th className="px-2 py-2 text-left font-semibold">Job Name</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">FY Contract</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Claimed</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Rem. Year</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Total Value</th>
-                                        <th className="px-2 py-2 text-right text-[10px] font-semibold">Order Book</th>
-                                        {months.map((month) => (
-                                            <th key={month} className="px-1 py-2 text-right text-[9px] font-semibold">
-                                                {formatMonthHeader(month)}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-l-4 border-l-violet-500 bg-violet-50">
-                                        <td colSpan={6 + months.length} className="px-3 py-2 font-semibold text-violet-800">
-                                            Forecasted Projects ({reportData.forecast.rows.length} projects)
-                                        </td>
-                                    </tr>
-                                    {reportData.forecast.rows.map((row, idx) => (
-                                        <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                            <td className="max-w-[180px] truncate border-t px-2 py-1">{row.job_name}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.claimed_to_date)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_for_year)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.total_contract_value)}
-                                            </td>
-                                            <td className="border-t px-2 py-1 text-right text-[10px]">
-                                                {formatCompactCurrency(row.remaining_order_book)}
-                                            </td>
-                                            {months.map((month) => {
-                                                const monthData = row.monthly_values[month];
-                                                return (
-                                                    <td
-                                                        key={month}
-                                                        className={`border-t px-1 py-1 text-right text-[9px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}
-                                                    >
-                                                        {formatCompactCurrency(monthData?.value || 0)}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-xs">
+                            <thead>
+                                <tr className="bg-slate-700">
+                                    <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Job Name</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Total Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Contract FY</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Claimed to Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining</th>
+                                    {months.map((month) => (
+                                        <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
+                                            {formatMonthHeader(month)}
+                                        </th>
                                     ))}
-                                    <tr className="bg-violet-100 font-semibold text-violet-800">
-                                        <td className="border-t px-2 py-2">Total</td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.forecast.totals.fy_contract)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.forecast.totals.claimed_to_date)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.forecast.totals.remaining_for_year)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.forecast.totals.total_contract_value)}
-                                        </td>
-                                        <td className="border-t px-2 py-2 text-right text-[10px]">
-                                            {formatCompactCurrency(reportData.forecast.totals.remaining_order_book)}
-                                        </td>
-                                        {months.map((month) => (
-                                            <td key={month} className="border-t px-1 py-2 text-right text-[9px]">
-                                                {formatCompactCurrency(reportData.forecast.totals.monthly_values[month] || 0)}
-                                            </td>
-                                        ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="bg-slate-100">
+                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
+                                        Forecasted Projects ({reportData.forecast.rows.length} jobs)
+                                    </td>
+                                </tr>
+                                {reportData.forecast.rows.map((row, idx) => (
+                                    <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                        <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        {months.map((month) => {
+                                            const monthData = row.monthly_values[month];
+                                            return (
+                                                <td key={month} className={`border border-slate-200 px-0.5 py-1 text-right text-[8px] ${monthData?.isActual ? 'bg-yellow-100' : ''}`}>
+                                                    {formatCompactCurrency(monthData?.value || 0)}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                                ))}
+                                <tr className="bg-slate-200 font-semibold text-slate-800">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Forecasted Projects Total</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.total_contract_value)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.fy_contract)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.claimed_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_for_year)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.forecast.totals.monthly_values[month] || 0)}
+                                        </td>
+                                    ))}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
-                    {/* Sustainability KPI Widget */}
-                    <div className="mb-6">
-                        <h2 className="mb-3 text-lg font-semibold">Business Sustainability Analysis (Next 12 Months)</h2>
-                        <div
-                            className={`overflow-hidden rounded-lg border-2 ${
-                                sustainabilityData.status === 'healthy'
-                                    ? 'border-emerald-500 bg-emerald-50'
-                                    : sustainabilityData.status === 'warning'
-                                      ? 'border-amber-500 bg-amber-50'
-                                      : 'border-red-500 bg-red-50'
-                            }`}
-                        >
-                            <div
-                                className={`px-4 py-3 text-white ${
-                                    sustainabilityData.status === 'healthy'
-                                        ? 'bg-emerald-600'
-                                        : sustainabilityData.status === 'warning'
-                                          ? 'bg-amber-600'
-                                          : 'bg-red-600'
-                                }`}
-                            >
-                                <div className="flex items-center justify-between">
-                                    <h3 className="font-semibold">
-                                        {sustainabilityData.status === 'healthy'
-                                            ? 'HEALTHY - Business is Sustainable'
-                                            : sustainabilityData.status === 'warning'
-                                              ? 'CAUTION - Monitor Closely'
-                                              : 'CRITICAL - Action Required'}
-                                    </h3>
-                                    <span className="text-2xl font-bold">{formatNumber(sustainabilityData.monthsSustainable, 1)} months</span>
-                                </div>
-                                <p className="mt-1 text-sm opacity-90">
-                                    KPI Target: {sustainabilityData.kpiThreshold} months | Status:{' '}
-                                    {sustainabilityData.status === 'healthy'
-                                        ? 'Above threshold (6+ months)'
-                                        : sustainabilityData.status === 'warning'
-                                          ? 'Warning zone (4-6 months)'
-                                          : 'Below threshold (<4 months)'}
-                                </p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 p-4">
-                                <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Total Profit (12mo)</div>
-                                    <div className={`text-lg font-bold ${sustainabilityData.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                        {formatCurrency(sustainabilityData.totalProfit)}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Monthly Overhead</div>
-                                    <div className="text-lg font-bold text-slate-700">{formatCurrency(sustainabilityData.monthlyOverhead)}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs font-medium text-slate-500 uppercase">Avg Monthly Profit</div>
-                                    <div className={`text-lg font-bold ${sustainabilityData.averageMonthlyProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                        {formatCurrency(sustainabilityData.averageMonthlyProfit)}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="border-t bg-white/50 px-4 py-2 text-xs text-slate-600">
-                                <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
-                            </div>
-                        </div>
+                    {/* Revenue Targets */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-xs">
+                            <thead>
+                                <tr className="bg-slate-700">
+                                    <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Budget</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white" colSpan={5}>FY Total</th>
+                                    {months.map((month) => (
+                                        <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
+                                            {formatMonthHeader(month)}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="bg-slate-50 font-semibold text-slate-700">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Budget</td>
+                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.revenueTargets.target[month])}
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr className="bg-white font-semibold text-slate-700">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Actual + Forecast</td>
+                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
+                                    {months.map((month) => (
+                                        <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
+                                            {formatCompactCurrency(reportData.revenueTargets.actual[month])}
+                                        </td>
+                                    ))}
+                                </tr>
+                                <tr className="bg-slate-50 font-semibold">
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px] text-slate-700">Variance</td>
+                                    <td colSpan={5} className={`border border-slate-200 px-1 py-1 text-right text-[9px] font-bold ${reportData.revenueTargets.varianceTotal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                        {formatCompactCurrency(reportData.revenueTargets.varianceTotal)}
+                                    </td>
+                                    {months.map((month) => {
+                                        const v = reportData.revenueTargets.variance[month];
+                                        return (
+                                            <td key={month} className={`border border-slate-200 px-0.5 py-1 text-right text-[8px] font-semibold ${v >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                {formatCompactCurrency(v)}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
-                    {/* Widget Summary */}
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-4">
+                    {/* Widget/Summary Section */}
+                    <div className="flex gap-5">
+                        <div className="flex-1 space-y-3">
                             {/* Current FY Summary */}
                             <div>
-                                <h2 className="mb-3 text-lg font-semibold">{fyLabel} Summary</h2>
-                                <div className="overflow-hidden rounded-lg border">
-                                    <table className="w-full text-sm">
-                                        <tbody>
-                                            <tr className="bg-white">
-                                                <td className="border-b px-4 py-3 font-medium text-slate-600">Completed Turnover YTD</td>
-                                                <td className="border-b px-4 py-3 text-right font-bold">
-                                                    {formatCurrency(widgetData.completedTurnoverYTD)}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-slate-50">
-                                                <td className="border-b px-4 py-3 font-medium text-slate-600">Budget Turnover YTD</td>
-                                                <td className="border-b px-4 py-3 text-right font-bold">
-                                                    {formatCurrency(widgetData.budgetTurnoverYTD)}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-white">
-                                                <td className="border-b px-4 py-3 font-medium text-slate-600">Forecast Work FY</td>
-                                                <td className="border-b px-4 py-3 text-right font-bold">
-                                                    {formatCurrency(widgetData.forecastWorkFY)}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-blue-50">
-                                                <td className="border-b px-4 py-3 font-semibold text-blue-700">Completed Turnover + Work in Hand</td>
-                                                <td className="border-b px-4 py-3 text-right text-lg font-bold text-blue-700">
-                                                    {formatCurrency(widgetData.completedAndWorkInHand)}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-white">
-                                                <td className="border-b px-4 py-3 font-medium text-slate-600">Budget Turnover</td>
-                                                <td className="border-b px-4 py-3 text-right font-bold">
-                                                    {formatCurrency(widgetData.budgetTurnover)}
-                                                </td>
-                                            </tr>
-                                            <tr className={widgetData.budgetBalanceToAchieve > 0 ? 'bg-amber-50' : 'bg-emerald-50'}>
-                                                <td
-                                                    className={`px-4 py-3 font-semibold ${widgetData.budgetBalanceToAchieve > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
-                                                >
-                                                    Budget Balance to Achieve
-                                                </td>
-                                                <td
-                                                    className={`px-4 py-3 text-right text-lg font-bold ${widgetData.budgetBalanceToAchieve > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
-                                                >
-                                                    {formatCurrency(widgetData.budgetBalanceToAchieve)}
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <div className="border border-slate-700 bg-slate-700 px-3 py-2 text-white">
+                                    <h3 className="text-[11px] font-semibold">{fyLabel} Summary</h3>
                                 </div>
+                                <table className="w-full border-collapse border border-t-0 border-slate-200">
+                                    <tbody>
+                                        <tr className="bg-white">
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-[10px] font-medium text-slate-700">Completed Turnover YTD</td>
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-right text-[10px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.completedTurnoverYTD)}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-[10px] font-medium text-slate-700">Budget Turnover YTD</td>
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-right text-[10px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.budgetTurnoverYTD)}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-white">
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-[10px] font-medium text-slate-700">Forecast Work FY</td>
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-right text-[10px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.forecastWorkFY)}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-800">Completed Turnover + Work in Hand</td>
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-right text-[11px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.completedAndWorkInHand)}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-white">
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-[10px] font-medium text-slate-700">Budget Turnover</td>
+                                            <td className="border-b border-slate-200 px-2.5 py-1.5 text-right text-[10px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.budgetTurnover)}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="px-2.5 py-1.5 text-[10px] font-semibold text-slate-800">Budget Balance to Achieve</td>
+                                            <td className="px-2.5 py-1.5 text-right text-[11px] font-bold text-slate-800">
+                                                {formatCurrency(widgetData.budgetBalanceToAchieve)}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
 
                             {/* Future FYs Summary */}
                             {futureFYSummaries.length > 0 && (
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="flex gap-2.5">
                                     {futureFYSummaries.map((fy) => (
-                                        <div key={fy.fyYear} className="overflow-hidden rounded-lg border">
-                                            <div className="bg-slate-600 px-3 py-2 text-white">
-                                                <h4 className="text-sm font-semibold">{fy.fyLabel}</h4>
+                                        <div key={fy.fyYear} className="flex-1">
+                                            <div className="border border-slate-500 bg-slate-500 px-2.5 py-1.5 text-white">
+                                                <h4 className="text-[10px] font-semibold">{fy.fyLabel}</h4>
                                             </div>
-                                            <table className="w-full text-sm">
+                                            <table className="w-full border-collapse border border-t-0 border-slate-200">
                                                 <tbody>
                                                     <tr className="bg-white">
-                                                        <td className="border-b px-3 py-2 text-xs font-medium text-slate-600">Forecast Revenue</td>
-                                                        <td className="border-b px-3 py-2 text-right text-sm font-bold">
+                                                        <td className="border-b border-slate-200 px-2 py-1 text-[9px] font-medium text-slate-700">Forecast Revenue</td>
+                                                        <td className="border-b border-slate-200 px-2 py-1 text-right text-[9px] font-bold text-slate-800">
                                                             {formatCurrency(fy.completedAndWorkInHand)}
                                                         </td>
                                                     </tr>
                                                     <tr className="bg-slate-50">
-                                                        <td className="px-3 py-2 text-xs font-medium text-slate-600">Budget Target</td>
-                                                        <td className={`px-3 py-2 text-right text-sm font-bold ${fy.hasBudget ? '' : 'text-slate-400 italic'}`}>
+                                                        <td className="px-2 py-1 text-[9px] font-medium text-slate-700">Budget Target</td>
+                                                        <td className={`px-2 py-1 text-right text-[9px] font-bold ${fy.hasBudget ? 'text-slate-800' : 'text-slate-400'}`}>
                                                             {fy.hasBudget ? formatCurrency(fy.budgetTurnover) : 'Not Set'}
                                                         </td>
                                                     </tr>
@@ -1121,24 +1153,170 @@ export function TurnoverPrintReport({
                             )}
                         </div>
 
-                        {/* Project Counts */}
-                        <div>
-                            <h2 className="mb-3 text-lg font-semibold">Project Summary</h2>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 p-4">
-                                    <div className="text-xs font-semibold text-emerald-700 uppercase">SWCP Projects</div>
-                                    <div className="text-2xl font-bold text-emerald-700">{reportData.swcp.rows.length}</div>
+                        {/* Summary Stats + Sustainability */}
+                        <div className="flex-1">
+                            <div className="mb-3 grid grid-cols-3 gap-2.5">
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">SWCP Jobs</div>
+                                    <div className="text-base font-bold text-slate-800">{reportData.swcp.rows.length}</div>
                                 </div>
-                                <div className="rounded-lg border-l-4 border-l-blue-500 bg-blue-50 p-4">
-                                    <div className="text-xs font-semibold text-blue-700 uppercase">GRE Projects</div>
-                                    <div className="text-2xl font-bold text-blue-700">{reportData.gre.rows.length}</div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">GRE Jobs</div>
+                                    <div className="text-base font-bold text-slate-800">{reportData.gre.rows.length}</div>
                                 </div>
-                                <div className="rounded-lg border-l-4 border-l-violet-500 bg-violet-50 p-4">
-                                    <div className="text-xs font-semibold text-violet-700 uppercase">Forecast Projects</div>
-                                    <div className="text-2xl font-bold text-violet-700">{reportData.forecast.rows.length}</div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Forecast Jobs</div>
+                                    <div className="text-base font-bold text-slate-800">{reportData.forecast.rows.length}</div>
+                                </div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Total FY Contract</div>
+                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.fy_contract)}</div>
+                                </div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Total Contract Value</div>
+                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.total_contract_value)}</div>
+                                </div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Order Book</div>
+                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.remaining_order_book)}</div>
+                                </div>
+                            </div>
+
+                            {/* Sustainability KPI */}
+                            <div>
+                                <div className="overflow-hidden rounded-lg border border-slate-200">
+                                    <div className="bg-slate-700 px-4 py-3 text-white">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-xs font-bold">Business Sustainability (Next 12 Months)</h3>
+                                                <p className="mt-1 text-[10px] opacity-90">
+                                                    {sustainabilityData.status === 'healthy'
+                                                        ? 'HEALTHY - Business is Sustainable'
+                                                        : sustainabilityData.status === 'warning'
+                                                          ? 'CAUTION - Monitor Closely'
+                                                          : 'CRITICAL - Action Required'}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xl font-bold">{formatNumber(sustainabilityData.monthsSustainable, 1)} months</div>
+                                                <div className="text-[9px] opacity-90">KPI Target: {sustainabilityData.kpiThreshold} months</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3">
+                                        <button type="button" className="cursor-pointer text-left" onClick={() => setShowProfitBreakdown(!showProfitBreakdown)}>
+                                            <div className="mb-1 text-[9px] font-semibold uppercase text-slate-500">Total Profit (12mo)</div>
+                                            <div className="flex items-center gap-1">
+                                                <span className={`text-[13px] font-bold underline decoration-dotted ${sustainabilityData.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                    {formatCurrency(sustainabilityData.totalProfit)}
+                                                </span>
+                                                {showProfitBreakdown ? <ChevronUp className="h-3 w-3 text-slate-400" /> : <ChevronDown className="h-3 w-3 text-slate-400" />}
+                                            </div>
+                                        </button>
+                                        <div>
+                                            <div className="mb-1 text-[9px] font-semibold uppercase text-slate-500">Monthly Overhead</div>
+                                            <div className="text-[13px] font-bold text-slate-700">{formatCurrency(sustainabilityData.monthlyOverhead)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="mb-1 text-[9px] font-semibold uppercase text-slate-500">Avg Monthly Profit</div>
+                                            <div className={`text-[13px] font-bold ${sustainabilityData.averageMonthlyProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                {formatCurrency(sustainabilityData.averageMonthlyProfit)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="border-t border-slate-200 bg-white px-4 py-2 text-[9px] text-slate-500">
+                                        <strong>Formula:</strong> Months Sustainable = Total Profit (12mo) / Monthly Overhead
+                                    </div>
+                                    {showProfitBreakdown && (() => {
+                                        const visibleJobs = sustainabilityData.jobBreakdown.filter((job) => job.totalRevenue !== 0 || job.totalCost !== 0);
+                                        const totalRevenue = visibleJobs.reduce((s, j) => s + j.totalRevenue, 0);
+                                        const totalCost = visibleJobs.reduce((s, j) => s + j.totalCost, 0);
+                                        const totalProfit = visibleJobs.reduce((s, j) => s + j.totalProfit, 0);
+                                        const noCostJobs = visibleJobs.filter((j) => j.totalCost === 0 && j.totalRevenue > 0);
+                                        return (
+                                            <div className="border-t border-slate-300">
+                                                <div className="bg-slate-700 px-3 py-1.5 text-[10px] font-semibold text-white">
+                                                    Profit Breakdown by Job (Next 12 Months) — {visibleJobs.length} jobs
+                                                </div>
+                                                <div className="max-h-[400px] overflow-y-auto">
+                                                    <table className="w-full border-collapse text-[9px]">
+                                                        <thead className="sticky top-0 bg-slate-100">
+                                                            <tr>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-left font-semibold text-slate-600">Job</th>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-right font-semibold text-slate-600">Revenue</th>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-right font-semibold text-slate-600">Cost</th>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-right font-semibold text-slate-600">Margin</th>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-right font-semibold text-slate-600">Profit</th>
+                                                                <th className="border-b border-slate-200 px-2 py-1 text-right font-semibold text-slate-600">%</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {visibleJobs.map((job, idx) => {
+                                                                const margin = job.totalRevenue !== 0 ? (job.totalProfit / job.totalRevenue) * 100 : 0;
+                                                                const pctOfTotal = totalProfit !== 0 ? (job.totalProfit / totalProfit) * 100 : 0;
+                                                                const noCost = job.totalCost === 0 && job.totalRevenue > 0;
+                                                                return (
+                                                                    <tr key={job.jobNumber} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                                                        <td className="max-w-[200px] truncate border-b border-slate-100 px-2 py-1 text-slate-700" title={job.jobName}>
+                                                                            {noCost && <span className="mr-0.5 text-amber-500" title="No cost data">*</span>}
+                                                                            {job.jobName}
+                                                                        </td>
+                                                                        <td className="border-b border-slate-100 px-2 py-1 text-right text-slate-600">
+                                                                            {formatCompactCurrency(job.totalRevenue)}
+                                                                        </td>
+                                                                        <td className={`border-b border-slate-100 px-2 py-1 text-right ${noCost ? 'text-amber-500' : 'text-slate-600'}`}>
+                                                                            {noCost ? 'n/a' : formatCompactCurrency(job.totalCost)}
+                                                                        </td>
+                                                                        <td className="border-b border-slate-100 px-2 py-1 text-right text-slate-500">
+                                                                            {job.totalRevenue !== 0 ? `${margin.toFixed(0)}%` : '-'}
+                                                                        </td>
+                                                                        <td className={`border-b border-slate-100 px-2 py-1 text-right font-semibold ${job.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                                            {formatCompactCurrency(job.totalProfit)}
+                                                                        </td>
+                                                                        <td className="border-b border-slate-100 px-2 py-1 text-right text-slate-400">
+                                                                            {formatNumber(pctOfTotal, 1)}%
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                        <tfoot className="sticky bottom-0 bg-slate-200 font-semibold">
+                                                            <tr>
+                                                                <td className="px-2 py-1.5 text-slate-700">Total ({visibleJobs.length} jobs)</td>
+                                                                <td className="px-2 py-1.5 text-right text-slate-700">
+                                                                    {formatCompactCurrency(totalRevenue)}
+                                                                </td>
+                                                                <td className="px-2 py-1.5 text-right text-slate-700">
+                                                                    {formatCompactCurrency(totalCost)}
+                                                                </td>
+                                                                <td className="px-2 py-1.5 text-right text-slate-500">
+                                                                    {totalRevenue !== 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(0)}%` : '-'}
+                                                                </td>
+                                                                <td className={`px-2 py-1.5 text-right font-bold ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                                    {formatCompactCurrency(totalProfit)}
+                                                                </td>
+                                                                <td className="px-2 py-1.5 text-right text-slate-500">100%</td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                                {noCostJobs.length > 0 && (
+                                                    <div className="border-t border-amber-200 bg-amber-50 px-3 py-1.5 text-[8px] text-amber-700">
+                                                        <span className="mr-0.5 font-bold">*</span> {noCostJobs.length} job(s) have no cost data — profit equals revenue for those jobs
+                                                        (totalling {formatCurrency(noCostJobs.reduce((s, j) => s + j.totalProfit, 0))} of the {formatCurrency(totalProfit)} total).
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="border-t border-slate-200 pt-2.5 text-center">
+                        <p className="text-[8px] text-slate-500">This report was generated from the Turnover Forecast system. Data reflects the current state at time of generation.</p>
                     </div>
                 </div>
             </DialogContent>

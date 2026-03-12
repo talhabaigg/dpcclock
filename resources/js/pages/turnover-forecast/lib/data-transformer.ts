@@ -74,12 +74,25 @@ const safeNumber = (value: number | null | undefined): number => {
     return Number(value);
 };
 
+const currentMonthStr = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+})();
+
 /**
- * Get the monthly value, preferring actuals over forecast
+ * Get the monthly value: current month prefers forecast; past months prefer actuals
  */
 function getMonthlyValue(actuals: MonthlyData | undefined, forecast: MonthlyData | undefined, month: string): { value: number; isActual: boolean } {
     const actualValue = safeNumber(actuals?.[month]);
     const forecastValue = safeNumber(forecast?.[month]);
+
+    if (month === currentMonthStr) {
+        // Current month: prefer forecast, fall back to actual
+        if (forecastValue !== 0) {
+            return { value: forecastValue, isActual: false };
+        }
+        return { value: actualValue, isActual: true };
+    }
 
     if (actualValue !== 0) {
         return { value: actualValue, isActual: true };
@@ -331,9 +344,8 @@ export function createTargetRows(data: TurnoverRow[], months: string[], monthlyT
         // Calculate total revenue for this month
         let totalRevenue = 0;
         data.forEach((job) => {
-            const actualRevenue = safeNumber(job.revenue_actuals?.[month]);
-            const forecastRevenue = safeNumber(job.revenue_forecast?.[month]);
-            totalRevenue += actualRevenue || forecastRevenue;
+            const { value } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
+            totalRevenue += value;
         });
 
         const targetValue = safeNumber(monthlyTargets?.[month]);
