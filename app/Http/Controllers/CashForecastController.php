@@ -107,6 +107,12 @@ class CashForecastController extends Controller
         // Combine actuals (past months only), forecasts (with gap-filled past months), and retention
         $combinedData = $actualData->concat($forecastData)->concat($retentionRows);
 
+        // Exclude work cover cost codes — real amounts entered as general transactions
+        $excludedCostCodes = $rules['excluded_cost_codes'] ?? [];
+        if (! empty($excludedCostCodes)) {
+            $combinedData = $combinedData->filter(fn ($item) => ! in_array($item->cost_item, $excludedCostCodes));
+        }
+
         // Generate month range starting from current month
         $allMonths = $this->generateMonthRange(Carbon::now(), 12);
 
@@ -760,6 +766,11 @@ class CashForecastController extends Controller
 
             // Wage codes - NO GST applied (explicitly listed to exclude from GST)
             'wage_codes' => ['01-01', '03-01', '05-01', '07-01'],
+
+            // Work cover cost codes excluded from cashflow calculation.
+            // These are calculated as a % in job forecast but in cashflow
+            // the real amount is entered as a general transaction instead.
+            'excluded_cost_codes' => ['02-25', '04-25', '06-25', '08-25'],
 
             // =================================================================
             // RULE 2: Oncosts (prefixes 02, 04, 06, 08)
@@ -1861,6 +1872,7 @@ class CashForecastController extends Controller
     private function getCashOutSources(array $rules, string $currentMonth, Carbon $startMonth): array
     {
         $cashInCode = $rules['cash_in_code'] ?? '99-99';
+        $excludedCostCodes = $rules['excluded_cost_codes'] ?? [];
 
         // Use JobCostDetail for job cost actuals (wages + oncosts + vendor costs)
         // Only include actuals BEFORE current month (current month uses forecast only)
@@ -1871,6 +1883,7 @@ class CashForecastController extends Controller
             ->where('transaction_date', '<', $currentMonthStart)
             ->whereNotNull('cost_item')
             ->where('cost_item', '!=', '')
+            ->when(! empty($excludedCostCodes), fn ($q) => $q->whereNotIn('cost_item', $excludedCostCodes))
             ->get()
             ->map(function ($item) {
                 return [
@@ -1902,6 +1915,7 @@ class CashForecastController extends Controller
             ->where('job_forecast_data.cost_item', '!=', $cashInCode)
             ->where('job_forecast_data.cost_item', '!=', 'GST-PAYABLE')
             ->where('job_forecast_data.cost_item', 'not like', 'GENERAL-%')
+            ->when(! empty($excludedCostCodes), fn ($q) => $q->whereNotIn('job_forecast_data.cost_item', $excludedCostCodes))
             ->groupBy('job_forecast_data.month', 'job_forecast_data.cost_item', 'job_forecast_data.job_number')
             ->get()
             ->map(function ($row) {
