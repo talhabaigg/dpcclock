@@ -267,7 +267,7 @@ export function TurnoverPrintReport({
         const targetMonthsToDate = lastActualMonth ? months.filter((month) => month < lastActualMonth) : months;
         const budgetTurnoverYTD = targetMonthsToDate.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
         const budgetTurnover = months.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
-        const budgetBalanceToAchieve = Math.max(budgetTurnover - completedAndWorkInHand, 0);
+        const budgetVariance = completedAndWorkInHand - budgetTurnover;
 
         return {
             completedTurnoverYTD,
@@ -275,7 +275,7 @@ export function TurnoverPrintReport({
             forecastWorkFY,
             completedAndWorkInHand,
             budgetTurnover,
-            budgetBalanceToAchieve,
+            budgetVariance,
         };
     }, [data, months, lastActualMonth, monthlyTargets]);
 
@@ -671,8 +671,8 @@ export function TurnoverPrintReport({
                                             <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; font-size: 10px; font-weight: 700; text-align: right; color: #1e293b;">${formatCurrency(widgetData.budgetTurnover)}</td>
                                         </tr>
                                         <tr style="background: #f8fafc;">
-                                            <td style="padding: 6px 10px; font-size: 10px; font-weight: 600; color: #1e293b;">Budget Balance to Achieve</td>
-                                            <td style="padding: 6px 10px; font-size: 11px; font-weight: 700; text-align: right; color: #1e293b;">${formatCurrency(widgetData.budgetBalanceToAchieve)}</td>
+                                            <td style="padding: 6px 10px; font-size: 10px; font-weight: 600; color: #1e293b;">Budget Variance</td>
+                                            <td style="padding: 6px 10px; font-size: 11px; font-weight: 700; text-align: right; color: ${widgetData.budgetVariance >= 0 ? '#047857' : '#dc2626'};">${widgetData.budgetVariance >= 0 ? '+' : ''}${formatCurrency(widgetData.budgetVariance)}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1114,9 +1114,9 @@ export function TurnoverPrintReport({
                                             </td>
                                         </tr>
                                         <tr className="bg-slate-50">
-                                            <td className="px-2.5 py-1.5 text-[10px] font-semibold text-slate-800">Budget Balance to Achieve</td>
-                                            <td className="px-2.5 py-1.5 text-right text-[11px] font-bold text-slate-800">
-                                                {formatCurrency(widgetData.budgetBalanceToAchieve)}
+                                            <td className="px-2.5 py-1.5 text-[10px] font-semibold text-slate-800">Budget Variance</td>
+                                            <td className={`px-2.5 py-1.5 text-right text-[11px] font-bold ${widgetData.budgetVariance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                {widgetData.budgetVariance >= 0 ? '+' : ''}{formatCurrency(widgetData.budgetVariance)}
                                             </td>
                                         </tr>
                                     </tbody>
