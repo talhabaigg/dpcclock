@@ -31,6 +31,7 @@ class User extends Authenticatable implements HasPasskeys
         'phone',
         'disable_kiosk_notifications',
         'passkey_prompt_dismissed',
+        'disabled_at',
     ];
 
     /**
@@ -54,12 +55,18 @@ class User extends Authenticatable implements HasPasskeys
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'passkey_prompt_dismissed' => 'boolean',
+            'disabled_at' => 'datetime',
         ];
     }
 
     public function isAdmin(): bool
     {
         return $this->hasRole('admin');
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
     }
 
     public function managedKiosks()

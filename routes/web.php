@@ -118,6 +118,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.manage-managers');
     Route::get('/users/kiosk/{kiosk}/{user}/remove', [UserController::class, 'removeKiosk'])->name('users.kiosk.remove')
         ->middleware('permission:kiosks.manage-managers');
+    Route::post('/users/{user}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggle-disable')
+        ->middleware('permission:users.manage-roles');
 
     // ============================================
     // EMPLOYEE MANAGEMENT

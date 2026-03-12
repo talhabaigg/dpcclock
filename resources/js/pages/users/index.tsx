@@ -9,14 +9,16 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Loader2, Pencil, Plus, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -33,6 +35,7 @@ type User = {
     name: string;
     email: string;
     created_at: string;
+    disabled_at: string | null;
     roles: {
         permissions: Permission[];
         id: number;
@@ -41,13 +44,21 @@ type User = {
 };
 
 export default function UsersIndex() {
-    const { users, roles, flash } = usePage<{
+    const { users, roles, flash, filters } = usePage<{
         users: User[];
         roles: { id: number; name: string }[];
         flash: { success: string; error: string };
+        filters: { show_disabled: boolean };
     }>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const filteredUsers = users.filter((user) => user.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const toggleShowDisabled = (checked: boolean) => {
+        router.get('/users', checked ? { show_disabled: '1' } : {}, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
 
     // Confirmation dialog state
     const [confirmDialog, setConfirmDialog] = useState<{
@@ -130,8 +141,14 @@ export default function UsersIndex() {
             <div className="flex flex-col gap-4 p-3 sm:p-4">
                 {/* Toolbar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="relative w-full sm:max-w-xs">
-                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name" />
+                    <div className="flex items-center gap-4">
+                        <div className="relative w-full sm:max-w-xs">
+                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name" />
+                        </div>
+                        <label className="flex items-center gap-2 whitespace-nowrap">
+                            <Checkbox checked={filters.show_disabled} onCheckedChange={(checked) => toggleShowDisabled(checked === true)} />
+                            <span className="text-muted-foreground text-sm">Show disabled</span>
+                        </label>
                     </div>
                     <Link href="/users/create">
                         <Button size="sm" className="gap-2">
@@ -153,6 +170,11 @@ export default function UsersIndex() {
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
                                         <UserInfo user={{ ...user, email_verified_at: '', created_at: '', updated_at: '', phone: '' }} showEmail />
+                                        {user.disabled_at && (
+                                            <Badge variant="destructive" className="text-[10px]">
+                                                Disabled
+                                            </Badge>
+                                        )}
                                     </div>
                                     <Link href={`/users/edit/${user.id}`}>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -223,6 +245,11 @@ export default function UsersIndex() {
                                         <TableCell className="px-3">
                                             <div className="flex items-center gap-2">
                                                 <UserInfo user={{ ...user, email_verified_at: '', created_at: '', updated_at: '', phone: '' }} />
+                                                {user.disabled_at && (
+                                                    <Badge variant="destructive" className="text-[10px]">
+                                                        Disabled
+                                                    </Badge>
+                                                )}
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-3">{user.email}</TableCell>

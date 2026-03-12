@@ -19,7 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, Loader2, Plus, X } from 'lucide-react';
+import { AlertCircle, Ban, Loader2, Plus, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -33,6 +33,7 @@ type User = {
     name: string;
     email: string;
     created_at: string;
+    disabled_at: string | null;
     disable_kiosk_notifications: boolean;
     roles: {
         permissions: Permission[];
@@ -88,6 +89,10 @@ export default function UserEdit() {
     });
     const [removingKiosk, setRemovingKiosk] = useState(false);
 
+    // Disable account dialog
+    const [disableDialog, setDisableDialog] = useState(false);
+    const [togglingDisable, setTogglingDisable] = useState(false);
+
     // Show flash messages via toast
     useEffect(() => {
         if (flash?.success) {
@@ -142,6 +147,24 @@ export default function UserEdit() {
                 },
                 onFinish: () => {
                     setRemovingKiosk(false);
+                },
+            },
+        );
+    };
+
+    // Toggle account disable
+    const handleToggleDisable = () => {
+        setTogglingDisable(true);
+        router.post(
+            route('users.toggle-disable', user.id),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setDisableDialog(false);
+                },
+                onFinish: () => {
+                    setTogglingDisable(false);
                 },
             },
         );
@@ -338,6 +361,41 @@ export default function UserEdit() {
                         </CardContent>
                     </Card>
 
+                    {/* Account Status */}
+                    <Card>
+                        <CardHeader className="px-4 sm:px-6">
+                            <CardTitle className="text-base sm:text-lg">
+                                {user.disabled_at ? 'Enable account' : 'Disable account'}
+                            </CardTitle>
+                            <CardDescription>
+                                {user.disabled_at
+                                    ? 'This account is currently disabled and cannot log in'
+                                    : 'Prevent this user from logging in'}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-4 sm:px-6">
+                            <div className={`rounded-lg border p-4 ${user.disabled_at ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950' : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'}`}>
+                                <p className={`text-sm font-medium ${user.disabled_at ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    Warning
+                                </p>
+                                <p className={`mt-1 text-sm ${user.disabled_at ? 'text-amber-600/80 dark:text-amber-400/80' : 'text-red-600/80 dark:text-red-400/80'}`}>
+                                    {user.disabled_at
+                                        ? `Disabled on ${new Date(user.disabled_at).toLocaleDateString()}. Re-enabling will allow this user to log in again.`
+                                        : 'This will immediately log the user out and prevent them from signing in.'}
+                                </p>
+                                <Button
+                                    type="button"
+                                    variant={user.disabled_at ? 'outline' : 'destructive'}
+                                    className="mt-3 h-9 gap-2"
+                                    onClick={() => setDisableDialog(true)}
+                                >
+                                    {user.disabled_at ? <ShieldCheck className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                                    {user.disabled_at ? 'Enable account' : 'Disable account'}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     {/* Form Actions */}
                     <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:pt-0">
                         <Button type="submit" disabled={processing} className="h-10 w-full sm:h-9 sm:w-auto">
@@ -372,6 +430,38 @@ export default function UserEdit() {
                         <AlertDialogAction onClick={handleRemoveKiosk} disabled={removingKiosk}>
                             {removingKiosk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Remove
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Disable/Enable Account Confirmation Dialog */}
+            <AlertDialog open={disableDialog} onOpenChange={setDisableDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{user.disabled_at ? 'Enable Account' : 'Disable Account'}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {user.disabled_at ? (
+                                <>
+                                    Are you sure you want to re-enable <strong>{user.name}</strong>'s account? They will be able to log in again.
+                                </>
+                            ) : (
+                                <>
+                                    Are you sure you want to disable <strong>{user.name}</strong>'s account? They will be logged out and unable to
+                                    sign in until the account is re-enabled.
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={togglingDisable}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleToggleDisable}
+                            disabled={togglingDisable}
+                            className={user.disabled_at ? '' : 'bg-red-600 text-white hover:bg-red-700'}
+                        >
+                            {togglingDisable ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {user.disabled_at ? 'Enable' : 'Disable'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

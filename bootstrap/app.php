@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CheckAccountDisabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'kiosk.access' => \App\Http\Middleware\CheckKioskTokenValidation::class,
         ]);
         $middleware->web(append: [
+            CheckAccountDisabled::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

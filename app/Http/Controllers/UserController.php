@@ -10,13 +10,20 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with(['roles.permissions'])->get();
+        $query = User::with(['roles.permissions']);
+
+        if (! $request->boolean('show_disabled')) {
+            $query->whereNull('disabled_at');
+        }
 
         return Inertia::render('users/index', [
             'roles' => Role::all(),
-            'users' => $users,
+            'users' => $query->get(),
+            'filters' => [
+                'show_disabled' => $request->boolean('show_disabled'),
+            ],
         ]);
     }
 
@@ -74,5 +81,16 @@ class UserController extends Controller
         $user->managedKiosks()->detach($kiosk->id);
 
         return back()->with('success', 'Kiosk removed from user successfully.');
+    }
+
+    public function toggleDisable(User $user)
+    {
+        $user->update([
+            'disabled_at' => $user->isDisabled() ? null : now(),
+        ]);
+
+        $status = $user->isDisabled() ? 'disabled' : 'enabled';
+
+        return back()->with('success', "Account {$status} successfully.");
     }
 }
