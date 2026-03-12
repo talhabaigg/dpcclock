@@ -280,6 +280,41 @@ const ShowCashForecast = ({
         const dateStr = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
         const fmtDollar = (v: number) => `${v < 0 ? '-$' : '$'}${formatAmount(Math.abs(v))}`;
 
+        // Capture chart SVGs from the DOM, inlining computed colors
+        const captureSvg = (containerId: string): string => {
+            const container = document.getElementById(containerId);
+            if (!container) return '';
+            const svg = container.querySelector('.recharts-surface') as SVGElement | null;
+            if (!svg) return '';
+            const clone = svg.cloneNode(true) as SVGElement;
+            clone.setAttribute('width', '100%');
+            clone.setAttribute('height', '200');
+            clone.style.maxWidth = '100%';
+
+            // Resolve computed fill/stroke on every element so CSS vars aren't needed
+            const origElements = svg.querySelectorAll('*');
+            const cloneElements = clone.querySelectorAll('*');
+            origElements.forEach((orig, i) => {
+                const el = cloneElements[i] as SVGElement | undefined;
+                if (!el) return;
+                const cs = window.getComputedStyle(orig);
+                const fill = cs.fill;
+                const stroke = cs.stroke;
+                if (fill && fill !== 'none' && fill !== 'rgb(0, 0, 0)') {
+                    el.setAttribute('fill', fill);
+                }
+                if (stroke && stroke !== 'none' && stroke !== 'rgb(0, 0, 0)') {
+                    el.setAttribute('stroke', stroke);
+                }
+            });
+
+            return clone.outerHTML;
+        };
+
+        const barChartSvg = captureSvg('chart-bar');
+        const cumulativeChartSvg = captureSvg('chart-cumulative');
+        const waterfallChartSvg = captureSvg('chart-waterfall');
+
         // Build month header cells
         const monthHeaders = months
             .map((m) => `<th>${formatMonthHeader(m.month)}</th>`)
@@ -433,6 +468,41 @@ const ShowCashForecast = ({
                         .summary-item .value.positive { color: #166534; }
                         .summary-item .value.negative { color: #991b1b; }
 
+                        /* Charts */
+                        .charts-grid {
+                            display: grid;
+                            grid-template-columns: repeat(3, 1fr);
+                            gap: 16px;
+                            margin-bottom: 25px;
+                        }
+                        .chart-box {
+                            border: 1px solid #e5e7eb;
+                            border-radius: 6px;
+                            padding: 10px;
+                            background: #fafbfc;
+                            overflow: hidden;
+                        }
+                        .chart-box svg {
+                            display: block;
+                            width: 100% !important;
+                            height: auto !important;
+                            max-height: 200px;
+                        }
+                        .chart-title {
+                            font-size: 9px;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                            letter-spacing: 0.3px;
+                            color: #1a3a5c;
+                            margin-bottom: 6px;
+                        }
+                        .no-chart {
+                            font-size: 10px;
+                            color: #999;
+                            text-align: center;
+                            padding: 40px 0;
+                        }
+
                         /* Data table */
                         .data-table {
                             width: 100%;
@@ -541,6 +611,22 @@ const ShowCashForecast = ({
                             <div class="summary-item">
                                 <label>Ending Balance</label>
                                 <div class="value">${fmtDollar(endingBalance)}</div>
+                            </div>
+                        </div>
+
+                        <h2>Charts</h2>
+                        <div class="charts-grid">
+                            <div class="chart-box">
+                                <div class="chart-title">Monthly Cash Flow</div>
+                                ${barChartSvg || '<p class="no-chart">Chart not available</p>'}
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">Cumulative Cash Position</div>
+                                ${cumulativeChartSvg || '<p class="no-chart">Chart not available</p>'}
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">Cash Waterfall</div>
+                                ${waterfallChartSvg || '<p class="no-chart">Chart not available</p>'}
                             </div>
                         </div>
 
@@ -805,7 +891,7 @@ const ShowCashForecast = ({
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
                     {/* Monthly Cash Flow Chart */}
-                    <Card className="gap-0 overflow-hidden py-0">
+                    <Card id="chart-bar" className="gap-0 overflow-hidden py-0">
                         <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
                             <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Monthly Cash Flow</span>
                             <Button onClick={() => setShowFullscreenChart('bar')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
@@ -818,7 +904,7 @@ const ShowCashForecast = ({
                     </Card>
 
                     {/* Cumulative Chart */}
-                    <Card className="gap-0 overflow-hidden py-0">
+                    <Card id="chart-cumulative" className="gap-0 overflow-hidden py-0">
                         <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
                             <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cumulative Cash Position</span>
                             <Button onClick={() => setShowFullscreenChart('cumulative')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
@@ -836,7 +922,7 @@ const ShowCashForecast = ({
                     </Card>
 
                     {/* Waterfall Chart */}
-                    <Card className="gap-0 overflow-hidden py-0">
+                    <Card id="chart-waterfall" className="gap-0 overflow-hidden py-0">
                         <div className="bg-muted flex flex-wrap items-center gap-1.5 sm:gap-2 border-b px-2 py-1.5 sm:px-3 sm:py-2">
                             <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cash Waterfall</span>
                             <div className="flex flex-1 items-center justify-end gap-1 sm:gap-1.5">
