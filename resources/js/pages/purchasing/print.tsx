@@ -245,15 +245,14 @@ export default function RequisitionPrint() {
                         <tbody>
                             {groupedItems.map(([location, items]) => (
                                 <Fragment key={location}>
-                                    {/* Delivery location header */}
-                                    <tr className="border-t-2 border-slate-300 bg-slate-100">
-                                        <td colSpan={4} className="py-2 px-3 font-bold text-slate-700">
-                                            {location !== 'No Location Specified'
-                                                ? `Pack these items for delivery to ${location}`
-                                                : `${location} (${items.length} items)`
-                                            }
-                                        </td>
-                                    </tr>
+                                    {/* Delivery location header - skip for ungrouped items */}
+                                    {location !== 'No Location Specified' && (
+                                        <tr className="border-t-2 border-slate-300 bg-slate-100">
+                                            <td colSpan={4} className="py-2 px-3 font-bold text-slate-700">
+                                                Pack these items for delivery to {location}
+                                            </td>
+                                        </tr>
+                                    )}
                                     {/* Items for this location */}
                                     {items.map((item, index) => (
                                         <tr key={item.id} className="border-b border-slate-200">

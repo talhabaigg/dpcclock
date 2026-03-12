@@ -182,6 +182,10 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
             payload.new_item_description = es.save_mode === 'create_item' ? es.new_item_description : es.description;
             payload.new_item_price = es.new_item_price;
             payload.new_item_is_locked = es.new_item_is_locked;
+            // Sync line item description with new item description when creating
+            if (es.save_mode === 'create_item' && es.new_item_description) {
+                payload.description = es.new_item_description;
+            }
             if (es.save_mode === 'create_item' && es.new_item_supplier_category_id) {
                 payload.new_item_supplier_category_id = es.new_item_supplier_category_id;
             }
@@ -208,6 +212,7 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
         }
         const ctx = item.resolution_context!;
         const match = getMatchForItem(item);
+        const resolvedDescription = ctx.matched_catalog_description ?? match?.description ?? item.description;
 
         // Initialize edit state for quick apply
         setEditStates((prev) => ({
@@ -215,14 +220,14 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
             [item.id]: {
                 price_mode: 'calculated',
                 new_code: ctx.matched_catalog_code ?? item.code ?? '',
-                description: item.description,
+                description: resolvedDescription,
                 qty: item.qty,
                 unit_cost: calculated.unitCost,
                 cost_code: match?.cost_code ?? item.cost_code ?? '',
                 cost_code_id: match?.cost_code_id ?? null,
                 save_mode: 'one_off',
                 new_item_code: ctx.matched_catalog_code ?? item.code ?? '',
-                new_item_description: item.description,
+                new_item_description: resolvedDescription,
                 new_item_price: calculated.unitCost,
                 new_item_is_locked: false,
                 new_item_supplier_category_id: null,
@@ -234,7 +239,7 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
             line_item_id: item.id,
             resolution_type: 'custom_length',
             new_code: ctx.matched_catalog_code ?? item.code,
-            description: item.description,
+            description: resolvedDescription,
             qty: item.qty,
             unit_cost: calculated.unitCost,
             cost_code: match?.cost_code ?? item.cost_code ?? '',
@@ -539,6 +544,16 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
                                                     </RadioGroup>
                                                 </div>
                                             )}
+
+                                            {/* Description field (always editable) */}
+                                            <div>
+                                                <Label className="text-xs">Description</Label>
+                                                <Input
+                                                    value={es.description}
+                                                    onChange={(e) => updateEditState(item.id, { description: e.target.value })}
+                                                    className="h-8 text-xs"
+                                                />
+                                            </div>
 
                                             {/* Editable fields */}
                                             {(es.price_mode === 'direct' || !calculated) && (

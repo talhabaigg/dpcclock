@@ -193,16 +193,14 @@
             @endphp
 
             @foreach ($sortedGroups as $location => $items)
-                {{-- Delivery location header --}}
+                {{-- Delivery location header - skip for ungrouped items --}}
+                @if($location !== 'No Location Specified')
                 <tr class="heading">
                     <td colspan="2" style="background-color: #f1f1f1; padding: 8px; font-weight: bold;">
-                        @if($location !== 'No Location Specified')
-                            Pack these items for delivery to {{ $location }}
-                        @else
-                            {{ $location }} ({{ $items->count() }} items)
-                        @endif
+                        Pack these items for delivery to {{ $location }}
                     </td>
                 </tr>
+                @endif
                 {{-- Items for this location --}}
                 @foreach ($items as $line)
                     <tr class="item">
