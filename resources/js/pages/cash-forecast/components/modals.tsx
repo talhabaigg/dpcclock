@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { router } from '@inertiajs/react';
-import { Download, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { Download, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -148,6 +148,7 @@ type GeneralCostsModalProps = {
     newCost: Partial<GeneralCost>;
     onNewCostChange: (cost: Partial<GeneralCost>) => void;
     onAdd: () => void;
+    onUpdate: (id: number, data: Partial<GeneralCost>, onComplete?: () => void) => void;
     onDelete: (id: number, onComplete?: () => void) => void;
 };
 
@@ -160,10 +161,14 @@ export const GeneralCostsModal = ({
     newCost,
     onNewCostChange,
     onAdd,
+    onUpdate,
     onDelete,
 }: GeneralCostsModalProps) => {
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editCost, setEditCost] = useState<Partial<GeneralCost>>({});
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleConfirmDelete = (id: number) => {
         setIsDeleting(true);
@@ -173,9 +178,41 @@ export const GeneralCostsModal = ({
         });
     };
 
+    const startEdit = (cost: GeneralCost) => {
+        setEditingId(cost.id);
+        setEditCost({
+            name: cost.name,
+            amount: cost.amount,
+            type: cost.type,
+            flow_type: cost.flow_type,
+            frequency: cost.frequency,
+            category: cost.category,
+            start_date: cost.start_date,
+            end_date: cost.end_date,
+            includes_gst: cost.includes_gst,
+            is_active: cost.is_active,
+        });
+        setConfirmDeleteId(null);
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditCost({});
+    };
+
+    const saveEdit = () => {
+        if (!editingId || !editCost.name || !editCost.amount || !editCost.start_date) return;
+        setIsSaving(true);
+        onUpdate(editingId, editCost, () => {
+            setIsSaving(false);
+            setEditingId(null);
+            setEditCost({});
+        });
+    };
+
     return (
         <>
-            <Dialog open={open} onOpenChange={onOpenChange}>
+            <Dialog open={open} onOpenChange={(v) => { if (!v) cancelEdit(); onOpenChange(v); }}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>General Transactions</DialogTitle>
@@ -195,7 +232,9 @@ export const GeneralCostsModal = ({
                                                     'flex items-center justify-between rounded-lg p-3 transition-colors',
                                                     isConfirming
                                                         ? 'bg-destructive/10 border-2 border-destructive'
-                                                        : 'bg-muted'
+                                                        : editingId === cost.id
+                                                            ? 'bg-primary/5 border-2 border-primary'
+                                                            : 'bg-muted'
                                                 )}
                                             >
                                                 {isConfirming ? (
@@ -247,15 +286,26 @@ export const GeneralCostsModal = ({
                                                                 {cost.category && ` · ${categories[cost.category]}`}
                                                             </div>
                                                         </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => setConfirmDeleteId(cost.id)}
-                                                            disabled={isDeleting || confirmDeleteId !== null}
-                                                            className="text-destructive hover:text-destructive"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => startEdit(cost)}
+                                                                disabled={isDeleting || confirmDeleteId !== null || isSaving}
+                                                                className="text-muted-foreground hover:text-foreground"
+                                                            >
+                                                                <Pencil className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => setConfirmDeleteId(cost.id)}
+                                                                disabled={isDeleting || confirmDeleteId !== null || isSaving}
+                                                                className="text-destructive hover:text-destructive"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
                                                     </>
                                                 )}
                                             </div>
@@ -267,90 +317,103 @@ export const GeneralCostsModal = ({
 
                         <Separator />
 
-                        <div className="space-y-4">
-                            <Label>Add New Transaction</Label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs" htmlFor="cost-name">Name *</Label>
-                                    <Input
-                                        id="cost-name"
-                                        type="text"
-                                        value={newCost.name ?? ''}
-                                        onChange={(e) => onNewCostChange({ ...newCost, name: e.target.value })}
-                                        placeholder="e.g., Office Rent"
-                                    />
+                        {/* Edit form (shown when editing) */}
+                        {editingId !== null && (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label>Edit Transaction</Label>
+                                    <Button variant="ghost" size="sm" onClick={cancelEdit} className="h-7 gap-1 text-xs">
+                                        <X className="h-3 w-3" />
+                                        Cancel Edit
+                                    </Button>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs" htmlFor="cost-amount">Amount *</Label>
-                                    <div className="relative">
-                                        <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs" htmlFor="edit-cost-name">Name *</Label>
                                         <Input
-                                            id="cost-amount"
-                                            type="number"
-                                            value={newCost.amount ?? ''}
-                                            onChange={(e) =>
-                                                onNewCostChange({
-                                                    ...newCost,
-                                                    amount: parseFloat(e.target.value) || 0,
-                                                })
-                                            }
-                                            className="pl-8"
-                                            placeholder="0.00"
+                                            id="edit-cost-name"
+                                            type="text"
+                                            value={editCost.name ?? ''}
+                                            onChange={(e) => setEditCost({ ...editCost, name: e.target.value })}
+                                            placeholder="e.g., Office Rent"
                                         />
                                     </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Type</Label>
-                                    <Select
-                                        value={newCost.type ?? 'recurring'}
-                                        onValueChange={(value) =>
-                                            onNewCostChange({
-                                                ...newCost,
-                                                type: value as 'one_off' | 'recurring',
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="recurring">Recurring</SelectItem>
-                                            <SelectItem value="one_off">One-off</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Cash Flow</Label>
-                                    <Select
-                                        value={newCost.flow_type ?? 'cash_out'}
-                                        onValueChange={(value) =>
-                                            onNewCostChange({
-                                                ...newCost,
-                                                flow_type: value as 'cash_in' | 'cash_out',
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Cash flow" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="cash_out">Cash Out</SelectItem>
-                                            <SelectItem value="cash_in">Cash In</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                {newCost.type === 'recurring' && (
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs">Frequency</Label>
+                                        <Label className="text-xs" htmlFor="edit-cost-amount">Amount *</Label>
+                                        <div className="relative">
+                                            <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                                            <Input
+                                                id="edit-cost-amount"
+                                                type="number"
+                                                value={editCost.amount ?? ''}
+                                                onChange={(e) => setEditCost({ ...editCost, amount: parseFloat(e.target.value) || 0 })}
+                                                className="pl-8"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Type</Label>
                                         <Select
-                                            value={newCost.frequency ?? 'monthly'}
-                                            onValueChange={(value) => onNewCostChange({ ...newCost, frequency: value })}
+                                            value={editCost.type ?? 'recurring'}
+                                            onValueChange={(value) => setEditCost({ ...editCost, type: value as 'one_off' | 'recurring' })}
                                         >
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select frequency" />
+                                                <SelectValue placeholder="Select type" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {Object.entries(frequencies).map(([key, label]) => (
+                                                <SelectItem value="recurring">Recurring</SelectItem>
+                                                <SelectItem value="one_off">One-off</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Cash Flow</Label>
+                                        <Select
+                                            value={editCost.flow_type ?? 'cash_out'}
+                                            onValueChange={(value) => setEditCost({ ...editCost, flow_type: value as 'cash_in' | 'cash_out' })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Cash flow" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="cash_out">Cash Out</SelectItem>
+                                                <SelectItem value="cash_in">Cash In</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {editCost.type === 'recurring' && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Frequency</Label>
+                                            <Select
+                                                value={editCost.frequency ?? 'monthly'}
+                                                onValueChange={(value) => setEditCost({ ...editCost, frequency: value })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Object.entries(frequencies).map(([key, label]) => (
+                                                        <SelectItem key={key} value={key}>
+                                                            {label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Category</Label>
+                                        <Select
+                                            value={editCost.category ?? 'none'}
+                                            onValueChange={(value) => setEditCost({ ...editCost, category: value === 'none' ? '' : value })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Select category</SelectItem>
+                                                {Object.entries(categories).map(([key, label]) => (
                                                     <SelectItem key={key} value={key}>
                                                         {label}
                                                     </SelectItem>
@@ -358,70 +421,205 @@ export const GeneralCostsModal = ({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                )}
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Category</Label>
-                                    <Select
-                                        value={newCost.category ?? 'none'}
-                                        onValueChange={(value) =>
-                                            onNewCostChange({
-                                                ...newCost,
-                                                category: value === 'none' ? '' : value,
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select category" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Select category</SelectItem>
-                                            {Object.entries(categories).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>
-                                                    {label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs" htmlFor="cost-start-date">Start Date *</Label>
-                                    <Input
-                                        id="cost-start-date"
-                                        type="date"
-                                        value={newCost.start_date ?? ''}
-                                        onChange={(e) => onNewCostChange({ ...newCost, start_date: e.target.value })}
-                                    />
-                                </div>
-                                {newCost.type === 'recurring' && (
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="cost-end-date">End Date</Label>
+                                        <Label className="text-xs" htmlFor="edit-cost-start-date">Start Date *</Label>
                                         <Input
-                                            id="cost-end-date"
+                                            id="edit-cost-start-date"
                                             type="date"
-                                            value={newCost.end_date ?? ''}
-                                            onChange={(e) => onNewCostChange({ ...newCost, end_date: e.target.value })}
+                                            value={editCost.start_date ?? ''}
+                                            onChange={(e) => setEditCost({ ...editCost, start_date: e.target.value })}
                                         />
                                     </div>
-                                )}
-                                <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                    <Checkbox
-                                        id="includes-gst"
-                                        checked={newCost.includes_gst ?? true}
-                                        onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
-                                    />
-                                    <Label htmlFor="includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                    {editCost.type === 'recurring' && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs" htmlFor="edit-cost-end-date">End Date</Label>
+                                            <Input
+                                                id="edit-cost-end-date"
+                                                type="date"
+                                                value={editCost.end_date ?? ''}
+                                                onChange={(e) => setEditCost({ ...editCost, end_date: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
+                                        <Checkbox
+                                            id="edit-includes-gst"
+                                            checked={editCost.includes_gst ?? true}
+                                            onCheckedChange={(checked) => setEditCost({ ...editCost, includes_gst: Boolean(checked) })}
+                                        />
+                                        <Label htmlFor="edit-includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={cancelEdit} disabled={isSaving}>
+                                        Cancel
+                                    </Button>
+                                    <Button onClick={saveEdit} disabled={!editCost.name || !editCost.amount || !editCost.start_date || isSaving}>
+                                        <Save className="mr-1 h-4 w-4" />
+                                        {isSaving ? 'Saving...' : 'Save Changes'}
+                                    </Button>
                                 </div>
                             </div>
-                            <div className="flex justify-end">
-                                <Button onClick={onAdd} disabled={!newCost.name || !newCost.amount || !newCost.start_date || isDeleting}>
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add Transaction
-                                </Button>
+                        )}
+
+                        {/* Add form (hidden when editing) */}
+                        {editingId === null && (
+                            <div className="space-y-4">
+                                <Label>Add New Transaction</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs" htmlFor="cost-name">Name *</Label>
+                                        <Input
+                                            id="cost-name"
+                                            type="text"
+                                            value={newCost.name ?? ''}
+                                            onChange={(e) => onNewCostChange({ ...newCost, name: e.target.value })}
+                                            placeholder="e.g., Office Rent"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs" htmlFor="cost-amount">Amount *</Label>
+                                        <div className="relative">
+                                            <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                                            <Input
+                                                id="cost-amount"
+                                                type="number"
+                                                value={newCost.amount ?? ''}
+                                                onChange={(e) =>
+                                                    onNewCostChange({
+                                                        ...newCost,
+                                                        amount: parseFloat(e.target.value) || 0,
+                                                    })
+                                                }
+                                                className="pl-8"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Type</Label>
+                                        <Select
+                                            value={newCost.type ?? 'recurring'}
+                                            onValueChange={(value) =>
+                                                onNewCostChange({
+                                                    ...newCost,
+                                                    type: value as 'one_off' | 'recurring',
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="recurring">Recurring</SelectItem>
+                                                <SelectItem value="one_off">One-off</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Cash Flow</Label>
+                                        <Select
+                                            value={newCost.flow_type ?? 'cash_out'}
+                                            onValueChange={(value) =>
+                                                onNewCostChange({
+                                                    ...newCost,
+                                                    flow_type: value as 'cash_in' | 'cash_out',
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Cash flow" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="cash_out">Cash Out</SelectItem>
+                                                <SelectItem value="cash_in">Cash In</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {newCost.type === 'recurring' && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Frequency</Label>
+                                            <Select
+                                                value={newCost.frequency ?? 'monthly'}
+                                                onValueChange={(value) => onNewCostChange({ ...newCost, frequency: value })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Object.entries(frequencies).map(([key, label]) => (
+                                                        <SelectItem key={key} value={key}>
+                                                            {label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Category</Label>
+                                        <Select
+                                            value={newCost.category ?? 'none'}
+                                            onValueChange={(value) =>
+                                                onNewCostChange({
+                                                    ...newCost,
+                                                    category: value === 'none' ? '' : value,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Select category</SelectItem>
+                                                {Object.entries(categories).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>
+                                                        {label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs" htmlFor="cost-start-date">Start Date *</Label>
+                                        <Input
+                                            id="cost-start-date"
+                                            type="date"
+                                            value={newCost.start_date ?? ''}
+                                            onChange={(e) => onNewCostChange({ ...newCost, start_date: e.target.value })}
+                                        />
+                                    </div>
+                                    {newCost.type === 'recurring' && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs" htmlFor="cost-end-date">End Date</Label>
+                                            <Input
+                                                id="cost-end-date"
+                                                type="date"
+                                                value={newCost.end_date ?? ''}
+                                                onChange={(e) => onNewCostChange({ ...newCost, end_date: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
+                                        <Checkbox
+                                            id="includes-gst"
+                                            checked={newCost.includes_gst ?? true}
+                                            onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
+                                        />
+                                        <Label htmlFor="includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end">
+                                    <Button onClick={onAdd} disabled={!newCost.name || !newCost.amount || !newCost.start_date || isDeleting}>
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Add Transaction
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeleting}>
+                        <Button variant="outline" onClick={() => { cancelEdit(); onOpenChange(false); }} disabled={isDeleting || isSaving}>
                             Close
                         </Button>
                     </DialogFooter>

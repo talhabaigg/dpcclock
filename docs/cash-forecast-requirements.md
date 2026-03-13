@@ -107,6 +107,7 @@ Non-project cash items not tracked in Premier (rent, insurance, subscriptions, l
 | BR-07.2 | Recurring items auto-expanded into monthly amounts across the forecast window. |
 | BR-07.3 | Categories: Rent & Lease, Utilities, Insurance, Software & IT, Professional Services, Marketing, Equipment, Travel, Training, Other. |
 | BR-07.4 | Soft delete — removed from forecast but preserved for audit. |
+| BR-07.5 | All fields are editable after creation (name, amount, direction, type, frequency, category, GST flag, dates). |
 
 ---
 

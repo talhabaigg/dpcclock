@@ -221,6 +221,29 @@ const ShowCashForecast = ({
         );
     };
 
+    const handleUpdateGeneralCost = (id: number, data: Partial<GeneralCost>, onComplete?: () => void) => {
+        router.put(
+            `/cash-forecast/general-costs/${id}`,
+            {
+                ...data,
+                includes_gst: data.includes_gst ?? true,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ['generalCosts', 'months'],
+                onSuccess: () => {
+                    toast.success('Transaction updated successfully');
+                    onComplete?.();
+                },
+                onError: (errors) => {
+                    toast.error(Object.values(errors).flat().join(', ') || 'Failed to update transaction');
+                    onComplete?.();
+                },
+            },
+        );
+    };
+
     const handleDeleteGeneralCost = (id: number, onComplete?: () => void) => {
         if (!id) {
             toast.error('Invalid transaction ID');
@@ -1033,6 +1056,7 @@ const ShowCashForecast = ({
                 newCost={newCost}
                 onNewCostChange={setNewCost}
                 onAdd={handleAddGeneralCost}
+                onUpdate={handleUpdateGeneralCost}
                 onDelete={handleDeleteGeneralCost}
             />
 
