@@ -1,14 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
+import { router } from '@inertiajs/react';
 import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, RotateCcw } from 'lucide-react';
+import { Download, GripHorizontal, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-    formatCurrency,
     formatMonthHeader,
     getMonthCellClass,
     getMonthHeaderClass,
@@ -16,6 +16,7 @@ import {
     getRowClass,
     getValueCellClass,
 } from '../lib/cell-styles';
+import { formatCurrency } from '../lib/utils';
 import {
     calculateLabourRow,
     calculateTotalRow,
@@ -30,6 +31,23 @@ import { ForecastStatusCell } from './ForecastStatusCell';
 import { LabourCell } from './LabourCell';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+/** Column IDs for toggleable (non-month) columns — used for visibility sync */
+const TOGGLEABLE_COLUMN_IDS = [
+    'projectType',
+    'jobName',
+    'projectManager',
+    'overUnderBilling',
+    'forecastStatus',
+    'toDate',
+    'contractFY',
+    'totalValue',
+    'remainingFY',
+    'remainingTotal',
+] as const;
+
+/** Stable fallback counter for rows without an ID (avoids Date.now() instability) */
+let rowIdCounter = 0;
 
 // Custom header component with help icon and HoverCard
 interface HeaderWithHelpProps {
@@ -99,22 +117,8 @@ export function UnifiedForecastGrid({
     useEffect(() => {
         if (!gridRef.current?.api || viewMode === 'targets') return;
 
-        // Get all column IDs that should be hidden/shown based on React state
-        const allColumnIds = [
-            'projectType',
-            'jobName',
-            'projectManager',
-            'overUnderBilling',
-            'forecastStatus',
-            'toDate',
-            'contractFY',
-            'totalValue',
-            'remainingFY',
-            'remainingTotal',
-        ];
-
         // Apply visibility for each column
-        allColumnIds.forEach((colId) => {
+        TOGGLEABLE_COLUMN_IDS.forEach((colId) => {
             const shouldHide = hiddenColumns.has(colId);
             gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
         });
@@ -123,13 +127,12 @@ export function UnifiedForecastGrid({
     // Transform data based on view mode
     const rowData = useMemo(() => {
         if (viewMode === 'targets') {
-            return createTargetRows(data, months, monthlyTargets);
+            // Transform revenue rows first so createTargetRows can reuse them
+            const revenueRows = transformToUnifiedRows(data, months, lastActualMonth, 'revenue-only');
+            return createTargetRows(revenueRows, months, monthlyTargets);
         }
 
-        const rows = transformToUnifiedRows(data, months, lastActualMonth, viewMode);
-
-        // Calculate totals for pinned bottom
-        return rows;
+        return transformToUnifiedRows(data, months, lastActualMonth, viewMode);
     }, [data, months, lastActualMonth, viewMode, monthlyTargets]);
 
     // Calculate pinned bottom row data (totals)
@@ -199,7 +202,7 @@ export function UnifiedForecastGrid({
                     headerComponent: () => (
                         <HeaderWithHelp
                             displayName="Type"
-                            helpText='Indicates project source: "location" for jobs from Access Dimensions, "forecast_project" for manually created forecast projects'
+                            helpText="Indicates project source: Job for projects from Access Dimensions, Forecast for manually created forecast projects"
                         />
                     ),
                     field: 'projectType',
@@ -229,11 +232,10 @@ export function UnifiedForecastGrid({
                             rowData.projectType !== 'summary' &&
                             rowData.jobNumber
                         ) {
-                            if (rowData.projectType === 'forecast_project') {
-                                window.location.href = `/forecast-projects/${rowData.jobId}`;
-                            } else {
-                                window.location.href = `/location/${rowData.jobId}/job-forecast`;
-                            }
+                            const url = rowData.projectType === 'forecast_project'
+                                ? `/forecast-projects/${rowData.jobId}`
+                                : `/location/${rowData.jobId}/job-forecast`;
+                            router.visit(url);
                         }
                     },
                 },
@@ -433,7 +435,7 @@ export function UnifiedForecastGrid({
 
     // Get row ID for stable rendering
     const getRowId = useCallback((params: GetRowIdParams) => {
-        return (params.data as UnifiedRow)?.id ?? `row-${params.level}-${Date.now()}`;
+        return (params.data as UnifiedRow)?.id ?? `row-${params.level}-${rowIdCounter++}`;
     }, []);
 
     // Get row height - labour rows need more space
@@ -471,7 +473,7 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
         [updateCurrentColumnState],
     );
 
-    const saveColumnState = useCallback(() => {
+    const saveColumnStateImmediate = useCallback(() => {
         try {
             const state = gridRef.current?.api?.getColumnState();
             if (state) {
@@ -482,6 +484,13 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             // Ignore storage errors
         }
     }, []);
+
+    // Debounced version — avoids writing to localStorage on every pixel during column resize
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const saveColumnState = useCallback(() => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(saveColumnStateImmediate, 300);
+    }, [saveColumnStateImmediate]);
 
     const resetColumnState = useCallback(() => {
         gridRef.current?.api?.resetColumnState();
@@ -552,19 +561,7 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
         localStorage.removeItem(`${COLUMN_STATE_KEY}-hidden`);
         // Show all columns via AG Grid API
         if (gridRef.current?.api) {
-            const allColumnIds = [
-                'projectType',
-                'jobName',
-                'projectManager',
-                'overUnderBilling',
-                'forecastStatus',
-                'toDate',
-                'contractFY',
-                'totalValue',
-                'remainingFY',
-                'remainingTotal',
-            ];
-            gridRef.current.api.setColumnsVisible(allColumnIds, true);
+            gridRef.current.api.setColumnsVisible([...TOGGLEABLE_COLUMN_IDS], true);
         }
     }, []);
 
@@ -594,19 +591,7 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
 
             // Also explicitly set visibility via AG Grid API to ensure sync
             if (gridRef.current?.api) {
-                const allColumnIds = [
-                    'projectType',
-                    'jobName',
-                    'projectManager',
-                    'overUnderBilling',
-                    'forecastStatus',
-                    'toDate',
-                    'contractFY',
-                    'totalValue',
-                    'remainingFY',
-                    'remainingTotal',
-                ];
-                allColumnIds.forEach((colId) => {
+                TOGGLEABLE_COLUMN_IDS.forEach((colId) => {
                     const shouldHide = newHiddenColumns.has(colId);
                     gridRef.current?.api?.setColumnsVisible([colId], !shouldHide);
                 });
@@ -725,11 +710,11 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             {/* Resize handle */}
             {onHeightChange && (
                 <div
-                    className="group relative flex h-2 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                    className="group relative flex h-4 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
                     onMouseDown={handleResizeStart}
                     title="Drag to resize grid"
                 >
-                    <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
+                    <GripHorizontal className="text-border h-4 w-4 group-hover:text-blue-500 dark:group-hover:text-blue-400" />
                 </div>
             )}
         </div>

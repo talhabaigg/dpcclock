@@ -141,6 +141,15 @@ class LoadTimesheetsForLocation implements ShouldQueue
                     ->first();
             }
 
+            // Soft-delete incomplete clocks for same employee + same day
+            // Payroll is the source of truth; incomplete app records are preserved as trashed for reporting
+            if (! $clock) {
+                Clock::where('eh_employee_id', $ehId)
+                    ->whereNull('clock_out')
+                    ->whereDate('clock_in', $clock_in->toDateString())
+                    ->delete();
+            }
+
             if ($clock) {
                 $clock->fill($payLoad)->save();
                 $updated++;

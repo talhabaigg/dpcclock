@@ -3,6 +3,8 @@
  * for the single-grid architecture.
  */
 
+import { currentMonthStr, safeNumber } from './utils';
+
 export type RowType = 'revenue' | 'cost' | 'profit' | 'target' | 'variance' | 'labour' | 'total';
 
 export type MonthlyData = {
@@ -69,15 +71,6 @@ export type UnifiedRow = {
     labourForecast?: Record<string, number>;
 };
 
-const safeNumber = (value: number | null | undefined): number => {
-    if (value === null || value === undefined || Number.isNaN(value)) return 0;
-    return Number(value);
-};
-
-const currentMonthStr = (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-})();
 
 /**
  * Get the monthly value: current month prefers forecast; past months prefer actuals
@@ -113,11 +106,6 @@ export function transformToUnifiedRows(
 
     data.forEach((job) => {
         const isActualMonth: Record<string, boolean> = {};
-
-        // Determine which months are actual vs forecast
-        months.forEach((month) => {
-            isActualMonth[month] = lastActualMonth ? month <= lastActualMonth : false;
-        });
 
         // Revenue row (always visible)
         const revenueRow: UnifiedRow = {
@@ -289,9 +277,10 @@ export function calculateLabourRow(revenueRows: UnifiedRow[], data: TurnoverRow[
 }
 
 /**
- * Create target rows for the grid
+ * Create target rows for the grid.
+ * Accepts pre-transformed revenue rows to avoid re-deriving monthly values from raw data.
  */
-export function createTargetRows(data: TurnoverRow[], months: string[], monthlyTargets: Record<string, number>): UnifiedRow[] {
+export function createTargetRows(revenueRows: UnifiedRow[], months: string[], monthlyTargets: Record<string, number>): UnifiedRow[] {
     const targetRow: UnifiedRow = {
         id: 'target-row',
         rowType: 'target',
@@ -341,11 +330,10 @@ export function createTargetRows(data: TurnoverRow[], months: string[], monthlyT
     };
 
     months.forEach((month) => {
-        // Calculate total revenue for this month
+        // Sum revenue from pre-transformed rows
         let totalRevenue = 0;
-        data.forEach((job) => {
-            const { value } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
-            totalRevenue += value;
+        revenueRows.forEach((row) => {
+            totalRevenue += safeNumber((row as any)[`month_${month}`]);
         });
 
         const targetValue = safeNumber(monthlyTargets?.[month]);

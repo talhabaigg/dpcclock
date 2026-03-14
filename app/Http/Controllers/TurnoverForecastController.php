@@ -59,12 +59,13 @@ class TurnoverForecastController extends Controller
 
         // Filter by kiosk access if user is not admin or backoffice
         if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
-            // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
         }
 
         $locations = $locationsQuery->select('id', 'name', 'external_id', 'eh_parent_id')->get();
+        $jobNumbers = $locations->pluck('external_id')->toArray();
+        $locationIds = $locations->pluck('id')->toArray();
 
         // Get forecast projects - hide them if user has restricted access (not admin or backoffice)
         $forecastProjects = collect([]);
@@ -72,122 +73,181 @@ class TurnoverForecastController extends Controller
             $forecastProjects = ForecastProject::with(['costItems', 'revenueItems'])->get();
         }
 
-        // Build combined data
+        // ============ BATCH LOAD ALL DATA ============
+
+        // JobReportByCostItemAndCostType: budget (estimate_at_completion) and project_manager per job
+        $budgetsByJob = JobReportByCostItemAndCostType::whereIn('job_number', $jobNumbers)
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('SUM(estimate_at_completion) as budget'))
+            ->pluck('budget', 'job_number');
+
+        $projectManagersByJob = JobReportByCostItemAndCostType::whereIn('job_number', $jobNumbers)
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('MIN(project_manager) as project_manager'))
+            ->pluck('project_manager', 'job_number');
+
+        // JobSummary: current_estimate_revenue (max) and over_under_billing (max) per job
+        $jobSummariesByJob = JobSummary::whereIn('job_number', $jobNumbers)
+            ->groupBy('job_number')
+            ->select(
+                'job_number',
+                DB::raw('MAX(current_estimate_revenue) as current_estimate_revenue'),
+                DB::raw('MAX(over_under_billing) as over_under_billing')
+            )
+            ->get()
+            ->keyBy('job_number');
+
+        // JobCostDetail: cost_to_date (total amount) per job
+        $costToDateByJob = JobCostDetail::whereIn('job_number', $jobNumbers)
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('SUM(amount) as cost_to_date'))
+            ->pluck('cost_to_date', 'job_number');
+
+        // JobCostDetail: monthly cost actuals per job
+        $monthlyCostActuals = JobCostDetail::whereIn('job_number', $jobNumbers)
+            ->selectRaw("job_number, DATE_FORMAT(transaction_date, '%Y-%m') as month, SUM(amount) as amount")
+            ->groupBy('job_number', 'month')
+            ->orderBy('month')
+            ->get()
+            ->groupBy('job_number')
+            ->map(fn ($rows) => $rows->pluck('amount', 'month')->toArray());
+
+        // JobCostDetail: cost actuals this FY per job
+        $costActualsFYByJob = JobCostDetail::whereIn('job_number', $jobNumbers)
+            ->whereBetween('transaction_date', [$fyStartDate, $fyEndDate])
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('SUM(amount) as amount'))
+            ->pluck('amount', 'job_number');
+
+        // ArProgressBillingSummary: claimed_to_date per job
+        $claimedToDateByJob = ArProgressBillingSummary::whereIn('job_number', $jobNumbers)
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('SUM(this_app_work_completed) as claimed_to_date'))
+            ->pluck('claimed_to_date', 'job_number');
+
+        // ArProgressBillingSummary: claimed actuals this FY per job
+        $claimedActualsFYByJob = ArProgressBillingSummary::whereIn('job_number', $jobNumbers)
+            ->whereBetween('period_end_date', [$fyStartDate, $fyEndDate])
+            ->groupBy('job_number')
+            ->select('job_number', DB::raw('SUM(this_app_work_completed) as amount'))
+            ->pluck('amount', 'job_number');
+
+        // ArProgressBillingSummary: monthly revenue actuals per job
+        $monthlyRevenueActuals = ArProgressBillingSummary::whereIn('job_number', $jobNumbers)
+            ->selectRaw("job_number, DATE_FORMAT(period_end_date, '%Y-%m') as month, SUM(this_app_work_completed) as amount")
+            ->groupBy('job_number', 'month')
+            ->orderBy('month')
+            ->get()
+            ->groupBy('job_number')
+            ->map(fn ($rows) => $rows->pluck('amount', 'month')->toArray());
+
+        // JobForecast: get current month forecasts and fallback latest forecasts per job
+        $currentMonthForecasts = JobForecast::whereIn('job_number', $jobNumbers)
+            ->whereYear('forecast_month', $currentForecastMonth->year)
+            ->whereMonth('forecast_month', $currentForecastMonth->month)
+            ->orderBy('forecast_month', 'desc')
+            ->get()
+            ->unique('job_number')
+            ->keyBy('job_number');
+
+        // For jobs without a current-month forecast, get the latest forecast
+        $jobsNeedingFallback = collect($jobNumbers)->diff($currentMonthForecasts->keys());
+        $fallbackForecasts = collect();
+        if ($jobsNeedingFallback->isNotEmpty()) {
+            $fallbackForecasts = JobForecast::whereIn('job_number', $jobsNeedingFallback->values())
+                ->orderBy('forecast_month', 'desc')
+                ->get()
+                ->unique('job_number')
+                ->keyBy('job_number');
+        }
+
+        // Merge: current month forecast takes priority, fallback for the rest
+        $forecastsByJob = $currentMonthForecasts->union($fallbackForecasts);
+        $forecastIdsByJob = $forecastsByJob->map(fn ($f) => $f->id);
+
+        // JobForecastData: batch load all forecast data for resolved forecast IDs
+        $allForecastIds = $forecastIdsByJob->values()->filter()->toArray();
+        $allForecastData = collect();
+        if (! empty($allForecastIds)) {
+            $allForecastData = JobForecastData::whereIn('job_forecast_id', $allForecastIds)
+                ->whereIn('job_number', $jobNumbers)
+                ->select('job_number', 'job_forecast_id', 'grid_type', 'month', DB::raw('SUM(forecast_amount) as amount'))
+                ->groupBy('job_number', 'job_forecast_id', 'grid_type', 'month')
+                ->orderBy('month')
+                ->get();
+        }
+
+        // Index forecast data by job_number -> grid_type -> month
+        $forecastDataByJob = [];
+        foreach ($allForecastData as $row) {
+            $forecastDataByJob[$row->job_number][$row->grid_type][$row->month] = (float) $row->amount;
+        }
+
+        // LabourForecast: get latest approved forecast per location with entries
+        $labourForecasts = LabourForecast::whereIn('location_id', $locationIds)
+            ->where('status', LabourForecast::STATUS_APPROVED)
+            ->with('entries')
+            ->orderBy('forecast_month', 'desc')
+            ->get()
+            ->unique('location_id')
+            ->keyBy('location_id');
+
+        // JobForecastData for forecast projects: batch load
+        $forecastProjectIds = $forecastProjects->pluck('id')->toArray();
+        $forecastProjectData = collect();
+        if (! empty($forecastProjectIds)) {
+            $forecastProjectData = JobForecastData::whereIn('forecast_project_id', $forecastProjectIds)
+                ->select('forecast_project_id', 'grid_type', 'month', DB::raw('SUM(forecast_amount) as amount'))
+                ->groupBy('forecast_project_id', 'grid_type', 'month')
+                ->orderBy('month')
+                ->get();
+        }
+
+        // Index forecast project data by project_id -> grid_type -> month
+        $forecastProjectDataByProject = [];
+        foreach ($forecastProjectData as $row) {
+            $forecastProjectDataByProject[$row->forecast_project_id][$row->grid_type][$row->month] = (float) $row->amount;
+        }
+
+        // ============ BUILD COMBINED DATA ============
         $combinedData = [];
         $earliestActualMonth = null;
         $latestForecastMonth = null;
+        $fyMonths = $this->generateMonthRange(date('Y-m', strtotime($fyStartDate)), date('Y-m', strtotime($fyEndDate)));
+        $currentMonthStr = date('Y-m');
 
-        // Process actual locations
+        // Process actual locations (no more per-job queries)
         foreach ($locations as $location) {
             $jobNumber = $location->external_id;
 
-            // ============ COST DATA ============
-            // Budget (estimate at completion)
-            $budget = JobReportByCostItemAndCostType::where('job_number', $jobNumber)
-                ->sum('estimate_at_completion');
+            $budget = (float) ($budgetsByJob[$jobNumber] ?? 0);
+            $projectManager = $projectManagersByJob[$jobNumber] ?? 'Not Assigned';
 
-            // ============ Current Revenue ============
-            $currentEstimateRevenue = JobSummary::where('job_number', $jobNumber)
-                ->max('current_estimate_revenue') ?? 0;
+            $jobSummary = $jobSummariesByJob[$jobNumber] ?? null;
+            $currentEstimateRevenue = (float) ($jobSummary?->current_estimate_revenue ?? 0);
+            $over_under_billing = (float) ($jobSummary?->over_under_billing ?? 0);
+            $totalContractValue = $currentEstimateRevenue;
 
-            // Cost to date (sum of all job cost details)
-            $costToDate = JobCostDetail::where('job_number', $jobNumber)
-                ->sum('amount');
+            $costToDate = (float) ($costToDateByJob[$jobNumber] ?? 0);
+            $costActuals = $monthlyCostActuals[$jobNumber] ?? [];
+            $costActualsFY = (float) ($costActualsFYByJob[$jobNumber] ?? 0);
 
-            // Load project manager name
-            $projectManager = JobReportByCostItemAndCostType::where('job_number', $jobNumber)->value('project_manager') ?? 'Not Assigned';
+            $claimedToDate = (float) ($claimedToDateByJob[$jobNumber] ?? 0);
+            $claimedActualsFY = (float) ($claimedActualsFYByJob[$jobNumber] ?? 0);
+            $revenueActuals = $monthlyRevenueActuals[$jobNumber] ?? [];
 
-            // Load Over Under Billing
-            $over_under_billing = JobSummary::where('job_number', $jobNumber)
-                ->max('over_under_billing') ?? 0;
+            // Forecast data
+            $currentJobForecast = $forecastsByJob[$jobNumber] ?? null;
+            $costForecast = $forecastDataByJob[$jobNumber]['cost'] ?? [];
+            $revenueForecast = $forecastDataByJob[$jobNumber]['revenue'] ?? [];
 
-            // Get monthly cost actuals
-            $costActuals = JobCostDetail::where('job_number', $jobNumber)
-                ->selectRaw("DATE_FORMAT(transaction_date, '%Y-%m') as month, SUM(amount) as amount")
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get()
-                ->pluck('amount', 'month')
-                ->toArray();
-
-            // ============ REVENUE DATA ============
-            // Claimed to date (sum of all billing)
-            $claimedToDate = ArProgressBillingSummary::where('job_number', $jobNumber)
-                ->sum('this_app_work_completed');
-
-            // Total contract value (latest contract sum)
-            $totalContractValue = JobSummary::where('job_number', $jobNumber)
-                ->max('current_estimate_revenue') ?? 0;
-
-            // Claimed actuals this FY
-            $claimedActualsFY = ArProgressBillingSummary::where('job_number', $jobNumber)
-                ->whereBetween('period_end_date', [$fyStartDate, $fyEndDate])
-                ->sum('this_app_work_completed');
-
-            // Get monthly actuals (revenue)
-            $revenueActuals = ArProgressBillingSummary::where('job_number', $jobNumber)
-                ->selectRaw("DATE_FORMAT(period_end_date, '%Y-%m') as month, SUM(this_app_work_completed) as amount")
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get()
-                ->pluck('amount', 'month')
-                ->toArray();
-
-            // ============ FORECAST DATA ============
-            // Find last actual month across both cost and revenue
-            $lastCostMonth = ! empty($costActuals) ? max(array_keys($costActuals)) : null;
-            $lastRevenueMonth = ! empty($revenueActuals) ? max(array_keys($revenueActuals)) : null;
-            $lastActualMonth = max($lastCostMonth, $lastRevenueMonth);
-
-            // Track global earliest and determine latest forecast month
-            if (! empty($costActuals) || ! empty($revenueActuals)) {
-                $firstMonth = min(
-                    ! empty($costActuals) ? min(array_keys($costActuals)) : '9999-99',
-                    ! empty($revenueActuals) ? min(array_keys($revenueActuals)) : '9999-99'
-                );
+            // Track earliest actual month
+            $allActualMonthKeys = array_merge(array_keys($costActuals), array_keys($revenueActuals));
+            if (! empty($allActualMonthKeys)) {
+                $firstMonth = min($allActualMonthKeys);
                 if ($earliestActualMonth === null || $firstMonth < $earliestActualMonth) {
                     $earliestActualMonth = $firstMonth;
                 }
-            }
-
-            $currentJobForecast = JobForecast::where('job_number', $jobNumber)
-                ->whereYear('forecast_month', $currentForecastMonth->year)
-                ->whereMonth('forecast_month', $currentForecastMonth->month)
-                ->latest('forecast_month')
-                ->first();
-            $jobForecastId = $currentJobForecast?->id;
-            if (! $jobForecastId) {
-                $jobForecastId = JobForecast::where('job_number', $jobNumber)
-                    ->latest('forecast_month')
-                    ->value('id');
-            }
-
-            // Get monthly cost forecasts for the current forecast month
-            $costForecast = [];
-            if ($jobForecastId) {
-                $costForecast = JobForecastData::where('job_number', $jobNumber)
-                    ->where('job_forecast_id', $jobForecastId)
-                    ->where('grid_type', 'cost')
-                    ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                    ->groupBy('month')
-                    ->orderBy('month')
-                    ->get()
-                    ->pluck('amount', 'month')
-                    ->toArray();
-            }
-
-            // Get monthly revenue forecasts for the current forecast month
-            $revenueForecast = [];
-            if ($jobForecastId) {
-                $revenueForecast = JobForecastData::where('job_number', $jobNumber)
-                    ->where('job_forecast_id', $jobForecastId)
-                    ->where('grid_type', 'revenue')
-                    ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                    ->groupBy('month')
-                    ->orderBy('month')
-                    ->get()
-                    ->pluck('amount', 'month')
-                    ->toArray();
             }
 
             // Track latest forecast month
@@ -201,12 +261,9 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // ============ REVENUE FY CALCULATIONS ============
-            // Calculate revenue contract FY by preferring actuals over forecasts per month
+            // Revenue contract FY: prefer actuals over forecasts per month
             $revenueContractFY = 0;
-            $fyMonths = $this->generateMonthRange(date('Y-m', strtotime($fyStartDate)), date('Y-m', strtotime($fyEndDate)));
             foreach ($fyMonths as $month) {
-                // Prefer actual over forecast for each month
                 if (isset($revenueActuals[$month]) && $revenueActuals[$month] != 0) {
                     $revenueContractFY += $revenueActuals[$month];
                 } elseif (isset($revenueForecast[$month])) {
@@ -214,33 +271,19 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // Remaining revenue value FY = Contract FY - claimed actuals for this FY
             $remainingRevenueValueFY = $revenueContractFY - $claimedActualsFY;
-
-            // Remaining order book = total contract value - total claimed to date
             $remainingOrderBook = $totalContractValue - $claimedToDate;
 
-            // ============ COST FY CALCULATIONS ============
-            // Cost actuals this FY
-            $costActualsFY = JobCostDetail::where('job_number', $jobNumber)
-                ->whereBetween('transaction_date', [$fyStartDate, $fyEndDate])
-                ->sum('amount');
-
-            // Calculate cost contract FY:
-            // - Past months: prefer actuals over forecast
-            // - Current month and future: prefer forecast over actuals
-            $currentMonth = date('Y-m');
+            // Cost contract FY: past months prefer actuals, current/future prefer forecast
             $costContractFY = 0;
             foreach ($fyMonths as $month) {
-                if ($month < $currentMonth) {
-                    // Past month: prefer actuals over forecast
+                if ($month < $currentMonthStr) {
                     if (isset($costActuals[$month]) && $costActuals[$month] != 0) {
                         $costContractFY += $costActuals[$month];
                     } elseif (isset($costForecast[$month])) {
                         $costContractFY += $costForecast[$month];
                     }
                 } else {
-                    // Current or future month: prefer forecast over actuals
                     if (isset($costForecast[$month]) && $costForecast[$month] != 0) {
                         $costContractFY += $costForecast[$month];
                     } elseif (isset($costActuals[$month])) {
@@ -249,46 +292,28 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // Remaining cost value FY = Contract FY - cost actuals for this FY
             $remainingCostValueFY = $costContractFY - $costActualsFY;
-
-            // Remaining budget = total budget - cost to date
             $remainingBudget = $budget - $costToDate;
 
-            // ============ LABOUR FORECAST DATA ============
-            // Get the latest approved labour forecast for this location
-            // Then calculate total headcount by month from its entries (which have week_ending dates)
-            $latestApprovedForecast = LabourForecast::where('location_id', $location->id)
-                ->where('status', LabourForecast::STATUS_APPROVED)
-                ->with('entries')
-                ->orderBy('forecast_month', 'desc')
-                ->first();
-
+            // Labour forecast headcount
             $labourForecastHeadcount = [];
+            $latestApprovedForecast = $labourForecasts[$location->id] ?? null;
             if ($latestApprovedForecast) {
-                // Group entries by month (using week_ending date) and sum headcount
-                // Each entry has a week_ending date - we use that to determine which month it belongs to
-                $monthlyHeadcounts = [];
                 $monthlyWeekCounts = [];
 
                 foreach ($latestApprovedForecast->entries as $entry) {
-                    // Use week_ending to determine the month this entry belongs to
                     $monthKey = $entry->week_ending->format('Y-m');
+                    $weekKey = $entry->week_ending->format('Y-m-d');
 
-                    if (! isset($monthlyHeadcounts[$monthKey])) {
-                        $monthlyHeadcounts[$monthKey] = 0;
+                    if (! isset($monthlyWeekCounts[$monthKey])) {
                         $monthlyWeekCounts[$monthKey] = [];
                     }
-
-                    // Track headcount per week to calculate average
-                    $weekKey = $entry->week_ending->format('Y-m-d');
                     if (! isset($monthlyWeekCounts[$monthKey][$weekKey])) {
                         $monthlyWeekCounts[$monthKey][$weekKey] = 0;
                     }
                     $monthlyWeekCounts[$monthKey][$weekKey] += (float) $entry->headcount;
                 }
 
-                // Calculate average headcount per month (average of weekly totals)
                 foreach ($monthlyWeekCounts as $month => $weeks) {
                     $weekCount = count($weeks);
                     if ($weekCount > 0) {
@@ -297,12 +322,10 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // Determine forecast submission status from the actual forecast status field
+            // Forecast status
             $forecastStatus = 'not_started';
             $lastSubmittedAt = null;
-
             if ($currentJobForecast) {
-                // Map the actual status from the forecast model
                 $forecastStatus = match ($currentJobForecast->status) {
                     JobForecast::STATUS_PENDING => 'not_started',
                     JobForecast::STATUS_DRAFT => 'draft',
@@ -313,8 +336,7 @@ class TurnoverForecastController extends Controller
                 $lastSubmittedAt = $currentJobForecast->submitted_at?->toIso8601String();
             }
 
-            // Calculate sum of all actuals + forecasts (preferring actuals per month)
-            // This helps identify discrepancies with total_contract_value
+            // Calculated total revenue (actuals preferred over forecasts per month)
             $allMonthsSet = array_unique(array_merge(
                 array_keys($revenueActuals),
                 array_keys($revenueForecast)
@@ -323,11 +345,10 @@ class TurnoverForecastController extends Controller
             foreach ($allMonthsSet as $month) {
                 $actualVal = $revenueActuals[$month] ?? 0;
                 $forecastVal = $revenueForecast[$month] ?? 0;
-                // Prefer actual over forecast
                 $calculatedTotalRevenue += ($actualVal != 0) ? $actualVal : $forecastVal;
             }
 
-            // Determine company from eh_parent_id (cast to int for strict match comparison)
+            // Determine company from eh_parent_id
             $company = match ((int) $location->eh_parent_id) {
                 1198645 => 'GRE',
                 1249093 => 'SWCP',
@@ -341,27 +362,23 @@ class TurnoverForecastController extends Controller
                 'job_name' => $location->name,
                 'job_number' => $jobNumber,
                 'project_manager' => $projectManager,
-                'over_under_billing' => (float) $over_under_billing,
-                // Forecast status fields
+                'over_under_billing' => $over_under_billing,
                 'forecast_status' => $forecastStatus,
                 'last_submitted_at' => $lastSubmittedAt,
-                // Revenue fields
-                'current_estimate_revenue' => (float) $currentEstimateRevenue,
-                'current_estimate_cost' => (float) $budget,
-                'claimed_to_date' => (float) $claimedToDate,
+                'current_estimate_revenue' => $currentEstimateRevenue,
+                'current_estimate_cost' => $budget,
+                'claimed_to_date' => $claimedToDate,
                 'revenue_contract_fy' => (float) $revenueContractFY,
-                'total_contract_value' => (float) $totalContractValue,
+                'total_contract_value' => $totalContractValue,
                 'calculated_total_revenue' => (float) $calculatedTotalRevenue,
                 'revenue_variance' => (float) ($calculatedTotalRevenue - $totalContractValue),
                 'remaining_revenue_value_fy' => (float) $remainingRevenueValueFY,
                 'remaining_order_book' => (float) $remainingOrderBook,
-                // Cost fields
-                'cost_to_date' => (float) $costToDate,
+                'cost_to_date' => $costToDate,
                 'cost_contract_fy' => (float) $costContractFY,
-                'budget' => (float) $budget,
+                'budget' => $budget,
                 'remaining_cost_value_fy' => (float) $remainingCostValueFY,
                 'remaining_budget' => (float) $remainingBudget,
-                // Monthly data
                 'revenue_actuals' => $revenueActuals,
                 'revenue_forecast' => $revenueForecast,
                 'cost_actuals' => $costActuals,
@@ -372,31 +389,11 @@ class TurnoverForecastController extends Controller
 
         // Process forecast projects
         foreach ($forecastProjects as $project) {
-            // Budget from cost items
             $budget = $project->costItems->sum('estimate_at_completion');
-
-            // Total contract value from revenue items
             $totalContractValue = $project->revenueItems->sum('contract_sum_to_date');
 
-            // Get monthly cost forecasts
-            $costForecast = JobForecastData::where('forecast_project_id', $project->id)
-                ->where('grid_type', 'cost')
-                ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get()
-                ->pluck('amount', 'month')
-                ->toArray();
-
-            // Get monthly revenue forecasts
-            $revenueForecast = JobForecastData::where('forecast_project_id', $project->id)
-                ->where('grid_type', 'revenue')
-                ->select('month', DB::raw('SUM(forecast_amount) as amount'))
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get()
-                ->pluck('amount', 'month')
-                ->toArray();
+            $costForecast = $forecastProjectDataByProject[$project->id]['cost'] ?? [];
+            $revenueForecast = $forecastProjectDataByProject[$project->id]['revenue'] ?? [];
 
             // Track latest forecast month
             if (! empty($costForecast) || ! empty($revenueForecast)) {
@@ -409,49 +406,32 @@ class TurnoverForecastController extends Controller
                 }
             }
 
-            // ============ REVENUE FY CALCULATIONS ============
-            // Calculate revenue forecast this FY (no actuals for forecast projects)
-            $revenueForecastFY = 0;
+            // Revenue FY calculations (no actuals for forecast projects)
+            $revenueContractFY = 0;
             foreach ($revenueForecast as $month => $amount) {
                 if (
                     $month >= date('Y-m', strtotime($fyStartDate)) &&
                     $month <= date('Y-m', strtotime($fyEndDate))
                 ) {
-                    $revenueForecastFY += $amount;
+                    $revenueContractFY += $amount;
                 }
             }
-
-            // Revenue Contract FY = forecast this FY (no actuals for forecast projects)
-            $revenueContractFY = $revenueForecastFY;
-
-            // Remaining revenue value FY = Contract FY (same as contract FY for forecast projects)
             $remainingRevenueValueFY = $revenueContractFY;
-
-            // Remaining order book = total contract value (no claims yet)
             $remainingOrderBook = $totalContractValue;
 
-            // ============ COST FY CALCULATIONS ============
-            // Calculate cost forecast this FY (no actuals for forecast projects)
-            $costForecastFY = 0;
+            // Cost FY calculations (no actuals for forecast projects)
+            $costContractFY = 0;
             foreach ($costForecast as $month => $amount) {
                 if (
                     $month >= date('Y-m', strtotime($fyStartDate)) &&
                     $month <= date('Y-m', strtotime($fyEndDate))
                 ) {
-                    $costForecastFY += $amount;
+                    $costContractFY += $amount;
                 }
             }
-
-            // Cost Contract FY = forecast this FY (no actuals for forecast projects)
-            $costContractFY = $costForecastFY;
-
-            // Remaining cost value FY = Contract FY (same as contract FY for forecast projects)
             $remainingCostValueFY = $costContractFY;
-
-            // Remaining budget = total budget (no costs yet)
             $remainingBudget = $budget;
 
-            // Map the actual status from the forecast project model
             $forecastProjectStatus = match ($project->status) {
                 'pending' => 'not_started',
                 'draft' => 'draft',
@@ -460,7 +440,6 @@ class TurnoverForecastController extends Controller
                 default => 'not_started',
             };
 
-            // For forecast projects, calculated total is just sum of all forecasts
             $calculatedTotalRevenue = array_sum($revenueForecast);
 
             $combinedData[] = [
@@ -469,10 +448,8 @@ class TurnoverForecastController extends Controller
                 'company' => 'Forecast',
                 'job_name' => $project->name,
                 'job_number' => $project->project_number,
-                // Forecast status fields
                 'forecast_status' => $forecastProjectStatus,
                 'last_submitted_at' => null,
-                // Revenue fields
                 'claimed_to_date' => 0,
                 'current_estimate_revenue' => 0,
                 'revenue_contract_fy' => (float) $revenueContractFY,
@@ -481,13 +458,11 @@ class TurnoverForecastController extends Controller
                 'revenue_variance' => (float) ($calculatedTotalRevenue - $totalContractValue),
                 'remaining_revenue_value_fy' => (float) $remainingRevenueValueFY,
                 'remaining_order_book' => (float) $remainingOrderBook,
-                // Cost fields
                 'cost_to_date' => 0,
                 'cost_contract_fy' => (float) $costContractFY,
                 'budget' => (float) $budget,
                 'remaining_cost_value_fy' => (float) $remainingCostValueFY,
                 'remaining_budget' => (float) $remainingBudget,
-                // Monthly data
                 'revenue_actuals' => [],
                 'revenue_forecast' => $revenueForecast,
                 'cost_actuals' => [],
@@ -497,16 +472,13 @@ class TurnoverForecastController extends Controller
         }
 
         // Generate complete month range from earliest actual to latest forecast
-        // Ensure we have a start month (default to current month if no data)
         $startMonth = $earliestActualMonth ?? date('Y-m');
         $endMonth = $latestForecastMonth ?? date('Y-m');
 
-        // If we have actuals but no forecasts, extend to at least 12 months from now
         if ($earliestActualMonth && ! $latestForecastMonth) {
             $endMonth = date('Y-m', strtotime('+12 months'));
         }
 
-        // Generate all months in range
         $allMonths = $this->generateMonthRange($startMonth, $endMonth);
 
         $monthlyTargets = CompanyMonthlyRevenueTarget::whereIn('month', $allMonths)

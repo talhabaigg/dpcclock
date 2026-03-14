@@ -343,6 +343,28 @@
     border-bottom-color: #3b82f6 !important;
 }
 
+/* Current month header highlight */
+.forecast-header-current {
+    background-color: rgba(245, 158, 11, 0.12) !important; /* amber */
+    border-bottom: 2px solid #f59e0b !important;
+    font-weight: 700 !important;
+}
+
+.dark .forecast-header-current {
+    background-color: rgba(245, 158, 11, 0.18) !important;
+}
+
+/* Current month cell subtle side borders */
+.forecast-cell-current-month {
+    border-left: 1px solid rgba(245, 158, 11, 0.25) !important;
+    border-right: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+.dark .forecast-cell-current-month {
+    border-left-color: rgba(245, 158, 11, 0.3) !important;
+    border-right-color: rgba(245, 158, 11, 0.3) !important;
+}
+
 /* View mode toggle styling */
 .forecast-view-toggle {
     @apply flex gap-1 rounded-lg border border-slate-200 bg-slate-50/50 p-1;

@@ -45,7 +45,8 @@ class MissingSignOutReportController extends Controller
             'eh_employee_id' => 'nullable|string',
         ]);
 
-        $query = Clock::whereNull('clock_out')
+        $query = Clock::withTrashed()
+            ->whereNull('clock_out')
             ->with(['employee', 'kiosk.location']);
 
         if (! empty($filters['date_from'])) {

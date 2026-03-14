@@ -4,24 +4,7 @@
 
 import type { CellClassParams, CellClassRules } from 'ag-grid-community';
 import type { RowType, UnifiedRow } from './data-transformer';
-
-const currentMonthStr = (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-})();
-
-/**
- * Format currency in AUD
- */
-export const formatCurrency = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || Number.isNaN(value)) return '';
-    return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-};
+import { currentMonthStr, formatCurrency } from './utils';
 
 /**
  * Format month header from YYYY-MM to "Mon 'YY"
@@ -119,10 +102,15 @@ export const getValueCellClass = (params: CellClassParams): string => {
  * Get cell class for monthly value columns
  */
 export const getMonthCellClass = (month: string, lastActualMonth: string | null) => {
-    const isActual = lastActualMonth ? month <= lastActualMonth && month !== currentMonthStr : false;
+    const isCurrentMonth = month === currentMonthStr;
+    const isActual = lastActualMonth ? month <= lastActualMonth && !isCurrentMonth : false;
 
     return (params: CellClassParams): string => {
         const classes = ['text-right', 'tabular-nums', 'text-sm'];
+
+        if (isCurrentMonth) {
+            classes.push('forecast-cell-current-month');
+        }
         const rowType = getRowType(params);
         const data = params.data as UnifiedRow;
 
@@ -165,12 +153,20 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
  * Get header class for monthly columns
  */
 export const getMonthHeaderClass = (month: string, lastActualMonth: string | null): string => {
-    const isActual = lastActualMonth ? month <= lastActualMonth && month !== currentMonthStr : false;
+    const isCurrentMonth = month === currentMonthStr;
+    const isActual = lastActualMonth ? month <= lastActualMonth && !isCurrentMonth : false;
 
-    if (isActual) {
-        return 'forecast-header-actual';
+    const classes: string[] = [];
+
+    if (isCurrentMonth) {
+        classes.push('forecast-header-current');
+    } else if (isActual) {
+        classes.push('forecast-header-actual');
+    } else {
+        classes.push('forecast-header-forecast');
     }
-    return 'forecast-header-forecast';
+
+    return classes.join(' ');
 };
 
 /**

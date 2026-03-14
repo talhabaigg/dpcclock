@@ -2,19 +2,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TurnoverPrintReport } from './TurnoverPrintReport';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
+import { JobFilterDialog } from './components/JobFilterDialog';
 import { UnifiedForecastGrid, type ViewMode } from './components/UnifiedForecastGrid';
 import type { TurnoverRow } from './lib/data-transformer';
+import { currentMonthStr, formatCurrency, formatPercent, safeNumber } from './lib/utils';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Turnover Forecast', href: '/turnover-forecast' }];
 
@@ -25,33 +25,9 @@ const SELECTED_FY_KEY = 'turnover-forecast-selected-fy';
 type TurnoverForecastProps = {
     data: TurnoverRow[];
     months: string[];
-    earliestMonth: string | null;
     lastActualMonth: string | null;
-    latestForecastMonth: string | null;
-    fyStartDate: string;
-    fyEndDate: string;
     fyLabel: string;
     monthlyTargets: Record<string, number>;
-};
-
-const formatCurrency = (value: number | null | undefined): string => {
-    if (value === null || value === undefined) return '';
-    return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-};
-
-const formatPercent = (value: number, total: number): string => {
-    if (!total || total <= 0) return '0.0';
-    return ((value / total) * 100).toFixed(1);
-};
-
-const safeNumber = (value: number | null | undefined): number => {
-    if (value === null || value === undefined || Number.isNaN(value)) return 0;
-    return Number(value);
 };
 
 export default function TurnoverForecastIndex({ data, months, lastActualMonth, fyLabel, monthlyTargets }: TurnoverForecastProps) {
@@ -197,6 +173,22 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
         });
     };
 
+    const handleSelectAll = useCallback((ids: string[]) => {
+        setExcludedJobIds((prev) => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.delete(id));
+            return next;
+        });
+    }, []);
+
+    const handleDeselectAll = useCallback((ids: string[]) => {
+        setExcludedJobIds((prev) => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.add(id));
+            return next;
+        });
+    }, []);
+
     // Calculate totals for summary
     const totals = useMemo(() => {
         return filteredData.reduce(
@@ -210,17 +202,34 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 acc.calculatedTotalRevenue += safeNumber(row.calculated_total_revenue);
                 acc.revenueVariance += safeNumber(row.revenue_variance);
 
-                // For each month, prefer actuals over forecasts
+                // Use same logic as getMonthlyValue in data-transformer:
+                // current month prefers forecast; past months prefer actuals; use lastActualMonth as cutoff
                 filteredMonths.forEach((month) => {
                     const actualValue = safeNumber(row.revenue_actuals?.[month]);
                     const forecastValue = safeNumber(row.revenue_forecast?.[month]);
 
-                    if (actualValue !== 0) {
-                        // Use actual - count as completed turnover
-                        acc.completedTurnoverYTD += actualValue;
-                    } else if (forecastValue !== 0) {
-                        // Use forecast - count as work in hand
-                        acc.forecastRevenueYTG += forecastValue;
+                    let value: number;
+                    let isActual: boolean;
+
+                    if (month === currentMonthStr) {
+                        // Current month: prefer forecast, fall back to actual
+                        value = forecastValue !== 0 ? forecastValue : actualValue;
+                        isActual = forecastValue === 0 && actualValue !== 0;
+                    } else if (actualValue !== 0) {
+                        value = actualValue;
+                        isActual = true;
+                    } else {
+                        value = forecastValue;
+                        isActual = false;
+                    }
+
+                    // Classify using lastActualMonth as the global cutoff, consistent with grid styling
+                    const isActualMonth = lastActualMonth ? month <= lastActualMonth && month !== currentMonthStr : false;
+
+                    if (isActualMonth && isActual) {
+                        acc.completedTurnoverYTD += value;
+                    } else {
+                        acc.forecastRevenueYTG += value;
                     }
                 });
 
@@ -244,7 +253,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const completedTurnoverYTD = totals.completedTurnoverYTD;
     const workInHandFY = totals.forecastRevenueYTG;
     const totalFY = completedTurnoverYTD + workInHandFY;
-    const targetMonthsToDate = lastActualMonth ? filteredMonths.filter((month) => month < lastActualMonth) : filteredMonths;
+    const targetMonthsToDate = lastActualMonth ? filteredMonths.filter((month) => month <= lastActualMonth) : filteredMonths;
     const targetTurnoverYTD = targetMonthsToDate.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
     const turnoverTargetFYTotal = filteredMonths.reduce((sum, month) => sum + safeNumber(monthlyTargets?.[month]), 0);
     const remainingTargetToAchieve = Math.max(turnoverTargetFYTotal - totalFY, 0);
@@ -285,32 +294,6 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
         if (labels.length === 2) return `${labels[0]} & ${labels[1]} Turnover`;
         return `${labels.slice(0, 2).join(', ')} & ${labels.length - 2} more`;
     }, [selectedFYs, isAllTime, availableFYs]);
-
-    // Debug: Log jobs with revenue variance for investigation
-    useEffect(() => {
-        if (isAllTime) {
-            const jobsWithVariance = filteredData
-                .filter((row) => Math.abs(safeNumber(row.revenue_variance)) > 1000)
-                .map((row) => ({
-                    job: row.job_number,
-                    name: row.job_name,
-                    totalContractValue: safeNumber(row.total_contract_value),
-                    calculatedTotal: safeNumber(row.calculated_total_revenue),
-                    variance: safeNumber(row.revenue_variance),
-                }))
-                .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
-
-            if (jobsWithVariance.length > 0) {
-                console.group('Revenue Variance Analysis (All Time)');
-                console.log('Total Contract Value:', formatCurrency(totals.totalContractValue));
-                console.log('Calculated Total (Actuals + Forecasts):', formatCurrency(totals.calculatedTotalRevenue));
-                console.log('Total Variance:', formatCurrency(totals.revenueVariance));
-                console.log('Jobs with variance > $1,000:');
-                console.table(jobsWithVariance);
-                console.groupEnd();
-            }
-        }
-    }, [filteredData, isAllTime, totals]);
 
     const handleHeightChange = useCallback((newHeight: number) => {
         setGridHeight(newHeight);
@@ -377,7 +360,18 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" size="sm" className="h-8 gap-1.5">
                                         <Calendar className="h-3.5 w-3.5" />
-                                        <span className="max-w-[200px] truncate">{selectedFYLabel}</span>
+                                        <span className="max-w-[200px] truncate">
+                                            {isAllTime
+                                                ? 'All Time'
+                                                : selectedFYs.length === 1
+                                                  ? availableFYs.find((f) => f.value === selectedFYs[0])?.label ?? selectedFYs[0]
+                                                  : 'Financial Years'}
+                                        </span>
+                                        {selectedFYs.length > 1 && (
+                                            <span className="bg-primary text-primary-foreground ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold">
+                                                {selectedFYs.length}
+                                            </span>
+                                        )}
                                         <ChevronDown className="ml-0.5 h-3.5 w-3.5 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
@@ -438,8 +432,8 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                             </Button>
                             <Button onClick={() => setReportDialogOpen(true)} variant="outline" size="sm">
                                 <FileText className="mr-2 h-4 w-4" />
-                                <span className="hidden sm:inline">View Report</span>
-                                <span className="sm:hidden">Report</span>
+                                <span className="hidden sm:inline">Cumulative Report</span>
+                                <span className="sm:hidden">Cumulative</span>
                             </Button>
                             <Button onClick={() => setFilterDialogOpen(true)} variant="outline" size="sm">
                                 <Filter className="mr-2 h-4 w-4" />
@@ -620,7 +614,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                         </div>
 
                         {/* Variance callout */}
-                        {targetTurnoverYTD > 0 && (
+                        {targetTurnoverYTD > 0 ? (
                             <div
                                 className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs font-medium sm:items-center sm:py-2.5 sm:text-sm ${
                                     isAheadOfBudget
@@ -647,6 +641,11 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                     </span>
                                 </span>
                             </div>
+                        ) : (
+                            <div className="text-muted-foreground flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs sm:py-2.5 sm:text-sm dark:bg-slate-800/50">
+                                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" />
+                                <span>Set up monthly targets to track budget variance</span>
+                            </div>
                         )}
 
                     </CardContent>
@@ -655,9 +654,9 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 {/* Grids — one per active view */}
                 {(['revenue-only', 'expanded', 'targets'] as ViewMode[])
                     .filter((v) => activeViews.has(v))
-                    .map((mode, _i, arr) => (
+                    .map((mode) => (
                         <div key={mode} className="space-y-1">
-                            {arr.length > 1 && (
+                            {activeViews.size > 1 && (
                                 <h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
                                     {viewNames[mode]}
                                 </h3>
@@ -677,409 +676,17 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
             </div>
 
             {/* Filter Dialog */}
-            <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-                <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col overflow-hidden sm:max-h-[80vh] sm:max-w-2xl">
-                    <DialogHeader className="pb-2">
-                        <DialogTitle className="flex items-center justify-between">
-                            <span>Filter Jobs</span>
-                            <span className="text-muted-foreground text-sm font-normal">
-                                {filteredData.length}/{data.length} selected
-                            </span>
-                        </DialogTitle>
-                    </DialogHeader>
-
-                    <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-                        {/* Quick Filters - Grid layout for mobile */}
-                        <div className="space-y-3">
-                            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Quick Filters</div>
-                            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                                <Button
-                                    variant={excludedJobIds.size === 0 ? 'default' : 'outline'}
-                                    className="h-10 sm:h-9"
-                                    onClick={() => setExcludedJobIds(new Set())}
-                                >
-                                    Show All
-                                </Button>
-                                <Button
-                                    variant={excludedJobIds.size === data.length ? 'default' : 'outline'}
-                                    className="h-10 sm:h-9"
-                                    onClick={() => setExcludedJobIds(new Set(data.map((r) => `${r.type}-${r.id}`)))}
-                                >
-                                    Hide All
-                                </Button>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <Button
-                                    variant={
-                                        data.filter((r) => r.company === 'SWCP').length > 0 &&
-                                        data.filter((r) => r.company === 'SWCP').every((r) => !excludedJobIds.has(`${r.type}-${r.id}`)) &&
-                                        data.filter((r) => r.company !== 'SWCP').every((r) => excludedJobIds.has(`${r.type}-${r.id}`))
-                                            ? 'default'
-                                            : 'outline'
-                                    }
-                                    className="h-10 border-emerald-300 text-xs sm:h-9 sm:text-sm dark:border-emerald-700"
-                                    onClick={() => {
-                                        const nonSwcpIds = data.filter((r) => r.company !== 'SWCP').map((r) => `${r.type}-${r.id}`);
-                                        setExcludedJobIds(new Set(nonSwcpIds));
-                                    }}
-                                >
-                                    SWCP Only
-                                </Button>
-                                <Button
-                                    variant={
-                                        data.filter((r) => r.company === 'GRE').length > 0 &&
-                                        data.filter((r) => r.company === 'GRE').every((r) => !excludedJobIds.has(`${r.type}-${r.id}`)) &&
-                                        data.filter((r) => r.company !== 'GRE').every((r) => excludedJobIds.has(`${r.type}-${r.id}`))
-                                            ? 'default'
-                                            : 'outline'
-                                    }
-                                    className="h-10 border-blue-300 text-xs sm:h-9 sm:text-sm dark:border-blue-700"
-                                    onClick={() => {
-                                        const nonGreIds = data.filter((r) => r.company !== 'GRE').map((r) => `${r.type}-${r.id}`);
-                                        setExcludedJobIds(new Set(nonGreIds));
-                                    }}
-                                >
-                                    GRE Only
-                                </Button>
-                                <Button
-                                    variant={
-                                        data.filter((r) => r.company === 'Forecast').length > 0 &&
-                                        data.filter((r) => r.company === 'Forecast').every((r) => !excludedJobIds.has(`${r.type}-${r.id}`)) &&
-                                        data.filter((r) => r.company !== 'Forecast').every((r) => excludedJobIds.has(`${r.type}-${r.id}`))
-                                            ? 'default'
-                                            : 'outline'
-                                    }
-                                    className="h-10 border-violet-300 text-xs sm:h-9 sm:text-sm dark:border-violet-700"
-                                    onClick={() => {
-                                        const nonForecastIds = data.filter((r) => r.company !== 'Forecast').map((r) => `${r.type}-${r.id}`);
-                                        setExcludedJobIds(new Set(nonForecastIds));
-                                    }}
-                                >
-                                    Forecast Only
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Individual Selection */}
-                        <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Select Individual Jobs</div>
-
-                        {/* SWCP Jobs */}
-                        {data.filter((row) => row.company === 'SWCP').length > 0 && (
-                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-emerald-50 p-3 transition-colors hover:bg-emerald-100 sm:p-2 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-3 w-3 rounded-full bg-emerald-500" />
-                                        <span className="font-semibold text-emerald-800 dark:text-emerald-300">SWCP</span>
-                                        <span className="text-muted-foreground text-sm">
-                                            ({data.filter((r) => r.company === 'SWCP' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
-                                            {data.filter((r) => r.company === 'SWCP').length})
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <div className="space-y-1 bg-emerald-50/50 p-2 dark:bg-emerald-950/20">
-                                        <div className="flex gap-2 border-b border-emerald-200 pb-2 dark:border-emerald-800">
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const swcpIds = data.filter((r) => r.company === 'SWCP').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        swcpIds.forEach((id) => next.delete(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Select All
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const swcpIds = data.filter((r) => r.company === 'SWCP').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        swcpIds.forEach((id) => next.add(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Deselect All
-                                            </Button>
-                                        </div>
-                                        {data
-                                            .filter((row) => row.company === 'SWCP')
-                                            .map((row) => {
-                                                const key = `${row.type}-${row.id}`;
-                                                const isExcluded = excludedJobIds.has(key);
-                                                return (
-                                                    <label
-                                                        key={key}
-                                                        htmlFor={key}
-                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-emerald-100 active:bg-emerald-200 dark:hover:bg-emerald-900/30 dark:active:bg-emerald-900/50"
-                                                    >
-                                                        <Checkbox
-                                                            id={key}
-                                                            checked={!isExcluded}
-                                                            onCheckedChange={() => toggleJobExclusion(row)}
-                                                            className="h-5 w-5"
-                                                        />
-                                                        <span className="flex-1 text-sm leading-tight">
-                                                            {row.job_name}
-                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
-                                                        </span>
-                                                    </label>
-                                                );
-                                            })}
-                                    </div>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        )}
-
-                        {/* GRE Jobs */}
-                        {data.filter((row) => row.company === 'GRE').length > 0 && (
-                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-blue-200 dark:border-blue-800">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-blue-50 p-3 transition-colors hover:bg-blue-100 sm:p-2 dark:bg-blue-950/30 dark:hover:bg-blue-950/50">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-3 w-3 rounded-full bg-blue-500" />
-                                        <span className="font-semibold text-blue-800 dark:text-blue-300">GRE</span>
-                                        <span className="text-muted-foreground text-sm">
-                                            ({data.filter((r) => r.company === 'GRE' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
-                                            {data.filter((r) => r.company === 'GRE').length})
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <div className="space-y-1 bg-blue-50/50 p-2 dark:bg-blue-950/20">
-                                        <div className="flex gap-2 border-b border-blue-200 pb-2 dark:border-blue-800">
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const greIds = data.filter((r) => r.company === 'GRE').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        greIds.forEach((id) => next.delete(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Select All
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const greIds = data.filter((r) => r.company === 'GRE').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        greIds.forEach((id) => next.add(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Deselect All
-                                            </Button>
-                                        </div>
-                                        {data
-                                            .filter((row) => row.company === 'GRE')
-                                            .map((row) => {
-                                                const key = `${row.type}-${row.id}`;
-                                                const isExcluded = excludedJobIds.has(key);
-                                                return (
-                                                    <label
-                                                        key={key}
-                                                        htmlFor={key}
-                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-blue-100 active:bg-blue-200 dark:hover:bg-blue-900/30 dark:active:bg-blue-900/50"
-                                                    >
-                                                        <Checkbox
-                                                            id={key}
-                                                            checked={!isExcluded}
-                                                            onCheckedChange={() => toggleJobExclusion(row)}
-                                                            className="h-5 w-5"
-                                                        />
-                                                        <span className="flex-1 text-sm leading-tight">
-                                                            {row.job_name}
-                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
-                                                        </span>
-                                                    </label>
-                                                );
-                                            })}
-                                    </div>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        )}
-
-                        {/* Forecast Projects */}
-                        {data.filter((row) => row.company === 'Forecast').length > 0 && (
-                            <Collapsible defaultOpen className="overflow-hidden rounded-lg border border-violet-200 dark:border-violet-800">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-violet-50 p-3 transition-colors hover:bg-violet-100 sm:p-2 dark:bg-violet-950/30 dark:hover:bg-violet-950/50">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-3 w-3 rounded-full bg-violet-500" />
-                                        <span className="font-semibold text-violet-800 dark:text-violet-300">Forecast</span>
-                                        <span className="text-muted-foreground text-sm">
-                                            ({data.filter((r) => r.company === 'Forecast' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
-                                            {data.filter((r) => r.company === 'Forecast').length})
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <div className="space-y-1 bg-violet-50/50 p-2 dark:bg-violet-950/20">
-                                        <div className="flex gap-2 border-b border-violet-200 pb-2 dark:border-violet-800">
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const forecastIds = data.filter((r) => r.company === 'Forecast').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        forecastIds.forEach((id) => next.delete(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Select All
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const forecastIds = data.filter((r) => r.company === 'Forecast').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        forecastIds.forEach((id) => next.add(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Deselect All
-                                            </Button>
-                                        </div>
-                                        {data
-                                            .filter((row) => row.company === 'Forecast')
-                                            .map((row) => {
-                                                const key = `${row.type}-${row.id}`;
-                                                const isExcluded = excludedJobIds.has(key);
-                                                return (
-                                                    <label
-                                                        key={key}
-                                                        htmlFor={key}
-                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-violet-100 active:bg-violet-200 dark:hover:bg-violet-900/30 dark:active:bg-violet-900/50"
-                                                    >
-                                                        <Checkbox
-                                                            id={key}
-                                                            checked={!isExcluded}
-                                                            onCheckedChange={() => toggleJobExclusion(row)}
-                                                            className="h-5 w-5"
-                                                        />
-                                                        <span className="flex-1 text-sm leading-tight">
-                                                            {row.job_name}
-                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
-                                                        </span>
-                                                    </label>
-                                                );
-                                            })}
-                                    </div>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        )}
-
-                        {/* Unknown/Other Jobs */}
-                        {data.filter((row) => row.company === 'Unknown').length > 0 && (
-                            <Collapsible className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                                <CollapsibleTrigger className="flex w-full items-center justify-between bg-slate-50 p-3 transition-colors hover:bg-slate-100 sm:p-2 dark:bg-slate-900/30 dark:hover:bg-slate-900/50">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-3 w-3 rounded-full bg-slate-500" />
-                                        <span className="font-semibold text-slate-700 dark:text-slate-300">Other</span>
-                                        <span className="text-muted-foreground text-sm">
-                                            ({data.filter((r) => r.company === 'Unknown' && !excludedJobIds.has(`${r.type}-${r.id}`)).length}/
-                                            {data.filter((r) => r.company === 'Unknown').length})
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <div className="space-y-1 bg-slate-50/50 p-2 dark:bg-slate-950/20">
-                                        <div className="flex gap-2 border-b border-slate-200 pb-2 dark:border-slate-700">
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const unknownIds = data.filter((r) => r.company === 'Unknown').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        unknownIds.forEach((id) => next.delete(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Select All
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 flex-1 px-3 text-xs"
-                                                onClick={() => {
-                                                    const unknownIds = data.filter((r) => r.company === 'Unknown').map((r) => `${r.type}-${r.id}`);
-                                                    setExcludedJobIds((prev) => {
-                                                        const next = new Set(prev);
-                                                        unknownIds.forEach((id) => next.add(id));
-                                                        return next;
-                                                    });
-                                                }}
-                                            >
-                                                Deselect All
-                                            </Button>
-                                        </div>
-                                        {data
-                                            .filter((row) => row.company === 'Unknown')
-                                            .map((row) => {
-                                                const key = `${row.type}-${row.id}`;
-                                                const isExcluded = excludedJobIds.has(key);
-                                                return (
-                                                    <label
-                                                        key={key}
-                                                        htmlFor={key}
-                                                        className="flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-slate-100 active:bg-slate-200 dark:hover:bg-slate-800/30 dark:active:bg-slate-800/50"
-                                                    >
-                                                        <Checkbox
-                                                            id={key}
-                                                            checked={!isExcluded}
-                                                            onCheckedChange={() => toggleJobExclusion(row)}
-                                                            className="h-5 w-5"
-                                                        />
-                                                        <span className="flex-1 text-sm leading-tight">
-                                                            {row.job_name}
-                                                            <span className="text-muted-foreground block text-xs">{row.job_number}</span>
-                                                        </span>
-                                                    </label>
-                                                );
-                                            })}
-                                    </div>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        )}
-                    </div>
-
-                    {/* Footer with Done button for mobile */}
-                    <div className="mt-2 border-t pt-3 sm:hidden">
-                        <Button className="h-11 w-full" onClick={() => setFilterDialogOpen(false)}>
-                            Done
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <JobFilterDialog
+                open={filterDialogOpen}
+                onOpenChange={setFilterDialogOpen}
+                data={data}
+                filteredCount={filteredData.length}
+                excludedJobIds={excludedJobIds}
+                onSetExcludedJobIds={setExcludedJobIds}
+                onToggleJob={toggleJobExclusion}
+                onSelectAll={handleSelectAll}
+                onDeselectAll={handleDeselectAll}
+            />
 
             {/* Turnover Report Dialog */}
             <TurnoverReportDialog
