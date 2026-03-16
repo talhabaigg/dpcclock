@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Filter, Maximize2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from './dashboard-utils';
 
 export interface LabourBudgetRow {
     cost_item: string;
@@ -30,14 +31,6 @@ const chartConfig = {
     budget: { label: 'Budget', color: 'hsl(217, 91%, 60%)' },
     spent: { label: 'Spent', color: 'hsl(224, 76%, 30%)' },
 } satisfies ChartConfig;
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
 
 export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardProps) {
     const [selectedItems, setSelectedItems] = useState<Set<string>>(
@@ -75,6 +68,13 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
     const selectNone = () => setSelectedItems(new Set());
 
     const chartData = sortedData.filter((row) => selectedItems.has(row.cost_item));
+
+    const totals = useMemo(() => {
+        const totalBudget = chartData.reduce((sum, r) => sum + r.budget, 0);
+        const totalSpent = chartData.reduce((sum, r) => sum + r.spent, 0);
+        const percent = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+        return { budget: totalBudget, spent: totalSpent, percent };
+    }, [chartData]);
 
     const renderChart = (expanded = false) => {
         if (chartData.length === 0) {
@@ -220,10 +220,16 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
             <Card className="p-0 gap-0 h-full flex flex-col">
                 <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                        <CardTitle className="text-[11px] font-semibold leading-none">
-                            Budget Utilization by Type
-                        </CardTitle>
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex-1" />
+                        <div className="flex items-center gap-1.5">
+                            <CardTitle className="text-[11px] font-semibold leading-none">
+                                Budget Utilization:
+                            </CardTitle>
+                            <span className="text-[11px] font-semibold leading-none text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                                {totals.percent}%
+                            </span>
+                        </div>
+                        <div className="flex-1 flex justify-end items-center gap-0.5">
                             {renderFilterPopover()}
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setFullscreen(true)}>
                                 <Maximize2 className="h-3.5 w-3.5" />

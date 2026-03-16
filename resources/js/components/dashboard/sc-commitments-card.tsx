@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { BarChart3, Table2 } from 'lucide-react';
 import { useState } from 'react';
+import { formatCurrency, formatCompact } from './dashboard-utils';
 
 interface SCCommitmentsData {
     sc_outstanding: number;
@@ -18,27 +19,6 @@ interface SCCommitmentsCardProps {
     data: SCCommitmentsData | null;
     isEditing?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
 
 export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCardProps) {
     const [view, setView] = useState<'visual' | 'table'>('visual');

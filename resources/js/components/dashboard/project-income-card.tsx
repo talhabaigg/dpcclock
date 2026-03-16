@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { BarChart3, Table2, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { useState } from 'react';
 import FieldLabel from './field-label';
+import { formatCurrency, formatCompact, formatPercent } from './dashboard-utils';
 
 interface IncomeRow {
     income: number;
@@ -25,29 +26,6 @@ interface ProjectIncomeCardProps {
     data: ProjectIncomeData;
     isEditing?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
-
-const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 
 export default function ProjectIncomeCard({ data, isEditing }: ProjectIncomeCardProps) {
     const [view, setView] = useState<'visual' | 'table'>('visual');

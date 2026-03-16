@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { AlertTriangle, BarChart3, ChevronRight, Table2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { formatCurrency } from './dashboard-utils';
 
 interface VariationRow {
     status: string;
@@ -39,14 +40,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Workflow order for statuses. */
 const STATUS_ORDER: string[] = ['approved', 'sent', 'pending', 'draft', 'rejected'];
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
 
 export default function VariationsCard({ data, locationId, originalContractIncome, isEditing }: VariationsCardProps) {
     const drillDown = (params: { status?: string; type?: string }) => {

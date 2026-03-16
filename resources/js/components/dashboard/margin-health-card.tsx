@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
-import { useCallback, useState } from 'react';
 import type { JobSummary, Location } from '@/types';
+import { formatCurrency, useContainerSize } from './dashboard-utils';
 
 interface MarginHealthCardProps {
     location: Location & {
@@ -12,34 +12,10 @@ interface MarginHealthCardProps {
     isEditing?: boolean;
 }
 
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-type CardSize = 'compact' | 'normal';
-
-function getCardSize(w: number, h: number): CardSize {
-    if (w < 180 || h < 100) return 'compact';
-    return 'normal';
-}
-
 export default function MarginHealthCard({ location, isEditing }: MarginHealthCardProps) {
     const jobSummary = location.job_summary;
-    const [size, setSize] = useState<CardSize>('normal');
-
-    const contentRef = useCallback((node: HTMLDivElement | null) => {
-        if (!node) return;
-        const obs = new ResizeObserver(([entry]) => {
-            const { width, height } = entry.contentRect;
-            setSize(getCardSize(width, height));
-        });
-        obs.observe(node);
-        return () => obs.disconnect();
-    }, []);
+    const { ref: contentRef, width, height } = useContainerSize();
+    const compact = width > 0 && (width < 180 || height < 100);
 
     if (!jobSummary) {
         return (
@@ -72,8 +48,6 @@ export default function MarginHealthCard({ location, isEditing }: MarginHealthCa
     const isEroded = delta !== null && delta < -0.01;
     const isImproved = delta !== null && delta > 0.01;
     const isNegativeMargin = forecastMargin !== null && forecastMargin < 0;
-
-    const compact = size === 'compact';
 
     const heroClass = compact ? 'text-lg' : 'text-3xl';
     const labelClass = compact ? 'text-[8px]' : 'text-[10px]';

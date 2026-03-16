@@ -1,31 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { formatCompact } from './dashboard-utils';
 
 interface POCommitmentsCardProps {
     value: number | null;
     isEditing?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
 
 export default function POCommitmentsCard({ value, isEditing }: POCommitmentsCardProps) {
     return (

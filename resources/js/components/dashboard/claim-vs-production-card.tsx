@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { formatCurrency, formatCompact, useContainerSize } from './dashboard-utils';
 
 interface ClaimVsProductionCardProps {
     claimedPercent: number;
@@ -12,46 +12,8 @@ interface ClaimVsProductionCardProps {
     isEditing?: boolean;
 }
 
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
-
-type CardSize = 'compact' | 'normal';
-
-function getCardSize(w: number, h: number): CardSize {
-    if (w < 180 || h < 100) return 'compact';
-    return 'normal';
-}
-
 export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComplete, currentContractIncome, actualClaimedAmount, isEditing }: ClaimVsProductionCardProps) {
-    const [size, setSize] = useState<CardSize>('normal');
-
-    const contentRef = useCallback((node: HTMLDivElement | null) => {
-        if (!node) return;
-        const obs = new ResizeObserver(([entry]) => {
-            const { width, height } = entry.contentRect;
-            setSize(getCardSize(width, height));
-        });
-        obs.observe(node);
-        return () => obs.disconnect();
-    }, []);
+    const { ref: contentRef, width, height } = useContainerSize();
 
     if (dpcPercentComplete === null) {
         return (
@@ -77,7 +39,7 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
     const isOverBilled = billingDiff > 0;
     const isUnderBilled = billingDiff < 0;
 
-    const compact = size === 'compact';
+    const compact = width > 0 && (width < 180 || height < 100);
 
     const heroClass = compact ? 'text-sm' : 'text-base';
     const barLabelClass = compact ? 'text-[8px]' : 'text-[10px]';

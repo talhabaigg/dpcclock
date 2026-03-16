@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { JobSummary, Location } from '@/types';
+import { formatCurrency, formatCompact } from './dashboard-utils';
 
 interface OtherItemsCardProps {
     location: Location & {
@@ -10,27 +11,6 @@ interface OtherItemsCardProps {
     cashRetention?: number;
     isEditing?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
 
 export default function OtherItemsCard({ location, claimedToDate, cashRetention, isEditing }: OtherItemsCardProps) {
     const jobSummary = location.job_summary;

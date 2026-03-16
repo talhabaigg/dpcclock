@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { formatCurrency, formatCompact, formatDelta, useContainerSize } from './dashboard-utils';
 
 interface IncomeRow {
     income: number;
@@ -17,32 +17,6 @@ interface ThisMonthCardProps {
     isEditing?: boolean;
 }
 
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-
-const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
-
-const formatDelta = (value: number) => {
-    const sign = value >= 0 ? '+' : '';
-    return `(${sign}${formatCompact(value)})`;
-};
-
 type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
 function getCardSize(w: number, h: number): CardSize {
@@ -53,19 +27,11 @@ function getCardSize(w: number, h: number): CardSize {
 }
 
 export default function ThisMonthCard({ thisMonth, previousMonth, isEditing }: ThisMonthCardProps) {
-    const [size, setSize] = useState<CardSize>('md');
-
-    const contentRef = useCallback((node: HTMLDivElement | null) => {
-        if (!node) return;
-        const obs = new ResizeObserver(([entry]) => {
-            const { width, height } = entry.contentRect;
-            setSize(getCardSize(width, height));
-        });
-        obs.observe(node);
-        return () => obs.disconnect();
-    }, []);
+    const { ref: contentRef, width, height } = useContainerSize();
+    const size = width === 0 ? 'md' : getCardSize(width, height);
 
     const hasPrev = previousMonth.income !== 0 || previousMonth.cost !== 0;
+    const hasData = thisMonth.income !== 0 || thisMonth.cost !== 0;
 
     const margin = thisMonth.profitPercent;
     const prevMargin = previousMonth.profitPercent;
@@ -128,65 +94,77 @@ export default function ThisMonthCard({ thisMonth, previousMonth, isEditing }: T
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
             <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                    <CardTitle className="text-[11px] font-semibold leading-none">This Month</CardTitle>
+                    <CardTitle className="text-[11px] font-semibold leading-none">Monthly Margin</CardTitle>
                 </div>
             </CardHeader>
             <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col items-center justify-center gap-1 px-2">
-                <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="flex flex-col items-center cursor-default">
-                                {/* Hero margin */}
-                                {size === 'xs' ? (
-                                    <div className="flex items-center gap-1">
-                                        <span
-                                            className={cn(
-                                                heroClass,
-                                                'font-bold tabular-nums leading-none',
-                                                isNegativeMargin && 'text-red-600 dark:text-red-400',
+                {!hasData ? (
+                    <span className={cn(labelClass, 'text-muted-foreground')}>No data this month</span>
+                ) : (
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex flex-col items-center cursor-default">
+                                    {size === 'xs' ? (
+                                        <div className="flex items-center gap-1">
+                                            <span
+                                                className={cn(
+                                                    heroClass,
+                                                    'font-bold tabular-nums leading-none',
+                                                    isNegativeMargin && 'text-red-600 dark:text-red-400',
+                                                )}
+                                            >
+                                                {margin.toFixed(1)}
+                                                <span className="text-[60%] align-super">%</span>
+                                            </span>
+                                            {deltaBadge}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {marginDelta !== null && deltaBadge}
+                                            <span
+                                                className={cn(
+                                                    heroClass,
+                                                    'font-bold tabular-nums leading-none',
+                                                    isNegativeMargin && 'text-red-600 dark:text-red-400',
+                                                )}
+                                            >
+                                                {margin.toFixed(1)}
+                                                <span className="text-[60%] align-super">%</span>
+                                            </span>
+                                            <span className={cn(labelClass, 'text-muted-foreground leading-none mt-0.5')}>
+                                                Margin
+                                            </span>
+                                            {size !== 'sm' && (
+                                                <span className={cn(
+                                                    labelClass,
+                                                    'tabular-nums leading-none mt-1',
+                                                    thisMonth.profit < 0 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-muted-foreground',
+                                                )}>
+                                                    {formatCompact(thisMonth.profit)} profit
+                                                </span>
                                             )}
-                                        >
-                                            {margin.toFixed(1)}
-                                            <span className="text-[60%] align-super">%</span>
-                                        </span>
-                                        {deltaBadge}
-                                    </div>
-                                ) : (
+                                        </>
+                                    )}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-[10px] max-w-[260px]">
+                                <div className="font-medium mb-0.5">This Month</div>
+                                <div>Income: {formatCurrency(thisMonth.income)}{incomeDelta !== null && <span className={cn('ml-1', incomeDelta >= 0 ? 'text-green-400' : 'text-red-400')}>{formatDelta(incomeDelta)}</span>}</div>
+                                <div>Cost: {formatCurrency(thisMonth.cost)}{costDelta !== null && <span className={cn('ml-1', costDelta <= 0 ? 'text-green-400' : 'text-amber-400')}>{formatDelta(costDelta)}</span>}</div>
+                                <div>Profit: {formatCurrency(thisMonth.profit)}{profitDelta !== null && <span className={cn('ml-1', profitDelta >= 0 ? 'text-green-400' : 'text-red-400')}>{formatDelta(profitDelta)}</span>}</div>
+                                {hasPrev && (
                                     <>
-                                        {marginDelta !== null && deltaBadge}
-                                        <span
-                                            className={cn(
-                                                heroClass,
-                                                'font-bold tabular-nums leading-none',
-                                                isNegativeMargin && 'text-red-600 dark:text-red-400',
-                                            )}
-                                        >
-                                            {margin.toFixed(1)}
-                                            <span className="text-[60%] align-super">%</span>
-                                        </span>
-                                        <span className={cn(labelClass, 'text-muted-foreground leading-none mt-0.5')}>
-                                            Margin
-                                        </span>
+                                        <div className="border-t border-border/50 mt-0.5 pt-0.5 font-medium">Previous Month</div>
+                                        <div>Income: {formatCurrency(previousMonth.income)}</div>
+                                        <div>Cost: {formatCurrency(previousMonth.cost)}</div>
+                                        <div>Profit: {formatCurrency(previousMonth.profit)} ({previousMonth.profitPercent.toFixed(2)}%)</div>
                                     </>
                                 )}
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-[10px] max-w-[260px]">
-                            <div className="font-medium mb-0.5">This Month</div>
-                            <div>Income: {formatCurrency(thisMonth.income)}{incomeDelta !== null && <span className={cn('ml-1', incomeDelta >= 0 ? 'text-green-400' : 'text-red-400')}>{formatDelta(incomeDelta)}</span>}</div>
-                            <div>Cost: {formatCurrency(thisMonth.cost)}{costDelta !== null && <span className={cn('ml-1', costDelta <= 0 ? 'text-green-400' : 'text-amber-400')}>{formatDelta(costDelta)}</span>}</div>
-                            <div>Profit: {formatCurrency(thisMonth.profit)}{profitDelta !== null && <span className={cn('ml-1', profitDelta >= 0 ? 'text-green-400' : 'text-red-400')}>{formatDelta(profitDelta)}</span>}</div>
-                            {hasPrev && (
-                                <>
-                                    <div className="border-t border-border/50 mt-0.5 pt-0.5 font-medium">Previous Month</div>
-                                    <div>Income: {formatCurrency(previousMonth.income)}</div>
-                                    <div>Cost: {formatCurrency(previousMonth.cost)}</div>
-                                    <div>Profit: {formatCurrency(previousMonth.profit)} ({previousMonth.profitPercent.toFixed(2)}%)</div>
-                                </>
-                            )}
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </CardContent>
         </Card>
     );

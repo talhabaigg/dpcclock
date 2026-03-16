@@ -25,14 +25,7 @@ const COMMITMENT_COLORS: Record<string, string> = {
     SC: 'hsl(38, 92%, 50%)',
 };
 
-const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-};
+import { formatCurrency } from './dashboard-utils';
 
 const formatCompact = (value: number) => {
     if (Math.abs(value) >= 1000) {
