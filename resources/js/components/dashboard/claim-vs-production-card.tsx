@@ -46,13 +46,6 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
     const barValueClass = compact ? 'text-[9px]' : 'text-[11px]';
     const labelClass = compact ? 'text-[8px]' : 'text-[9px]';
 
-    // Semantic color for the DPC bar — mirrors the hero state
-    const dpcBarColor = isAhead
-        ? 'bg-green-500'
-        : isBehind
-            ? 'bg-amber-500'
-            : 'bg-foreground/50';
-
     const dpcTextColor = isAhead
         ? 'text-green-600 dark:text-green-400'
         : isBehind
@@ -103,46 +96,23 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                         </TooltipContent>
                     </Tooltip>
 
-                    {/* Comparison bars — Claimed is grey baseline, DPC carries semantic color */}
-                    <div className="flex flex-col gap-1" role="group" aria-label="Claim vs production progress">
-                        {/* Claimed bar — grey baseline */}
-                        <div className="flex items-center gap-1.5">
-                            <span className={cn(barLabelClass, 'font-medium min-w-[36px] shrink-0 text-muted-foreground')}>Claimed</span>
-                            <div
-                                className="flex-1 h-2 rounded-full bg-muted/60 overflow-hidden"
-                                role="progressbar"
-                                aria-label={`Claimed: ${claimedPercent.toFixed(0)}%`}
-                                aria-valuenow={Math.round(claimedPercent)}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                            >
-                                <div
-                                    className="h-full rounded-full bg-muted-foreground/40 transition-all duration-500"
-                                    style={{ width: `${Math.min(claimedPercent, 100)}%` }}
-                                />
-                            </div>
-                            <span className={cn(barValueClass, 'tabular-nums font-semibold text-muted-foreground shrink-0 min-w-[28px] text-right')}>
+                    {/* Side-by-side comparison metrics */}
+                    <div className="flex items-center justify-center gap-0" role="group" aria-label="Claim vs production comparison">
+                        {/* Claimed metric */}
+                        <div className="flex-1 flex flex-col items-center gap-0.5">
+                            <span className={cn(barLabelClass, 'font-medium text-muted-foreground')}>Claimed</span>
+                            <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
                                 {claimedPercent.toFixed(0)}%
                             </span>
                         </div>
 
-                        {/* DPC bar — semantic accent color */}
-                        <div className="flex items-center gap-1.5">
-                            <span className={cn(barLabelClass, 'font-medium min-w-[36px] shrink-0', dpcTextColor)}>DPC</span>
-                            <div
-                                className="flex-1 h-2 rounded-full bg-muted/60 overflow-hidden"
-                                role="progressbar"
-                                aria-label={`DPC production: ${dpcPercentComplete.toFixed(0)}%`}
-                                aria-valuenow={Math.round(dpcPercentComplete)}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                            >
-                                <div
-                                    className={cn('h-full rounded-full transition-all duration-500', dpcBarColor)}
-                                    style={{ width: `${Math.min(dpcPercentComplete, 100)}%` }}
-                                />
-                            </div>
-                            <span className={cn(barValueClass, 'tabular-nums font-semibold shrink-0 min-w-[28px] text-right', dpcTextColor)}>
+                        {/* Divider */}
+                        <div className="w-px h-8 bg-border shrink-0" />
+
+                        {/* DPC metric — semantic color */}
+                        <div className="flex-1 flex flex-col items-center gap-0.5">
+                            <span className={cn(barLabelClass, 'font-medium', dpcTextColor)}>DPC</span>
+                            <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold leading-none', dpcTextColor)}>
                                 {dpcPercentComplete.toFixed(0)}%
                             </span>
                         </div>

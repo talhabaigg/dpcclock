@@ -73,11 +73,6 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
         ? forecastDuration - contractDuration
         : diffDays(contractEnd, today);
 
-    // Elapsed progress as percentage of contract duration
-    const elapsed = actualStart ? diffDays(actualStart, today) : 0;
-    const progressPercent = contractDuration > 0
-        ? Math.min(Math.max((elapsed / contractDuration) * 100, 0), 150) // cap at 150% for visual
-        : 0;
 
     // ── Status ──
     const getStatus = () => {
@@ -87,15 +82,6 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
     };
     const status = getStatus();
     const StatusIcon = status.icon;
-
-    // ── Timeline bar colors ──
-    const barColor = totalOverrun > 0
-        ? 'bg-amber-500'
-        : 'bg-green-500';
-
-    const barBg = totalOverrun > 0
-        ? 'bg-amber-500/10'
-        : 'bg-green-500/10';
 
     return (
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
@@ -116,161 +102,121 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                 className="p-0 mt-0 flex-1 min-h-0 flex flex-col overflow-hidden"
             >
                 <TooltipProvider delayDuration={200}>
-                    {/* ── Hero section: total overrun ── */}
+                    {/* ── Three metric columns ── */}
                     <div className={cn(
-                        'flex flex-col items-center justify-center gap-0.5 px-3',
-                        compact ? 'py-1.5' : 'py-3',
+                        'flex items-center justify-center px-3',
+                        compact ? 'py-1' : 'py-3',
                     )}>
+                        {/* Start Delay */}
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="flex flex-col items-center gap-0.5 cursor-default">
-                                    <div className="flex items-baseline gap-1.5">
-                                        <span className={cn(
-                                            'font-bold tabular-nums leading-none',
-                                            compact ? 'text-xl' : 'text-3xl',
-                                            totalOverrun > 0
-                                                ? 'text-amber-600 dark:text-amber-400'
-                                                : totalOverrun < 0
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : '',
-                                        )}>
-                                            {totalOverrun > 0 ? '+' : ''}{totalOverrun}
-                                        </span>
-                                        <span className={cn(
-                                            'text-muted-foreground leading-none',
-                                            compact ? 'text-[9px]' : 'text-[10px]',
-                                        )}>
-                                            days
-                                        </span>
-                                    </div>
+                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Start Delay</span>
                                     <span className={cn(
-                                        'text-muted-foreground leading-none',
-                                        compact ? 'text-[8px]' : 'text-[10px]',
+                                        'font-bold tabular-nums leading-none text-muted-foreground',
+                                        compact ? 'text-sm' : 'text-base',
                                     )}>
-                                        {totalOverrun > 0 ? 'expected over-run' : totalOverrun < 0 ? 'expected under-run' : 'on schedule'}
+                                        {startDelay !== null ? (startDelay > 0 ? `+${startDelay}` : startDelay) : '-'}
                                     </span>
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px] max-w-[240px]">
-                                <div className="space-y-0.5">
-                                    {startDelay !== null && (
-                                        <div>Start delay: <span className="font-semibold">{startDelay > 0 ? '+' : ''}{startDelay}</span> days</div>
-                                    )}
-                                    {forecastOverrun !== null && (
-                                        <div>Forecast vs contract end: <span className="font-semibold">{forecastOverrun > 0 ? '+' : ''}{forecastOverrun}</span> days</div>
-                                    )}
-                                    <div className="border-t border-border/50 pt-0.5 mt-0.5 font-semibold">
-                                        Net overrun: {totalOverrun > 0 ? '+' : ''}{totalOverrun} days
-                                    </div>
-                                </div>
+                            <TooltipContent side="bottom" className="text-[10px]">
+                                <div>Contract start: {fmtDate(timelineData.start_date)}</div>
+                                {actualStart && <div>Actual start: {fmtDate(timelineData.actual_start_date!)}</div>}
+                                <div className="font-semibold">{startDelay !== null ? `${startDelay > 0 ? '+' : ''}${startDelay} days` : 'No actual start'}</div>
                             </TooltipContent>
                         </Tooltip>
-                    </div>
 
-                    {/* ── Timeline progress bar ── */}
-                    <div className="px-3 pb-2">
+                        <div className={cn('w-px bg-border shrink-0', compact ? 'h-6' : 'h-8')} />
+
+                        {/* End Overrun */}
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="cursor-default">
-                                    <div className={cn('w-full h-2 rounded-full overflow-hidden', barBg)}>
-                                        <div
-                                            className={cn('h-full rounded-full transition-all duration-500', barColor)}
-                                            style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                                        />
-                                    </div>
-                                    {/* Scale labels */}
-                                    <div className="flex justify-between mt-0.5">
-                                        <span className="text-[9px] text-muted-foreground tabular-nums">0%</span>
-                                        <span className={cn(
-                                            'text-[9px] font-medium tabular-nums',
-                                            progressPercent > 100 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
-                                        )}>
-                                            {Math.round(progressPercent)}%
-                                        </span>
-                                        <span className="text-[9px] text-muted-foreground tabular-nums">100%</span>
-                                    </div>
+                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Over Run</span>
+                                    <span className={cn(
+                                        'font-bold tabular-nums leading-none text-muted-foreground',
+                                        compact ? 'text-sm' : 'text-base',
+                                    )}>
+                                        {forecastOverrun !== null ? (forecastOverrun > 0 ? `+${forecastOverrun}` : forecastOverrun) : '-'}
+                                    </span>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="text-[10px]">
-                                {elapsed} of {contractDuration} contract days elapsed ({Math.round(progressPercent)}%)
+                                <div>Contract end: {fmtDate(timelineData.estimated_end_date)}</div>
+                                {forecastEnd && <div>Forecast end: {fmtDate(timelineData.actual_end_date!)}</div>}
+                                <div className="font-semibold">{forecastOverrun !== null ? `${forecastOverrun > 0 ? '+' : ''}${forecastOverrun} days` : 'No forecast'}</div>
+                            </TooltipContent>
+                        </Tooltip>
+
+                        <div className={cn('w-px bg-border shrink-0', compact ? 'h-6' : 'h-8')} />
+
+                        {/* Total Overrun */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Total Over Run</span>
+                                    <span className={cn(
+                                        'font-bold tabular-nums leading-none',
+                                        compact ? 'text-sm' : 'text-lg',
+                                        totalOverrun > 0
+                                            ? 'text-amber-600 dark:text-amber-400'
+                                            : totalOverrun < 0
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-muted-foreground',
+                                    )}>
+                                        {totalOverrun > 0 ? '+' : ''}{totalOverrun}
+                                    </span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-[10px]">
+                                Net overrun (forecast duration vs contract duration): {totalOverrun > 0 ? '+' : ''}{totalOverrun} days
                             </TooltipContent>
                         </Tooltip>
                     </div>
 
                     {/* ── Date details (secondary info) ── */}
-                    {!compact && (
-                        <div className="border-t flex-1 min-h-0 overflow-hidden">
-                            <table className="w-full border-collapse text-[11px]">
-                                <thead>
-                                    <tr className="bg-muted/30">
-                                        <th className="py-0.5 px-2 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground w-[70px]"></th>
-                                        <th className="py-0.5 px-2 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Start</th>
-                                        <th className="py-0.5 px-2 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Finish</th>
-                                        <th className="py-0.5 px-2 text-right text-[9px] font-semibold uppercase tracking-wider text-muted-foreground w-[50px]">Days</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-b border-border/50">
-                                        <td className="py-0.5 px-2 font-medium text-muted-foreground">Contract</td>
-                                        <td className="py-0.5 px-2 text-center tabular-nums">
-                                            {timelineData.start_date ? fmtDate(timelineData.start_date) : '-'}
-                                        </td>
-                                        <td className="py-0.5 px-2 text-center tabular-nums">
-                                            {timelineData.estimated_end_date ? fmtDate(timelineData.estimated_end_date) : '-'}
-                                        </td>
-                                        <td className="py-0.5 px-2 text-right tabular-nums text-muted-foreground">
-                                            {contractDuration}
-                                        </td>
-                                    </tr>
-                                    <tr className="border-b border-border/50">
-                                        <td className="py-0.5 px-2 font-medium text-muted-foreground">Forecast</td>
-                                        <td className={cn(
-                                            'py-0.5 px-2 text-center tabular-nums',
-                                            startDelay !== null && startDelay > 0 && 'text-amber-600 dark:text-amber-400',
-                                            startDelay !== null && startDelay < 0 && 'text-green-600 dark:text-green-400',
-                                        )}>
-                                            {actualStart ? fmtDate(timelineData.actual_start_date!) : '-'}
-                                        </td>
-                                        <td className={cn(
-                                            'py-0.5 px-2 text-center tabular-nums',
-                                            forecastOverrun !== null && forecastOverrun > 0 && 'text-amber-600 dark:text-amber-400',
-                                            forecastOverrun !== null && forecastOverrun < 0 && 'text-green-600 dark:text-green-400',
-                                        )}>
-                                            {forecastEnd ? fmtDate(timelineData.actual_end_date!) : '-'}
-                                        </td>
-                                        <td className="py-0.5 px-2 text-right tabular-nums text-muted-foreground">
-                                            {forecastEnd && actualStart ? diffDays(actualStart, forecastEnd) : elapsed}
-                                        </td>
-                                    </tr>
-                                    {/* Variance row */}
-                                    <tr className="bg-muted/20">
-                                        <td className="py-0.5 px-2 font-semibold text-[10px]">Delay</td>
-                                        <td className={cn(
-                                            'py-0.5 px-2 text-center tabular-nums font-semibold text-[10px]',
-                                            startDelay !== null && startDelay > 0 && 'text-amber-600 dark:text-amber-400',
-                                            startDelay !== null && startDelay < 0 && 'text-green-600 dark:text-green-400',
-                                        )}>
-                                            {startDelay !== null ? (startDelay > 0 ? `+${startDelay}` : startDelay) : '-'}
-                                        </td>
-                                        <td className={cn(
-                                            'py-0.5 px-2 text-center tabular-nums font-semibold text-[10px]',
-                                            forecastOverrun !== null && forecastOverrun > 0 && 'text-amber-600 dark:text-amber-400',
-                                            forecastOverrun !== null && forecastOverrun < 0 && 'text-green-600 dark:text-green-400',
-                                        )}>
-                                            {forecastOverrun !== null ? (forecastOverrun > 0 ? `+${forecastOverrun}` : forecastOverrun) : '-'}
-                                        </td>
-                                        <td className={cn(
-                                            'py-0.5 px-2 text-right tabular-nums font-bold text-[10px]',
-                                            totalOverrun > 0 && 'text-amber-600 dark:text-amber-400',
-                                            totalOverrun < 0 && 'text-green-600 dark:text-green-400',
-                                        )}>
-                                            {totalOverrun > 0 ? `+${totalOverrun}` : totalOverrun}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                    <div className="border-t flex-1 min-h-0">
+                        <table className={cn('w-full h-full border-collapse', compact ? 'text-[9px]' : 'text-[11px]')}>
+                            <thead>
+                                <tr className="bg-muted/30">
+                                    <th className={cn('text-left font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px] w-[50px]' : 'py-0.5 px-2 text-[9px] w-[70px]')}></th>
+                                    <th className={cn('text-center font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Start</th>
+                                    <th className={cn('text-center font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Finish</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="border-b border-border/50">
+                                    <td className={cn('font-medium text-muted-foreground', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>Contract</td>
+                                    <td className={cn('text-center tabular-nums', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
+                                        {timelineData.start_date ? fmtDate(timelineData.start_date) : '-'}
+                                    </td>
+                                    <td className={cn('text-center tabular-nums', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
+                                        {timelineData.estimated_end_date ? fmtDate(timelineData.estimated_end_date) : '-'}
+                                    </td>
+                                </tr>
+                                <tr className="border-b border-border/50">
+                                    <td className={cn('font-medium text-muted-foreground', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>Actual</td>
+                                    <td className={cn(
+                                        'text-center tabular-nums',
+                                        compact ? 'py-0 px-1' : 'py-0.5 px-2',
+                                        startDelay !== null && startDelay > 0 && 'text-amber-600 dark:text-amber-400',
+                                        startDelay !== null && startDelay < 0 && 'text-green-600 dark:text-green-400',
+                                    )}>
+                                        {actualStart ? fmtDate(timelineData.actual_start_date!) : '-'}
+                                    </td>
+                                    <td className={cn(
+                                        'text-center tabular-nums',
+                                        compact ? 'py-0 px-1' : 'py-0.5 px-2',
+                                        forecastOverrun !== null && forecastOverrun > 0 && 'text-amber-600 dark:text-amber-400',
+                                        forecastOverrun !== null && forecastOverrun < 0 && 'text-green-600 dark:text-green-400',
+                                    )}>
+                                        {forecastEnd ? fmtDate(timelineData.actual_end_date!) : '-'}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </TooltipProvider>
             </CardContent>
         </Card>

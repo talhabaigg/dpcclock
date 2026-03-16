@@ -16,11 +16,11 @@ interface VariationRow {
     aging_over_30_value: number | null;
 }
 
-interface StatusGroup {
-    status: string;
+interface TypeGroup {
+    type: string;
     qty: number;
     value: number;
-    children: VariationRow[];
+    children: { status: string; qty: number; value: number }[];
 }
 
 interface VariationsCardProps {
@@ -52,31 +52,59 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     };
 
     const [view, setView] = useState<'visual' | 'table'>('visual');
-    const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(() => new Set(['approved']));
-    const toggleExpand = (status: string) => {
-        setExpandedStatuses((prev) => {
+    const [expandedTypes, setExpandedTypes] = useState<Set<string>>(() => new Set(data.map(r => (r.type?.toLowerCase() ?? 'unknown'))));
+    const toggleExpand = (type: string) => {
+        setExpandedTypes((prev) => {
             const next = new Set(prev);
-            if (next.has(status)) {
-                next.delete(status);
+            if (next.has(type)) {
+                next.delete(type);
             } else {
-                next.add(status);
+                next.add(type);
             }
             return next;
         });
     };
 
-    // Group rows by status, then sort statuses by workflow order
-    const statusGroups = useMemo(() => {
-        const map = new Map<string, StatusGroup>();
+    // Group rows by change type, then aggregate statuses within each type
+    const typeGroups = useMemo<TypeGroup[]>(() => {
+        const map = new Map<string, { type: string; qty: number; value: number; statusMap: Map<string, { status: string; qty: number; value: number }> }>();
         for (const row of data) {
-            const key = row.status?.toLowerCase() ?? 'unknown';
-            if (!map.has(key)) {
-                map.set(key, { status: row.status, qty: 0, value: 0, children: [] });
+            const typeKey = row.type?.toLowerCase() ?? 'unknown';
+            if (!map.has(typeKey)) {
+                map.set(typeKey, { type: row.type, qty: 0, value: 0, statusMap: new Map() });
             }
-            const group = map.get(key)!;
+            const group = map.get(typeKey)!;
             group.qty += row.qty;
             group.value += row.value;
-            group.children.push(row);
+            const statusKey = row.status?.toLowerCase() ?? 'unknown';
+            if (!group.statusMap.has(statusKey)) {
+                group.statusMap.set(statusKey, { status: row.status, qty: 0, value: 0 });
+            }
+            const sc = group.statusMap.get(statusKey)!;
+            sc.qty += row.qty;
+            sc.value += row.value;
+        }
+        return [...map.values()]
+            .map(g => ({
+                type: g.type,
+                qty: g.qty,
+                value: g.value,
+                children: [...g.statusMap.values()].sort((a, b) => {
+                    const ai = STATUS_ORDER.indexOf(a.status.toLowerCase());
+                    const bi = STATUS_ORDER.indexOf(b.status.toLowerCase());
+                    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                }),
+            }))
+            .sort((a, b) => b.value - a.value);
+    }, [data]);
+
+    // Status-level totals for the stacked bar
+    const statusTotals = useMemo(() => {
+        const map = new Map<string, { status: string; value: number }>();
+        for (const row of data) {
+            const key = row.status?.toLowerCase() ?? 'unknown';
+            if (!map.has(key)) map.set(key, { status: row.status, value: 0 });
+            map.get(key)!.value += row.value;
         }
         return [...map.values()].sort((a, b) => {
             const ai = STATUS_ORDER.indexOf(a.status.toLowerCase());
@@ -90,16 +118,20 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     const totalAging = data.reduce((sum, row) => sum + (row.aging_over_30 ?? 0), 0);
     const totalAgingValue = data.reduce((sum, row) => sum + (row.aging_over_30_value ?? 0), 0);
 
-    // Separate rejected from active total
-    const rejectedGroup = statusGroups.find((g) => g.status.toLowerCase() === 'rejected');
-    const rejectedValue = rejectedGroup?.value ?? 0;
-    const rejectedQty = rejectedGroup?.qty ?? 0;
-    const hasRejected = rejectedGroup != null && rejectedGroup.qty > 0;
-    const activeValue = totalValue - rejectedValue;
+    // Statuses excluded from the active total
+    const EXCLUDED_STATUSES = ['rejected', 'revising'];
+    const excludedValue = statusTotals
+        .filter((s) => EXCLUDED_STATUSES.includes(s.status.toLowerCase()))
+        .reduce((sum, s) => sum + s.value, 0);
+    const excludedQty = data
+        .filter(r => EXCLUDED_STATUSES.includes(r.status?.toLowerCase()))
+        .reduce((sum, r) => sum + r.qty, 0);
+    const hasExcluded = excludedQty > 0;
+    const activeValue = totalValue - excludedValue;
 
     // Contract impact percentage
     const hasContract = originalContractIncome != null && originalContractIncome > 0;
-    const contractPercent = hasContract ? ((hasRejected ? activeValue : totalValue) / originalContractIncome!) * 100 : 0;
+    const contractPercent = hasContract ? ((hasExcluded ? activeValue : totalValue) / originalContractIncome!) * 100 : 0;
 
 
     return (
@@ -147,7 +179,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                         {/* 1. Headline: total value + contract context */}
                         <div className="flex items-baseline justify-between gap-2">
                             <span className="text-sm sm:text-base font-bold tabular-nums leading-none">
-                                {formatCurrency(hasRejected ? activeValue : totalValue)}
+                                {formatCurrency(hasExcluded ? activeValue : totalValue)}
                             </span>
                             {hasContract && (
                                 <span className={cn(
@@ -159,7 +191,27 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                             )}
                         </div>
 
-                        {/* 2. Aging alert */}
+                        {/* 2. Stacked status bar */}
+                        {activeValue > 0 && (
+                            <div className="w-full h-2 rounded-full bg-muted/50 overflow-hidden flex">
+                                {statusTotals
+                                    .filter((s) => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()) && s.value > 0)
+                                    .map((s) => {
+                                        const pct = (s.value / activeValue) * 100;
+                                        const color = STATUS_COLORS[s.status.toLowerCase()] ?? STATUS_COLORS.draft;
+                                        return (
+                                            <div
+                                                key={s.status}
+                                                className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-300"
+                                                style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: color }}
+                                                title={`${s.status}: ${formatCurrency(s.value)} (${pct.toFixed(0)}%)`}
+                                            />
+                                        );
+                                    })}
+                            </div>
+                        )}
+
+                        {/* 3. Aging alert */}
                         {totalAging > 0 && (
                             <div className="rounded bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 flex items-center gap-1.5">
                                 <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
@@ -172,74 +224,57 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                             </div>
                         )}
 
-                        {/* 3. Status groups with type breakdown */}
+                        {/* 3. Type groups with status breakdown */}
                         <div className="flex flex-col gap-1">
-                            {statusGroups.filter((g) => g.status.toLowerCase() !== 'rejected').map((group) => {
-                                const barPct = activeValue > 0 ? (group.value / activeValue) * 100 : 0;
-                                const color = STATUS_COLORS[group.status.toLowerCase()] ?? STATUS_COLORS.draft;
-                                const isExpanded = expandedStatuses.has(group.status.toLowerCase());
+                            {typeGroups.map((group) => {
+                                const isExpanded = expandedTypes.has(group.type.toLowerCase());
                                 const hasChildren = group.children.length > 1;
                                 return (
-                                    <div key={group.status} className="flex flex-col gap-0">
-                                        {/* Status parent row with bar */}
+                                    <div key={group.type} className="flex flex-col gap-0">
+                                        {/* Type parent row */}
                                         <div className="flex items-center gap-1 text-[10px] sm:text-[11px] leading-tight">
                                             <button
                                                 type="button"
-                                                onClick={() => hasChildren && toggleExpand(group.status.toLowerCase())}
-                                                className={cn('flex items-center gap-0.5 w-[52px] sm:w-[62px] font-medium truncate shrink-0 capitalize', hasChildren && 'cursor-pointer')}
+                                                onClick={() => hasChildren && toggleExpand(group.type.toLowerCase())}
+                                                className={cn('flex items-center gap-0.5 w-[60px] sm:w-[72px] font-medium truncate shrink-0 capitalize', hasChildren && 'cursor-pointer')}
                                             >
                                                 {hasChildren && (
                                                     <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform duration-150', isExpanded && 'rotate-90')} />
                                                 )}
-                                                {group.status.toLowerCase()}
+                                                {group.type.toLowerCase()}
                                             </button>
-                                            <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden min-w-0">
-                                                <div
-                                                    className="h-full rounded-full transition-all duration-300"
-                                                    style={{ width: `${Math.max(barPct, 2)}%`, backgroundColor: color }}
-                                                />
-                                            </div>
+                                            <div className="flex-1 min-w-0" />
                                             <span className="tabular-nums text-muted-foreground shrink-0 w-[18px] text-right">{group.qty}</span>
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.stopPropagation(); drillDown({ status: group.status }); }}
+                                                onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type }); }}
                                                 className={cn('tabular-nums font-semibold shrink-0 w-[58px] sm:w-[68px] text-right', locationId && 'hover:underline cursor-pointer')}
                                             >
                                                 {formatCurrency(group.value)}
                                             </button>
                                         </div>
-                                        {/* Type children (indented, no bar) — only when expanded */}
-                                        {hasChildren && isExpanded && group.children.map((row) => (
-                                            <div key={row.type} className="flex items-center gap-1 text-[9px] sm:text-[10px] leading-tight text-muted-foreground pl-3">
-                                                <span className="w-[40px] sm:w-[50px] truncate shrink-0 capitalize">{row.type.toLowerCase()}</span>
+                                        {/* Status children (indented, with color dot) — only when expanded */}
+                                        {hasChildren && isExpanded && group.children.map((child) => (
+                                            <div key={child.status} className="flex items-center gap-1 text-[9px] sm:text-[10px] leading-tight text-muted-foreground pl-3">
+                                                <span
+                                                    className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                                                    style={{ backgroundColor: STATUS_COLORS[child.status.toLowerCase()] ?? STATUS_COLORS.draft }}
+                                                />
+                                                <span className="w-[40px] sm:w-[50px] truncate shrink-0 capitalize">{child.status.toLowerCase()}</span>
                                                 <div className="flex-1 min-w-0" />
-                                                <span className="tabular-nums shrink-0 w-[18px] text-right">{row.qty}</span>
+                                                <span className="tabular-nums shrink-0 w-[18px] text-right">{child.qty}</span>
                                                 <button
                                                     type="button"
-                                                    onClick={(e) => { e.stopPropagation(); drillDown({ status: row.status, type: row.type }); }}
+                                                    onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type, status: child.status }); }}
                                                     className={cn('tabular-nums shrink-0 w-[58px] sm:w-[68px] text-right', locationId && 'hover:underline cursor-pointer')}
                                                 >
-                                                    {formatCurrency(row.value)}
+                                                    {formatCurrency(child.value)}
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
                                 );
                             })}
-                            {hasRejected && (
-                                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] leading-tight text-muted-foreground">
-                                    <span className="w-[52px] sm:w-[62px] truncate shrink-0">Rejected</span>
-                                    <div className="flex-1 min-w-0" />
-                                    <span className="tabular-nums shrink-0 w-[18px] text-right">{rejectedQty}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => drillDown({ status: rejectedGroup!.status })}
-                                        className={cn('tabular-nums shrink-0 w-[58px] sm:w-[68px] text-right', locationId && 'hover:underline cursor-pointer')}
-                                    >
-                                        {formatCurrency(rejectedValue)}
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     </div>
                 ) : (
@@ -247,31 +282,23 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                         <table className="w-full h-full border-collapse text-[11px]">
                             <thead>
                                 <tr className="bg-muted/40">
-                                    <th className="text-left py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Status / Type</th>
+                                    <th className="text-left py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Type / Status</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Qty</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Value</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">%</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {statusGroups.map((group) => (
+                                {typeGroups.map((group) => (
                                     <>
-                                        {/* Status parent row */}
-                                        <tr key={group.status} className="bg-muted/30 border-b">
-                                            <td className="py-1 px-2 font-semibold capitalize">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span
-                                                        className="inline-block w-2 h-2 rounded-full shrink-0"
-                                                        style={{ backgroundColor: STATUS_COLORS[group.status.toLowerCase()] ?? STATUS_COLORS.draft }}
-                                                    />
-                                                    {group.status.toLowerCase()}
-                                                </div>
-                                            </td>
+                                        {/* Type parent row */}
+                                        <tr key={group.type} className="bg-muted/30 border-b">
+                                            <td className="py-1 px-2 font-semibold capitalize">{group.type.toLowerCase()}</td>
                                             <td className="text-right py-1 px-2 tabular-nums font-semibold">{group.qty}</td>
                                             <td className="text-right py-1 px-2 tabular-nums font-semibold">
                                                 <button
                                                     type="button"
-                                                    onClick={() => drillDown({ status: group.status })}
+                                                    onClick={() => drillDown({ type: group.type })}
                                                     className={cn(locationId && 'hover:underline cursor-pointer')}
                                                 >
                                                     {formatCurrency(group.value)}
@@ -281,21 +308,31 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                                                 {totalValue > 0 ? ((group.value / totalValue) * 100).toFixed(1) : '0.0'}%
                                             </td>
                                         </tr>
-                                        {/* Type child rows */}
-                                        {group.children.map((row) => (
-                                            <tr key={`${group.status}-${row.type}`} className="border-b last:border-b-0 hover:bg-muted/20 transition-colors">
-                                                <td className="py-0.5 pl-6 pr-2 text-muted-foreground capitalize">{row.type.toLowerCase()}</td>
-                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">{row.qty}</td>
+                                        {/* Status child rows */}
+                                        {group.children.map((child) => (
+                                            <tr key={`${group.type}-${child.status}`} className="border-b last:border-b-0 hover:bg-muted/20 transition-colors">
+                                                <td className="py-0.5 pl-6 pr-2 text-muted-foreground capitalize">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span
+                                                            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                                                            style={{ backgroundColor: STATUS_COLORS[child.status.toLowerCase()] ?? STATUS_COLORS.draft }}
+                                                        />
+                                                        {child.status.toLowerCase()}
+                                                    </div>
+                                                </td>
+                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">{child.qty}</td>
                                                 <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">
                                                     <button
                                                         type="button"
-                                                        onClick={() => drillDown({ status: row.status, type: row.type })}
+                                                        onClick={() => drillDown({ type: group.type, status: child.status })}
                                                         className={cn(locationId && 'hover:underline cursor-pointer')}
                                                     >
-                                                        {formatCurrency(row.value)}
+                                                        {formatCurrency(child.value)}
                                                     </button>
                                                 </td>
-                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">{row.percent_of_total.toFixed(1)}%</td>
+                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">
+                                                    {totalValue > 0 ? ((child.value / totalValue) * 100).toFixed(1) : '0.0'}%
+                                                </td>
                                             </tr>
                                         ))}
                                     </>
