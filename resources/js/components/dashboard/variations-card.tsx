@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { AlertTriangle, BarChart3, ChevronRight, Table2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { formatCurrency } from './dashboard-utils';
+import { formatCurrency, formatCompact, useContainerSize } from './dashboard-utils';
 
 interface VariationRow {
     status: string;
@@ -20,6 +21,7 @@ interface TypeGroup {
     type: string;
     qty: number;
     value: number;
+    aging: number;
     children: { status: string; qty: number; value: number }[];
 }
 
@@ -38,10 +40,22 @@ const STATUS_COLORS: Record<string, string> = {
     draft: 'hsl(215, 14%, 60%)',
 };
 
+const STATUS_BG: Record<string, string> = {
+    approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+    pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+    sent: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+    rejected: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+    draft: 'bg-muted text-muted-foreground border-border',
+};
+
 /** Workflow order for statuses. */
 const STATUS_ORDER: string[] = ['approved', 'sent', 'pending', 'draft', 'rejected'];
 
 export default function VariationsCard({ data, locationId, originalContractIncome, isEditing }: VariationsCardProps) {
+    const { ref: contentRef, width, height } = useContainerSize();
+    const compact = height > 0 && height < 200;
+    const ultraCompact = height > 0 && height < 120;
+
     const drillDown = (params: { status?: string; type?: string }) => {
         if (!locationId) return;
         const url = `/locations/${locationId}/variations`;
@@ -67,15 +81,16 @@ export default function VariationsCard({ data, locationId, originalContractIncom
 
     // Group rows by change type, then aggregate statuses within each type
     const typeGroups = useMemo<TypeGroup[]>(() => {
-        const map = new Map<string, { type: string; qty: number; value: number; statusMap: Map<string, { status: string; qty: number; value: number }> }>();
+        const map = new Map<string, { type: string; qty: number; value: number; aging: number; statusMap: Map<string, { status: string; qty: number; value: number }> }>();
         for (const row of data) {
             const typeKey = row.type?.toLowerCase() ?? 'unknown';
             if (!map.has(typeKey)) {
-                map.set(typeKey, { type: row.type, qty: 0, value: 0, statusMap: new Map() });
+                map.set(typeKey, { type: row.type, qty: 0, value: 0, aging: 0, statusMap: new Map() });
             }
             const group = map.get(typeKey)!;
             group.qty += row.qty;
             group.value += row.value;
+            group.aging += row.aging_over_30 ?? 0;
             const statusKey = row.status?.toLowerCase() ?? 'unknown';
             if (!group.statusMap.has(statusKey)) {
                 group.statusMap.set(statusKey, { status: row.status, qty: 0, value: 0 });
@@ -89,6 +104,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                 type: g.type,
                 qty: g.qty,
                 value: g.value,
+                aging: g.aging,
                 children: [...g.statusMap.values()].sort((a, b) => {
                     const ai = STATUS_ORDER.indexOf(a.status.toLowerCase());
                     const bi = STATUS_ORDER.indexOf(b.status.toLowerCase());
@@ -100,11 +116,13 @@ export default function VariationsCard({ data, locationId, originalContractIncom
 
     // Status-level totals for the stacked bar
     const statusTotals = useMemo(() => {
-        const map = new Map<string, { status: string; value: number }>();
+        const map = new Map<string, { status: string; value: number; qty: number }>();
         for (const row of data) {
             const key = row.status?.toLowerCase() ?? 'unknown';
-            if (!map.has(key)) map.set(key, { status: row.status, value: 0 });
-            map.get(key)!.value += row.value;
+            if (!map.has(key)) map.set(key, { status: row.status, value: 0, qty: 0 });
+            const entry = map.get(key)!;
+            entry.value += row.value;
+            entry.qty += row.qty;
         }
         return [...map.values()].sort((a, b) => {
             const ai = STATUS_ORDER.indexOf(a.status.toLowerCase());
@@ -132,6 +150,9 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     // Contract impact percentage
     const hasContract = originalContractIncome != null && originalContractIncome > 0;
     const contractPercent = hasContract ? ((hasExcluded ? activeValue : totalValue) / originalContractIncome!) * 100 : 0;
+
+    // Max group value for proportional bars
+    const maxGroupValue = typeGroups.length > 0 ? Math.max(...typeGroups.map(g => Math.abs(g.value))) : 1;
 
 
     return (
@@ -169,189 +190,270 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="p-0 mt-0 flex-1 min-h-0 flex flex-col">
+            <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col">
                 {data.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center">
                         <span className="text-[11px] text-muted-foreground">No variations found.</span>
                     </div>
                 ) : view === 'visual' ? (
-                    <div className="px-1.5 py-0.5 sm:px-2 sm:py-1 flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
-                        {/* 1. Headline: total value + contract context */}
-                        <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm sm:text-base font-bold tabular-nums leading-none">
-                                {formatCurrency(hasExcluded ? activeValue : totalValue)}
-                            </span>
-                            {hasContract && (
-                                <span className={cn(
-                                    'text-[9px] sm:text-[10px] font-semibold tabular-nums leading-none whitespace-nowrap',
-                                    contractPercent > 15 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
-                                )}>
-                                    {contractPercent.toFixed(1)}% of contract
-                                </span>
-                            )}
-                        </div>
-
-                        {/* 2. Stacked status bar */}
-                        {activeValue > 0 && (
-                            <div className="w-full h-2 rounded-full bg-muted/50 overflow-hidden flex">
-                                {statusTotals
-                                    .filter((s) => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()) && s.value > 0)
-                                    .map((s) => {
-                                        const pct = (s.value / activeValue) * 100;
-                                        const color = STATUS_COLORS[s.status.toLowerCase()] ?? STATUS_COLORS.draft;
-                                        return (
-                                            <div
-                                                key={s.status}
-                                                className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-300"
-                                                style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: color }}
-                                                title={`${s.status}: ${formatCurrency(s.value)} (${pct.toFixed(0)}%)`}
-                                            />
-                                        );
-                                    })}
-                            </div>
-                        )}
-
-                        {/* 3. Aging alert */}
-                        {totalAging > 0 && (
-                            <div className="rounded bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 flex items-center gap-1.5">
-                                <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
-                                <span className="text-[10px] sm:text-[11px] font-medium text-red-700 dark:text-red-400">
-                                    {totalAging} aging &gt;30d
-                                </span>
-                                <span className="text-[9px] sm:text-[10px] text-red-600 dark:text-red-400/80 tabular-nums">
-                                    {formatCurrency(totalAgingValue)} at risk
-                                </span>
-                            </div>
-                        )}
-
-                        {/* 3. Type groups with status breakdown */}
-                        <div className="flex flex-col gap-1">
-                            {typeGroups.map((group) => {
-                                const isExpanded = expandedTypes.has(group.type.toLowerCase());
-                                const hasChildren = group.children.length > 1;
-                                return (
-                                    <div key={group.type} className="flex flex-col gap-0">
-                                        {/* Type parent row */}
-                                        <div className="flex items-center gap-1 text-[10px] sm:text-[11px] leading-tight">
+                    <TooltipProvider delayDuration={200}>
+                        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+                            {/* ── Hero section ── */}
+                            <div className={cn('px-3 border-b bg-muted/20', compact ? 'py-1.5' : 'py-2.5')}>
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
                                             <button
                                                 type="button"
-                                                onClick={() => hasChildren && toggleExpand(group.type.toLowerCase())}
-                                                className={cn('flex items-center gap-0.5 w-[60px] sm:w-[72px] font-medium truncate shrink-0 capitalize', hasChildren && 'cursor-pointer')}
-                                            >
-                                                {hasChildren && (
-                                                    <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform duration-150', isExpanded && 'rotate-90')} />
+                                                onClick={() => drillDown({})}
+                                                className={cn(
+                                                    'font-bold tabular-nums leading-none',
+                                                    compact ? 'text-base' : 'text-xl',
+                                                    locationId && 'hover:underline cursor-pointer',
                                                 )}
-                                                {group.type.toLowerCase()}
-                                            </button>
-                                            <div className="flex-1 min-w-0" />
-                                            <span className="tabular-nums text-muted-foreground shrink-0 w-[18px] text-right">{group.qty}</span>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type }); }}
-                                                className={cn('tabular-nums font-semibold shrink-0 w-[58px] sm:w-[68px] text-right', locationId && 'hover:underline cursor-pointer')}
                                             >
-                                                {formatCurrency(group.value)}
+                                                {formatCompact(hasExcluded ? activeValue : totalValue)}
                                             </button>
-                                        </div>
-                                        {/* Status children (indented, with color dot) — only when expanded */}
-                                        {hasChildren && isExpanded && group.children.map((child) => (
-                                            <div key={child.status} className="flex items-center gap-1 text-[9px] sm:text-[10px] leading-tight text-muted-foreground pl-3">
-                                                <span
-                                                    className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-                                                    style={{ backgroundColor: STATUS_COLORS[child.status.toLowerCase()] ?? STATUS_COLORS.draft }}
-                                                />
-                                                <span className="w-[40px] sm:w-[50px] truncate shrink-0 capitalize">{child.status.toLowerCase()}</span>
-                                                <div className="flex-1 min-w-0" />
-                                                <span className="tabular-nums shrink-0 w-[18px] text-right">{child.qty}</span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="text-[10px]">
+                                            <div>{totalQty} total variations — {formatCurrency(totalValue)}</div>
+                                            {hasExcluded && <div>Active (excl. rejected): {formatCurrency(activeValue)}</div>}
+                                            {locationId && <div className="font-semibold mt-0.5">Click to view all</div>}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] text-muted-foreground tabular-nums">{totalQty} items</span>
+                                        {hasContract && (
+                                            <span className={cn(
+                                                'text-[9px] font-semibold tabular-nums leading-none px-1.5 py-0.5 rounded-full border whitespace-nowrap',
+                                                contractPercent > 15
+                                                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                                                    : 'bg-muted text-muted-foreground border-border',
+                                            )}>
+                                                {contractPercent.toFixed(1)}% of contract
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* ── Stacked status bar ── */}
+                                {activeValue > 0 && (
+                                    <div className={cn('w-full rounded-full bg-muted/60 overflow-hidden flex', compact ? 'h-2 mt-1.5' : 'h-3 mt-2')}>
+                                        {statusTotals
+                                            .filter((s) => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()) && s.value > 0)
+                                            .map((s) => {
+                                                const pct = (s.value / activeValue) * 100;
+                                                const color = STATUS_COLORS[s.status.toLowerCase()] ?? STATUS_COLORS.draft;
+                                                return (
+                                                    <Tooltip key={s.status}>
+                                                        <TooltipTrigger asChild>
+                                                            <div
+                                                                className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-300 hover:opacity-80 cursor-default"
+                                                                style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: color }}
+                                                            />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="bottom" className="text-[10px]">
+                                                            <div className="capitalize font-semibold">{s.status}</div>
+                                                            <div>{s.qty} items — {formatCurrency(s.value)}</div>
+                                                            <div>{pct.toFixed(1)}% of active value</div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                    </div>
+                                )}
+
+                                {/* ── Status legend pills ── */}
+                                {!ultraCompact && (
+                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
+                                        {statusTotals
+                                            .filter(s => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()))
+                                            .map(s => (
+                                                <button
+                                                    key={s.status}
+                                                    type="button"
+                                                    onClick={() => drillDown({ status: s.status })}
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1 text-[9px] leading-none',
+                                                        locationId && 'hover:underline cursor-pointer',
+                                                    )}
+                                                >
+                                                    <span
+                                                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                        style={{ backgroundColor: STATUS_COLORS[s.status.toLowerCase()] ?? STATUS_COLORS.draft }}
+                                                    />
+                                                    <span className="capitalize text-muted-foreground">{s.status.toLowerCase()}</span>
+                                                    <span className="tabular-nums font-medium">{s.qty}</span>
+                                                </button>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── Aging alert ── */}
+                            {totalAging > 0 && (
+                                <div className="mx-2 mt-1.5 rounded bg-red-500/10 border border-red-500/20 px-2 py-1 flex items-center gap-1.5">
+                                    <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
+                                    <span className="text-[10px] font-medium text-red-700 dark:text-red-400">
+                                        {totalAging} aging &gt;30d
+                                    </span>
+                                    <span className="text-[9px] text-red-600 dark:text-red-400/80 tabular-nums ml-auto">
+                                        {formatCurrency(totalAgingValue)} at risk
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* ── Type breakdown with proportional bars ── */}
+                            <div className={cn('flex flex-col gap-0 flex-1', compact ? 'px-2 py-1' : 'px-3 py-2')}>
+                                {typeGroups.map((group) => {
+                                    const isExpanded = expandedTypes.has(group.type.toLowerCase());
+                                    const hasChildren = group.children.length > 1;
+                                    const barPct = maxGroupValue > 0 ? (Math.abs(group.value) / maxGroupValue) * 100 : 0;
+
+                                    return (
+                                        <div key={group.type} className="flex flex-col">
+                                            {/* Type row with proportional bar */}
+                                            <div className={cn('flex items-center gap-1.5 group', compact ? 'py-0.5' : 'py-1')}>
                                                 <button
                                                     type="button"
-                                                    onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type, status: child.status }); }}
-                                                    className={cn('tabular-nums shrink-0 w-[58px] sm:w-[68px] text-right', locationId && 'hover:underline cursor-pointer')}
+                                                    onClick={() => hasChildren && toggleExpand(group.type.toLowerCase())}
+                                                    className={cn(
+                                                        'flex items-center gap-0.5 shrink-0 capitalize font-medium text-[11px] leading-none',
+                                                        compact ? 'w-[60px]' : 'w-[72px]',
+                                                        hasChildren && 'cursor-pointer',
+                                                    )}
                                                 >
-                                                    {formatCurrency(child.value)}
+                                                    {hasChildren && (
+                                                        <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform duration-150', isExpanded && 'rotate-90')} />
+                                                    )}
+                                                    <span className="truncate">{group.type.toLowerCase()}</span>
+                                                </button>
+
+                                                {/* Proportional bar */}
+                                                <div className="flex-1 min-w-0 h-4 relative">
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div
+                                                                className="absolute inset-y-0 left-0 rounded-r bg-primary/10 dark:bg-primary/15 transition-all duration-500"
+                                                                style={{ width: `${Math.max(barPct, 2)}%` }}
+                                                            >
+                                                                {/* Segmented status colors within the bar */}
+                                                                <div className="absolute inset-0 rounded-r overflow-hidden flex">
+                                                                    {group.children
+                                                                        .filter(c => !EXCLUDED_STATUSES.includes(c.status.toLowerCase()) && c.value > 0)
+                                                                        .map(c => {
+                                                                            const segPct = group.value > 0 ? (c.value / group.value) * 100 : 0;
+                                                                            return (
+                                                                                <div
+                                                                                    key={c.status}
+                                                                                    className="h-full opacity-25 first:rounded-l-sm last:rounded-r-sm"
+                                                                                    style={{
+                                                                                        width: `${segPct}%`,
+                                                                                        backgroundColor: STATUS_COLORS[c.status.toLowerCase()] ?? STATUS_COLORS.draft,
+                                                                                    }}
+                                                                                />
+                                                                            );
+                                                                        })}
+                                                                </div>
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="text-[10px]">
+                                                            <div className="capitalize font-semibold">{group.type}</div>
+                                                            <div>{group.qty} items — {formatCurrency(group.value)}</div>
+                                                            <div>{totalValue > 0 ? ((group.value / totalValue) * 100).toFixed(1) : '0'}% of total</div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </div>
+
+                                                <span className="tabular-nums text-[10px] text-muted-foreground shrink-0 w-[16px] text-right">{group.qty}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type }); }}
+                                                    className={cn(
+                                                        'tabular-nums text-[11px] font-semibold shrink-0 text-right',
+                                                        compact ? 'w-[58px]' : 'w-[68px]',
+                                                        locationId && 'hover:underline cursor-pointer',
+                                                    )}
+                                                >
+                                                    {formatCompact(group.value)}
                                                 </button>
                                             </div>
-                                        ))}
-                                    </div>
-                                );
-                            })}
+
+                                            {/* Status children */}
+                                            {hasChildren && isExpanded && group.children.map((child) => (
+                                                <div key={child.status} className="flex items-center gap-1.5 text-[10px] leading-tight text-muted-foreground pl-4 py-0.5">
+                                                    <span
+                                                        className={cn(
+                                                            'inline-flex items-center gap-1 shrink-0 capitalize rounded-full border px-1.5 py-px text-[9px]',
+                                                            compact ? 'w-auto' : 'min-w-[52px]',
+                                                            STATUS_BG[child.status.toLowerCase()] ?? STATUS_BG.draft,
+                                                        )}
+                                                    >
+                                                        <span
+                                                            className="w-1 h-1 rounded-full shrink-0"
+                                                            style={{ backgroundColor: STATUS_COLORS[child.status.toLowerCase()] ?? STATUS_COLORS.draft }}
+                                                        />
+                                                        {child.status.toLowerCase()}
+                                                    </span>
+                                                    <div className="flex-1 min-w-0 border-b border-dotted border-border/40" />
+                                                    <span className="tabular-nums shrink-0 w-[16px] text-right">{child.qty}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); drillDown({ type: group.type, status: child.status }); }}
+                                                        className={cn(
+                                                            'tabular-nums shrink-0 text-right',
+                                                            compact ? 'w-[58px]' : 'w-[68px]',
+                                                            locationId && 'hover:underline cursor-pointer',
+                                                        )}
+                                                    >
+                                                        {formatCompact(child.value)}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
+                    </TooltipProvider>
                 ) : (
                     <div className="overflow-x-auto h-full flex-1 min-h-0">
                         <table className="w-full h-full border-collapse text-[11px]">
                             <thead>
                                 <tr className="bg-muted/40">
-                                    <th className="text-left py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Type / Status</th>
+                                    <th className="text-left py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Type</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Qty</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Value</th>
                                     <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">%</th>
+                                    <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">&gt;30d</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {typeGroups.map((group) => (
-                                    <>
-                                        {/* Type parent row */}
-                                        <tr key={group.type} className="bg-muted/30 border-b">
-                                            <td className="py-1 px-2 font-semibold capitalize">{group.type.toLowerCase()}</td>
-                                            <td className="text-right py-1 px-2 tabular-nums font-semibold">{group.qty}</td>
-                                            <td className="text-right py-1 px-2 tabular-nums font-semibold">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => drillDown({ type: group.type })}
-                                                    className={cn(locationId && 'hover:underline cursor-pointer')}
-                                                >
-                                                    {formatCurrency(group.value)}
-                                                </button>
-                                            </td>
-                                            <td className="text-right py-1 px-2 tabular-nums font-semibold">
-                                                {totalValue > 0 ? ((group.value / totalValue) * 100).toFixed(1) : '0.0'}%
-                                            </td>
-                                        </tr>
-                                        {/* Status child rows */}
-                                        {group.children.map((child) => (
-                                            <tr key={`${group.type}-${child.status}`} className="border-b last:border-b-0 hover:bg-muted/20 transition-colors">
-                                                <td className="py-0.5 pl-6 pr-2 text-muted-foreground capitalize">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span
-                                                            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-                                                            style={{ backgroundColor: STATUS_COLORS[child.status.toLowerCase()] ?? STATUS_COLORS.draft }}
-                                                        />
-                                                        {child.status.toLowerCase()}
-                                                    </div>
-                                                </td>
-                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">{child.qty}</td>
-                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => drillDown({ type: group.type, status: child.status })}
-                                                        className={cn(locationId && 'hover:underline cursor-pointer')}
-                                                    >
-                                                        {formatCurrency(child.value)}
-                                                    </button>
-                                                </td>
-                                                <td className="text-right py-0.5 px-2 tabular-nums text-muted-foreground">
-                                                    {totalValue > 0 ? ((child.value / totalValue) * 100).toFixed(1) : '0.0'}%
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </>
+                                    <tr key={group.type} className="border-b hover:bg-muted/20 transition-colors">
+                                        <td className="py-1 px-2 font-medium">
+                                            <button
+                                                type="button"
+                                                onClick={() => drillDown({ type: group.type })}
+                                                className={cn(locationId && 'hover:underline cursor-pointer')}
+                                            >
+                                                {group.type}
+                                            </button>
+                                        </td>
+                                        <td className="text-right py-1 px-2 tabular-nums">{group.qty}</td>
+                                        <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(group.value)}</td>
+                                        <td className="text-right py-1 px-2 tabular-nums">{totalValue > 0 ? ((group.value / totalValue) * 100).toFixed(1) : '0.0'}%</td>
+                                        <td className={cn('text-right py-1 px-2 tabular-nums', group.aging > 0 && 'text-red-600 dark:text-red-400 font-medium')}>{group.aging || '-'}</td>
+                                    </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="bg-muted/40 border-t-2 border-border">
                                     <td className="py-1 px-2 font-bold">Total</td>
                                     <td className="text-right py-1 px-2 tabular-nums font-bold">{totalQty}</td>
-                                    <td className="text-right py-1 px-2 tabular-nums font-bold">
-                                        <button
-                                            type="button"
-                                            onClick={() => drillDown({})}
-                                            className={cn(locationId && 'hover:underline cursor-pointer')}
-                                        >
-                                            {formatCurrency(totalValue)}
-                                        </button>
-                                    </td>
+                                    <td className="text-right py-1 px-2 tabular-nums font-bold">{formatCurrency(totalValue)}</td>
                                     <td className="text-right py-1 px-2 tabular-nums font-bold">100%</td>
+                                    <td className={cn('text-right py-1 px-2 tabular-nums font-bold', totalAging > 0 && 'text-red-600 dark:text-red-400')}>{totalAging || '-'}</td>
                                 </tr>
                             </tfoot>
                         </table>

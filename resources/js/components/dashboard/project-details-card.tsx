@@ -40,6 +40,7 @@ function fmtDate(dateStr: string): string {
 export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectDetailsCardProps) {
     const { ref: contentRef, height } = useContainerSize();
     const compact = height > 0 && height < 180;
+    const statsOnly = height > 0 && height < 80;
 
     if (!timelineData) {
         return (
@@ -99,22 +100,22 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
             </CardHeader>
             <CardContent
                 ref={contentRef}
-                className="p-0 mt-0 flex-1 min-h-0 flex flex-col overflow-hidden"
+                className={cn("p-0 mt-0 flex-1 min-h-0 flex flex-col overflow-hidden", statsOnly && "justify-center")}
             >
                 <TooltipProvider delayDuration={200}>
                     {/* ── Three metric columns ── */}
                     <div className={cn(
                         'flex items-center justify-center px-3',
-                        compact ? 'py-1' : 'py-3',
+                        statsOnly ? 'py-0' : compact ? 'py-1' : 'py-3',
                     )}>
                         {/* Start Delay */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
-                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Start Delay</span>
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Start Delay</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none text-muted-foreground',
-                                        compact ? 'text-sm' : 'text-base',
+                                        statsOnly ? 'text-xs' : compact ? 'text-sm' : 'text-base',
                                     )}>
                                         {startDelay !== null ? (startDelay > 0 ? `+${startDelay}` : startDelay) : '-'}
                                     </span>
@@ -127,16 +128,16 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                             </TooltipContent>
                         </Tooltip>
 
-                        <div className={cn('w-px bg-border shrink-0', compact ? 'h-6' : 'h-8')} />
+                        <div className={cn('w-px bg-border shrink-0', statsOnly ? 'h-5' : compact ? 'h-6' : 'h-8')} />
 
                         {/* End Overrun */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
-                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Over Run</span>
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Over Run</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none text-muted-foreground',
-                                        compact ? 'text-sm' : 'text-base',
+                                        statsOnly ? 'text-xs' : compact ? 'text-sm' : 'text-base',
                                     )}>
                                         {forecastOverrun !== null ? (forecastOverrun > 0 ? `+${forecastOverrun}` : forecastOverrun) : '-'}
                                     </span>
@@ -149,16 +150,16 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                             </TooltipContent>
                         </Tooltip>
 
-                        <div className={cn('w-px bg-border shrink-0', compact ? 'h-6' : 'h-8')} />
+                        <div className={cn('w-px bg-border shrink-0', statsOnly ? 'h-5' : compact ? 'h-6' : 'h-8')} />
 
                         {/* Total Overrun */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
-                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', compact && 'text-[8px]')}>Total Over Run</span>
+                                    <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Total Over Run</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none',
-                                        compact ? 'text-sm' : 'text-lg',
+                                        statsOnly ? 'text-sm' : compact ? 'text-sm' : 'text-lg',
                                         totalOverrun > 0
                                             ? 'text-amber-600 dark:text-amber-400'
                                             : totalOverrun < 0
@@ -176,7 +177,7 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                     </div>
 
                     {/* ── Date details (secondary info) ── */}
-                    <div className="border-t flex-1 min-h-0">
+                    {!statsOnly && <div className="border-t flex-1 min-h-0">
                         <table className={cn('w-full h-full border-collapse', compact ? 'text-[9px]' : 'text-[11px]')}>
                             <thead>
                                 <tr className="bg-muted/30">
@@ -216,7 +217,7 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
+                    </div>}
                 </TooltipProvider>
             </CardContent>
         </Card>

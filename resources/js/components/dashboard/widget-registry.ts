@@ -26,8 +26,8 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         id: 'project-details',
         label: 'Project Details',
         minW: 2,
-        minH: 2,
-        defaultLayout: { x: 0, y: 0, w: 2, h: 2 },
+        minH: 1,
+        defaultLayout: { x: 0, y: 0, w: 4, h: 2 },
     },
     {
         id: 'variations',
