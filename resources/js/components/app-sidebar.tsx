@@ -25,6 +25,7 @@ import {
     Hammer,
     Hourglass,
     Key,
+    LayoutDashboard,
     LayoutGrid,
     PersonStanding,
     Pickaxe,
@@ -42,7 +43,7 @@ import { NavDocuments } from './nav-documents';
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/',
+        href: '/dashboard',
         icon: LayoutGrid,
         permission: 'dashboard.view',
     },
@@ -50,6 +51,12 @@ const mainNavItems: NavItem[] = [
         title: 'Locations',
         href: '/locations',
         icon: Building,
+        permission: 'locations.view',
+    },
+    {
+        title: 'Project Dashboard',
+        href: '/project-dashboard',
+        icon: LayoutDashboard,
         permission: 'locations.view',
     },
     {

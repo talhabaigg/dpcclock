@@ -151,6 +151,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
         ->middleware('permission:timesheets.sync');
     Route::middleware('permission:locations.view')->group(function () {
+        Route::get('/project-dashboard', [LocationController::class, 'projectDashboard'])->name('project-dashboard');
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
         Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard');

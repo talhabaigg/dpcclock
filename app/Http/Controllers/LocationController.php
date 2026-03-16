@@ -147,6 +147,29 @@ class LocationController extends Controller
     }
 
     /**
+     * Project dashboard landing page — select a job to view its dashboard.
+     */
+    public function projectDashboard()
+    {
+        $availableLocations = Location::open()
+            ->with('jobSummary')
+            ->whereHas('jobSummary')
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '')
+            ->orderBy('name')
+            ->get()
+            ->map(fn($loc) => [
+                'id' => $loc->id,
+                'name' => $loc->name,
+                'external_id' => $loc->external_id,
+            ]);
+
+        return Inertia::render('locations/project-dashboard', [
+            'availableLocations' => $availableLocations,
+        ]);
+    }
+
+    /**
      * Display the project dashboard.
      */
     public function dashboard(Request $request, Location $location)
