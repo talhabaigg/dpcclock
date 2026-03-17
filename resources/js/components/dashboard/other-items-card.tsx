@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { JobSummary, Location } from '@/types';
-import { formatCurrency, formatCompact } from './dashboard-utils';
+import { formatCompact } from './dashboard-utils';
 
 interface OtherItemsCardProps {
     location: Location & {

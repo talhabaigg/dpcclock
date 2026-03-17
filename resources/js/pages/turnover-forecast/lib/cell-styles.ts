@@ -4,7 +4,7 @@
 
 import type { CellClassParams, CellClassRules } from 'ag-grid-community';
 import type { RowType, UnifiedRow } from './data-transformer';
-import { currentMonthStr, formatCurrency } from './utils';
+import { currentMonthStr } from './utils';
 
 /**
  * Format month header from YYYY-MM to "Mon 'YY"

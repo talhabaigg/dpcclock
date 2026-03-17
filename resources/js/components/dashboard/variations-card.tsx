@@ -52,7 +52,7 @@ const STATUS_BG: Record<string, string> = {
 const STATUS_ORDER: string[] = ['approved', 'sent', 'pending', 'draft', 'rejected'];
 
 export default function VariationsCard({ data, locationId, originalContractIncome, isEditing }: VariationsCardProps) {
-    const { ref: contentRef, width, height } = useContainerSize();
+    const { ref: contentRef, height } = useContainerSize();
     const compact = height > 0 && height < 200;
     const ultraCompact = height > 0 && height < 120;
 
