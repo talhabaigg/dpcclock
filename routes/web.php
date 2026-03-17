@@ -34,6 +34,7 @@ use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SafetyDashboardController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
 use App\Http\Controllers\RoleController;
@@ -790,6 +791,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:reports.missing-sign-out')->group(function () {
         Route::get('/reports/missing-sign-out', [MissingSignOutReportController::class, 'index'])->name('reports.missingSignOut');
         Route::get('/reports/missing-sign-out/data', [MissingSignOutReportController::class, 'getData'])->name('reports.missingSignOut.data');
+    });
+
+    // Safety Dashboard
+    Route::middleware('permission:reports.safety-dashboard')->group(function () {
+        Route::get('/reports/safety-dashboard', [SafetyDashboardController::class, 'index'])->name('reports.safetyDashboard');
+        Route::get('/reports/safety-dashboard/import', [SafetyDashboardController::class, 'importPage'])->name('reports.safetyDashboard.importPage');
+        Route::get('/reports/safety-dashboard/monthly-data', [SafetyDashboardController::class, 'getMonthlyData'])->name('reports.safetyDashboard.monthlyData');
+        Route::get('/reports/safety-dashboard/fy-data', [SafetyDashboardController::class, 'getFYData'])->name('reports.safetyDashboard.fyData');
+        Route::post('/reports/safety-dashboard/import', [SafetyDashboardController::class, 'import'])->name('reports.safetyDashboard.import');
     });
 
     // ============================================

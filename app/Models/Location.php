@@ -135,4 +135,9 @@ class Location extends Model
     {
         return $this->hasMany(ProductionUpload::class);
     }
+
+    public function incidentReports()
+    {
+        return $this->hasMany(IncidentReport::class);
+    }
 }

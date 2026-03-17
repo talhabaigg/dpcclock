@@ -38,4 +38,9 @@ class Employee extends Model
     {
         return $this->belongsToMany(Worktype::class);
     }
+
+    public function incidentReports()
+    {
+        return $this->hasMany(IncidentReport::class);
+    }
 }

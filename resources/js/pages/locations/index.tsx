@@ -27,6 +27,7 @@ import {
     ArrowUpDown,
     ChartColumnIncreasing,
     CheckCircle2,
+    Clock,
     ClockAlert,
     Code2,
     DollarSign,
@@ -96,6 +97,7 @@ function getLocationActions(location: Location, canClose: boolean) {
                 { href: `/location/${location.id}/job-forecast`, icon: ChartColumnIncreasing, label: 'Job Forecast' },
                 { href: `/projects/${location.id}/drawings`, icon: FileImage, label: 'Drawings' },
                 { href: `/locations/${location.id}/variations`, icon: Eye, label: 'Variations' },
+                { href: `/locations/${location.id}/load-timesheets`, icon: Clock, label: 'Load Timesheets' },
             ],
         },
         {
