@@ -207,7 +207,6 @@ export function ProductionDataTable<TData, TValue>({ columns, data, groupBy, onG
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
                                 <SelectItem value="area">Area</SelectItem>
                                 <SelectItem value="cost_code">Cost Code</SelectItem>
                             </SelectContent>

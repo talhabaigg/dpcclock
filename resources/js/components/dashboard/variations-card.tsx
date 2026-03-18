@@ -51,10 +51,15 @@ const STATUS_BG: Record<string, string> = {
 /** Workflow order for statuses. */
 const STATUS_ORDER: string[] = ['approved', 'sent', 'pending', 'draft', 'rejected'];
 
+const VISIBLE_STATUSES = ['pending', 'approved'];
+
 export default function VariationsCard({ data, locationId, originalContractIncome, isEditing }: VariationsCardProps) {
     const { ref: contentRef, height } = useContainerSize();
     const compact = height > 0 && height < 200;
     const ultraCompact = height > 0 && height < 120;
+
+    // Filter to only pending & approved statuses
+    const filtered = useMemo(() => data.filter(r => VISIBLE_STATUSES.includes(r.status?.toLowerCase())), [data]);
 
     const drillDown = (params: { status?: string; type?: string }) => {
         if (!locationId) return;
@@ -66,7 +71,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     };
 
     const [view, setView] = useState<'visual' | 'table'>('table');
-    const [expandedTypes, setExpandedTypes] = useState<Set<string>>(() => new Set(data.map(r => (r.type?.toLowerCase() ?? 'unknown'))));
+    const [expandedTypes, setExpandedTypes] = useState<Set<string>>(() => new Set(filtered.map(r => (r.type?.toLowerCase() ?? 'unknown'))));
     const toggleExpand = (type: string) => {
         setExpandedTypes((prev) => {
             const next = new Set(prev);
@@ -82,7 +87,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
     // Group rows by change type, then aggregate statuses within each type
     const typeGroups = useMemo<TypeGroup[]>(() => {
         const map = new Map<string, { type: string; qty: number; value: number; aging: number; statusMap: Map<string, { status: string; qty: number; value: number }> }>();
-        for (const row of data) {
+        for (const row of filtered) {
             const typeKey = row.type?.toLowerCase() ?? 'unknown';
             if (!map.has(typeKey)) {
                 map.set(typeKey, { type: row.type, qty: 0, value: 0, aging: 0, statusMap: new Map() });
@@ -112,12 +117,12 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                 }),
             }))
             .sort((a, b) => b.value - a.value);
-    }, [data]);
+    }, [filtered]);
 
     // Status-level totals for the stacked bar
     const statusTotals = useMemo(() => {
         const map = new Map<string, { status: string; value: number; qty: number }>();
-        for (const row of data) {
+        for (const row of filtered) {
             const key = row.status?.toLowerCase() ?? 'unknown';
             if (!map.has(key)) map.set(key, { status: row.status, value: 0, qty: 0 });
             const entry = map.get(key)!;
@@ -129,27 +134,16 @@ export default function VariationsCard({ data, locationId, originalContractIncom
             const bi = STATUS_ORDER.indexOf(b.status.toLowerCase());
             return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-    }, [data]);
+    }, [filtered]);
 
-    const totalQty = data.reduce((sum, row) => sum + row.qty, 0);
-    const totalValue = data.reduce((sum, row) => sum + row.value, 0);
-    const totalAging = data.reduce((sum, row) => sum + (row.aging_over_30 ?? 0), 0);
-    const totalAgingValue = data.reduce((sum, row) => sum + (row.aging_over_30_value ?? 0), 0);
-
-    // Statuses excluded from the active total
-    const EXCLUDED_STATUSES = ['rejected', 'revising'];
-    const excludedValue = statusTotals
-        .filter((s) => EXCLUDED_STATUSES.includes(s.status.toLowerCase()))
-        .reduce((sum, s) => sum + s.value, 0);
-    const excludedQty = data
-        .filter(r => EXCLUDED_STATUSES.includes(r.status?.toLowerCase()))
-        .reduce((sum, r) => sum + r.qty, 0);
-    const hasExcluded = excludedQty > 0;
-    const activeValue = totalValue - excludedValue;
+    const totalQty = filtered.reduce((sum, row) => sum + row.qty, 0);
+    const totalValue = filtered.reduce((sum, row) => sum + row.value, 0);
+    const totalAging = filtered.reduce((sum, row) => sum + (row.aging_over_30 ?? 0), 0);
+    const totalAgingValue = filtered.reduce((sum, row) => sum + (row.aging_over_30_value ?? 0), 0);
 
     // Contract impact percentage
     const hasContract = originalContractIncome != null && originalContractIncome > 0;
-    const contractPercent = hasContract ? ((hasExcluded ? activeValue : totalValue) / originalContractIncome!) * 100 : 0;
+    const contractPercent = hasContract ? (totalValue / originalContractIncome!) * 100 : 0;
 
     // Max group value for proportional bars
     const maxGroupValue = typeGroups.length > 0 ? Math.max(...typeGroups.map(g => Math.abs(g.value))) : 1;
@@ -161,7 +155,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Variations</CardTitle>
                     <div className="flex items-center gap-1">
-                        {data.length > 0 && (
+                        {filtered.length > 0 && (
                             <div className="flex items-center rounded border border-border overflow-hidden">
                                 <button
                                     type="button"
@@ -191,7 +185,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                 </div>
             </CardHeader>
             <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col">
-                {data.length === 0 ? (
+                {filtered.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center">
                         <span className="text-[11px] text-muted-foreground">No variations found.</span>
                     </div>
@@ -212,12 +206,11 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                                                     locationId && 'hover:underline cursor-pointer',
                                                 )}
                                             >
-                                                {formatCompact(hasExcluded ? activeValue : totalValue)}
+                                                {formatCompact(totalValue)}
                                             </button>
                                         </TooltipTrigger>
                                         <TooltipContent side="bottom" className="text-[10px]">
-                                            <div>{totalQty} total variations — {formatCurrency(totalValue)}</div>
-                                            {hasExcluded && <div>Active (excl. rejected): {formatCurrency(activeValue)}</div>}
+                                            <div>{totalQty} variations — {formatCurrency(totalValue)}</div>
                                             {locationId && <div className="font-semibold mt-0.5">Click to view all</div>}
                                         </TooltipContent>
                                     </Tooltip>
@@ -237,12 +230,12 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                                 </div>
 
                                 {/* ── Stacked status bar ── */}
-                                {activeValue > 0 && (
+                                {totalValue > 0 && (
                                     <div className={cn('w-full rounded-full bg-muted/60 overflow-hidden flex', compact ? 'h-2 mt-1.5' : 'h-3 mt-2')}>
                                         {statusTotals
-                                            .filter((s) => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()) && s.value > 0)
+                                            .filter((s) => s.value > 0)
                                             .map((s) => {
-                                                const pct = (s.value / activeValue) * 100;
+                                                const pct = (s.value / totalValue) * 100;
                                                 const color = STATUS_COLORS[s.status.toLowerCase()] ?? STATUS_COLORS.draft;
                                                 return (
                                                     <Tooltip key={s.status}>
@@ -266,9 +259,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                                 {/* ── Status legend pills ── */}
                                 {!ultraCompact && (
                                     <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
-                                        {statusTotals
-                                            .filter(s => !EXCLUDED_STATUSES.includes(s.status.toLowerCase()))
-                                            .map(s => (
+                                        {statusTotals.map(s => (
                                                 <button
                                                     key={s.status}
                                                     type="button"
@@ -340,7 +331,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
                                                                 {/* Segmented status colors within the bar */}
                                                                 <div className="absolute inset-0 rounded-r overflow-hidden flex">
                                                                     {group.children
-                                                                        .filter(c => !EXCLUDED_STATUSES.includes(c.status.toLowerCase()) && c.value > 0)
+                                                                        .filter(c => c.value > 0)
                                                                         .map(c => {
                                                                             const segPct = group.value > 0 ? (c.value / group.value) * 100 : 0;
                                                                             return (

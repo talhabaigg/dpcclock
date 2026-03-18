@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { formatCurrency, formatCompact, useContainerSize } from './dashboard-utils';
 
 interface ClaimVsProductionCardProps {
@@ -30,27 +29,18 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
         );
     }
 
-    const delta = dpcPercentComplete - claimedPercent;
-    const isAhead = delta > 0.5;
-    const isBehind = delta < -0.5;
-
     const dpcClaimAmount = (dpcPercentComplete / 100) * currentContractIncome;
     const billingDiff = actualClaimedAmount - dpcClaimAmount;
     const isOverBilled = billingDiff > 0;
     const isUnderBilled = billingDiff < 0;
 
-    const compact = width > 0 && (width < 180 || height < 100);
+    const compact = width > 0 && (width < 130 || height < 80);
 
-    const heroClass = compact ? 'text-sm' : 'text-base';
     const barLabelClass = compact ? 'text-[8px]' : 'text-[10px]';
     const barValueClass = compact ? 'text-[9px]' : 'text-[11px]';
     const labelClass = compact ? 'text-[8px]' : 'text-[9px]';
 
-    const dpcTextColor = isAhead
-        ? 'text-green-600 dark:text-green-400'
-        : isBehind
-            ? 'text-amber-600 dark:text-amber-400'
-            : 'text-muted-foreground';
+    const dpcTextColor = 'text-muted-foreground';
 
     return (
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
@@ -61,68 +51,39 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
             </CardHeader>
             <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col justify-center gap-1.5 px-2 py-1.5">
                 <TooltipProvider delayDuration={200}>
-                    {/* Hero — single focal point, text-only (no decorative border/bg) */}
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="flex items-center justify-center gap-1 px-2 py-1">
-                                <span className={cn(
-                                    'inline-flex items-center',
-                                    isAhead && 'text-green-600 dark:text-green-400',
-                                    isBehind && 'text-amber-600 dark:text-amber-400',
-                                    !isAhead && !isBehind && 'text-muted-foreground',
-                                )}>
-                                    {isAhead && <ArrowUpRight className="h-3.5 w-3.5" />}
-                                    {isBehind && <ArrowDownRight className="h-3.5 w-3.5" />}
-                                    {!isAhead && !isBehind && <Minus className="h-3.5 w-3.5" />}
-                                </span>
-                                <span className={cn(
-                                    heroClass,
-                                    'font-bold tabular-nums leading-none',
-                                    isAhead && 'text-green-600 dark:text-green-400',
-                                    isBehind && 'text-amber-600 dark:text-amber-400',
-                                    !isAhead && !isBehind && 'text-muted-foreground',
-                                )}>
-                                    {isAhead ? 'Ahead' : isBehind ? 'Behind' : 'On Track'}
-                                    {(isAhead || isBehind) && ` ${Math.abs(delta).toFixed(2)}%`}
-                                </span>
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-[10px] max-w-[280px]">
-                            <div>DPC % Complete: {dpcPercentComplete.toFixed(2)}%</div>
-                            <div>Claimed %: {claimedPercent.toFixed(2)}%</div>
-                            <div className="border-t border-border/50 mt-0.5 pt-0.5">
-                                DPC is {isAhead ? 'ahead of' : isBehind ? 'behind' : 'tracking'} claims by {Math.abs(delta).toFixed(2)}%
-                            </div>
-                        </TooltipContent>
-                    </Tooltip>
-
-                    {/* Side-by-side comparison metrics */}
-                    <div className="flex items-center justify-center gap-0" role="group" aria-label="Claim vs DPC comparison">
+                    {/* Comparison metrics — stacked when narrow, side-by-side when wide */}
+                    <div className={cn(
+                        'flex items-center justify-center gap-0',
+                        compact ? 'flex-col gap-1' : 'flex-row',
+                    )} role="group" aria-label="Claim vs DPC comparison">
                         {/* Claimed metric */}
-                        <div className="flex-1 flex flex-col items-center gap-0.5">
+                        <div className={cn('flex flex-col items-center gap-0.5', !compact && 'flex-1')}>
                             <span className={cn(barLabelClass, 'font-medium text-muted-foreground')}>Claimed</span>
-                            <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
+                            <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
                                 {claimedPercent.toFixed(2)}%
                             </span>
                         </div>
 
-                        {/* Divider */}
-                        <div className="w-px h-8 bg-border shrink-0" />
+                        {/* Divider — vertical when side-by-side, horizontal when stacked */}
+                        <div className={cn(
+                            'bg-border shrink-0',
+                            compact ? 'h-px w-full' : 'w-px h-8',
+                        )} />
 
-                        {/* DPC metric — semantic color */}
-                        <div className="flex-1 flex flex-col items-center gap-0.5">
+                        {/* DPC metric */}
+                        <div className={cn('flex flex-col items-center gap-0.5', !compact && 'flex-1')}>
                             <span className={cn(barLabelClass, 'font-medium', dpcTextColor)}>DPC</span>
-                            <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold leading-none', dpcTextColor)}>
+                            <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold leading-none', dpcTextColor)}>
                                 {dpcPercentComplete.toFixed(2)}%
                             </span>
                         </div>
                     </div>
 
-                    {/* Billing position — demoted to inline detail */}
+                    {/* Billing position */}
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <div className="flex items-center justify-between cursor-default">
-                                <span className={cn(labelClass, 'text-muted-foreground')}>Billing:</span>
+                            <div className={cn('flex items-center cursor-default', compact ? 'justify-center' : 'justify-between')}>
+                                {!compact && <span className={cn(labelClass, 'text-muted-foreground')}>Billing:</span>}
                                 <span className={cn(
                                     barValueClass,
                                     'font-semibold tabular-nums leading-none',

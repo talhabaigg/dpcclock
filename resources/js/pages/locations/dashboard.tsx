@@ -116,7 +116,7 @@ function shortDate(dateStr: string): string {
 export default function Dashboard({ location, timelineData, asOfDate, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
-    const [groupBy, setGroupBy] = useState<GroupByMode>('none');
+    const [groupBy, setGroupBy] = useState<GroupByMode>('area');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
     const [reportOpen, setReportOpen] = useState(false);
     const [jobSelectorOpen, setJobSelectorOpen] = useState(false);

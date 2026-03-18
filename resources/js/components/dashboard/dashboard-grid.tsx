@@ -18,6 +18,7 @@ import BudgetSafetyCard from './budget-safety-card';
 import ClaimVsProductionCard from './claim-vs-production-card';
 import BudgetWeatherCard from './budget-weather-card';
 import IndustrialActionCard from './industrial-action-card';
+import OncostRatioCard from './oncost-ratio-card';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -38,6 +39,7 @@ const MOBILE_WIDGET_CONFIG: Record<string, { minH: number; size: 'sm' | 'md' | '
     'sc-commitments':       { minH: 180, size: 'md' },
     'employees-on-site':    { minH: 280, size: 'lg' },
     'claim-vs-production':  { minH: 150, size: 'sm' },
+    'oncost-ratio':         { minH: 150, size: 'sm' },
     'project-income':       { minH: 220, size: 'md' },
     'labour-budget':        { minH: 300, size: 'lg' },
 };
@@ -154,6 +156,8 @@ case 'po-commitments':
             return <ProjectIncomeCard data={props.projectIncomeData} isEditing={isEditing} asOfDate={props.asOfDate} poCommitments={props.vendorCommitmentsSummary?.po_outstanding ?? 0} />;
         case 'labour-budget':
             return <LabourBudgetCard data={props.labourBudgetData} isEditing={isEditing} />;
+        case 'oncost-ratio':
+            return <OncostRatioCard data={props.labourBudgetData} isEditing={isEditing} />;
         default:
             return null;
     }
@@ -434,7 +438,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
                 { ids: ['project-details', 'variations'], spans: [1, 2], minH: 280 },
                 { ids: ['budget-safety', 'budget-weather', 'industrial-action'], minH: 200 },
                 { ids: ['margin-health', 'po-commitments', 'sc-commitments'], minH: 140 },
-                { ids: ['claim-vs-production', 'project-income'], spans: [1, 2], minH: 200 },
+                { ids: ['claim-vs-production', 'oncost-ratio', 'project-income'], spans: [1, 1, 2], minH: 200 },
                 { ids: ['labour-budget'], minH: 260 },
                 { ids: ['employees-on-site'], minH: 240 },
             ];
@@ -503,7 +507,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
             { ids: ['budget-safety', 'budget-weather'], minH: 240 },
             { ids: ['industrial-action', 'margin-health'], minH: 120 },
             { ids: ['po-commitments', 'sc-commitments'], minH: 180 },
-            { ids: ['claim-vs-production'], minH: 150 },
+            { ids: ['claim-vs-production', 'oncost-ratio'], minH: 150 },
             { ids: ['project-income'], minH: 220 },
             { ids: ['labour-budget'], minH: 300 },
             { ids: ['employees-on-site'], minH: 280 },

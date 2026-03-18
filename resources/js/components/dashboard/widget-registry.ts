@@ -88,7 +88,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     {
         id: 'claim-vs-production',
         label: 'Claim vs DPC',
-        minW: 2,
+        minW: 1,
         minH: 2,
         defaultLayout: { x: 6, y: 2, w: 2, h: 2 },
     },
@@ -105,6 +105,13 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         minW: 2,
         minH: 2,
         defaultLayout: { x: 0, y: 6, w: 8, h: 4 },
+    },
+    {
+        id: 'oncost-ratio',
+        label: 'Oncost Ratio',
+        minW: 1,
+        minH: 2,
+        defaultLayout: { x: 4, y: 2, w: 2, h: 2 },
     },
 ];
 
