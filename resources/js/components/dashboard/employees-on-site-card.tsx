@@ -5,8 +5,10 @@
  */
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Maximize2, Minus } from 'lucide-react';
 import { Line, LineChart, XAxis, YAxis, ReferenceDot } from 'recharts';
 import { format, parse, subMonths } from 'date-fns';
 import { useMemo, useState } from 'react';
@@ -64,6 +66,7 @@ const TYPE_COLORS = [
 
 export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSiteCardProps) {
     const [range, setRange] = useState<TimeRange>('All');
+    const [fullscreen, setFullscreen] = useState(false);
 
     // Delta calculation
     const total = data?.total_workers ?? 0;
@@ -128,6 +131,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
     const totalByType = data.by_type.reduce((sum, r) => sum + r.count, 0);
 
     return (
+        <>
         <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
             <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
@@ -171,6 +175,9 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 )}
                             </div>
                         )}
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setFullscreen(true)}>
+                            <Maximize2 className="h-3.5 w-3.5" />
+                        </Button>
                     </div>
                 </div>
             </CardHeader>
@@ -271,5 +278,134 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                 )}
             </CardContent>
         </Card>
+
+        {/* Fullscreen dialog */}
+        <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+            <DialogContent className="min-w-full h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
+                <DialogHeader className="flex flex-row items-center justify-between pl-4 pr-12 py-3 border-b shrink-0">
+                    <DialogTitle className="text-sm font-semibold">Employees on Site</DialogTitle>
+                    <div className="flex items-center gap-3">
+                        {/* Time range toggle */}
+                        <div className="flex items-center bg-muted/50 rounded-md p-0.5">
+                            {TIME_RANGES.map((tr) => (
+                                <button
+                                    key={tr.value}
+                                    type="button"
+                                    onClick={() => setRange(tr.value)}
+                                    className={cn(
+                                        "px-2 py-1 text-xs font-medium rounded-sm transition-colors leading-none",
+                                        range === tr.value
+                                            ? "bg-background text-foreground shadow-sm"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    {tr.label}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Hero KPI */}
+                        {total > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-2xl font-bold tabular-nums leading-none">{total}</span>
+                                {deltaPct !== null && delta !== 0 && (
+                                    <span className={cn(
+                                        "flex items-center gap-0.5 text-sm font-medium tabular-nums",
+                                        delta > 0 ? "text-emerald-600" : "text-red-500"
+                                    )}>
+                                        {delta > 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                                        {Math.abs(deltaPct)}%
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </DialogHeader>
+                <div className="flex-1 min-h-0 p-4">
+                    <ChartContainer config={chartConfig} className="h-full w-full">
+                        <LineChart data={trendData} margin={{ top: 16, right: 32, bottom: 8, left: 8 }}>
+                            <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 12, fill: '#a1a1aa' }}
+                                tickLine={false}
+                                axisLine={false}
+                                interval={0}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 12, fill: '#a1a1aa' }}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                                width={32}
+                            />
+                            <ChartTooltip
+                                content={({ active, payload }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const d = payload[0].payload;
+                                    return (
+                                        <div className="rounded-md border bg-background p-2 shadow-sm text-sm">
+                                            <div className="font-medium">{d.tooltip}</div>
+                                            <div className="text-muted-foreground">
+                                                Workers: <span className="font-semibold text-foreground">{d.count}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }}
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="count"
+                                stroke="hsl(217, 91%, 60%)"
+                                strokeWidth={2.5}
+                                dot={false}
+                                activeDot={{ r: 5 }}
+                            />
+                            {lastPoint && (
+                                <ReferenceDot
+                                    x={lastPoint.label || lastPoint.week_ending}
+                                    y={lastPoint.count}
+                                    r={4}
+                                    fill="hsl(217, 91%, 60%)"
+                                    stroke="white"
+                                    strokeWidth={2}
+                                    label={{
+                                        value: lastPoint.count,
+                                        position: 'top',
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        fill: 'hsl(217, 91%, 60%)',
+                                        offset: 8,
+                                    }}
+                                />
+                            )}
+                        </LineChart>
+                    </ChartContainer>
+                </div>
+                {/* Worktype breakdown */}
+                {data.by_type.length > 0 && (
+                    <div className="shrink-0 px-4 pb-3 pt-1 border-t">
+                        <div className="flex h-3 w-full rounded-full overflow-hidden gap-px">
+                            {data.by_type.map((row, i) => (
+                                <div
+                                    key={row.worktype}
+                                    className={cn("h-full rounded-sm", TYPE_COLORS[i % TYPE_COLORS.length])}
+                                    style={{ width: `${(row.count / totalByType) * 100}%` }}
+                                    title={`${row.worktype}: ${row.count}`}
+                                />
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                            {data.by_type.map((row, i) => (
+                                <div key={row.worktype} className="flex items-center gap-1.5">
+                                    <div className={cn("h-2 w-2 rounded-full shrink-0", TYPE_COLORS[i % TYPE_COLORS.length])} />
+                                    <span className="text-xs text-muted-foreground">{row.worktype}</span>
+                                    <span className="text-xs font-semibold tabular-nums">{row.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

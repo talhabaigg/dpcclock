@@ -230,95 +230,180 @@ export default function Dashboard({ location, timelineData, asOfDate, projectInc
             <div className="p-1.5 sm:p-2 flex flex-col gap-1.5 sm:gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden min-w-0">
 
                 {/* ── Top bar with tabs + filters ── */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 bg-card rounded-lg border p-2">
-                    <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="h-8">
-                            <TabsTrigger value="dashboard" className="text-xs h-6 px-3">Dashboard</TabsTrigger>
-                            <TabsTrigger value="production-data" className="text-xs h-6 px-3">DPC</TabsTrigger>
-                            <TabsTrigger value="analysis" className="text-xs h-6 px-3">Analysis</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
+                <div className="shrink-0 bg-card rounded-lg border p-1.5 sm:p-2">
+                    {/* Row 1: Tabs + Job selector (always visible) */}
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
+                        <Tabs value={activeTab} onValueChange={setActiveTab}>
+                            <TabsList className="h-9 sm:h-8">
+                                <TabsTrigger value="dashboard" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">Dashboard</TabsTrigger>
+                                <TabsTrigger value="production-data" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">DPC</TabsTrigger>
+                                <TabsTrigger value="analysis" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">Analysis</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
 
-                    <div className="hidden sm:block h-6 w-px bg-border" />
+                        <div className="hidden sm:block h-6 w-px bg-border" />
 
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Job:</span>
-                        <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" aria-expanded={jobSelectorOpen} className="h-8 w-full sm:w-[180px] justify-between text-xs font-medium">
-                                    {location.external_id}
-                                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[250px] p-0" align="start">
-                                <Command>
-                                    <CommandInput placeholder="Search jobs..." className="h-9 text-xs" />
-                                    <CommandList>
-                                        <CommandEmpty>No jobs found.</CommandEmpty>
-                                        <CommandGroup>
-                                            {availableLocations.map((loc) => (
-                                                <CommandItem
-                                                    key={loc.id}
-                                                    value={`${loc.external_id} ${loc.name}`}
-                                                    onSelect={() => {
-                                                        handleLocationChange(loc.id.toString());
-                                                        setJobSelectorOpen(false);
-                                                    }}
-                                                    className="text-xs"
-                                                >
-                                                    <Check className={cn('mr-2 h-3.5 w-3.5', location.id === loc.id ? 'opacity-100' : 'opacity-0')} />
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{loc.external_id}</span>
-                                                        <span className="text-[10px] text-muted-foreground truncate">{loc.name}</span>
-                                                    </div>
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-
-                    <div className="hidden sm:block flex-1" />
-
-                    {activeTab !== 'production-data' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
-                            <div className="flex items-center gap-1">
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePreviousMonth}>
-                                    <ChevronLeft className="h-3.5 w-3.5" />
-                                </Button>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className={cn('h-8 w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
-                                            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                                            {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="end" onKeyDown={handleKeyDown}>
-                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
-                                    </PopoverContent>
-                                </Popover>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
-                                    <ChevronRight className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
+                        <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0">
+                            <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">Job:</span>
+                            <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" role="combobox" aria-expanded={jobSelectorOpen} className="h-9 sm:h-8 w-auto sm:w-[180px] justify-between text-xs font-medium px-2.5 sm:px-3">
+                                        {location.external_id}
+                                        <ChevronsUpDown className="ml-1.5 sm:ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[250px] p-0" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Search jobs..." className="h-9 text-xs" />
+                                        <CommandList>
+                                            <CommandEmpty>No jobs found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {availableLocations.map((loc) => (
+                                                    <CommandItem
+                                                        key={loc.id}
+                                                        value={`${loc.external_id} ${loc.name}`}
+                                                        onSelect={() => {
+                                                            handleLocationChange(loc.id.toString());
+                                                            setJobSelectorOpen(false);
+                                                        }}
+                                                        className="text-xs"
+                                                    >
+                                                        <Check className={cn('mr-2 h-3.5 w-3.5', location.id === loc.id ? 'opacity-100' : 'opacity-0')} />
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium">{loc.external_id}</span>
+                                                            <span className="text-[10px] text-muted-foreground truncate">{loc.name}</span>
+                                                        </div>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
-                    )}
 
-                    {productionUploads.length > 0 && (
-                        <>
-                            <div className="hidden sm:block h-6 w-px bg-border" />
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Report:</span>
+                        <div className="hidden sm:block flex-1" />
+
+                        {/* Desktop-only: layout editing controls inline */}
+                        {activeTab === 'dashboard' && !isFixedLayout && isAdmin && (
+                            <>
+                                <div className="hidden sm:block h-6 w-px bg-border" />
+
+                                {allLayouts && (
+                                    <LayoutManager allLayouts={allLayouts} activeLayoutId={activeLayout?.id ?? null} />
+                                )}
+
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 opacity-40 hover:opacity-100"
+                                                onClick={() => setIsEditing(!isEditing)}
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="text-xs">{isEditing ? 'Done editing' : 'Edit layout'}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                {isEditing && (
+                                    <>
+                                        <Popover open={widgetsOpen} onOpenChange={setWidgetsOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
+                                                    {hiddenWidgets.length > 0 ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                                    Widgets
+                                                    {hiddenWidgets.length > 0 && (
+                                                        <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
+                                                            {WIDGET_REGISTRY.length - hiddenWidgets.length}/{WIDGET_REGISTRY.length}
+                                                        </span>
+                                                    )}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[240px] p-2" align="end">
+                                                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Toggle widget visibility</p>
+                                                <div className="space-y-1">
+                                                    {WIDGET_REGISTRY.map((w) => {
+                                                        const isHidden = hiddenWidgets.includes(w.id);
+                                                        return (
+                                                            <button
+                                                                key={w.id}
+                                                                type="button"
+                                                                onClick={() => toggleWidget(w.id)}
+                                                                className={cn(
+                                                                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
+                                                                    isHidden && 'opacity-50',
+                                                                )}
+                                                            >
+                                                                <Switch checked={!isHidden} className="scale-75" />
+                                                                <span className={cn('truncate', isHidden && 'line-through')}>{w.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs px-2" onClick={resetLayout}>
+                                            <RotateCcw className="h-3 w-3" />
+                                            Reset
+                                        </Button>
+
+                                        {selectedWidgets.size > 1 && (
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {selectedWidgets.size} selected — drag to move together
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                        {/* Date picker: stacked on mobile, inline in this row on desktop */}
+                        {activeTab !== 'production-data' && (
+                            <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t w-full sm:contents">
+                                <span className="text-[10px] font-medium text-muted-foreground sm:hidden">As of Date</span>
+                                <div className="hidden sm:block h-6 w-px bg-border" />
+                                <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
+                                <div className="flex items-center gap-1.5">
+                                    <Button variant="outline" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" onClick={handlePreviousMonth}>
+                                        <ChevronLeft className="h-4 sm:h-3.5 w-4 sm:w-3.5" />
+                                    </Button>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className={cn('h-9 sm:h-8 flex-1 sm:flex-none sm:w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
+                                                <CalendarIcon className="mr-1.5 sm:mr-2 h-3.5 w-3.5" />
+                                                {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="end" onKeyDown={handleKeyDown}>
+                                            <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                                        </PopoverContent>
+                                    </Popover>
+                                    <Button variant="outline" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" onClick={handleNextMonth}>
+                                        <ChevronRight className="h-4 sm:h-3.5 w-4 sm:w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Report selector: stacked on mobile, inline in this row on desktop */}
+                        {productionUploads.length > 0 && (
+                            <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t w-full sm:contents">
+                                <span className="text-[10px] font-medium text-muted-foreground sm:hidden">DPC Report Date</span>
+                                <div className="hidden sm:block h-6 w-px bg-border" />
+                                <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">Report:</span>
                                 <Popover open={reportOpen} onOpenChange={setReportOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-8 w-full sm:w-[160px] justify-between text-xs font-normal">
+                                        <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-9 sm:h-8 w-full sm:w-[160px] justify-between text-xs font-normal">
                                             {selectedUploadId
                                                 ? formatReportDate(productionUploads.find((u) => u.id === selectedUploadId)?.report_date ?? '')
                                                 : 'Select report'}
-                                            <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                            <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[220px] p-0" align="end">
@@ -347,87 +432,8 @@ export default function Dashboard({ location, timelineData, asOfDate, projectInc
                                     </PopoverContent>
                                 </Popover>
                             </div>
-                        </>
-                    )}
-
-                    {activeTab === 'dashboard' && !isFixedLayout && isAdmin && (
-                        <>
-                            <div className="hidden sm:block h-6 w-px bg-border" />
-
-                            {allLayouts && (
-                                <LayoutManager allLayouts={allLayouts} activeLayoutId={activeLayout?.id ?? null} />
-                            )}
-
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 opacity-40 hover:opacity-100"
-                                            onClick={() => setIsEditing(!isEditing)}
-                                        >
-                                            <Pencil className="h-3 w-3" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p className="text-xs">{isEditing ? 'Done editing' : 'Edit layout'}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-
-                            {isEditing && (
-                                <>
-                                    <Popover open={widgetsOpen} onOpenChange={setWidgetsOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
-                                                {hiddenWidgets.length > 0 ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                                Widgets
-                                                {hiddenWidgets.length > 0 && (
-                                                    <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
-                                                        {WIDGET_REGISTRY.length - hiddenWidgets.length}/{WIDGET_REGISTRY.length}
-                                                    </span>
-                                                )}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[240px] p-2" align="end">
-                                            <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Toggle widget visibility</p>
-                                            <div className="space-y-1">
-                                                {WIDGET_REGISTRY.map((w) => {
-                                                    const isHidden = hiddenWidgets.includes(w.id);
-                                                    return (
-                                                        <button
-                                                            key={w.id}
-                                                            type="button"
-                                                            onClick={() => toggleWidget(w.id)}
-                                                            className={cn(
-                                                                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
-                                                                isHidden && 'opacity-50',
-                                                            )}
-                                                        >
-                                                            <Switch checked={!isHidden} className="scale-75" />
-                                                            <span className={cn('truncate', isHidden && 'line-through')}>{w.label}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </PopoverContent>
-                                    </Popover>
-
-                                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs px-2" onClick={resetLayout}>
-                                        <RotateCcw className="h-3 w-3" />
-                                        Reset
-                                    </Button>
-
-                                    {selectedWidgets.size > 1 && (
-                                        <span className="text-[10px] text-muted-foreground">
-                                            {selectedWidgets.size} selected — drag to move together
-                                        </span>
-                                    )}
-                                </>
-                            )}
-                        </>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* ── Dashboard tab ── */}

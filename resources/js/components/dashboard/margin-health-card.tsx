@@ -108,7 +108,7 @@ export default function MarginHealthCard({ location, isEditing }: MarginHealthCa
                                 <span className={cn(labelClass, 'text-muted-foreground leading-none')}>
                                     Forecast Margin
                                 </span>
-                                {originalMargin !== null && !compact && (
+                                {originalMargin !== null && (
                                     <span className={cn(labelClass, 'text-muted-foreground leading-none mt-0.5')}>
                                         vs {originalMargin.toFixed(2)}% original
                                     </span>

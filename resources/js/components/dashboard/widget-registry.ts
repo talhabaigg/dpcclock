@@ -65,13 +65,6 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         defaultLayout: { x: 4, y: 2, w: 1, h: 1 },
     },
     {
-        id: 'this-month',
-        label: 'This Month',
-        minW: 1,
-        minH: 1,
-        defaultLayout: { x: 4, y: 3, w: 1, h: 1 },
-    },
-    {
         id: 'po-commitments',
         label: 'PO Commitments',
         minW: 1,

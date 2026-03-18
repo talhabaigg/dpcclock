@@ -8,7 +8,6 @@ import type { Location, JobSummary } from '@/types';
 
 import ProjectDetailsCard from './project-details-card';
 import MarginHealthCard from './margin-health-card';
-import ThisMonthCard from './this-month-card';
 import ProjectIncomeCard from './project-income-card';
 import VariationsCard from './variations-card';
 import LabourBudgetCard from './labour-budget-card';
@@ -22,6 +21,29 @@ import IndustrialActionCard from './industrial-action-card';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+
+/**
+ * Mobile min-heights per widget type.
+ * Chart/table widgets need more space; KPI cards are compact.
+ * 'sm' widgets can be paired side-by-side in portrait.
+ */
+const MOBILE_WIDGET_CONFIG: Record<string, { minH: number; size: 'sm' | 'md' | 'lg' }> = {
+    'project-details':      { minH: 180, size: 'md' },
+    'variations':           { minH: 220, size: 'md' },
+    'budget-safety':        { minH: 240, size: 'md' },
+    'industrial-action':    { minH: 120, size: 'sm' },
+    'budget-weather':       { minH: 240, size: 'md' },
+    'margin-health':        { minH: 120, size: 'sm' },
+    'po-commitments':       { minH: 140, size: 'sm' },
+    'sc-commitments':       { minH: 180, size: 'md' },
+    'employees-on-site':    { minH: 280, size: 'lg' },
+    'claim-vs-production':  { minH: 150, size: 'sm' },
+    'project-income':       { minH: 220, size: 'md' },
+    'labour-budget':        { minH: 300, size: 'lg' },
+};
+
+/** Widgets forced to the bottom of mobile layout, in this order. */
+const MOBILE_BOTTOM_WIDGETS = ['employees-on-site'];
 
 interface ProjectIncomeData {
     originalContractSum: { income: number; cost: number; profit: number; profitPercent: number };
@@ -108,8 +130,6 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
             );
         case 'margin-health':
             return <MarginHealthCard location={props.location} isEditing={isEditing} />;
-        case 'this-month':
-            return <ThisMonthCard thisMonth={props.projectIncomeData.thisMonth} previousMonth={props.projectIncomeData.previousMonth} isEditing={isEditing} />;
 case 'po-commitments':
             return <POCommitmentsCard value={props.vendorCommitmentsSummary?.po_outstanding ?? null} isEditing={isEditing} />;
         case 'sc-commitments':
@@ -135,7 +155,7 @@ case 'po-commitments':
         case 'labour-budget':
             return <LabourBudgetCard data={props.labourBudgetData} isEditing={isEditing} />;
         default:
-            return <div className="flex items-center justify-center h-full text-muted-foreground text-xs">Unknown widget</div>;
+            return null;
     }
 }
 
@@ -356,21 +376,170 @@ export default function DashboardGrid(props: DashboardGridProps) {
             }));
     }, [layouts, hiddenWidgets, isEditing]);
 
-    // Fixed mobile layout: stack widgets vertically
+    // ── Mobile / fixed layout ──
+    // Detect landscape orientation for 2-column layout
+    const [isLandscape, setIsLandscape] = useState(() => window.innerWidth > window.innerHeight);
+    useEffect(() => {
+        if (!isFixedLayout) return;
+        const mql = window.matchMedia('(orientation: landscape)');
+        const handler = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+        setIsLandscape(mql.matches);
+        mql.addEventListener('change', handler);
+        return () => mql.removeEventListener('change', handler);
+    }, [isFixedLayout]);
+
+    // Build mobile layout: group small widgets into pairs for side-by-side display
+    const mobileItems = useMemo(() => {
+        if (!isFixedLayout) return [];
+
+        const sorted = [...visibleLayouts].sort((a, b) => {
+            const aBottom = MOBILE_BOTTOM_WIDGETS.indexOf(a.i);
+            const bBottom = MOBILE_BOTTOM_WIDGETS.indexOf(b.i);
+            // Force bottom widgets to the end, preserving their relative order
+            if (aBottom !== -1 && bBottom !== -1) return aBottom - bBottom;
+            if (aBottom !== -1) return 1;
+            if (bBottom !== -1) return -1;
+            if (a.y !== b.y) return a.y - b.y;
+            return a.x - b.x;
+        });
+
+        // In landscape, all widgets go into a 2-column CSS grid — no pairing needed
+        if (isLandscape) return sorted;
+
+        // In portrait, pair consecutive 'sm' widgets side-by-side
+        const result: Array<{ type: 'single'; item: typeof sorted[0] } | { type: 'pair'; items: [typeof sorted[0], typeof sorted[0]] }> = [];
+        let i = 0;
+        while (i < sorted.length) {
+            const cfg = MOBILE_WIDGET_CONFIG[sorted[i].i];
+            const nextCfg = i + 1 < sorted.length ? MOBILE_WIDGET_CONFIG[sorted[i + 1].i] : undefined;
+
+            if (cfg?.size === 'sm' && nextCfg?.size === 'sm') {
+                result.push({ type: 'pair', items: [sorted[i], sorted[i + 1]] });
+                i += 2;
+            } else {
+                result.push({ type: 'single', item: sorted[i] });
+                i++;
+            }
+        }
+        return result;
+    }, [isFixedLayout, visibleLayouts, isLandscape]);
+
     if (isFixedLayout) {
-        return (
-            <div className="flex flex-col gap-2 overflow-auto pb-4" ref={containerRef}>
-                {visibleLayouts
-                    .sort((a, b) => {
-                        // Sort by y position, then x position for mobile view
-                        if (a.y !== b.y) return a.y - b.y;
-                        return a.x - b.x;
-                    })
-                    .map((item) => (
-                        <div key={item.i} className="w-full">
-                            {renderWidget(item.i, props, false)}
+        const getMinH = (id: string) => MOBILE_WIDGET_CONFIG[id]?.minH ?? 160;
+
+        // Landscape: explicit row definitions — no dynamic merge logic
+        if (isLandscape) {
+            // Each row: widget IDs, optional column spans, min height
+            const LANDSCAPE_ROWS: { ids: string[]; spans?: number[]; minH: number }[] = [
+                { ids: ['project-details', 'variations'], spans: [1, 2], minH: 280 },
+                { ids: ['budget-safety', 'budget-weather', 'industrial-action'], minH: 200 },
+                { ids: ['margin-health', 'po-commitments', 'sc-commitments'], minH: 140 },
+                { ids: ['claim-vs-production', 'project-income'], spans: [1, 2], minH: 200 },
+                { ids: ['labour-budget'], minH: 260 },
+                { ids: ['employees-on-site'], minH: 240 },
+            ];
+
+            const allRowIds = new Set(LANDSCAPE_ROWS.flatMap((r) => r.ids));
+            const sorted = mobileItems as typeof visibleLayouts;
+
+            // Resolve each row: only include visible widgets
+            const resolvedRows = LANDSCAPE_ROWS.map((row) => {
+                const items = row.ids
+                    .map((id) => sorted.find((item) => item.i === id))
+                    .filter(Boolean) as typeof visibleLayouts;
+                const spans = row.spans
+                    ? row.ids.map((id, i) => ({ id, span: row.spans![i] ?? 1 })).filter(({ id }) => items.some((item) => item.i === id)).map(({ span }) => span)
+                    : undefined;
+                return { ...row, items, spans };
+            }).filter((r) => r.items.length > 0);
+
+            // Any widgets not in a defined row go at the end in a 2-col grid
+            const remainingItems = sorted.filter((item) => !allRowIds.has(item.i));
+
+            return (
+                <div className="flex flex-col gap-2 overflow-auto pb-4 px-1" ref={containerRef}>
+                    {resolvedRows.map((row, idx) => {
+                        const totalCols = row.spans
+                            ? row.spans.reduce((a, b) => a + b, 0)
+                            : row.items.length;
+                        return (
+                            <div
+                                key={`row-${idx}`}
+                                className="grid gap-2 shrink-0"
+                                style={{ minHeight: row.minH, gridTemplateColumns: totalCols === 1 ? '1fr' : `repeat(${totalCols}, minmax(0, 1fr))`, gridTemplateRows: '1fr' }}
+                            >
+                                {row.items.map((item, i) => {
+                                    const span = row.spans?.[i] ?? 1;
+                                    return (
+                                        <div key={item.i} className="w-full h-full" style={span > 1 ? { gridColumn: `span ${span}` } : undefined}>
+                                            {renderWidget(item.i, props, false)}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                    {remainingItems.length > 0 && (
+                        <div className="grid grid-cols-2 gap-2 shrink-0">
+                            {remainingItems.map((item) => {
+                                const cfg = MOBILE_WIDGET_CONFIG[item.i];
+                                const h = cfg ? Math.round(cfg.minH * 0.85) : 140;
+                                return (
+                                    <div key={item.i} className="w-full" style={{ minHeight: h }}>
+                                        {renderWidget(item.i, props, false)}
+                                    </div>
+                                );
+                            })}
                         </div>
-                    ))}
+                    )}
+                </div>
+            );
+        }
+
+        // Portrait: explicit row definitions
+        const PORTRAIT_ROWS: { ids: string[]; minH: number }[] = [
+            { ids: ['project-details'], minH: 180 },
+            { ids: ['variations'], minH: 280 },
+            { ids: ['budget-safety', 'budget-weather'], minH: 240 },
+            { ids: ['industrial-action', 'margin-health'], minH: 120 },
+            { ids: ['po-commitments', 'sc-commitments'], minH: 180 },
+            { ids: ['claim-vs-production'], minH: 150 },
+            { ids: ['project-income'], minH: 220 },
+            { ids: ['labour-budget'], minH: 300 },
+            { ids: ['employees-on-site'], minH: 280 },
+        ];
+
+        const allPortraitRowIds = new Set(PORTRAIT_ROWS.flatMap((r) => r.ids));
+
+        const portraitResolvedRows = PORTRAIT_ROWS.map((row) => {
+            const items = row.ids
+                .map((id) => visibleLayouts.find((item) => item.i === id))
+                .filter(Boolean) as typeof visibleLayouts;
+            return { ...row, items };
+        }).filter((r) => r.items.length > 0);
+
+        const portraitRemainingItems = visibleLayouts.filter((item) => !allPortraitRowIds.has(item.i));
+
+        return (
+            <div className="flex flex-col gap-2 overflow-auto pb-4 px-1" ref={containerRef}>
+                {portraitResolvedRows.map((row, idx) => (
+                    <div
+                        key={`row-${idx}`}
+                        className="grid gap-2 shrink-0"
+                        style={{ minHeight: row.minH, gridTemplateColumns: `repeat(${row.items.length}, minmax(0, 1fr))`, gridTemplateRows: '1fr' }}
+                    >
+                        {row.items.map((item) => (
+                            <div key={item.i} className="w-full h-full">
+                                {renderWidget(item.i, props, false)}
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                {portraitRemainingItems.map((item) => (
+                    <div key={item.i} className="w-full shrink-0" style={{ minHeight: getMinH(item.i) }}>
+                        {renderWidget(item.i, props, false)}
+                    </div>
+                ))}
             </div>
         );
     }
