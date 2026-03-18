@@ -369,6 +369,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.view',
             // Kiosks (scoped to their assigned kiosk)
             'kiosks.view',
+            'kiosks.retrieve-token',
             // Timesheets (manage/review their employees via kiosk relation)
             'timesheets.view',
             'timesheets.edit',

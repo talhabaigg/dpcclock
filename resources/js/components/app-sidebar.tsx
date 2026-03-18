@@ -155,7 +155,7 @@ const documents = [
                 name: 'Allowance Types',
                 url: '/allowance-types',
                 icon: DollarSign,
-                permission: 'materials.view',
+                permission: 'employees.manage-worktypes',
             },
             {
                 name: 'Cost Codes',
@@ -179,7 +179,7 @@ const documents = [
                 name: 'Pay Rate Templates',
                 url: '/pay-rate-templates',
                 icon: DollarSign,
-                permission: 'materials.view',
+                permission: 'employees.manage-worktypes',
             },
             {
                 name: 'Premier Sync',
@@ -203,7 +203,7 @@ const documents = [
                 name: 'Update Pricing',
                 url: '/update-pricing',
                 icon: RefreshCw,
-                permission: 'materials.view',
+                permission: 'materials.edit',
             },
         ],
     },
@@ -332,7 +332,7 @@ export function AppSidebar() {
 
             <SidebarFooter>
                 <TokenUsageWidget className="mb-2" />
-                <NavFooter items={footerNavItems} className="mt-auto" />
+                <NavFooter items={footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission))} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

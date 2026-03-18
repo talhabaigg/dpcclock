@@ -96,26 +96,6 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                             <tr className="border-b hover:bg-muted/30 transition-colors">
                                 <td className="py-1 px-2 font-medium">
                                     <FieldLabel
-                                        label="Previous Month"
-                                        helpText="Costs and revenue from the previous calendar month. Used as a comparison baseline for current month performance."
-                                    />
-                                </td>
-                                <td className="text-right py-1 px-2 tabular-nums">
-                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.income)}
-                                </td>
-                                <td className="text-right py-1 px-2 tabular-nums">
-                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.cost)}
-                                </td>
-                                <td className="text-right py-1 px-2 tabular-nums">
-                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.profit)}
-                                </td>
-                                <td className="text-right py-1 px-2 tabular-nums">
-                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatPercent(data.previousMonth.profitPercent)}
-                                </td>
-                            </tr>
-                            <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
-                                <td className="py-1 px-2 font-medium">
-                                    <FieldLabel
                                         label="This Month"
                                         helpText="Actual costs incurred and revenue claimed for the current month to date. Income shows progress claim submitted for this month."
                                     />
@@ -153,6 +133,26 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                     ) : (
                                         formatPercent(thisMonth.profitPercent)
                                     )}
+                                </td>
+                            </tr>
+                            <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
+                                <td className="py-1 px-2 font-medium">
+                                    <FieldLabel
+                                        label="Previous Month"
+                                        helpText="Costs and revenue from the previous calendar month. Used as a comparison baseline for current month performance."
+                                    />
+                                </td>
+                                <td className="text-right py-1 px-2 tabular-nums">
+                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.income)}
+                                </td>
+                                <td className="text-right py-1 px-2 tabular-nums">
+                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.cost)}
+                                </td>
+                                <td className="text-right py-1 px-2 tabular-nums">
+                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.profit)}
+                                </td>
+                                <td className="text-right py-1 px-2 tabular-nums">
+                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatPercent(data.previousMonth.profitPercent)}
                                 </td>
                             </tr>
                             <tr className="border-b hover:bg-muted/30 transition-colors">

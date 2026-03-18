@@ -74,6 +74,32 @@ class User extends Authenticatable implements HasPasskeys
         return $this->belongsToMany(Kiosk::class, 'kiosk_user');
     }
 
+    /**
+     * Get location IDs this user can access via kiosk manager assignments.
+     * Includes both the kiosk's direct location and its parent job location.
+     */
+    public function managedLocationIds(): \Illuminate\Support\Collection
+    {
+        $kioskEhLocationIds = $this->managedKiosks()
+            ->pluck('eh_location_id')
+            ->filter()
+            ->unique();
+
+        if ($kioskEhLocationIds->isEmpty()) {
+            return collect();
+        }
+
+        // Get parent eh_location_ids for any sub-locations
+        $parentEhIds = Location::whereIn('eh_location_id', $kioskEhLocationIds)
+            ->whereNotNull('eh_parent_id')
+            ->pluck('eh_parent_id')
+            ->unique();
+
+        // Return IDs of: kiosk locations + their parent locations
+        return Location::whereIn('eh_location_id', $kioskEhLocationIds->merge($parentEhIds)->unique())
+            ->pluck('id');
+    }
+
     public function aiChatMessages()
     {
         return $this->hasMany(AiChatMessage::class);

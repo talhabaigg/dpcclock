@@ -152,18 +152,7 @@ class LocationController extends Controller
      */
     public function projectDashboard()
     {
-        $availableLocations = Location::open()
-            ->with('jobSummary')
-            ->whereHas('jobSummary')
-            ->whereNotNull('external_id')
-            ->where('external_id', '!=', '')
-            ->orderBy('name')
-            ->get()
-            ->map(fn($loc) => [
-                'id' => $loc->id,
-                'name' => $loc->name,
-                'external_id' => $loc->external_id,
-            ]);
+        $availableLocations = $this->getAvailableLocations();
 
         return Inertia::render('locations/project-dashboard', [
             'availableLocations' => $availableLocations,
@@ -171,10 +160,43 @@ class LocationController extends Controller
     }
 
     /**
+     * Get available locations for the job selector, scoped by user role.
+     * Admin/backoffice see all; managers only see their kiosk-assigned locations.
+     */
+    private function getAvailableLocations()
+    {
+        $user = auth()->user();
+
+        $query = Location::open()
+            ->with('jobSummary')
+            ->whereHas('jobSummary')
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '');
+
+        if (! $user->hasRole(['admin', 'backoffice'])) {
+            $query->whereIn('id', $user->managedLocationIds());
+        }
+
+        return $query->orderBy('name')
+            ->get()
+            ->map(fn($loc) => [
+                'id' => $loc->id,
+                'name' => $loc->name,
+                'external_id' => $loc->external_id,
+            ]);
+    }
+
+    /**
      * Display the project dashboard.
      */
     public function dashboard(Request $request, Location $location)
     {
+        // Ensure non-admin/backoffice users can only access their managed locations
+        $user = auth()->user();
+        if (! $user->hasRole(['admin', 'backoffice']) && ! $user->managedLocationIds()->contains($location->id)) {
+            abort(403, 'You do not have access to this project.');
+        }
+
         $location->load('jobSummary', 'vendorCommitments');
 
         // Append forecast cost from job report (sum of estimate_at_completion)
@@ -367,19 +389,8 @@ class LocationController extends Controller
             ];
         }
 
-        // Get all locations with job summaries for the selector
-        $availableLocations = Location::open()
-            ->with('jobSummary')
-            ->whereHas('jobSummary')
-            ->whereNotNull('external_id')
-            ->where('external_id', '!=', '')
-            ->orderBy('name')
-            ->get()
-            ->map(fn($loc) => [
-                'id' => $loc->id,
-                'name' => $loc->name,
-                'external_id' => $loc->external_id,
-            ]);
+        // Get available locations for the selector (scoped by user role)
+        $availableLocations = $this->getAvailableLocations();
 
         // Industrial action — total hours where worktype is industrial action (eh_worktype_id = 2585103)
         $industrialActionHours = 0;
