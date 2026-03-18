@@ -361,67 +361,26 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         'manager' => [
-            // Dashboard
+            // Dashboard (scoped to their project via kiosk manager relation)
             'dashboard.view',
-            // Users (limited)
-            'users.view',
-            // Employees
+            // Employees (view list only)
             'employees.view',
-            'employees.manage-worktypes',
-            // Locations
+            // Locations (view only)
             'locations.view',
-            'locations.edit',
-            // Kiosks
+            // Kiosks (scoped to their assigned kiosk)
             'kiosks.view',
-            'kiosks.edit',
-            'kiosks.manage-employees',
-            'kiosks.retrieve-token',
-            // Timesheets
+            // Timesheets (manage/review their employees via kiosk relation)
             'timesheets.view',
             'timesheets.edit',
             'timesheets.review',
             'clocks.manage',
-            // Calendar
-            'calendar.view',
-            'timesheet-events.create',
-            'timesheet-events.edit',
-            'timesheet-events.generate',
-            // Worktypes
-            'worktypes.view',
-            // Requisitions
+            // Requisitions (scoped to their location via kiosk relation)
             'requisitions.view',
-            'requisitions.view-all',
             'requisitions.create',
             'requisitions.edit',
-            'requisitions.process',
             'requisitions.export',
-            // Materials
+            // Materials (view material list only)
             'materials.view',
-            // Suppliers
-            'suppliers.view',
-            // Cost Codes
-            'costcodes.view',
-            'costtypes.view',
-            // Forecasting
-            'forecast.view',
-            'forecast.edit',
-            'forecast.submit',
-            'forecast-projects.view',
-            'turnover-forecast.view',
-            'cash-forecast.view',
-            // Variations
-            'variations.view',
-            'variations.create',
-            'variations.edit',
-            // Drawings
-            'drawings.view',
-            // Drawing Viewer (production only)
-            'production.view',
-            'production.edit',
-            // Reports
-            'reports.view',
-            'reports.missing-sign-out',
-            'reports.safety-dashboard',
         ],
 
         'kiosk' => [

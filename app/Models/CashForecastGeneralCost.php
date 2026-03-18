@@ -129,6 +129,13 @@ class CashForecastGeneralCost extends Model
             'equipment' => 'Equipment & Maintenance',
             'travel' => 'Travel & Accommodation',
             'training' => 'Training & Development',
+            'management_fees' => 'Management Fees',
+            'other_revenue' => 'Other Revenue Received (Interests)',
+            'tax_refund' => 'Tax Refund',
+            'cash_disbursements' => 'Cash Disbursements to Owner',
+            'income_tax' => 'Income Tax Expense',
+            'loans' => 'Loans',
+            'new_shareholders' => 'New Shareholders',
             'other' => 'Other',
         ];
     }
