@@ -37,7 +37,7 @@ const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey
     { key: 'cost-codes', label: 'Cost Codes', icon: Code2, countKey: 'cost_codes' },
     { key: 'price-list', label: 'Price List', icon: DollarSign, countKey: 'price_list' },
     { key: 'favourites', label: 'Favorites', icon: Heart, countKey: 'favourites' },
-    { key: 'production-data', label: 'Production Data', icon: ChartColumnIncreasing, countKey: 'production_data' },
+    { key: 'production-data', label: 'DPC Data', icon: ChartColumnIncreasing, countKey: 'production_data' },
 ];
 
 export type LocationBase = {

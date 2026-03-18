@@ -229,7 +229,7 @@ export default function ProductionData() {
             <Card>
                 <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                     <div className="flex items-center justify-between">
-                        <CardTitle className="text-base">Production Data</CardTitle>
+                        <CardTitle className="text-base">DPC Data</CardTitle>
                         <Button onClick={handleOpenWizard} className="gap-2" size="sm">
                             <Upload className="h-4 w-4" />
                             Upload CSV
@@ -256,7 +256,7 @@ export default function ProductionData() {
                                         <TableCell colSpan={7} className="h-32 text-center">
                                             <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                 <BarChart3 className="h-8 w-8 opacity-40" />
-                                                <p>No production data uploaded yet</p>
+                                                <p>No DPC data uploaded yet</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -336,7 +336,7 @@ export default function ProductionData() {
             >
                 <DialogContent className="min-w-full h-[calc(100%-2rem)] grid-rows-[auto_1fr]">
                     <DialogHeader>
-                        <DialogTitle>Upload Production CSV</DialogTitle>
+                        <DialogTitle>Upload DPC CSV</DialogTitle>
                         <StepIndicator currentStep={wizardStep} />
                     </DialogHeader>
 

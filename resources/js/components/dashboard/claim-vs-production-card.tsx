@@ -20,11 +20,11 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
             <Card className="p-0 gap-0 h-full overflow-hidden">
                 <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                        <CardTitle className="text-[11px] font-semibold leading-none">Claim vs Production</CardTitle>
+                        <CardTitle className="text-[11px] font-semibold leading-none">Claim vs DPC</CardTitle>
                     </div>
                 </CardHeader>
                 <CardContent className="p-2 flex items-center justify-center h-full">
-                    <span className="text-[11px] text-muted-foreground">No production data</span>
+                    <span className="text-[11px] text-muted-foreground">No DPC data</span>
                 </CardContent>
             </Card>
         );
@@ -56,7 +56,7 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
             <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                    <CardTitle className="text-[11px] font-semibold leading-none">Claim vs Production</CardTitle>
+                    <CardTitle className="text-[11px] font-semibold leading-none">Claim vs DPC</CardTitle>
                 </div>
             </CardHeader>
             <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col justify-center gap-1.5 px-2 py-1.5">
@@ -83,26 +83,26 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                                     !isAhead && !isBehind && 'text-muted-foreground',
                                 )}>
                                     {isAhead ? 'Ahead' : isBehind ? 'Behind' : 'On Track'}
-                                    {(isAhead || isBehind) && ` ${Math.abs(delta).toFixed(1)}%`}
+                                    {(isAhead || isBehind) && ` ${Math.abs(delta).toFixed(2)}%`}
                                 </span>
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[10px] max-w-[280px]">
-                            <div>DPC % Complete: {dpcPercentComplete.toFixed(1)}%</div>
-                            <div>Claimed %: {claimedPercent.toFixed(1)}%</div>
+                            <div>DPC % Complete: {dpcPercentComplete.toFixed(2)}%</div>
+                            <div>Claimed %: {claimedPercent.toFixed(2)}%</div>
                             <div className="border-t border-border/50 mt-0.5 pt-0.5">
-                                Production is {isAhead ? 'ahead of' : isBehind ? 'behind' : 'tracking'} claims by {Math.abs(delta).toFixed(1)}%
+                                DPC is {isAhead ? 'ahead of' : isBehind ? 'behind' : 'tracking'} claims by {Math.abs(delta).toFixed(2)}%
                             </div>
                         </TooltipContent>
                     </Tooltip>
 
                     {/* Side-by-side comparison metrics */}
-                    <div className="flex items-center justify-center gap-0" role="group" aria-label="Claim vs production comparison">
+                    <div className="flex items-center justify-center gap-0" role="group" aria-label="Claim vs DPC comparison">
                         {/* Claimed metric */}
                         <div className="flex-1 flex flex-col items-center gap-0.5">
                             <span className={cn(barLabelClass, 'font-medium text-muted-foreground')}>Claimed</span>
                             <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
-                                {claimedPercent.toFixed(0)}%
+                                {claimedPercent.toFixed(2)}%
                             </span>
                         </div>
 
@@ -113,7 +113,7 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                         <div className="flex-1 flex flex-col items-center gap-0.5">
                             <span className={cn(barLabelClass, 'font-medium', dpcTextColor)}>DPC</span>
                             <span className={cn(compact ? 'text-base' : 'text-lg', 'tabular-nums font-bold leading-none', dpcTextColor)}>
-                                {dpcPercentComplete.toFixed(0)}%
+                                {dpcPercentComplete.toFixed(2)}%
                             </span>
                         </div>
                     </div>
@@ -136,14 +136,14 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-[10px] max-w-[280px]">
-                            <div>DPC claim value: {formatCurrency(dpcClaimAmount)} ({dpcPercentComplete.toFixed(1)}% x {formatCurrency(currentContractIncome)})</div>
+                            <div>DPC claim value: {formatCurrency(dpcClaimAmount)} ({dpcPercentComplete.toFixed(2)}% x {formatCurrency(currentContractIncome)})</div>
                             <div>Actual claimed: {formatCurrency(actualClaimedAmount)}</div>
                             <div className="border-t border-border/50 mt-0.5 pt-0.5">
                                 {isOverBilled
-                                    ? 'Claimed more than production progress — over-billed (cash positive but delivery risk)'
+                                    ? 'Claimed more than DPC progress — over-billed (cash positive but delivery risk)'
                                     : isUnderBilled
-                                        ? 'Claimed less than production progress — under-billed'
-                                        : 'Claims match production progress'}
+                                        ? 'Claimed less than DPC progress — under-billed'
+                                        : 'Claims match DPC progress'}
                             </div>
                         </TooltipContent>
                     </Tooltip>

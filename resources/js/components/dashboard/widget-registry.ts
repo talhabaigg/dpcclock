@@ -72,13 +72,6 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         defaultLayout: { x: 4, y: 3, w: 1, h: 1 },
     },
     {
-        id: 'other-items',
-        label: 'Billing Position',
-        minW: 1,
-        minH: 1,
-        defaultLayout: { x: 5, y: 2, w: 1, h: 2 },
-    },
-    {
         id: 'po-commitments',
         label: 'PO Commitments',
         minW: 1,
@@ -101,7 +94,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     },
     {
         id: 'claim-vs-production',
-        label: 'Claim vs Production',
+        label: 'Claim vs DPC',
         minW: 2,
         minH: 2,
         defaultLayout: { x: 6, y: 2, w: 2, h: 2 },

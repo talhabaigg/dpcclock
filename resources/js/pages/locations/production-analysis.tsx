@@ -514,7 +514,7 @@ export default function ProductionAnalysis({
                                 <div>
                                     <h4 className="text-sm font-semibold">Cost Code Mapping</h4>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Assign production cost codes to each category. Unmapped codes count as Wages.
+                                        Assign DPC cost codes to each category. Unmapped codes count as Wages.
                                     </p>
                                 </div>
                                 <CodePicker
@@ -672,7 +672,7 @@ export default function ProductionAnalysis({
             {/* Analysis Table */}
             {!hasData ? (
                 <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
-                    No production data available. Upload a CSV from the Production Data tab.
+                    No DPC data available. Upload a CSV from the DPC Data tab.
                 </div>
             ) : (
                 <ScrollArea className="min-h-0 flex-1 rounded-md border">

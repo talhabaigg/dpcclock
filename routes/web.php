@@ -9,6 +9,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
 use App\Http\Controllers\DrawingMeasurementController;
@@ -157,6 +158,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
         Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard');
         Route::put('/locations/{location}/dashboard-settings', [LocationController::class, 'saveDashboardSettings'])->name('locations.dashboard-settings.update');
+
+        // Dashboard Layouts (admin only)
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/dashboard-layouts', [DashboardLayoutController::class, 'index'])->name('dashboard-layouts.index');
+            Route::post('/dashboard-layouts', [DashboardLayoutController::class, 'store'])->name('dashboard-layouts.store');
+            Route::put('/dashboard-layouts/{layout}', [DashboardLayoutController::class, 'update'])->name('dashboard-layouts.update');
+            Route::delete('/dashboard-layouts/{layout}', [DashboardLayoutController::class, 'destroy'])->name('dashboard-layouts.destroy');
+            Route::post('/dashboard-layouts/{layout}/activate', [DashboardLayoutController::class, 'activate'])->name('dashboard-layouts.activate');
+        });
+
         Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes');
         Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list');
         Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites');

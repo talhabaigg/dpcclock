@@ -87,7 +87,7 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
                     <XAxis
                         type="number"
                         domain={[0, 'dataMax']}
-                        tickFormatter={(v: number) => `$${(v / 1000000).toFixed(1)}M`}
+                        tickFormatter={(v: number) => formatCurrency(v)}
                         fontSize={expanded ? 13 : 11}
                     />
                     <YAxis

@@ -23,7 +23,7 @@ export type DrawingTab = 'takeoff' | 'conditions' | 'labour' | 'material' | 'est
 const TABS: { key: DrawingTab; label: string; permission: string }[] = [
     { key: 'takeoff', label: 'Takeoff', permission: 'takeoff.view' },
     { key: 'variations', label: 'Variations', permission: 'variations.view' },
-    { key: 'production', label: 'Production', permission: 'production.view' },
+    { key: 'production', label: 'DPC', permission: 'production.view' },
     { key: 'budget', label: 'Budget', permission: 'budget.view' },
     { key: 'qa', label: 'QA', permission: 'qa.view' },
 ];

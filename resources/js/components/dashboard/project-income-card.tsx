@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useMemo, useState } from 'react';
 import FieldLabel from './field-label';
 import { formatCurrency, formatPercent } from './dashboard-utils';
 
@@ -22,11 +23,31 @@ interface ProjectIncomeData {
 interface ProjectIncomeCardProps {
     data: ProjectIncomeData;
     isEditing?: boolean;
+    asOfDate?: string;
+    poCommitments?: number;
 }
 
-export default function ProjectIncomeCard({ data, isEditing }: ProjectIncomeCardProps) {
+export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitments = 0 }: ProjectIncomeCardProps) {
     const hasNoClaimThisMonth = data.thisMonth.income === 0;
     const hasNoPrevMonth = data.previousMonth.income === 0 && data.previousMonth.cost === 0;
+
+    const isCurrentMonth = useMemo(() => {
+        if (!asOfDate) return false;
+        const now = new Date();
+        const d = new Date(asOfDate);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }, [asOfDate]);
+
+    const canIncludeCommitments = isCurrentMonth && poCommitments > 0;
+    const [includeCommitments, setIncludeCommitments] = useState(true);
+
+    const thisMonth = useMemo(() => {
+        if (!canIncludeCommitments || !includeCommitments) return data.thisMonth;
+        const cost = data.thisMonth.cost + poCommitments;
+        const profit = data.thisMonth.income - cost;
+        const profitPercent = data.thisMonth.income > 0 ? (profit / data.thisMonth.income) * 100 : 0;
+        return { income: data.thisMonth.income, cost, profit, profitPercent };
+    }, [data.thisMonth, canIncludeCommitments, includeCommitments, poCommitments]);
 
     return (
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
@@ -98,27 +119,39 @@ export default function ProjectIncomeCard({ data, isEditing }: ProjectIncomeCard
                                         label="This Month"
                                         helpText="Actual costs incurred and revenue claimed for the current month to date. Income shows progress claim submitted for this month."
                                     />
+                                    {canIncludeCommitments && (
+                                        <div className="text-[9px] text-muted-foreground leading-tight mt-0.5">
+                                            Incl. pending POs —{' '}
+                                            <button
+                                                type="button"
+                                                className="underline underline-offset-2 hover:text-foreground transition-colors"
+                                                onClick={() => setIncludeCommitments((v) => !v)}
+                                            >
+                                                {includeCommitments ? 'exclude' : 'include'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="text-right py-1 px-2 tabular-nums">
                                     {hasNoClaimThisMonth ? (
                                         <span className="text-muted-foreground italic">No claim in system</span>
                                     ) : (
-                                        formatCurrency(data.thisMonth.income)
+                                        formatCurrency(thisMonth.income)
                                     )}
                                 </td>
-                                <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.thisMonth.cost)}</td>
+                                <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(thisMonth.cost)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums">
                                     {hasNoClaimThisMonth ? (
                                         <span className="text-muted-foreground">-</span>
                                     ) : (
-                                        formatCurrency(data.thisMonth.profit)
+                                        formatCurrency(thisMonth.profit)
                                     )}
                                 </td>
                                 <td className="text-right py-1 px-2 tabular-nums">
                                     {hasNoClaimThisMonth ? (
                                         <span className="text-muted-foreground">-</span>
                                     ) : (
-                                        formatPercent(data.thisMonth.profitPercent)
+                                        formatPercent(thisMonth.profitPercent)
                                     )}
                                 </td>
                             </tr>

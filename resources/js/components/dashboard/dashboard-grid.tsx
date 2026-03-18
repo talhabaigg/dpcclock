@@ -9,7 +9,6 @@ import type { Location, JobSummary } from '@/types';
 import ProjectDetailsCard from './project-details-card';
 import MarginHealthCard from './margin-health-card';
 import ThisMonthCard from './this-month-card';
-import OtherItemsCard from './other-items-card';
 import ProjectIncomeCard from './project-income-card';
 import VariationsCard from './variations-card';
 import LabourBudgetCard from './labour-budget-card';
@@ -53,8 +52,6 @@ interface TimelineData {
 export interface DashboardGridProps {
     location: Location & { job_summary?: JobSummary };
     timelineData: TimelineData | null;
-    claimedToDate?: number;
-    cashRetention?: number;
     projectIncomeData: ProjectIncomeData;
     variationsSummary: VariationRow[];
     labourBudgetData: LabourBudgetRow[];
@@ -72,6 +69,7 @@ export interface DashboardGridProps {
     industrialActionHours: number;
     dashboardSettings: Record<string, unknown> | null;
     dpcPercentComplete: number | null;
+    asOfDate?: string;
     isEditing: boolean;
     layouts: LayoutItem[];
     hiddenWidgets: string[];
@@ -112,9 +110,7 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
             return <MarginHealthCard location={props.location} isEditing={isEditing} />;
         case 'this-month':
             return <ThisMonthCard thisMonth={props.projectIncomeData.thisMonth} previousMonth={props.projectIncomeData.previousMonth} isEditing={isEditing} />;
-        case 'other-items':
-            return <OtherItemsCard location={props.location} claimedToDate={props.claimedToDate} cashRetention={props.cashRetention} isEditing={isEditing} />;
-        case 'po-commitments':
+case 'po-commitments':
             return <POCommitmentsCard value={props.vendorCommitmentsSummary?.po_outstanding ?? null} isEditing={isEditing} />;
         case 'sc-commitments':
             return <SCCommitmentsCard data={props.vendorCommitmentsSummary ? { sc_outstanding: props.vendorCommitmentsSummary.sc_outstanding, sc_summary: props.vendorCommitmentsSummary.sc_summary } : null} isEditing={isEditing} />;
@@ -135,7 +131,7 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
             );
         }
         case 'project-income':
-            return <ProjectIncomeCard data={props.projectIncomeData} isEditing={isEditing} />;
+            return <ProjectIncomeCard data={props.projectIncomeData} isEditing={isEditing} asOfDate={props.asOfDate} poCommitments={props.vendorCommitmentsSummary?.po_outstanding ?? 0} />;
         case 'labour-budget':
             return <LabourBudgetCard data={props.labourBudgetData} isEditing={isEditing} />;
         default:

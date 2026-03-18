@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DashboardLayout;
 use App\Models\JobCostDetail;
 use App\Models\JobReportByCostItemAndCostType;
 use App\Models\Location;
@@ -537,6 +538,9 @@ class LocationController extends Controller
             'labourer' => collect($premierLabourerItems)->sum(fn($item) => (float) ($premierCosts[$item] ?? 0)),
         ];
 
+        $activeLayout = DashboardLayout::where('is_active', true)->first();
+        $isAdmin = $request->user()?->isAdmin();
+
         return Inertia::render('locations/dashboard', [
             'location' => $location,
             'timelineData' => $timelineData,
@@ -559,6 +563,15 @@ class LocationController extends Controller
             'premierLatestDate' => $premierLatestDate,
             'payrollHoursByWorktype' => $payrollHoursByWorktype,
             'dpcPercentComplete' => $dpcPercentComplete,
+            'activeLayout' => $activeLayout ? [
+                'id' => $activeLayout->id,
+                'name' => $activeLayout->name,
+                'grid_layout' => $activeLayout->grid_layout,
+                'hidden_widgets' => $activeLayout->hidden_widgets,
+            ] : null,
+            'allLayouts' => $isAdmin
+                ? DashboardLayout::select('id', 'name', 'is_active')->orderByDesc('is_active')->orderBy('name')->get()
+                : null,
         ]);
     }
 
@@ -595,14 +608,6 @@ class LocationController extends Controller
             'dpc_rates.foreman' => 'nullable|numeric|min:0',
             'dpc_rates.leading_hands' => 'nullable|numeric|min:0',
             'dpc_rates.labourer' => 'nullable|numeric|min:0',
-            'grid_layout' => 'nullable|array',
-            'grid_layout.*.i' => 'required|string|max:50',
-            'grid_layout.*.x' => 'required|integer|min:0',
-            'grid_layout.*.y' => 'required|integer|min:0',
-            'grid_layout.*.w' => 'required|integer|min:1|max:14',
-            'grid_layout.*.h' => 'required|integer|min:1|max:20',
-            'hidden_widgets' => 'nullable|array',
-            'hidden_widgets.*' => 'string|max:50',
         ]);
 
         $settings = $location->dashboard_settings ?? [];
@@ -614,7 +619,6 @@ class LocationController extends Controller
             'analysis_premier_wages_items', 'analysis_premier_foreman_items',
             'analysis_premier_lh_items', 'analysis_premier_labourer_items',
             'dpc_hourly_rate', 'dpc_rates',
-            'grid_layout', 'hidden_widgets',
         ];
 
         foreach ($allowedKeys as $key) {

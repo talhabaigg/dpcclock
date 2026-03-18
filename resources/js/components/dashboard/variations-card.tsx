@@ -65,7 +65,7 @@ export default function VariationsCard({ data, locationId, originalContractIncom
         router.get(url, query);
     };
 
-    const [view, setView] = useState<'visual' | 'table'>('visual');
+    const [view, setView] = useState<'visual' | 'table'>('table');
     const [expandedTypes, setExpandedTypes] = useState<Set<string>>(() => new Set(data.map(r => (r.type?.toLowerCase() ?? 'unknown'))));
     const toggleExpand = (type: string) => {
         setExpandedTypes((prev) => {

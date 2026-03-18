@@ -1,13 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { getDefaultLayout, GRID_COLS, WIDGET_REGISTRY, type LayoutItem } from './widget-registry';
+import { api } from '@/lib/api';
 
-export interface GridLayoutSettings {
-    grid_layout?: LayoutItem[];
-    hidden_widgets?: string[];
+export interface ActiveLayout {
+    id: number;
+    name: string;
+    grid_layout: LayoutItem[];
+    hidden_widgets: string[];
 }
 
-const STORAGE_KEY = 'dashboard-layout-settings';
+const OLD_STORAGE_KEY = 'dashboard-layout-settings';
 
 /**
  * Detects if the device is mobile/tablet or below md breakpoint (768px).
@@ -38,43 +41,22 @@ function useIsFixedLayout(): boolean {
     return isFixedLayout;
 }
 
-function loadLayoutFromStorage(): GridLayoutSettings | null {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        return stored ? JSON.parse(stored) : null;
-    } catch {
-        return null;
-    }
-}
-
-function saveLayoutToStorage(settings: GridLayoutSettings): void {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch {
-        // Silently fail if localStorage is not available
-    }
-}
-
-export function useDashboardLayout(savedSettings: GridLayoutSettings | null) {
+export function useDashboardLayout(activeLayout: ActiveLayout | null, isAdmin: boolean) {
     const isFixedLayout = useIsFixedLayout();
 
-    // Always prefer localStorage over location-specific settings
-    const globalSettings = loadLayoutFromStorage();
-    const settingsToUse = globalSettings || savedSettings;
-
     const [layouts, setLayouts] = useState<LayoutItem[]>(() => {
-        if (settingsToUse?.grid_layout?.length) {
-            // Validate saved layout has valid structure (allow items beyond GRID_ROWS during editing)
-            const isValid = settingsToUse.grid_layout.every(
+        const source = activeLayout?.grid_layout;
+        if (source?.length) {
+            const isValid = source.every(
                 (l) => l.i && typeof l.x === 'number' && typeof l.y === 'number' &&
                     l.x + l.w <= GRID_COLS,
             );
             if (isValid) {
-                const savedIds = new Set(settingsToUse.grid_layout.map((l) => l.i));
+                const savedIds = new Set(source.map((l) => l.i));
                 const defaults = getDefaultLayout();
                 const newWidgets = defaults.filter((l) => !savedIds.has(l.i));
                 return [
-                    ...settingsToUse.grid_layout.map((l) => {
+                    ...source.map((l) => {
                         const def = WIDGET_REGISTRY.find((w) => w.id === l.i);
                         return { ...l, minW: def?.minW, minH: def?.minH };
                     }),
@@ -85,29 +67,39 @@ export function useDashboardLayout(savedSettings: GridLayoutSettings | null) {
         return getDefaultLayout();
     });
 
-    const [hiddenWidgets, setHiddenWidgets] = useState<string[]>(settingsToUse?.hidden_widgets ?? []);
+    const [hiddenWidgets, setHiddenWidgets] = useState<string[]>(activeLayout?.hidden_widgets ?? []);
     const [isEditing, setIsEditing] = useState(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const layoutIdRef = useRef<number | null>(activeLayout?.id ?? null);
 
-    // Disable editing on mobile/touch devices
+    // Clean up old localStorage on mount (one-time migration)
     useEffect(() => {
-        if (isFixedLayout && isEditing) {
+        try { localStorage.removeItem(OLD_STORAGE_KEY); } catch { /* ignore */ }
+    }, []);
+
+    // Disable editing on mobile/touch devices or for non-admins
+    useEffect(() => {
+        if ((isFixedLayout || !isAdmin) && isEditing) {
             setIsEditing(false);
         }
-    }, [isFixedLayout, isEditing]);
+    }, [isFixedLayout, isAdmin, isEditing]);
 
     const persistLayout = useCallback(
         (newLayouts: LayoutItem[], newHidden: string[]) => {
+            if (!isAdmin || !layoutIdRef.current) return;
+
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             saveTimerRef.current = setTimeout(() => {
                 const cleanLayouts = newLayouts.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
-                saveLayoutToStorage({
+                api.put(`/dashboard-layouts/${layoutIdRef.current}`, {
                     grid_layout: cleanLayouts,
                     hidden_widgets: newHidden,
+                }).catch(() => {
+                    toast.error('Failed to save layout.');
                 });
             }, 800);
         },
-        [],
+        [isAdmin],
     );
 
     const onLayoutChange = useCallback(
@@ -149,7 +141,7 @@ export function useDashboardLayout(savedSettings: GridLayoutSettings | null) {
         hiddenWidgets,
         setHiddenWidgets,
         isEditing,
-        setIsEditing,
+        setIsEditing: isAdmin ? setIsEditing : () => {},
         onLayoutChange,
         toggleWidget,
         resetLayout,

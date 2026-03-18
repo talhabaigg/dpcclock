@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, JobSummary, Location } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import DashboardGrid from '@/components/dashboard/dashboard-grid';
 import { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
 import { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
@@ -18,7 +18,8 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 import ProductionAnalysis from './production-analysis';
-import { useDashboardLayout, type GridLayoutSettings } from '@/components/dashboard/use-dashboard-layout';
+import { useDashboardLayout, type ActiveLayout } from '@/components/dashboard/use-dashboard-layout';
+import LayoutManager from '@/components/dashboard/layout-manager';
 import { WIDGET_REGISTRY } from '@/components/dashboard/widget-registry';
 import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -100,6 +101,8 @@ interface DashboardProps {
     premierLatestDate: string | null;
     payrollHoursByWorktype: Record<string, number>;
     dpcPercentComplete: number | null;
+    activeLayout: ActiveLayout | null;
+    allLayouts?: { id: number; name: string; is_active: boolean }[];
 }
 
 function formatReportDate(dateStr: string): string {
@@ -110,7 +113,7 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('none');
@@ -120,9 +123,12 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     const [widgetsOpen, setWidgetsOpen] = useState(false);
     const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
 
+    const isAdmin = (usePage().props as { auth?: { isAdmin?: boolean } }).auth?.isAdmin ?? false;
+
     // Dashboard layout hook
     const { layouts, hiddenWidgets, isEditing, setIsEditing, onLayoutChange, toggleWidget, resetLayout, isFixedLayout } = useDashboardLayout(
-        location.dashboard_settings as GridLayoutSettings | null,
+        activeLayout,
+        isAdmin,
     );
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -228,7 +234,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="h-8">
                             <TabsTrigger value="dashboard" className="text-xs h-6 px-3">Dashboard</TabsTrigger>
-                            <TabsTrigger value="production-data" className="text-xs h-6 px-3">Production</TabsTrigger>
+                            <TabsTrigger value="production-data" className="text-xs h-6 px-3">DPC</TabsTrigger>
                             <TabsTrigger value="analysis" className="text-xs h-6 px-3">Analysis</TabsTrigger>
                         </TabsList>
                     </Tabs>
@@ -276,28 +282,30 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                     <div className="hidden sm:block flex-1" />
 
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
-                        <div className="flex items-center gap-1">
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePreviousMonth}>
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                            </Button>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className={cn('h-8 w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
-                                        <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                                        {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="end" onKeyDown={handleKeyDown}>
-                                    <Calendar mode="single" selected={date} onSelect={handleDateChange} />
-                                </PopoverContent>
-                            </Popover>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
-                                <ChevronRight className="h-3.5 w-3.5" />
-                            </Button>
+                    {activeTab !== 'production-data' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
+                            <div className="flex items-center gap-1">
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePreviousMonth}>
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className={cn('h-8 w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
+                                            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                                            {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="end" onKeyDown={handleKeyDown}>
+                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                                    </PopoverContent>
+                                </Popover>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {productionUploads.length > 0 && (
                         <>
@@ -342,9 +350,14 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         </>
                     )}
 
-                    {activeTab === 'dashboard' && !isFixedLayout && (
+                    {activeTab === 'dashboard' && !isFixedLayout && isAdmin && (
                         <>
                             <div className="hidden sm:block h-6 w-px bg-border" />
+
+                            {allLayouts && (
+                                <LayoutManager allLayouts={allLayouts} activeLayoutId={activeLayout?.id ?? null} />
+                            )}
+
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -422,8 +435,6 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                     <DashboardGrid
                         location={location}
                         timelineData={timelineData}
-                        claimedToDate={claimedToDate}
-                        cashRetention={cashRetention}
                         projectIncomeData={projectIncomeData}
                         variationsSummary={variationsSummary}
                         labourBudgetData={labourBudgetData}
@@ -433,6 +444,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         industrialActionHours={industrialActionHours}
                         dashboardSettings={location.dashboard_settings as Record<string, unknown> | null}
                         dpcPercentComplete={dpcPercentComplete}
+                        asOfDate={asOfDate}
                         isEditing={isEditing}
                         layouts={layouts}
                         hiddenWidgets={hiddenWidgets}
@@ -485,7 +497,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         {/* Data table */}
                         {productionLines.length === 0 ? (
                             <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
-                                No production data available. Upload a CSV from the Production Data tab.
+                                No DPC data available. Upload a CSV from the DPC Data tab.
                             </div>
                         ) : (
                             <ProductionDataTable

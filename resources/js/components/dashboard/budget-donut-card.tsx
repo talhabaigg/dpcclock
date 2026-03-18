@@ -135,7 +135,7 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
             </CardHeader>
             <CardContent className="p-0 mt-0 flex-1 min-h-0 flex flex-col items-center justify-center">
                 {costCodes.length === 0 ? (
-                    <span className="text-[11px] text-muted-foreground">No production data</span>
+                    <span className="text-[11px] text-muted-foreground">No DPC data</span>
                 ) : !selectedCode ? (
                     <span className="text-[11px] text-muted-foreground px-2 text-center">
                         Click <Settings2 className="inline h-3 w-3" /> to select a cost code
@@ -188,7 +188,7 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
                                 </PieChart>
                         </ChartContainer>
                         <p className={cn('text-[10px] tabular-nums text-center pb-1.5 leading-none', semantic.text)}>
-                            {contextLine}
+                            {fmt(selected.used_hours)} hrs used · {contextLine}
                         </p>
                     </div>
                 )}

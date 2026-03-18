@@ -10,18 +10,7 @@ export const formatCurrency = (value: number) =>
         maximumFractionDigits: 0,
     }).format(value);
 
-export const formatCompact = (value: number) => {
-    if (Math.abs(value) >= 1_000_000) {
-        return new Intl.NumberFormat('en-AU', {
-            style: 'currency',
-            currency: 'AUD',
-            notation: 'compact',
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-        }).format(value);
-    }
-    return formatCurrency(value);
-};
+export const formatCompact = (value: number) => formatCurrency(value);
 
 export const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 
