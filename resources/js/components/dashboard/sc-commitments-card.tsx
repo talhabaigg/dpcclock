@@ -87,15 +87,15 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
                     </div>
                 ) : view === 'visual' ? (
                     <TooltipProvider delayDuration={200}>
-                        <div className="px-2 py-1 flex flex-col gap-1 justify-center flex-1 min-h-0">
+                        <div className="px-1.5 py-1 flex flex-col gap-1 justify-center flex-1 min-h-0">
                             {/* Hero: Remaining balance with tooltip */}
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <div className="flex flex-col items-center cursor-default">
-                                        <span className="text-lg sm:text-xl font-bold tabular-nums leading-none">
+                                        <span className="text-base font-bold tabular-nums leading-none">
                                             {formatCompact(data.sc_summary.remaining_balance)}
                                         </span>
-                                        <span className="text-[9px] sm:text-[10px] text-muted-foreground leading-none mt-0.5">
+                                        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
                                             remaining of {formatCompact(scTotal)}
                                         </span>
                                     </div>
@@ -132,7 +132,7 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
                             </div>
 
                             {/* Direct-labeled inline row: Invoiced amount + percentage */}
-                            <div className="flex items-center justify-between text-[9px] sm:text-[10px] leading-tight">
+                            <div className="flex items-center justify-between text-[9px] leading-tight">
                                 <span className="text-muted-foreground">
                                     Invoiced <span className="tabular-nums font-medium text-foreground">{formatCompact(data.sc_summary.invoiced_to_date)}</span>
                                 </span>
@@ -147,23 +147,23 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
                     </TooltipProvider>
                 ) : (
                     <div className="overflow-x-auto h-full flex-1 min-h-0">
-                        <table className="w-full h-full border-collapse text-[11px]">
+                        <table className="w-full h-full border-collapse text-[10px]">
                             <tbody>
                                 <tr className="border-b hover:bg-muted/30 transition-colors">
-                                    <td className="py-1 px-2 font-medium">Value</td>
-                                    <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.value)}</td>
+                                    <td className="py-0.5 px-1.5 font-medium">Value</td>
+                                    <td className="py-0.5 px-1.5 text-right tabular-nums">{formatCompact(data.sc_summary.value)}</td>
                                 </tr>
                                 <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
-                                    <td className="py-1 px-2 font-medium">Variations</td>
-                                    <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.variations)}</td>
+                                    <td className="py-0.5 px-1.5 font-medium">Variations</td>
+                                    <td className="py-0.5 px-1.5 text-right tabular-nums">{formatCompact(data.sc_summary.variations)}</td>
                                 </tr>
                                 <tr className="border-b hover:bg-muted/30 transition-colors">
-                                    <td className="py-1 px-2 font-medium">Invoiced to date</td>
-                                    <td className="py-1 px-2 text-right tabular-nums">{formatCurrency(data.sc_summary.invoiced_to_date)}</td>
+                                    <td className="py-0.5 px-1.5 font-medium">Invoiced</td>
+                                    <td className="py-0.5 px-1.5 text-right tabular-nums">{formatCompact(data.sc_summary.invoiced_to_date)}</td>
                                 </tr>
                                 <tr className="bg-muted/40 border-t-2 border-border">
-                                    <td className="py-1 px-2 font-bold">Remaining</td>
-                                    <td className="py-1 px-2 text-right tabular-nums font-bold">{formatCurrency(data.sc_summary.remaining_balance)}</td>
+                                    <td className="py-0.5 px-1.5 font-bold">Remaining</td>
+                                    <td className="py-0.5 px-1.5 text-right tabular-nums font-bold">{formatCompact(data.sc_summary.remaining_balance)}</td>
                                 </tr>
                             </tbody>
                         </table>

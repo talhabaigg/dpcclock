@@ -76,7 +76,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         label: 'SC Commitments',
         minW: 1,
         minH: 1,
-        defaultLayout: { x: 6, y: 4, w: 2, h: 2 },
+        defaultLayout: { x: 6, y: 4, w: 1, h: 2 },
     },
     {
         id: 'employees-on-site',
