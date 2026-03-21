@@ -59,7 +59,7 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
 
-Route::get('/apply', function () {
+Route::get('/work-with-us', function () {
     return Inertia::render('job-applications/apply');
 })->name('job-applications.apply');
 
