@@ -148,7 +148,7 @@ export default function Apply() {
     });
 
     const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
-    const [processing, setProcessing] = useState(false);
+    const [processing] = useState(false);
     const [submitted, setSubmitted] = useState(false);
 
     function setData<K extends keyof JobApplicationForm>(key: K, value: JobApplicationForm[K]) {
