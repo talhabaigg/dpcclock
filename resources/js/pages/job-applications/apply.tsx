@@ -1,4 +1,3 @@
-import AppLogoIcon from '@/components/app-logo-icon';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { Link } from '@inertiajs/react';
+
 import { CheckIcon } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
@@ -245,11 +244,8 @@ export default function Apply() {
 
     if (submitted) {
         return (
-            <div className="bg-muted flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
+            <div className="flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
                 <div className="flex w-full max-w-2xl flex-col items-center gap-6">
-                    <Link href="/" className="flex items-center gap-2 font-medium">
-                        <AppLogoIcon className="size-9 fill-current text-black dark:text-white" />
-                    </Link>
                     <Card className="w-full rounded-xl">
                         <CardContent className="flex flex-col items-center gap-4 py-16">
                             <div className="bg-primary text-primary-foreground flex size-16 items-center justify-center rounded-full">
@@ -267,12 +263,8 @@ export default function Apply() {
     }
 
     return (
-        <div className="bg-muted flex min-h-svh flex-col items-center p-6 md:p-10">
+        <div className="flex min-h-svh flex-col items-center p-6 md:p-10">
             <div className="flex w-full max-w-2xl flex-col gap-6">
-                <Link href="/" className="flex items-center gap-2 self-center font-medium">
-                    <AppLogoIcon className="size-9 fill-current text-black dark:text-white" />
-                </Link>
-
                 {/* Step Indicator */}
                 <div className="flex items-center justify-between px-2">
                     {STEPS.map((s, i) => (
