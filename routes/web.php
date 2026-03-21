@@ -59,6 +59,10 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
 
+Route::get('/apply', function () {
+    return Inertia::render('job-applications/apply');
+})->name('job-applications.apply');
+
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
     $user->unreadNotifications->markAsRead();
