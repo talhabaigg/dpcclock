@@ -927,7 +927,8 @@ export default function Apply() {
                                             onCheckedChange={(checked) => setData('declaration_accepted', checked === true)}
                                         />
                                         <Label htmlFor="declaration_accepted" className="font-normal leading-snug">
-                                            I confirm that the above information is true and correct to the best of my knowledge{' '}
+                                            I confirm that the above information is true and correct to the best of my knowledge, and I
+                                            acknowledge the privacy notice{' '}
                                             <span className="text-destructive">*</span>
                                         </Label>
                                     </div>
@@ -955,6 +956,24 @@ export default function Apply() {
                         )}
                     </div>
                 </form>
+
+                {/* Privacy Notice — persistent across all steps */}
+                <div className="text-muted-foreground mt-2 space-y-1.5 px-1 text-xs">
+                    <p>
+                        <span className="font-medium">Privacy Notice:</span> Superior Group collects personal information including
+                        your name, contact details, employment history, qualifications, and medical information for the purpose of
+                        assessing your suitability for employment. This information is handled in accordance with the Privacy Act 1988
+                        (Cth) and the Australian Privacy Principles.
+                    </p>
+                    <p>
+                        Sensitive information (medical history, Aboriginal or Torres Strait Islander status) is collected with your
+                        consent and used solely for equal opportunity reporting and workplace safety requirements. Your information will
+                        only be accessed by authorised personnel involved in the recruitment process and will not be shared with third
+                        parties without your consent. If your application is unsuccessful, your data will be retained for up to 12 months
+                        then securely deleted. You may request access to, correction, or deletion of your information by contacting us at{' '}
+                        <span className="font-medium">privacy@superiorgroup.com.au</span>.
+                    </p>
+                </div>
             </div>
         </div>
     );
