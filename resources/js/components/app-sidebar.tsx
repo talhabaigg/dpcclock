@@ -19,6 +19,7 @@ import {
     DollarSign,
     File,
     FileSpreadsheet,
+    FileText,
     Folder,
     FolderTree,
     GitCompare,
@@ -89,6 +90,12 @@ const mainNavItems: NavItem[] = [
         href: '/employees',
         icon: UsersRound,
         permission: 'employees.view',
+    },
+    {
+        title: 'Employment Applications',
+        href: '/employment-applications',
+        icon: FileText,
+        permission: 'employment-applications.view',
     },
     {
         title: 'Kiosks',

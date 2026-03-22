@@ -233,6 +233,21 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // EMPLOYMENT APPLICATIONS
+        // ============================================
+        'Employment Applications' => [
+            'employment-applications.view' => 'View employment applications',
+            'employment-applications.screen' => 'Screen applications (change status, add comments, tick checklists)',
+        ],
+
+        // ============================================
+        // CHECKLISTS
+        // ============================================
+        'Checklists' => [
+            'checklists.manage-templates' => 'Create, edit, delete checklist templates',
+        ],
+
+        // ============================================
         // AI FEATURES
         // ============================================
         'AI' => [
@@ -358,6 +373,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.safety-dashboard',
             // System
             'queue-status.view',
+            // Employment Applications
+            'employment-applications.view',
+            'employment-applications.screen',
         ],
 
         'manager' => [

@@ -7,6 +7,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\DashboardLayoutController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
+use App\Http\Controllers\EmploymentApplicationController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
 use App\Models\Employee;
@@ -59,9 +61,10 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 })->name('home');
 
-Route::get('/work-with-us', function () {
-    return Inertia::render('job-applications/apply');
-})->name('job-applications.apply');
+// Employment Applications — public routes
+Route::get('/work-with-us', [EmploymentApplicationController::class, 'create'])->name('employment-applications.create');
+Route::post('/work-with-us', [EmploymentApplicationController::class, 'store'])->name('employment-applications.store');
+Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, 'thankYou'])->name('employment-applications.thank-you');
 
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
@@ -126,6 +129,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.manage-managers');
     Route::post('/users/{user}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggle-disable')
         ->middleware('permission:users.manage-roles');
+
+    // ============================================
+    // EMPLOYMENT APPLICATIONS
+    // ============================================
+    Route::middleware('permission:employment-applications.view')->group(function () {
+        Route::get('/employment-applications', [EmploymentApplicationController::class, 'index'])->name('employment-applications.index');
+        Route::get('/employment-applications/{employmentApplication}', [EmploymentApplicationController::class, 'show'])->name('employment-applications.show');
+        Route::get('/employment-applications/{employmentApplication}/submission', [EmploymentApplicationController::class, 'submission'])->name('employment-applications.submission');
+    });
+    Route::middleware('permission:employment-applications.screen')->group(function () {
+        Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
+        Route::post('/employment-applications/{employmentApplication}/decline', [EmploymentApplicationController::class, 'decline'])->name('employment-applications.decline');
+        Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
+    });
+
+    // Comments (generic)
+    Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
+    Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
 
     // ============================================
     // EMPLOYEE MANAGEMENT

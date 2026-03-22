@@ -10,20 +10,18 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
+import { useForm } from '@inertiajs/react';
 import { CheckIcon } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
-// Mock skills data (will come from backend later)
-const availableSkills = [
-    { id: 1, name: 'Erecting Framework' },
-    { id: 2, name: 'Concealed Grid' },
-    { id: 3, name: 'Setting' },
-    { id: 4, name: 'Decorative Cornice' },
-    { id: 5, name: 'Set Out' },
-    { id: 6, name: 'Fix Plasterboard' },
-    { id: 7, name: 'Exposed Grid' },
-    { id: 8, name: 'Cornice' },
-];
+interface Skill {
+    id: number;
+    name: string;
+}
+
+interface Props {
+    skills: Skill[];
+}
 
 const occupations = [
     { value: 'plasterer', label: 'Plasterer' },
@@ -38,54 +36,6 @@ interface Reference {
     employment_period: string;
     contact_person: string;
     phone_number: string;
-}
-
-interface JobApplicationForm {
-    // Personal
-    surname: string;
-    first_name: string;
-    suburb: string;
-    email: string;
-    phone: string;
-    date_of_birth: string;
-    why_should_we_employ_you: string;
-    referred_by: string;
-    aboriginal_or_tsi: string;
-    // Occupation
-    occupation: string;
-    apprentice_year: string;
-    trade_qualified: string;
-    occupation_other: string;
-    // Project
-    preferred_project_site: string;
-    // Skills
-    selected_skills: number[];
-    custom_skills: string;
-    // Licences
-    safety_induction_number: string;
-    ewp_below_11m: boolean;
-    ewp_above_11m: boolean;
-    forklift_licence_number: string;
-    work_safely_at_heights: string;
-    scaffold_licence_number: string;
-    first_aid_completion_date: string;
-    workplace_impairment_training: string;
-    wit_completion_date: string;
-    asbestos_awareness_training: string;
-    crystalline_silica_course: string;
-    gender_equity_training: string;
-    quantitative_fit_test: string;
-    // Medical
-    workcover_claim: string;
-    medical_condition: string;
-    medical_condition_other: string;
-    // References
-    references: Reference[];
-    // Acceptance
-    acceptance_full_name: string;
-    acceptance_email: string;
-    acceptance_date: string;
-    declaration_accepted: boolean;
 }
 
 const emptyReference: Reference = {
@@ -104,9 +54,11 @@ const STEPS = [
     { label: 'Medical & Declaration', shortLabel: 'Medical' },
 ];
 
-export default function Apply() {
+export default function Apply({ skills }: Props) {
     const [step, setStep] = useState(0);
-    const [form, setForm] = useState<JobApplicationForm>({
+
+    const { data, setData, post, processing, errors } = useForm({
+        // Personal
         surname: '',
         first_name: '',
         suburb: '',
@@ -116,13 +68,17 @@ export default function Apply() {
         why_should_we_employ_you: '',
         referred_by: '',
         aboriginal_or_tsi: '',
+        // Occupation
         occupation: '',
         apprentice_year: '',
         trade_qualified: '',
         occupation_other: '',
+        // Project
         preferred_project_site: '',
-        selected_skills: [],
+        // Skills
+        selected_skills: [] as number[],
         custom_skills: '',
+        // Licences
         safety_induction_number: '',
         ewp_below_11m: false,
         ewp_above_11m: false,
@@ -136,72 +92,65 @@ export default function Apply() {
         crystalline_silica_course: '',
         gender_equity_training: '',
         quantitative_fit_test: '',
+        // Medical
         workcover_claim: '',
         medical_condition: '',
         medical_condition_other: '',
+        // References
         references: [{ ...emptyReference }, { ...emptyReference }, { ...emptyReference }, { ...emptyReference }],
+        // Acceptance
         acceptance_full_name: '',
         acceptance_email: '',
         acceptance_date: '',
         declaration_accepted: false,
     });
 
-    const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
-    const [processing] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-
-    function setData<K extends keyof JobApplicationForm>(key: K, value: JobApplicationForm[K]) {
-        setForm((prev) => ({ ...prev, [key]: value }));
-    }
+    const [clientErrors, setClientErrors] = useState<Partial<Record<string, string>>>({});
 
     function setReference(index: number, field: keyof Reference, value: string) {
-        setForm((prev) => {
-            const refs = [...prev.references];
-            refs[index] = { ...refs[index], [field]: value };
-            return { ...prev, references: refs };
-        });
+        const refs = [...data.references];
+        refs[index] = { ...refs[index], [field]: value };
+        setData('references', refs);
     }
 
     function toggleSkill(skillId: number) {
-        setForm((prev) => {
-            const skills = prev.selected_skills.includes(skillId)
-                ? prev.selected_skills.filter((id) => id !== skillId)
-                : [...prev.selected_skills, skillId];
-            return { ...prev, selected_skills: skills };
-        });
+        const skills = data.selected_skills.includes(skillId)
+            ? data.selected_skills.filter((id) => id !== skillId)
+            : [...data.selected_skills, skillId];
+        setData('selected_skills', skills);
     }
 
     function validateStep(currentStep: number): boolean {
         const newErrors: Partial<Record<string, string>> = {};
 
         if (currentStep === 0) {
-            if (!form.surname.trim()) newErrors.surname = 'Surname is required';
-            if (!form.first_name.trim()) newErrors.first_name = 'First name is required';
-            if (!form.suburb.trim()) newErrors.suburb = 'Suburb is required';
-            if (!form.email.trim()) newErrors.email = 'Email is required';
-            if (!form.phone.trim()) newErrors.phone = 'Phone is required';
-            if (!form.date_of_birth) newErrors.date_of_birth = 'Date of birth is required';
-            if (!form.why_should_we_employ_you.trim()) newErrors.why_should_we_employ_you = 'This field is required';
+            if (!data.surname.trim()) newErrors.surname = 'Surname is required';
+            if (!data.first_name.trim()) newErrors.first_name = 'First name is required';
+            if (!data.suburb.trim()) newErrors.suburb = 'Suburb is required';
+            if (!data.email.trim()) newErrors.email = 'Email is required';
+            if (!data.phone.trim()) newErrors.phone = 'Phone is required';
+            if (!data.date_of_birth) newErrors.date_of_birth = 'Date of birth is required';
+            if (!data.why_should_we_employ_you.trim()) newErrors.why_should_we_employ_you = 'This field is required';
         }
 
         if (currentStep === 1) {
-            if (!form.occupation) newErrors.occupation = 'Occupation is required';
-            if (form.occupation === 'other' && !form.occupation_other.trim()) newErrors.occupation_other = 'Please specify your occupation';
+            if (!data.occupation) newErrors.occupation = 'Occupation is required';
+            if (data.occupation === 'other' && !data.occupation_other.trim()) newErrors.occupation_other = 'Please specify your occupation';
         }
 
         if (currentStep === 2) {
-            if (!form.safety_induction_number.trim()) newErrors.safety_induction_number = 'Safety induction number is required';
-            if (!form.work_safely_at_heights) newErrors.work_safely_at_heights = 'This field is required';
-            if (!form.workplace_impairment_training) newErrors.workplace_impairment_training = 'This field is required';
-            if (!form.asbestos_awareness_training) newErrors.asbestos_awareness_training = 'This field is required';
-            if (!form.crystalline_silica_course) newErrors.crystalline_silica_course = 'This field is required';
-            if (!form.gender_equity_training) newErrors.gender_equity_training = 'This field is required';
-            if (!form.quantitative_fit_test) newErrors.quantitative_fit_test = 'This field is required';
+            if (!data.safety_induction_number.trim()) newErrors.safety_induction_number = 'Safety induction number is required';
+            if (!data.work_safely_at_heights) newErrors.work_safely_at_heights = 'This field is required';
+            if (!data.workplace_impairment_training) newErrors.workplace_impairment_training = 'This field is required';
+            if (!data.asbestos_awareness_training) newErrors.asbestos_awareness_training = 'This field is required';
+            if (!data.crystalline_silica_course) newErrors.crystalline_silica_course = 'This field is required';
+            if (!data.gender_equity_training) newErrors.gender_equity_training = 'This field is required';
+            if (!data.quantitative_fit_test) newErrors.quantitative_fit_test = 'This field is required';
         }
 
         if (currentStep === 3) {
             for (let i = 0; i < 2; i++) {
-                const ref = form.references[i];
+                const ref = data.references[i];
                 if (!ref.company_name.trim()) newErrors[`ref_${i}_company`] = 'Company name is required';
                 if (!ref.position.trim()) newErrors[`ref_${i}_position`] = 'Position is required';
                 if (!ref.employment_period.trim()) newErrors[`ref_${i}_period`] = 'Employment period is required';
@@ -211,13 +160,13 @@ export default function Apply() {
         }
 
         if (currentStep === 4) {
-            if (!form.acceptance_full_name.trim()) newErrors.acceptance_full_name = 'Full name is required';
-            if (!form.acceptance_email.trim()) newErrors.acceptance_email = 'Email is required';
-            if (!form.acceptance_date) newErrors.acceptance_date = 'Date is required';
-            if (!form.declaration_accepted) newErrors.declaration_accepted = 'You must accept the declaration';
+            if (!data.acceptance_full_name.trim()) newErrors.acceptance_full_name = 'Full name is required';
+            if (!data.acceptance_email.trim()) newErrors.acceptance_email = 'Email is required';
+            if (!data.acceptance_date) newErrors.acceptance_date = 'Date is required';
+            if (!data.declaration_accepted) newErrors.declaration_accepted = 'You must accept the declaration';
         }
 
-        setErrors(newErrors);
+        setClientErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }
 
@@ -229,7 +178,7 @@ export default function Apply() {
     }
 
     function goBack() {
-        setErrors({});
+        setClientErrors({});
         setStep((s) => Math.max(s - 1, 0));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -237,30 +186,11 @@ export default function Apply() {
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!validateStep(step)) return;
-        // TODO: connect to backend
-        console.log('Form data:', form);
-        setSubmitted(true);
+        post(route('employment-applications.store'));
     }
 
-    if (submitted) {
-        return (
-            <div className="flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
-                <div className="flex w-full max-w-2xl flex-col items-center gap-6">
-                    <Card className="w-full rounded-xl">
-                        <CardContent className="flex flex-col items-center gap-4 py-16">
-                            <div className="bg-primary text-primary-foreground flex size-16 items-center justify-center rounded-full">
-                                <CheckIcon className="size-8" />
-                            </div>
-                            <h2 className="text-2xl font-semibold">Application Submitted</h2>
-                            <p className="text-muted-foreground text-center">
-                                Thank you for your application. We will review it and get back to you shortly.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-        );
-    }
+    // Merge client-side and server-side errors
+    const allErrors = { ...clientErrors, ...errors };
 
     return (
         <div className="flex min-h-svh flex-col items-center p-6 md:p-10">
@@ -310,15 +240,15 @@ export default function Apply() {
                                         <Label htmlFor="surname">
                                             Surname <span className="text-destructive">*</span>
                                         </Label>
-                                        <Input id="surname" value={form.surname} onChange={(e) => setData('surname', e.target.value)} />
-                                        <InputError message={errors.surname} />
+                                        <Input id="surname" value={data.surname} onChange={(e) => setData('surname', e.target.value)} />
+                                        <InputError message={allErrors.surname} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="first_name">
                                             First Name(s) <span className="text-destructive">*</span>
                                         </Label>
-                                        <Input id="first_name" value={form.first_name} onChange={(e) => setData('first_name', e.target.value)} />
-                                        <InputError message={errors.first_name} />
+                                        <Input id="first_name" value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
+                                        <InputError message={allErrors.first_name} />
                                     </div>
                                 </div>
 
@@ -326,8 +256,8 @@ export default function Apply() {
                                     <Label htmlFor="suburb">
                                         Suburb <span className="text-destructive">*</span>
                                     </Label>
-                                    <Input id="suburb" value={form.suburb} onChange={(e) => setData('suburb', e.target.value)} />
-                                    <InputError message={errors.suburb} />
+                                    <Input id="suburb" value={data.suburb} onChange={(e) => setData('suburb', e.target.value)} />
+                                    <InputError message={allErrors.suburb} />
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -335,15 +265,15 @@ export default function Apply() {
                                         <Label htmlFor="email">
                                             Email <span className="text-destructive">*</span>
                                         </Label>
-                                        <Input id="email" type="email" value={form.email} onChange={(e) => setData('email', e.target.value)} />
-                                        <InputError message={errors.email} />
+                                        <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
+                                        <InputError message={allErrors.email} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="phone">
                                             Phone <span className="text-destructive">*</span>
                                         </Label>
-                                        <Input id="phone" type="tel" value={form.phone} onChange={(e) => setData('phone', e.target.value)} />
-                                        <InputError message={errors.phone} />
+                                        <Input id="phone" type="tel" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
+                                        <InputError message={allErrors.phone} />
                                     </div>
                                 </div>
 
@@ -354,10 +284,10 @@ export default function Apply() {
                                     <Input
                                         id="date_of_birth"
                                         type="date"
-                                        value={form.date_of_birth}
+                                        value={data.date_of_birth}
                                         onChange={(e) => setData('date_of_birth', e.target.value)}
                                     />
-                                    <InputError message={errors.date_of_birth} />
+                                    <InputError message={allErrors.date_of_birth} />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -366,20 +296,20 @@ export default function Apply() {
                                     </Label>
                                     <Textarea
                                         id="why_should_we_employ_you"
-                                        value={form.why_should_we_employ_you}
+                                        value={data.why_should_we_employ_you}
                                         onChange={(e) => setData('why_should_we_employ_you', e.target.value)}
                                     />
-                                    <InputError message={errors.why_should_we_employ_you} />
+                                    <InputError message={allErrors.why_should_we_employ_you} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="referred_by">Did someone refer you to this page?</Label>
-                                    <Input id="referred_by" value={form.referred_by} onChange={(e) => setData('referred_by', e.target.value)} />
+                                    <Input id="referred_by" value={data.referred_by} onChange={(e) => setData('referred_by', e.target.value)} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label>Are you of Aboriginal or Torres Strait Islander Origin?</Label>
-                                    <RadioGroup value={form.aboriginal_or_tsi} onValueChange={(v) => setData('aboriginal_or_tsi', v)}>
+                                    <RadioGroup value={data.aboriginal_or_tsi} onValueChange={(v) => setData('aboriginal_or_tsi', v)}>
                                         <div className="flex items-center gap-2">
                                             <RadioGroupItem value="yes" id="atsi_yes" />
                                             <Label htmlFor="atsi_yes" className="font-normal">
@@ -411,7 +341,7 @@ export default function Apply() {
                                         <Label>
                                             Occupation <span className="text-destructive">*</span>
                                         </Label>
-                                        <Select value={form.occupation} onValueChange={(v) => setData('occupation', v)}>
+                                        <Select value={data.occupation} onValueChange={(v) => setData('occupation', v)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select your occupation" />
                                             </SelectTrigger>
@@ -423,26 +353,26 @@ export default function Apply() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <InputError message={errors.occupation} />
+                                        <InputError message={allErrors.occupation} />
                                     </div>
 
-                                    {form.occupation === 'other' && (
+                                    {data.occupation === 'other' && (
                                         <div className="grid gap-2">
                                             <Label htmlFor="occupation_other">
                                                 Please Specify <span className="text-destructive">*</span>
                                             </Label>
                                             <Input
                                                 id="occupation_other"
-                                                value={form.occupation_other}
+                                                value={data.occupation_other}
                                                 onChange={(e) => setData('occupation_other', e.target.value)}
                                             />
-                                            <InputError message={errors.occupation_other} />
+                                            <InputError message={allErrors.occupation_other} />
                                         </div>
                                     )}
 
                                     <div className="grid gap-2">
                                         <Label>Apprentice Year</Label>
-                                        <Select value={form.apprentice_year} onValueChange={(v) => setData('apprentice_year', v)}>
+                                        <Select value={data.apprentice_year} onValueChange={(v) => setData('apprentice_year', v)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Not an apprentice" />
                                             </SelectTrigger>
@@ -458,7 +388,7 @@ export default function Apply() {
 
                                     <div className="grid gap-2">
                                         <Label>Trade Qualified</Label>
-                                        <RadioGroup value={form.trade_qualified} onValueChange={(v) => setData('trade_qualified', v)}>
+                                        <RadioGroup value={data.trade_qualified} onValueChange={(v) => setData('trade_qualified', v)}>
                                             <div className="flex items-center gap-2">
                                                 <RadioGroupItem value="yes" id="tq_yes" />
                                                 <Label htmlFor="tq_yes" className="font-normal">
@@ -478,7 +408,7 @@ export default function Apply() {
                                         <Label htmlFor="preferred_project_site">Preferred Project/Site</Label>
                                         <Input
                                             id="preferred_project_site"
-                                            value={form.preferred_project_site}
+                                            value={data.preferred_project_site}
                                             onChange={(e) => setData('preferred_project_site', e.target.value)}
                                         />
                                     </div>
@@ -492,11 +422,11 @@ export default function Apply() {
                                 </CardHeader>
                                 <CardContent className="grid gap-4">
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        {availableSkills.map((skill) => (
+                                        {skills.map((skill) => (
                                             <div key={skill.id} className="flex items-center gap-2">
                                                 <Checkbox
                                                     id={`skill_${skill.id}`}
-                                                    checked={form.selected_skills.includes(skill.id)}
+                                                    checked={data.selected_skills.includes(skill.id)}
                                                     onCheckedChange={() => toggleSkill(skill.id)}
                                                 />
                                                 <Label htmlFor={`skill_${skill.id}`} className="font-normal">
@@ -510,9 +440,9 @@ export default function Apply() {
                                         <Label htmlFor="custom_skills">Other Skills (please specify)</Label>
                                         <Textarea
                                             id="custom_skills"
-                                            value={form.custom_skills}
+                                            value={data.custom_skills}
                                             onChange={(e) => setData('custom_skills', e.target.value)}
-                                            placeholder="Enter any additional skills..."
+                                            placeholder="Enter any additional skills, separated by commas..."
                                         />
                                     </div>
                                 </CardContent>
@@ -533,10 +463,10 @@ export default function Apply() {
                                     </Label>
                                     <Input
                                         id="safety_induction_number"
-                                        value={form.safety_induction_number}
+                                        value={data.safety_induction_number}
                                         onChange={(e) => setData('safety_induction_number', e.target.value)}
                                     />
-                                    <InputError message={errors.safety_induction_number} />
+                                    <InputError message={allErrors.safety_induction_number} />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -545,7 +475,7 @@ export default function Apply() {
                                         <div className="flex items-center gap-2">
                                             <Checkbox
                                                 id="ewp_below_11m"
-                                                checked={form.ewp_below_11m}
+                                                checked={data.ewp_below_11m}
                                                 onCheckedChange={(checked) => setData('ewp_below_11m', checked === true)}
                                             />
                                             <Label htmlFor="ewp_below_11m" className="font-normal">
@@ -555,7 +485,7 @@ export default function Apply() {
                                         <div className="flex items-center gap-2">
                                             <Checkbox
                                                 id="ewp_above_11m"
-                                                checked={form.ewp_above_11m}
+                                                checked={data.ewp_above_11m}
                                                 onCheckedChange={(checked) => setData('ewp_above_11m', checked === true)}
                                             />
                                             <Label htmlFor="ewp_above_11m" className="font-normal">
@@ -569,7 +499,7 @@ export default function Apply() {
                                     <Label htmlFor="forklift_licence_number">Fork Lift Licence Number</Label>
                                     <Input
                                         id="forklift_licence_number"
-                                        value={form.forklift_licence_number}
+                                        value={data.forklift_licence_number}
                                         onChange={(e) => setData('forklift_licence_number', e.target.value)}
                                     />
                                 </div>
@@ -578,7 +508,7 @@ export default function Apply() {
                                     <Label>
                                         Work Safely at Heights Training <span className="text-destructive">*</span>
                                     </Label>
-                                    <RadioGroup value={form.work_safely_at_heights} onValueChange={(v) => setData('work_safely_at_heights', v)}>
+                                    <RadioGroup value={data.work_safely_at_heights} onValueChange={(v) => setData('work_safely_at_heights', v)}>
                                         <div className="flex items-center gap-2">
                                             <RadioGroupItem value="yes" id="heights_yes" />
                                             <Label htmlFor="heights_yes" className="font-normal">
@@ -592,14 +522,14 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.work_safely_at_heights} />
+                                    <InputError message={allErrors.work_safely_at_heights} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="scaffold_licence_number">Scaffold Licence Number</Label>
                                     <Input
                                         id="scaffold_licence_number"
-                                        value={form.scaffold_licence_number}
+                                        value={data.scaffold_licence_number}
                                         onChange={(e) => setData('scaffold_licence_number', e.target.value)}
                                     />
                                 </div>
@@ -609,7 +539,7 @@ export default function Apply() {
                                     <Input
                                         id="first_aid_completion_date"
                                         type="date"
-                                        value={form.first_aid_completion_date}
+                                        value={data.first_aid_completion_date}
                                         onChange={(e) => setData('first_aid_completion_date', e.target.value)}
                                     />
                                 </div>
@@ -621,7 +551,7 @@ export default function Apply() {
                                         Workplace Impairment Training (WIT) <span className="text-destructive">*</span>
                                     </Label>
                                     <RadioGroup
-                                        value={form.workplace_impairment_training}
+                                        value={data.workplace_impairment_training}
                                         onValueChange={(v) => setData('workplace_impairment_training', v)}
                                     >
                                         <div className="flex items-center gap-2">
@@ -637,16 +567,16 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.workplace_impairment_training} />
+                                    <InputError message={allErrors.workplace_impairment_training} />
                                 </div>
 
-                                {form.workplace_impairment_training === 'yes' && (
+                                {data.workplace_impairment_training === 'yes' && (
                                     <div className="grid gap-2">
                                         <Label htmlFor="wit_completion_date">WIT Completion Date</Label>
                                         <Input
                                             id="wit_completion_date"
                                             type="date"
-                                            value={form.wit_completion_date}
+                                            value={data.wit_completion_date}
                                             onChange={(e) => setData('wit_completion_date', e.target.value)}
                                         />
                                     </div>
@@ -657,7 +587,7 @@ export default function Apply() {
                                         Asbestos Awareness Training <span className="text-destructive">*</span>
                                     </Label>
                                     <RadioGroup
-                                        value={form.asbestos_awareness_training}
+                                        value={data.asbestos_awareness_training}
                                         onValueChange={(v) => setData('asbestos_awareness_training', v)}
                                     >
                                         <div className="flex items-center gap-2">
@@ -673,7 +603,7 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.asbestos_awareness_training} />
+                                    <InputError message={allErrors.asbestos_awareness_training} />
                                 </div>
 
                                 <div className="grid gap-2">
@@ -681,7 +611,7 @@ export default function Apply() {
                                         10830NAT Crystalline Silica Course <span className="text-destructive">*</span>
                                     </Label>
                                     <RadioGroup
-                                        value={form.crystalline_silica_course}
+                                        value={data.crystalline_silica_course}
                                         onValueChange={(v) => setData('crystalline_silica_course', v)}
                                     >
                                         <div className="flex items-center gap-2">
@@ -697,14 +627,14 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.crystalline_silica_course} />
+                                    <InputError message={allErrors.crystalline_silica_course} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label>
                                         Gender Equity Training <span className="text-destructive">*</span>
                                     </Label>
-                                    <RadioGroup value={form.gender_equity_training} onValueChange={(v) => setData('gender_equity_training', v)}>
+                                    <RadioGroup value={data.gender_equity_training} onValueChange={(v) => setData('gender_equity_training', v)}>
                                         <div className="flex items-center gap-2">
                                             <RadioGroupItem value="yes" id="gender_yes" />
                                             <Label htmlFor="gender_yes" className="font-normal">
@@ -718,14 +648,14 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.gender_equity_training} />
+                                    <InputError message={allErrors.gender_equity_training} />
                                 </div>
 
                                 <div className="grid gap-2">
                                     <Label>
                                         Quantitative Fit Test <span className="text-destructive">*</span>
                                     </Label>
-                                    <RadioGroup value={form.quantitative_fit_test} onValueChange={(v) => setData('quantitative_fit_test', v)}>
+                                    <RadioGroup value={data.quantitative_fit_test} onValueChange={(v) => setData('quantitative_fit_test', v)}>
                                         <div className="flex items-center gap-2">
                                             <RadioGroupItem value="quantitative" id="fit_quant" />
                                             <Label htmlFor="fit_quant" className="font-normal">
@@ -739,7 +669,7 @@ export default function Apply() {
                                             </Label>
                                         </div>
                                     </RadioGroup>
-                                    <InputError message={errors.quantitative_fit_test} />
+                                    <InputError message={allErrors.quantitative_fit_test} />
                                 </div>
                             </CardContent>
                         </Card>
@@ -753,7 +683,7 @@ export default function Apply() {
                                 <CardDescription>Please provide at least 2 employment references</CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-6">
-                                {form.references.map((ref, index) => (
+                                {data.references.map((ref, index) => (
                                     <div key={index}>
                                         {index > 0 && <Separator className="mb-6" />}
                                         <h4 className="mb-3 text-sm font-medium">
@@ -768,7 +698,7 @@ export default function Apply() {
                                                         value={ref.company_name}
                                                         onChange={(e) => setReference(index, 'company_name', e.target.value)}
                                                     />
-                                                    <InputError message={errors[`ref_${index}_company`]} />
+                                                    <InputError message={allErrors[`ref_${index}_company`]} />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label htmlFor={`ref_position_${index}`}>Position</Label>
@@ -777,7 +707,7 @@ export default function Apply() {
                                                         value={ref.position}
                                                         onChange={(e) => setReference(index, 'position', e.target.value)}
                                                     />
-                                                    <InputError message={errors[`ref_${index}_position`]} />
+                                                    <InputError message={allErrors[`ref_${index}_position`]} />
                                                 </div>
                                             </div>
                                             <div className="grid gap-2">
@@ -787,7 +717,7 @@ export default function Apply() {
                                                     value={ref.employment_period}
                                                     onChange={(e) => setReference(index, 'employment_period', e.target.value)}
                                                 />
-                                                <InputError message={errors[`ref_${index}_period`]} />
+                                                <InputError message={allErrors[`ref_${index}_period`]} />
                                             </div>
                                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                 <div className="grid gap-2">
@@ -797,7 +727,7 @@ export default function Apply() {
                                                         value={ref.contact_person}
                                                         onChange={(e) => setReference(index, 'contact_person', e.target.value)}
                                                     />
-                                                    <InputError message={errors[`ref_${index}_contact`]} />
+                                                    <InputError message={allErrors[`ref_${index}_contact`]} />
                                                 </div>
                                                 <div className="grid gap-2">
                                                     <Label htmlFor={`ref_phone_${index}`}>Phone Number</Label>
@@ -807,7 +737,7 @@ export default function Apply() {
                                                         value={ref.phone_number}
                                                         onChange={(e) => setReference(index, 'phone_number', e.target.value)}
                                                     />
-                                                    <InputError message={errors[`ref_${index}_phone`]} />
+                                                    <InputError message={allErrors[`ref_${index}_phone`]} />
                                                 </div>
                                             </div>
                                         </div>
@@ -827,7 +757,7 @@ export default function Apply() {
                                 <CardContent className="grid gap-4">
                                     <div className="grid gap-2">
                                         <Label>Workcover Claim (last 2 years)</Label>
-                                        <RadioGroup value={form.workcover_claim} onValueChange={(v) => setData('workcover_claim', v)}>
+                                        <RadioGroup value={data.workcover_claim} onValueChange={(v) => setData('workcover_claim', v)}>
                                             <div className="flex items-center gap-2">
                                                 <RadioGroupItem value="yes" id="wc_yes" />
                                                 <Label htmlFor="wc_yes" className="font-normal">
@@ -845,7 +775,7 @@ export default function Apply() {
 
                                     <div className="grid gap-2">
                                         <Label>Medical or Physical Condition</Label>
-                                        <Select value={form.medical_condition} onValueChange={(v) => setData('medical_condition', v)}>
+                                        <Select value={data.medical_condition} onValueChange={(v) => setData('medical_condition', v)}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select if applicable" />
                                             </SelectTrigger>
@@ -859,12 +789,12 @@ export default function Apply() {
                                         </Select>
                                     </div>
 
-                                    {form.medical_condition === 'other' && (
+                                    {data.medical_condition === 'other' && (
                                         <div className="grid gap-2">
                                             <Label htmlFor="medical_condition_other">Please specify</Label>
                                             <Input
                                                 id="medical_condition_other"
-                                                value={form.medical_condition_other}
+                                                value={data.medical_condition_other}
                                                 onChange={(e) => setData('medical_condition_other', e.target.value)}
                                             />
                                         </div>
@@ -888,10 +818,10 @@ export default function Apply() {
                                             </Label>
                                             <Input
                                                 id="acceptance_full_name"
-                                                value={form.acceptance_full_name}
+                                                value={data.acceptance_full_name}
                                                 onChange={(e) => setData('acceptance_full_name', e.target.value)}
                                             />
-                                            <InputError message={errors.acceptance_full_name} />
+                                            <InputError message={allErrors.acceptance_full_name} />
                                         </div>
                                         <div className="grid gap-2">
                                             <Label htmlFor="acceptance_email">
@@ -900,10 +830,10 @@ export default function Apply() {
                                             <Input
                                                 id="acceptance_email"
                                                 type="email"
-                                                value={form.acceptance_email}
+                                                value={data.acceptance_email}
                                                 onChange={(e) => setData('acceptance_email', e.target.value)}
                                             />
-                                            <InputError message={errors.acceptance_email} />
+                                            <InputError message={allErrors.acceptance_email} />
                                         </div>
                                     </div>
 
@@ -914,16 +844,16 @@ export default function Apply() {
                                         <Input
                                             id="acceptance_date"
                                             type="date"
-                                            value={form.acceptance_date}
+                                            value={data.acceptance_date}
                                             onChange={(e) => setData('acceptance_date', e.target.value)}
                                         />
-                                        <InputError message={errors.acceptance_date} />
+                                        <InputError message={allErrors.acceptance_date} />
                                     </div>
 
                                     <div className="flex items-start gap-2">
                                         <Checkbox
                                             id="declaration_accepted"
-                                            checked={form.declaration_accepted}
+                                            checked={data.declaration_accepted}
                                             onCheckedChange={(checked) => setData('declaration_accepted', checked === true)}
                                         />
                                         <Label htmlFor="declaration_accepted" className="font-normal leading-snug">
@@ -932,7 +862,7 @@ export default function Apply() {
                                             <span className="text-destructive">*</span>
                                         </Label>
                                     </div>
-                                    <InputError message={errors.declaration_accepted} />
+                                    <InputError message={allErrors.declaration_accepted} />
                                 </CardContent>
                             </Card>
                         </div>
@@ -950,8 +880,8 @@ export default function Apply() {
                                 Continue
                             </Button>
                         ) : (
-                            <Button type="submit" className="flex-1" disabled={processing || !form.declaration_accepted}>
-                                Submit Application
+                            <Button type="submit" className="flex-1" disabled={processing || !data.declaration_accepted}>
+                                {processing ? 'Submitting...' : 'Submit Application'}
                             </Button>
                         )}
                     </div>
