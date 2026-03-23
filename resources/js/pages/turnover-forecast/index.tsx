@@ -21,6 +21,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Turnover Forecast', href: '/tur
 const STORAGE_KEY = 'turnover-forecast-excluded-jobs';
 const GRID_HEIGHT_KEY = 'turnover-forecast-grid-height';
 const SELECTED_FY_KEY = 'turnover-forecast-selected-fy';
+const ACTIVE_VIEWS_KEY = 'turnover-forecast-active-views';
 
 type TurnoverForecastProps = {
     data: TurnoverRow[];
@@ -44,7 +45,18 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [printReportOpen, setPrintReportOpen] = useState(false);
-    const [activeViews, setActiveViews] = useState<Set<ViewMode>>(() => new Set(['revenue-only']));
+    const [activeViews, setActiveViews] = useState<Set<ViewMode>>(() => {
+        try {
+            const stored = localStorage.getItem(ACTIVE_VIEWS_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored) as ViewMode[];
+                if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
+            }
+        } catch {
+            // Ignore
+        }
+        return new Set<ViewMode>(['revenue-only']);
+    });
     const toggleView = (mode: ViewMode) => {
         setActiveViews((prev) => {
             const next = new Set(prev);
@@ -53,6 +65,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
             } else {
                 next.add(mode);
             }
+            localStorage.setItem(ACTIVE_VIEWS_KEY, JSON.stringify([...next]));
             return next;
         });
     };
@@ -196,8 +209,20 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 acc.budget += safeNumber(row.budget);
                 acc.costToDate += safeNumber(row.cost_to_date);
                 acc.claimedToDate += safeNumber(row.claimed_to_date);
-                acc.revenueContractFY += safeNumber(row.revenue_contract_fy);
-                acc.costContractFY += safeNumber(row.cost_contract_fy);
+                // Compute contract FY from filtered months instead of backend's fixed current FY
+                filteredMonths.forEach((month) => {
+                    const rActual = safeNumber(row.revenue_actuals?.[month]);
+                    const rForecast = safeNumber(row.revenue_forecast?.[month]);
+                    acc.revenueContractFY += month === currentMonthStr
+                        ? (rForecast !== 0 ? rForecast : rActual)
+                        : (rActual !== 0 ? rActual : rForecast);
+
+                    const cActual = safeNumber(row.cost_actuals?.[month]);
+                    const cForecast = safeNumber(row.cost_forecast?.[month]);
+                    acc.costContractFY += month === currentMonthStr
+                        ? (cForecast !== 0 ? cForecast : cActual)
+                        : (cActual !== 0 ? cActual : cForecast);
+                });
                 acc.totalContractValue += safeNumber(row.total_contract_value);
                 acc.calculatedTotalRevenue += safeNumber(row.calculated_total_revenue);
                 acc.revenueVariance += safeNumber(row.revenue_variance);
@@ -665,7 +690,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 data={filteredData}
                                 months={filteredMonths}
                                 lastActualMonth={lastActualMonth}
-                                fyLabel={fyLabel}
+                                fyLabel={selectedFYLabel}
                                 monthlyTargets={monthlyTargets}
                                 viewMode={mode}
                                 height={gridHeight}

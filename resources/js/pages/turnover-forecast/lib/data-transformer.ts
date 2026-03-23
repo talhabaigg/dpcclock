@@ -55,11 +55,12 @@ export type UnifiedRow = {
     forecastStatus?: 'not_started' | 'draft' | 'submitted' | 'finalized';
     lastSubmittedAt?: string | null;
     // Summary columns - context-dependent values
-    toDate: number | null;
-    contractFY: number | null;
     totalValue: number | null;
-    remainingFY: number | null;
+    toDate: number | null;
     remainingTotal: number | null;
+    contractFY: number | null;
+    fyToDate: number | null;
+    remainingFY: number | null;
     // For target rows
     fyTotal?: number;
     // Monthly values - dynamically keyed
@@ -107,6 +108,15 @@ export function transformToUnifiedRows(
     data.forEach((job) => {
         const isActualMonth: Record<string, boolean> = {};
 
+        // Calculate contractFY and actuals dynamically from filtered months
+        let revenueContractFY = 0;
+        let revenueActualsFY = 0;
+        months.forEach((month) => {
+            const { value, isActual } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
+            revenueContractFY += value;
+            if (isActual) revenueActualsFY += value;
+        });
+
         // Revenue row (always visible)
         const revenueRow: UnifiedRow = {
             id: `${job.type}-${job.id}-revenue`,
@@ -119,11 +129,12 @@ export function transformToUnifiedRows(
             overUnderBilling: job.over_under_billing,
             forecastStatus: job.forecast_status,
             lastSubmittedAt: job.last_submitted_at,
-            toDate: job.claimed_to_date,
-            contractFY: job.revenue_contract_fy,
             totalValue: job.total_contract_value,
-            remainingFY: job.remaining_revenue_value_fy,
+            toDate: job.claimed_to_date,
             remainingTotal: job.remaining_order_book,
+            contractFY: revenueContractFY,
+            fyToDate: revenueActualsFY,
+            remainingFY: revenueContractFY - revenueActualsFY,
             isActualMonth,
         };
 
@@ -138,6 +149,15 @@ export function transformToUnifiedRows(
 
         // Cost and Profit rows (only in expanded mode)
         if (viewMode === 'expanded') {
+            // Calculate cost contractFY and actuals dynamically from filtered months
+            let costContractFY = 0;
+            let costActualsFY = 0;
+            months.forEach((month) => {
+                const { value, isActual } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
+                costContractFY += value;
+                if (isActual) costActualsFY += value;
+            });
+
             // Cost row
             const costRow: UnifiedRow = {
                 id: `${job.type}-${job.id}-cost`,
@@ -146,11 +166,12 @@ export function transformToUnifiedRows(
                 jobNumber: '',
                 jobName: 'Cost',
                 projectType: job.type,
-                toDate: job.cost_to_date,
-                contractFY: job.cost_contract_fy,
                 totalValue: job.budget,
-                remainingFY: job.remaining_cost_value_fy,
+                toDate: job.cost_to_date,
                 remainingTotal: job.remaining_budget,
+                contractFY: costContractFY,
+                fyToDate: costActualsFY,
+                remainingFY: costContractFY - costActualsFY,
                 isActualMonth: {},
             };
 
@@ -170,11 +191,12 @@ export function transformToUnifiedRows(
                 jobNumber: '',
                 jobName: 'Profit',
                 projectType: job.type,
-                toDate: safeNumber(job.claimed_to_date) - safeNumber(job.cost_to_date),
-                contractFY: safeNumber(job.revenue_contract_fy) - safeNumber(job.cost_contract_fy),
                 totalValue: safeNumber(job.total_contract_value) - safeNumber(job.budget),
-                remainingFY: null,
+                toDate: safeNumber(job.claimed_to_date) - safeNumber(job.cost_to_date),
                 remainingTotal: null,
+                contractFY: revenueContractFY - costContractFY,
+                fyToDate: revenueActualsFY - costActualsFY,
+                remainingFY: null,
                 isActualMonth: {},
             };
 
@@ -205,20 +227,22 @@ export function calculateTotalRow(rows: UnifiedRow[], rowType: RowType, months: 
         jobNumber: label,
         jobName: '',
         projectType: 'total',
-        toDate: 0,
-        contractFY: 0,
         totalValue: 0,
-        remainingFY: 0,
+        toDate: 0,
         remainingTotal: 0,
+        contractFY: 0,
+        fyToDate: 0,
+        remainingFY: 0,
         isActualMonth: {},
     };
 
     filteredRows.forEach((row) => {
-        totalRow.toDate = safeNumber(totalRow.toDate) + safeNumber(row.toDate);
-        totalRow.contractFY = safeNumber(totalRow.contractFY) + safeNumber(row.contractFY);
         totalRow.totalValue = safeNumber(totalRow.totalValue) + safeNumber(row.totalValue);
-        totalRow.remainingFY = safeNumber(totalRow.remainingFY) + safeNumber(row.remainingFY);
+        totalRow.toDate = safeNumber(totalRow.toDate) + safeNumber(row.toDate);
         totalRow.remainingTotal = safeNumber(totalRow.remainingTotal) + safeNumber(row.remainingTotal);
+        totalRow.contractFY = safeNumber(totalRow.contractFY) + safeNumber(row.contractFY);
+        totalRow.fyToDate = safeNumber(totalRow.fyToDate) + safeNumber(row.fyToDate);
+        totalRow.remainingFY = safeNumber(totalRow.remainingFY) + safeNumber(row.remainingFY);
     });
 
     months.forEach((month) => {
@@ -243,11 +267,12 @@ export function calculateLabourRow(revenueRows: UnifiedRow[], data: TurnoverRow[
         jobNumber: 'Labour Req',
         jobName: '',
         projectType: 'summary',
-        toDate: null,
-        contractFY: null,
         totalValue: null,
-        remainingFY: null,
+        toDate: null,
         remainingTotal: null,
+        contractFY: null,
+        fyToDate: null,
+        remainingFY: null,
         isActualMonth: {},
         labourRequired: {},
         labourForecast: {},
@@ -288,11 +313,12 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         jobNumber: 'Revenue Target',
         jobName: '',
         projectType: 'summary',
-        toDate: null,
-        contractFY: null,
         totalValue: null,
-        remainingFY: null,
+        toDate: null,
         remainingTotal: null,
+        contractFY: null,
+        fyToDate: null,
+        remainingFY: null,
         fyTotal: 0,
         isActualMonth: {},
     };
@@ -304,11 +330,12 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         jobNumber: 'Actual + Forecast',
         jobName: '',
         projectType: 'summary',
-        toDate: null,
-        contractFY: null,
         totalValue: null,
-        remainingFY: null,
+        toDate: null,
         remainingTotal: null,
+        contractFY: null,
+        fyToDate: null,
+        remainingFY: null,
         fyTotal: 0,
         isActualMonth: {},
     };
@@ -320,11 +347,12 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         jobNumber: 'Variance',
         jobName: '',
         projectType: 'summary',
-        toDate: null,
-        contractFY: null,
         totalValue: null,
-        remainingFY: null,
+        toDate: null,
         remainingTotal: null,
+        contractFY: null,
+        fyToDate: null,
+        remainingFY: null,
         fyTotal: 0,
         isActualMonth: {},
     };

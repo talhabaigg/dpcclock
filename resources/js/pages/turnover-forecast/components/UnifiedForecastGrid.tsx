@@ -27,23 +27,19 @@ import {
 } from '../lib/data-transformer';
 import { ColumnPresetManager, type ColumnPreset } from './ColumnPresetManager';
 import { ColumnVisibilityDropdown, type ColumnGroup } from './ColumnVisibilityDropdown';
-import { ForecastStatusCell } from './ForecastStatusCell';
 import { LabourCell } from './LabourCell';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 /** Column IDs for toggleable (non-month) columns — used for visibility sync */
 const TOGGLEABLE_COLUMN_IDS = [
-    'projectType',
     'jobName',
-    'projectManager',
-    'overUnderBilling',
-    'forecastStatus',
-    'toDate',
-    'contractFY',
     'totalValue',
-    'remainingFY',
+    'toDate',
     'remainingTotal',
+    'contractFY',
+    'fyToDate',
+    'remainingFY',
 ] as const;
 
 /** Stable fallback counter for rows without an ID (avoids Date.now() instability) */
@@ -68,7 +64,11 @@ function HeaderWithHelp({ displayName, helpText }: HeaderWithHelpProps) {
     );
 }
 
-const COLUMN_STATE_KEY = 'turnover-forecast-unified-column-state';
+const COLUMN_STATE_BASE_KEY = 'turnover-forecast-unified-column-state';
+/** Returns a view-mode-scoped storage key so different view modes don't corrupt each other */
+const columnStateKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewMode}`;
+const hiddenColumnsKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewMode}-hidden`;
+const activePresetKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewMode}-active-preset`;
 
 export type ViewMode = 'revenue-only' | 'expanded' | 'targets';
 
@@ -96,7 +96,7 @@ export function UnifiedForecastGrid({
     const gridRef = useRef<AgGridReact>(null);
     const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
         try {
-            const stored = localStorage.getItem(`${COLUMN_STATE_KEY}-hidden`);
+            const stored = localStorage.getItem(hiddenColumnsKey(viewMode));
             return stored ? new Set(JSON.parse(stored)) : new Set();
         } catch {
             return new Set();
@@ -107,7 +107,7 @@ export function UnifiedForecastGrid({
     const [currentColumnState, setCurrentColumnState] = useState<ColumnState[] | null>(null);
     const [activePresetId, setActivePresetId] = useState<string | null>(() => {
         try {
-            return localStorage.getItem(`${COLUMN_STATE_KEY}-active-preset`) || null;
+            return localStorage.getItem(activePresetKey(viewMode)) || null;
         } catch {
             return null;
         }
@@ -200,24 +200,6 @@ export function UnifiedForecastGrid({
             staticCols.push(
                 {
                     headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Type"
-                            helpText="Indicates project source: Job for projects from Access Dimensions, Forecast for manually created forecast projects"
-                        />
-                    ),
-                    field: 'projectType',
-                    width: 100,
-                    pinned: 'left',
-                    hide: hiddenColumns.has('projectType'),
-                    cellClass: getPinnedCellClass,
-                    valueFormatter: (params) => {
-                        const v = params.value as string;
-                        if (!v) return '';
-                        return v.charAt(0).toUpperCase() + v.slice(1);
-                    },
-                },
-                {
-                    headerComponent: () => (
                         <HeaderWithHelp displayName="Job Number" helpText="Unique job identifier. Click to view the job forecast details." />
                     ),
                     field: 'jobNumber',
@@ -244,7 +226,7 @@ export function UnifiedForecastGrid({
                     field: 'jobName',
                     width: 150,
                     pinned: 'left',
-                    hide: hiddenColumns.has('jobName'),
+                    // Visibility managed via AG Grid API in handleGridReady/useEffect
                     cellClass: (params) => {
                         const rowType = (params.data as UnifiedRow)?.rowType;
                         if (rowType === 'cost' || rowType === 'profit') {
@@ -253,117 +235,35 @@ export function UnifiedForecastGrid({
                         return 'font-medium';
                     },
                 },
-                {
-                    headerComponent: () => <HeaderWithHelp displayName="Project Manager" helpText="The manager responsible for this project" />,
-                    field: 'projectManager',
-                    width: 140,
-                    hide: hiddenColumns.has('projectManager'),
-                },
+                // --- Lifetime columns ---
                 {
                     headerComponent: () => (
                         <HeaderWithHelp
-                            displayName="Over/Under Billing"
-                            helpText="Difference between claimed revenue and cost incurred. Green = over-billed (claimed more than spent), Red = under-billed (spent more than claimed)"
+                            displayName="Total Value"
+                            helpText="Revenue: Total contract value. Cost: Total budget."
                         />
                     ),
-                    field: 'overUnderBilling',
-                    width: 140,
-                    hide: hiddenColumns.has('overUnderBilling'),
-                    valueFormatter: (params) => formatCurrency(params.value),
-                    type: 'numericColumn',
-                    cellClass: (params) => {
-                        if (params.value < 0) {
-                            return 'text-right text-red-600 dark:text-red-400 font-bold bg-red-100 dark:bg-red-900/40';
-                        }
-                        if (!params.value) {
-                            return 'text-right';
-                        }
-                        return 'text-right text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/30';
-                    },
-                },
-                {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Forecast Status"
-                            helpText="Current status of the forecast: not_started, draft, submitted, or finalized"
-                        />
-                    ),
-                    field: 'forecastStatus',
+                    field: 'totalValue',
                     width: 130,
-                    hide: hiddenColumns.has('forecastStatus'),
-                    cellStyle: { display: 'flex', alignItems: 'center' },
-                    cellRenderer: (params: { data: UnifiedRow }) => {
-                        const rowData = params.data;
-                        if (rowData?.rowType !== 'revenue' || rowData?.projectType === 'total' || rowData?.projectType === 'summary') {
-                            return null;
-                        }
-                        return <ForecastStatusCell value={rowData.forecastStatus} />;
+                    // Visibility managed via AG Grid API
+                    valueFormatter: (params) => {
+                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
                     },
+                    type: 'numericColumn',
+                    cellClass: getValueCellClass,
                 },
                 {
                     headerComponent: () => (
                         <HeaderWithHelp
                             displayName="To Date"
-                            helpText="Revenue: Total claimed to date from progress billing. Cost: Total cost incurred to date."
+                            helpText="Lifetime total. Revenue: claimed to date. Cost: incurred to date."
                         />
                     ),
                     field: 'toDate',
                     width: 130,
-                    hide: hiddenColumns.has('toDate'),
-                    valueFormatter: (params) => {
-                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
-                        return formatCurrency(v);
-                    },
-                    type: 'numericColumn',
-                    cellClass: getValueCellClass,
-                },
-                {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName={`Contract ${fyLabel}`}
-                            helpText="Sum of monthly values for the selected financial year. Uses actuals where available, otherwise forecast values."
-                        />
-                    ),
-                    field: 'contractFY',
-                    width: 130,
-                    hide: hiddenColumns.has('contractFY'),
-                    valueFormatter: (params) => {
-                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
-                        return formatCurrency(v);
-                    },
-                    type: 'numericColumn',
-                    cellClass: getValueCellClass,
-                },
-                {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName="Total Value"
-                            helpText="Revenue: Total contract value from Job Summary. Cost: Total budget for the project."
-                        />
-                    ),
-                    field: 'totalValue',
-                    width: 130,
-                    hide: hiddenColumns.has('totalValue'),
-                    valueFormatter: (params) => {
-                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
-                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
-                        return formatCurrency(v);
-                    },
-                    type: 'numericColumn',
-                    cellClass: getValueCellClass,
-                },
-                {
-                    headerComponent: () => (
-                        <HeaderWithHelp
-                            displayName={`Remaining ${fyLabel}`}
-                            helpText="Remaining value to be claimed/incurred in the current financial year (Contract FY minus To Date value for this FY)"
-                        />
-                    ),
-                    field: 'remainingFY',
-                    width: 140,
-                    hide: hiddenColumns.has('remainingFY'),
+                    // Visibility managed via AG Grid API
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
                         const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
@@ -376,12 +276,67 @@ export function UnifiedForecastGrid({
                     headerComponent: () => (
                         <HeaderWithHelp
                             displayName="Remaining Total"
-                            helpText="Revenue: Remaining order book (Total Value minus Claimed To Date). Cost: Remaining budget (Budget minus Cost To Date)."
+                            helpText="Total Value minus To Date. Revenue: remaining order book. Cost: remaining budget."
                         />
                     ),
                     field: 'remainingTotal',
                     width: 140,
-                    hide: hiddenColumns.has('remainingTotal'),
+                    // Visibility managed via AG Grid API
+                    valueFormatter: (params) => {
+                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
+                    },
+                    type: 'numericColumn',
+                    cellClass: getValueCellClass,
+                },
+                // --- FY-scoped columns ---
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Contract FY"
+                            helpText="Total expected value for the selected FY. Actuals where available, otherwise forecast."
+                        />
+                    ),
+                    field: 'contractFY',
+                    width: 130,
+                    // Visibility managed via AG Grid API
+                    valueFormatter: (params) => {
+                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
+                    },
+                    type: 'numericColumn',
+                    cellClass: getValueCellClass,
+                },
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="FY To Date"
+                            helpText="Actuals only within the selected FY. Zero if no actuals exist for the period."
+                        />
+                    ),
+                    field: 'fyToDate',
+                    width: 130,
+                    // Visibility managed via AG Grid API
+                    valueFormatter: (params) => {
+                        if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
+                        const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
+                        return formatCurrency(v);
+                    },
+                    type: 'numericColumn',
+                    cellClass: getValueCellClass,
+                },
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Remaining FY"
+                            helpText="Contract FY minus FY To Date. Equals Contract FY when no actuals exist."
+                        />
+                    ),
+                    field: 'remainingFY',
+                    width: 130,
+                    // Visibility managed via AG Grid API
                     valueFormatter: (params) => {
                         if ((params.data as UnifiedRow)?.rowType === 'labour') return '';
                         const v = (params.data as UnifiedRow)?.rowType === 'cost' ? -Math.abs(params.value) : params.value;
@@ -421,7 +376,7 @@ export function UnifiedForecastGrid({
         }));
 
         return [...staticCols, ...monthlyCols];
-    }, [months, lastActualMonth, fyLabel, viewMode, hiddenColumns]);
+    }, [months, lastActualMonth, fyLabel, viewMode]);
 
     // Default column definition
     const defaultColDef = useMemo<ColDef>(
@@ -458,32 +413,45 @@ export function UnifiedForecastGrid({
     const handleGridReady = useCallback(
         (params: GridReadyEvent) => {
             try {
-                const stored = localStorage.getItem(COLUMN_STATE_KEY);
+                const stored = localStorage.getItem(columnStateKey(viewMode));
                 if (stored) {
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => rest);
+                    const state = JSON.parse(stored) as ColumnState[];
                     params.api.applyColumnState({ state, applyOrder: true });
                 }
             } catch {
                 // Ignore storage errors
             }
+            // Apply hidden columns from localStorage (since hide is no longer on column defs)
+            if (viewMode !== 'targets') {
+                try {
+                    const hiddenStored = localStorage.getItem(hiddenColumnsKey(viewMode));
+                    if (hiddenStored) {
+                        const hiddenIds = JSON.parse(hiddenStored) as string[];
+                        TOGGLEABLE_COLUMN_IDS.forEach((colId) => {
+                            params.api.setColumnsVisible([colId], !hiddenIds.includes(colId));
+                        });
+                    }
+                } catch {
+                    // Ignore
+                }
+            }
             // Initialize current column state
             updateCurrentColumnState();
         },
-        [updateCurrentColumnState],
+        [updateCurrentColumnState, viewMode],
     );
 
     const saveColumnStateImmediate = useCallback(() => {
         try {
             const state = gridRef.current?.api?.getColumnState();
             if (state) {
-                localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(state));
+                localStorage.setItem(columnStateKey(viewMode), JSON.stringify(state));
                 setCurrentColumnState(state);
             }
         } catch {
             // Ignore storage errors
         }
-    }, []);
+    }, [viewMode]);
 
     // Debounced version — avoids writing to localStorage on every pixel during column resize
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -494,13 +462,13 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
 
     const resetColumnState = useCallback(() => {
         gridRef.current?.api?.resetColumnState();
-        localStorage.removeItem(COLUMN_STATE_KEY);
+        localStorage.removeItem(columnStateKey(viewMode));
         setHiddenColumns(new Set());
-        localStorage.removeItem(`${COLUMN_STATE_KEY}-hidden`);
+        localStorage.removeItem(hiddenColumnsKey(viewMode));
         setActivePresetId(null);
-        localStorage.removeItem(`${COLUMN_STATE_KEY}-active-preset`);
+        localStorage.removeItem(activePresetKey(viewMode));
         updateCurrentColumnState();
-    }, [updateCurrentColumnState]);
+    }, [updateCurrentColumnState, viewMode]);
 
     // Export to CSV
     const handleExportCSV = useCallback(() => {
@@ -517,25 +485,27 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             {
                 label: 'Job Info',
                 columns: [
-                    { id: 'projectType', label: 'Type', visible: !hiddenColumns.has('projectType') },
                     { id: 'jobName', label: 'Job Name', visible: !hiddenColumns.has('jobName') },
-                    { id: 'projectManager', label: 'Project Manager', visible: !hiddenColumns.has('projectManager') },
-                    { id: 'forecastStatus', label: 'Forecast Status', visible: !hiddenColumns.has('forecastStatus') },
                 ],
             },
             {
-                label: 'Summary Values',
+                label: 'Lifetime',
                 columns: [
-                    { id: 'overUnderBilling', label: 'Over/Under Billing', visible: !hiddenColumns.has('overUnderBilling') },
-                    { id: 'toDate', label: 'To Date', visible: !hiddenColumns.has('toDate') },
-                    { id: 'contractFY', label: `Contract ${fyLabel}`, visible: !hiddenColumns.has('contractFY') },
                     { id: 'totalValue', label: 'Total Value', visible: !hiddenColumns.has('totalValue') },
-                    { id: 'remainingFY', label: `Remaining ${fyLabel}`, visible: !hiddenColumns.has('remainingFY') },
+                    { id: 'toDate', label: 'To Date', visible: !hiddenColumns.has('toDate') },
                     { id: 'remainingTotal', label: 'Remaining Total', visible: !hiddenColumns.has('remainingTotal') },
                 ],
             },
+            {
+                label: 'Financial Year',
+                columns: [
+                    { id: 'contractFY', label: 'Contract FY', visible: !hiddenColumns.has('contractFY') },
+                    { id: 'fyToDate', label: 'FY To Date', visible: !hiddenColumns.has('fyToDate') },
+                    { id: 'remainingFY', label: 'Remaining FY', visible: !hiddenColumns.has('remainingFY') },
+                ],
+            },
         ];
-    }, [viewMode, hiddenColumns, fyLabel]);
+    }, [viewMode, hiddenColumns]);
 
     const handleToggleColumn = useCallback((columnId: string) => {
         setHiddenColumns((prev) => {
@@ -546,34 +516,34 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             } else {
                 next.add(columnId);
             }
-            localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify([...next]));
+            localStorage.setItem(hiddenColumnsKey(viewMode), JSON.stringify([...next]));
             // Toggle visibility via AG Grid API
             gridRef.current?.api?.setColumnsVisible([columnId], shouldShow);
             return next;
         });
         // Mark as modified from preset
         setActivePresetId(null);
-        localStorage.removeItem(`${COLUMN_STATE_KEY}-active-preset`);
-    }, []);
+        localStorage.removeItem(activePresetKey(viewMode));
+    }, [viewMode]);
 
     const handleShowAllColumns = useCallback(() => {
         setHiddenColumns(new Set());
-        localStorage.removeItem(`${COLUMN_STATE_KEY}-hidden`);
+        localStorage.removeItem(hiddenColumnsKey(viewMode));
         // Show all columns via AG Grid API
         if (gridRef.current?.api) {
             gridRef.current.api.setColumnsVisible([...TOGGLEABLE_COLUMN_IDS], true);
         }
-    }, []);
+    }, [viewMode]);
 
     const handleHideAllColumns = useCallback(() => {
         const allIds = columnGroups.flatMap((g) => g.columns.map((c) => c.id));
         setHiddenColumns(new Set(allIds));
-        localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(allIds));
+        localStorage.setItem(hiddenColumnsKey(viewMode), JSON.stringify(allIds));
         // Hide columns via AG Grid API
         if (gridRef.current?.api) {
             gridRef.current.api.setColumnsVisible(allIds, false);
         }
-    }, [columnGroups]);
+    }, [columnGroups, viewMode]);
 
     // Preset management
     const handleLoadPreset = useCallback(
@@ -581,13 +551,13 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
             // Apply column state (for column order, width, pinning)
             if (preset.columnState && gridRef.current?.api) {
                 gridRef.current.api.applyColumnState({ state: preset.columnState, applyOrder: true });
-                localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(preset.columnState));
+                localStorage.setItem(columnStateKey(viewMode), JSON.stringify(preset.columnState));
             }
 
             // Apply hidden columns via React state
             const newHiddenColumns = new Set(preset.hiddenColumns);
             setHiddenColumns(newHiddenColumns);
-            localStorage.setItem(`${COLUMN_STATE_KEY}-hidden`, JSON.stringify(preset.hiddenColumns));
+            localStorage.setItem(hiddenColumnsKey(viewMode), JSON.stringify(preset.hiddenColumns));
 
             // Also explicitly set visibility via AG Grid API to ensure sync
             if (gridRef.current?.api) {
@@ -599,17 +569,17 @@ const state = (JSON.parse(stored) as ColumnState[]).map(({ width, ...rest }) => 
 
             updateCurrentColumnState();
         },
-        [updateCurrentColumnState],
+        [updateCurrentColumnState, viewMode],
     );
 
     const handleActivePresetChange = useCallback((presetId: string | null) => {
         setActivePresetId(presetId);
         if (presetId) {
-            localStorage.setItem(`${COLUMN_STATE_KEY}-active-preset`, presetId);
+            localStorage.setItem(activePresetKey(viewMode), presetId);
         } else {
-            localStorage.removeItem(`${COLUMN_STATE_KEY}-active-preset`);
+            localStorage.removeItem(activePresetKey(viewMode));
         }
-    }, []);
+    }, [viewMode]);
 
     // Grid resize handling
     const handleResizeStart = useCallback(

@@ -66,20 +66,22 @@ const formatCompactCurrency = (value: number | null | undefined): string => {
 type ReportRow = {
     id: number;
     job_name: string;
-    fy_contract: number;
-    claimed_to_date: number;
-    remaining_for_year: number;
     total_contract_value: number;
-    remaining_order_book: number;
+    to_date: number;
+    remaining_total: number;
+    fy_contract: number;
+    fy_to_date: number;
+    remaining_fy: number;
     monthly_values: Record<string, { value: number; isActual: boolean }>;
 };
 
 type SectionTotals = {
-    fy_contract: number;
-    claimed_to_date: number;
-    remaining_for_year: number;
     total_contract_value: number;
-    remaining_order_book: number;
+    to_date: number;
+    remaining_total: number;
+    fy_contract: number;
+    fy_to_date: number;
+    remaining_fy: number;
     monthly_values: Record<string, number>;
 };
 
@@ -106,31 +108,36 @@ export function TurnoverPrintReport({
         const transformRow = (row: TurnoverRow): ReportRow => {
             // Get monthly values: current month prefers forecast; past months prefer actuals
             const monthly_values: Record<string, { value: number; isActual: boolean }> = {};
+            let fyContract = 0;
+            let fyActuals = 0;
             months.forEach((month) => {
                 const actualValue = safeNumber(row.revenue_actuals?.[month]);
                 const forecastValue = safeNumber(row.revenue_forecast?.[month]);
                 if (month === currentMonthStr) {
-                    // Current month: use forecast, fall back to actual if no forecast
-                    if (forecastValue !== 0) {
-                        monthly_values[month] = { value: forecastValue, isActual: false };
-                    } else {
-                        monthly_values[month] = { value: actualValue, isActual: true };
-                    }
+                    const value = forecastValue !== 0 ? forecastValue : actualValue;
+                    const isActual = forecastValue === 0 && actualValue !== 0;
+                    monthly_values[month] = { value, isActual };
+                    fyContract += value;
+                    if (isActual) fyActuals += value;
                 } else if (actualValue !== 0) {
                     monthly_values[month] = { value: actualValue, isActual: true };
+                    fyContract += actualValue;
+                    fyActuals += actualValue;
                 } else {
                     monthly_values[month] = { value: forecastValue, isActual: false };
+                    fyContract += forecastValue;
                 }
             });
 
             return {
                 id: row.id,
                 job_name: row.job_name,
-                fy_contract: safeNumber(row.revenue_contract_fy),
-                claimed_to_date: safeNumber(row.claimed_to_date),
-                remaining_for_year: safeNumber(row.remaining_revenue_value_fy),
                 total_contract_value: safeNumber(row.total_contract_value),
-                remaining_order_book: safeNumber(row.remaining_order_book),
+                to_date: safeNumber(row.claimed_to_date),
+                remaining_total: safeNumber(row.remaining_order_book),
+                fy_contract: fyContract,
+                fy_to_date: fyActuals,
+                remaining_fy: fyContract - fyActuals,
                 monthly_values,
             };
         };
@@ -143,19 +150,21 @@ export function TurnoverPrintReport({
 
             return rows.reduce(
                 (acc, row) => ({
-                    fy_contract: acc.fy_contract + row.fy_contract,
-                    claimed_to_date: acc.claimed_to_date + row.claimed_to_date,
-                    remaining_for_year: acc.remaining_for_year + row.remaining_for_year,
                     total_contract_value: acc.total_contract_value + row.total_contract_value,
-                    remaining_order_book: acc.remaining_order_book + row.remaining_order_book,
+                    to_date: acc.to_date + row.to_date,
+                    remaining_total: acc.remaining_total + row.remaining_total,
+                    fy_contract: acc.fy_contract + row.fy_contract,
+                    fy_to_date: acc.fy_to_date + row.fy_to_date,
+                    remaining_fy: acc.remaining_fy + row.remaining_fy,
                     monthly_values,
                 }),
                 {
-                    fy_contract: 0,
-                    claimed_to_date: 0,
-                    remaining_for_year: 0,
                     total_contract_value: 0,
-                    remaining_order_book: 0,
+                    to_date: 0,
+                    remaining_total: 0,
+                    fy_contract: 0,
+                    fy_to_date: 0,
+                    remaining_fy: 0,
                     monthly_values,
                 },
             );
@@ -177,11 +186,12 @@ export function TurnoverPrintReport({
         });
 
         const combinedTotals: SectionTotals = {
-            fy_contract: swcpTotals.fy_contract + greTotals.fy_contract,
-            claimed_to_date: swcpTotals.claimed_to_date + greTotals.claimed_to_date,
-            remaining_for_year: swcpTotals.remaining_for_year + greTotals.remaining_for_year,
             total_contract_value: swcpTotals.total_contract_value + greTotals.total_contract_value,
-            remaining_order_book: swcpTotals.remaining_order_book + greTotals.remaining_order_book,
+            to_date: swcpTotals.to_date + greTotals.to_date,
+            remaining_total: swcpTotals.remaining_total + greTotals.remaining_total,
+            fy_contract: swcpTotals.fy_contract + greTotals.fy_contract,
+            fy_to_date: swcpTotals.fy_to_date + greTotals.fy_to_date,
+            remaining_fy: swcpTotals.remaining_fy + greTotals.remaining_fy,
             monthly_values: combinedMonthlyValues,
         };
 
@@ -455,10 +465,11 @@ export function TurnoverPrintReport({
                 <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8fafc'};">
                     <td style="padding: 4px 6px 4px 20px; border: 1px solid #e2e8f0; text-align: left; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${row.job_name}</td>
                     <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.total_contract_value)}</td>
-                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_order_book)}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.to_date)}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_total)}</td>
                     <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.fy_contract)}</td>
-                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.claimed_to_date)}</td>
-                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_for_year)}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.fy_to_date)}</td>
+                    <td style="padding: 4px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px;">${formatCompactCurrency(row.remaining_fy)}</td>
                     ${months
                         .map((month) => {
                             const monthData = row.monthly_values[month];
@@ -478,10 +489,11 @@ export function TurnoverPrintReport({
             <tr style="background: ${bgColor}; font-weight: 600;">
                 <td style="padding: 5px 6px; border: 1px solid #e2e8f0; text-align: left; font-size: 9px; color: ${textColor};">${label}</td>
                 <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.total_contract_value)}</td>
-                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_order_book)}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.to_date)}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_total)}</td>
                 <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.fy_contract)}</td>
-                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.claimed_to_date)}</td>
-                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_for_year)}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.fy_to_date)}</td>
+                <td style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${textColor};">${formatCompactCurrency(totals.remaining_fy)}</td>
                 ${months
                     .map(
                         (month) =>
@@ -495,10 +507,11 @@ export function TurnoverPrintReport({
             <tr style="background: #334155;">
                 <th style="padding: 5px 6px; border: 1px solid #334155; text-align: left; font-size: 9px; color: white; font-weight: 600; min-width: 120px;">Job Name</th>
                 <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Total Value</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining Value</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">To Date</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining Total</th>
                 <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Contract FY</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Claimed to Date</th>
-                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">FY To Date</th>
+                <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;">Remaining FY</th>
                 ${monthlyHeaders}
             </tr>
         `;
@@ -558,7 +571,7 @@ export function TurnoverPrintReport({
                             <tbody>
                                 <!-- SWCP Section Header -->
                                 <tr style="background: #f8fafc;">
-                                    <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #1e293b; border: 1px solid #e2e8f0;">
+                                    <td colspan="${7 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #1e293b; border: 1px solid #e2e8f0;">
                                         SWCP (${reportData.swcp.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -567,7 +580,7 @@ export function TurnoverPrintReport({
 
                                 <!-- GRE Section Header -->
                                 <tr style="background: #f1f5f9;">
-                                    <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
+                                    <td colspan="${7 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
                                         GRE (${reportData.gre.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -580,7 +593,7 @@ export function TurnoverPrintReport({
                                 <!-- Labour Requirement Row -->
                                 <tr style="background: #f8fafc;">
                                     <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Labour Requirement</td>
-                                    <td colspan="5" style="padding: 5px; border: 1px solid #e2e8f0; font-size: 9px;"></td>
+                                    <td colspan="6" style="padding: 5px; border: 1px solid #e2e8f0; font-size: 9px;"></td>
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px; color: #334155; font-weight: 600;">${formatNumber(reportData.labourRequirementByMonth[month], 0)}</td>`).join('')}
                                 </tr>
                             </tbody>
@@ -596,7 +609,7 @@ export function TurnoverPrintReport({
                             <tbody>
                                 <!-- Forecast Section Header -->
                                 <tr style="background: #f1f5f9;">
-                                    <td colspan="${6 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
+                                    <td colspan="${7 + months.length}" style="padding: 6px 10px; font-weight: 700; font-size: 10px; color: #334155; border: 1px solid #e2e8f0;">
                                         Forecasted Projects (${reportData.forecast.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -612,24 +625,24 @@ export function TurnoverPrintReport({
                             <thead>
                                 <tr style="background: #334155;">
                                     <th style="padding: 5px 6px; border: 1px solid #334155; text-align: left; font-size: 9px; color: white; font-weight: 600; min-width: 120px;">Budget</th>
-                                    <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;" colspan="5">FY Total</th>
+                                    <th style="padding: 5px 4px; border: 1px solid #334155; text-align: right; font-size: 8px; color: white; font-weight: 600;" colspan="6">FY Total</th>
                                     ${monthlyHeaders}
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr style="background: #f8fafc;">
                                     <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Budget</td>
-                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
+                                    <td colspan="6" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.target[month])}</td>`).join('')}
                                 </tr>
                                 <tr style="background: white;">
                                     <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Actual + Forecast</td>
-                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
+                                    <td colspan="6" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.actual[month])}</td>`).join('')}
                                 </tr>
                                 <tr style="background: #f8fafc;">
                                     <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Variance</td>
-                                    <td colspan="5" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${reportData.revenueTargets.varianceTotal >= 0 ? '#047857' : '#dc2626'}; font-weight: 700;">${formatCompactCurrency(reportData.revenueTargets.varianceTotal)}</td>
+                                    <td colspan="6" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: ${reportData.revenueTargets.varianceTotal >= 0 ? '#047857' : '#dc2626'}; font-weight: 700;">${formatCompactCurrency(reportData.revenueTargets.varianceTotal)}</td>
                                     ${months.map((month) => {
                                         const v = reportData.revenueTargets.variance[month];
                                         const color = v >= 0 ? '#047857' : '#dc2626';
@@ -728,16 +741,16 @@ export function TurnoverPrintReport({
                                     <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${reportData.forecast.rows.length}</div>
                                 </div>
                                 <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total FY Contract</div>
-                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.fy_contract)}</div>
-                                </div>
-                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
                                     <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total Contract Value</div>
                                     <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.total_contract_value)}</div>
                                 </div>
                                 <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
-                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Order Book</div>
-                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.remaining_order_book)}</div>
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Contract FY</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.fy_contract)}</div>
+                                </div>
+                                <div style="background: #f8fafc; border-left: 3px solid #334155; padding: 10px;">
+                                    <div style="font-size: 9px; color: #334155; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Remaining Total</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${formatCurrency(reportData.combined.remaining_total)}</div>
                                 </div>
                             </div>
 
@@ -846,10 +859,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-700">
                                     <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Job Name</th>
                                     <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Total Value</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">To Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Total</th>
                                     <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Contract FY</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Claimed to Date</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">FY To Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining FY</th>
                                     {months.map((month) => (
                                         <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
                                             {formatMonthHeader(month)}
@@ -860,7 +874,7 @@ export function TurnoverPrintReport({
                             <tbody>
                                 {/* SWCP Section */}
                                 <tr className="bg-slate-50">
-                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-800">
+                                    <td colSpan={7 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-800">
                                         SWCP ({reportData.swcp.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -868,10 +882,11 @@ export function TurnoverPrintReport({
                                     <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                                         <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_total)}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_fy)}</td>
                                         {months.map((month) => {
                                             const monthData = row.monthly_values[month];
                                             return (
@@ -885,10 +900,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-200 font-semibold text-slate-800">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">SWCP Sub-total</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.total_contract_value)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_total)}</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.fy_contract)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.claimed_to_date)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_for_year)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.fy_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.swcp.totals.remaining_fy)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.swcp.totals.monthly_values[month] || 0)}
@@ -898,7 +914,7 @@ export function TurnoverPrintReport({
 
                                 {/* GRE Section */}
                                 <tr className="bg-slate-100">
-                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
+                                    <td colSpan={7 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
                                         GRE ({reportData.gre.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -906,10 +922,11 @@ export function TurnoverPrintReport({
                                     <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                                         <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_total)}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_fy)}</td>
                                         {months.map((month) => {
                                             const monthData = row.monthly_values[month];
                                             return (
@@ -923,10 +940,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-200 font-semibold text-slate-800">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">GRE Sub-total</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.total_contract_value)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_total)}</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.fy_contract)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.claimed_to_date)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_for_year)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.fy_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.gre.totals.remaining_fy)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.gre.totals.monthly_values[month] || 0)}
@@ -938,10 +956,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-700 font-semibold text-white">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Combined Total (SWCP + GRE)</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.total_contract_value)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_total)}</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.fy_contract)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.claimed_to_date)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_for_year)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.fy_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.combined.remaining_fy)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.combined.monthly_values[month] || 0)}
@@ -952,7 +971,7 @@ export function TurnoverPrintReport({
                                 {/* Labour Requirement Row */}
                                 <tr className="bg-slate-50 font-semibold text-slate-700">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Labour Requirement</td>
-                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-[9px]"></td>
+                                    <td colSpan={6} className="border border-slate-200 px-1 py-1 text-[9px]"></td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatNumber(reportData.labourRequirementByMonth[month], 0)}
@@ -970,10 +989,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-700">
                                     <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Job Name</th>
                                     <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Total Value</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Value</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">To Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining Total</th>
                                     <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Contract FY</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Claimed to Date</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">FY To Date</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white">Remaining FY</th>
                                     {months.map((month) => (
                                         <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
                                             {formatMonthHeader(month)}
@@ -983,7 +1003,7 @@ export function TurnoverPrintReport({
                             </thead>
                             <tbody>
                                 <tr className="bg-slate-100">
-                                    <td colSpan={6 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
+                                    <td colSpan={7 + months.length} className="border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
                                         Forecasted Projects ({reportData.forecast.rows.length} jobs)
                                     </td>
                                 </tr>
@@ -991,10 +1011,11 @@ export function TurnoverPrintReport({
                                     <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                                         <td className="max-w-[180px] truncate border border-slate-200 py-1 pl-5 pr-1.5 text-[9px]">{row.job_name}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.total_contract_value)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_order_book)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_total)}</td>
                                         <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_contract)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.claimed_to_date)}</td>
-                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_for_year)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.fy_to_date)}</td>
+                                        <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(row.remaining_fy)}</td>
                                         {months.map((month) => {
                                             const monthData = row.monthly_values[month];
                                             return (
@@ -1008,10 +1029,11 @@ export function TurnoverPrintReport({
                                 <tr className="bg-slate-200 font-semibold text-slate-800">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Forecasted Projects Total</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.total_contract_value)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_order_book)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_total)}</td>
                                     <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.fy_contract)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.claimed_to_date)}</td>
-                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_for_year)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.fy_to_date)}</td>
+                                    <td className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.forecast.totals.remaining_fy)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.forecast.totals.monthly_values[month] || 0)}
@@ -1028,7 +1050,7 @@ export function TurnoverPrintReport({
                             <thead>
                                 <tr className="bg-slate-700">
                                     <th className="min-w-[120px] border border-slate-700 px-1.5 py-1 text-left text-[9px] font-semibold text-white">Budget</th>
-                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white" colSpan={5}>FY Total</th>
+                                    <th className="border border-slate-700 px-1 py-1 text-right text-[8px] font-semibold text-white" colSpan={6}>FY Total</th>
                                     {months.map((month) => (
                                         <th key={month} className="whitespace-nowrap border border-slate-700 px-0.5 py-1 text-right text-[8px] font-semibold text-white">
                                             {formatMonthHeader(month)}
@@ -1039,7 +1061,7 @@ export function TurnoverPrintReport({
                             <tbody>
                                 <tr className="bg-slate-50 font-semibold text-slate-700">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Budget</td>
-                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
+                                    <td colSpan={6} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.targetTotal)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.revenueTargets.target[month])}
@@ -1048,7 +1070,7 @@ export function TurnoverPrintReport({
                                 </tr>
                                 <tr className="bg-white font-semibold text-slate-700">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Actual + Forecast</td>
-                                    <td colSpan={5} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
+                                    <td colSpan={6} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">
                                             {formatCompactCurrency(reportData.revenueTargets.actual[month])}
@@ -1057,7 +1079,7 @@ export function TurnoverPrintReport({
                                 </tr>
                                 <tr className="bg-slate-50 font-semibold">
                                     <td className="border border-slate-200 px-1.5 py-1 text-[9px] text-slate-700">Variance</td>
-                                    <td colSpan={5} className={`border border-slate-200 px-1 py-1 text-right text-[9px] font-bold ${reportData.revenueTargets.varianceTotal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                    <td colSpan={6} className={`border border-slate-200 px-1 py-1 text-right text-[9px] font-bold ${reportData.revenueTargets.varianceTotal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                                         {formatCompactCurrency(reportData.revenueTargets.varianceTotal)}
                                     </td>
                                     {months.map((month) => {
@@ -1169,16 +1191,16 @@ export function TurnoverPrintReport({
                                     <div className="text-base font-bold text-slate-800">{reportData.forecast.rows.length}</div>
                                 </div>
                                 <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
-                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Total FY Contract</div>
-                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.fy_contract)}</div>
-                                </div>
-                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
                                     <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Total Contract Value</div>
                                     <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.total_contract_value)}</div>
                                 </div>
                                 <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
-                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Order Book</div>
-                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.remaining_order_book)}</div>
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Contract FY</div>
+                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.fy_contract)}</div>
+                                </div>
+                                <div className="border-l-[3px] border-l-slate-700 bg-slate-50 p-2.5">
+                                    <div className="mb-1 text-[9px] font-semibold uppercase text-slate-700">Remaining Total</div>
+                                    <div className="text-[11px] font-bold text-slate-800">{formatCurrency(reportData.combined.remaining_total)}</div>
                                 </div>
                             </div>
 

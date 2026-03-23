@@ -142,12 +142,24 @@ export function TurnoverReportDialog({ open, onOpenChange, data, months, lastAct
         (acc, row) => {
             acc.claimedToDate += safeNumber(row.claimed_to_date);
             acc.costToDate += safeNumber(row.cost_to_date);
-            acc.revenueContractFY += safeNumber(row.revenue_contract_fy);
-            acc.costContractFY += safeNumber(row.cost_contract_fy);
+            // Compute FY values from filtered months instead of backend's fixed current FY
+            months.forEach((m) => {
+                const rActual = safeNumber(row.revenue_actuals?.[m]);
+                const rForecast = safeNumber(row.revenue_forecast?.[m]);
+                const rValue = m === currentMonthStr ? (rForecast !== 0 ? rForecast : rActual) : (rActual !== 0 ? rActual : rForecast);
+                acc.revenueContractFY += rValue;
+                if (rActual !== 0 && m !== currentMonthStr) acc.revenueActualsFY += rActual;
+                else if (m === currentMonthStr && rForecast === 0 && rActual !== 0) acc.revenueActualsFY += rActual;
+
+                const cActual = safeNumber(row.cost_actuals?.[m]);
+                const cForecast = safeNumber(row.cost_forecast?.[m]);
+                const cValue = m === currentMonthStr ? (cForecast !== 0 ? cForecast : cActual) : (cActual !== 0 ? cActual : cForecast);
+                acc.costContractFY += cValue;
+                if (cActual !== 0 && m !== currentMonthStr) acc.costActualsFY += cActual;
+                else if (m === currentMonthStr && cForecast === 0 && cActual !== 0) acc.costActualsFY += cActual;
+            });
             acc.totalContractValue += safeNumber(row.total_contract_value);
             acc.budget += safeNumber(row.budget);
-            acc.remainingRevenueFY += safeNumber(row.remaining_revenue_value_fy);
-            acc.remainingCostFY += safeNumber(row.remaining_cost_value_fy);
             acc.remainingOrderBook += safeNumber(row.remaining_order_book);
             acc.remainingBudget += safeNumber(row.remaining_budget);
             return acc;
@@ -157,10 +169,10 @@ export function TurnoverReportDialog({ open, onOpenChange, data, months, lastAct
             costToDate: 0,
             revenueContractFY: 0,
             costContractFY: 0,
+            revenueActualsFY: 0,
+            costActualsFY: 0,
             totalContractValue: 0,
             budget: 0,
-            remainingRevenueFY: 0,
-            remainingCostFY: 0,
             remainingOrderBook: 0,
             remainingBudget: 0,
         },
