@@ -2,7 +2,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -473,11 +473,11 @@ function ChecklistSection({
     }
 
     return (
-        <Card className="rounded-xl">
-            <CardHeader className="pb-2">
+        <div>
+            <div className="pb-2">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <CardTitle className="text-sm font-semibold">Checklists</CardTitle>
+                        <h3 className="text-sm font-semibold">Checklists</h3>
                         {totalItems > 0 && (
                             <span className="text-muted-foreground text-xs">
                                 {completedItems}/{totalItems}
@@ -487,34 +487,55 @@ function ChecklistSection({
                             </span>
                         )}
                     </div>
-                    {canScreen && (
-                        <div className="flex items-center gap-2 text-xs">
-                            {availableTemplates.length > 0 && (
-                                <Select onValueChange={handleAttachTemplate}>
-                                    <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
-                                        <Plus className="h-3 w-3" />
-                                        <SelectValue placeholder="Add checklist" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableTemplates.map((t) => (
-                                            <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            <button
-                                type="button"
-                                className="text-primary flex items-center gap-1 hover:underline"
-                                onClick={() => setShowAddChecklist(true)}
-                            >
-                                <ListChecks className="h-3 w-3" />
-                                Custom
-                            </button>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2 text-xs">
+                        {checklists.length > 1 && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={() => setCollapsedChecklists(new Set())}
+                                >
+                                    Expand all
+                                </button>
+                                <span className="text-muted-foreground/50">|</span>
+                                <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={() => setCollapsedChecklists(new Set(checklists.map((c) => c.id)))}
+                                >
+                                    Collapse all
+                                </button>
+                            </>
+                        )}
+                        {canScreen && (
+                            <>
+                                {availableTemplates.length > 0 && (
+                                    <Select onValueChange={handleAttachTemplate}>
+                                        <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
+                                            <Plus className="h-3 w-3" />
+                                            <SelectValue placeholder="Add checklist" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availableTemplates.map((t) => (
+                                                <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                                <button
+                                    type="button"
+                                    className="text-primary flex items-center gap-1 hover:underline"
+                                    onClick={() => setShowAddChecklist(true)}
+                                >
+                                    <ListChecks className="h-3 w-3" />
+                                    Custom
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
+            </div>
+            <div className="space-y-3">
                 {checklists.length === 0 && !showAddChecklist && (
                     <p className="text-muted-foreground text-sm italic">No checklists attached yet.</p>
                 )}
@@ -699,7 +720,7 @@ function ChecklistSection({
                         </div>
                     </div>
                 )}
-            </CardContent>
+            </div>
 
             {/* History Dialog */}
             <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
@@ -757,7 +778,7 @@ function ChecklistSection({
                     </div>
                 </DialogContent>
             </Dialog>
-        </Card>
+        </div>
     );
 }
 
@@ -906,7 +927,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Application`} />
 
-            <div className="flex flex-col gap-4 p-3 sm:p-4">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {/* Banners */}
                 {duplicates.length > 0 && (
                     <Alert className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
@@ -934,55 +955,54 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     </Alert>
                 )}
 
-                {/* Two Column Layout */}
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-                    {/* Left Column — Main Content */}
-                    <div className="flex flex-col gap-4">
+                {/* Single Card Layout */}
+                <Card className="gap-0 overflow-hidden rounded-xl py-0 lg:min-h-[calc(100vh-7rem)]">
+                    <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
+                        {/* Left Column — Main Content */}
+                        <div className="flex flex-col">
+                            <div className="flex-1 space-y-6 p-5">
+                                {/* Checklist Section */}
+                                <ChecklistSection
+                                    checklists={checklists}
+                                    availableTemplates={availableTemplates}
+                                    applicationId={app.id}
+                                    canScreen={canScreen}
+                                />
 
-                        {/* Checklist Section */}
-                        <ChecklistSection
-                            checklists={checklists}
-                            availableTemplates={availableTemplates}
-                            applicationId={app.id}
-                            canScreen={canScreen}
-                        />
-
-                        {/* Activity / Comments Feed */}
-                        <Card className="flex min-h-[400px] flex-col rounded-xl">
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-sm font-semibold">Activity</CardTitle>
-                                </div>
-                                {/* Filter & Sort bar */}
-                                {comments.length > 0 && (
-                                    <div className="flex items-center justify-between pt-1">
-                                        <div className="flex items-center gap-1.5 text-xs">
-                                            <span className="text-muted-foreground">Show:</span>
-                                            <Select value={commentFilter} onValueChange={(v) => setCommentFilter(v as 'all' | 'messages' | 'attachments' | 'history')}>
-                                                <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="all">All</SelectItem>
-                                                    <SelectItem value="messages">Messages</SelectItem>
-                                                    <SelectItem value="attachments">Attachments</SelectItem>
-                                                    <SelectItem value="history">History</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="text-primary flex items-center gap-1 text-xs font-medium"
-                                            onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
-                                        >
-                                            {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
-                                            <ArrowRight className={cn('h-3 w-3 transition-transform', commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90')} />
-                                        </button>
+                                {/* Activity Header */}
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-semibold">Activity</h3>
                                     </div>
-                                )}
-                            </CardHeader>
+                                    {comments.length > 0 && (
+                                        <div className="flex items-center justify-between pt-1">
+                                            <div className="flex items-center gap-1.5 text-xs">
+                                                <span className="text-muted-foreground">Show:</span>
+                                                <Select value={commentFilter} onValueChange={(v) => setCommentFilter(v as 'all' | 'messages' | 'attachments' | 'history')}>
+                                                    <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="all">All</SelectItem>
+                                                        <SelectItem value="messages">Messages</SelectItem>
+                                                        <SelectItem value="attachments">Attachments</SelectItem>
+                                                        <SelectItem value="history">History</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="text-primary flex items-center gap-1 text-xs font-medium"
+                                                onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
+                                            >
+                                                {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
+                                                <ArrowRight className={cn('h-3 w-3 transition-transform', commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90')} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
 
-                            <CardContent className="flex-1 space-y-4">
+                                {/* Comments */}
                                 {comments.length === 0 ? (
                                     <p className="text-muted-foreground py-8 text-center text-sm italic">
                                         No activity yet. Post a comment to get started.
@@ -1002,11 +1022,11 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         />
                                     ))
                                 )}
-                            </CardContent>
+                            </div>
 
                             {/* Comment Input */}
                             {canScreen && (
-                                <div className="border-t p-3">
+                                <div className="mt-auto border-t p-3">
                                     {attachments.length > 0 && (
                                         <div className="mb-2 flex flex-wrap gap-2">
                                             {attachments.map((file, i) => (
@@ -1090,13 +1110,10 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </div>
                                 </div>
                             )}
-                        </Card>
-                    </div>
+                        </div>
 
-                    {/* Right Column — Attributes Sidebar */}
-                    <div className="lg:sticky lg:top-4 lg:self-start">
-                        <Card className="rounded-xl">
-                            <CardContent className="pt-5">
+                        {/* Right Column — Attributes Sidebar */}
+                        <div className="bg-muted/40 p-5 max-lg:border-t lg:border-l">
                                 {/* Name & Status */}
                                 <div className="mb-4 flex items-start justify-between gap-2">
                                     <h2 className="text-lg font-semibold">
@@ -1128,8 +1145,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 <Separator className="mb-2" />
 
-                                {/* Attributes */}
+                                {/* Personal Details */}
                                 <div className="divide-y">
+                                    <SidebarAttribute icon={MapPin} label="Suburb">
+                                        {app.suburb}
+                                    </SidebarAttribute>
+
                                     <SidebarAttribute icon={Mail} label="Email">
                                         <a href={`mailto:${app.email}`} className="text-primary hover:underline">{app.email}</a>
                                     </SidebarAttribute>
@@ -1138,29 +1159,37 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         <a href={`tel:${app.phone}`} className="text-primary hover:underline">{app.phone}</a>
                                     </SidebarAttribute>
 
-                                    <SidebarAttribute icon={MapPin} label="Suburb">
-                                        {app.suburb}
+                                    <SidebarAttribute icon={Calendar} label="Date of Birth">
+                                        {formatDate(app.date_of_birth)}
                                     </SidebarAttribute>
 
-                                    <SidebarAttribute icon={Wrench} label="Occupation">
-                                        <span>{occupationDisplay}</span>
-                                        {app.trade_qualified && <Badge variant="secondary" className="ml-1.5 text-[10px]">Trade Qualified</Badge>}
-                                        {app.apprentice_year && <Badge variant="outline" className="ml-1.5 text-[10px]">Year {app.apprentice_year}</Badge>}
-                                    </SidebarAttribute>
-
-                                    {app.preferred_project_site && (
-                                        <SidebarAttribute icon={MapPin} label="Preferred Site">
-                                            {app.preferred_project_site}
-                                        </SidebarAttribute>
-                                    )}
-
-                                    <SidebarAttribute icon={Calendar} label="Applied">
-                                        {formatDate(app.created_at)}
+                                    <SidebarAttribute icon={User} label="Why Should We Employ You?">
+                                        <p className="text-sm whitespace-pre-wrap">{app.why_should_we_employ_you || '—'}</p>
                                     </SidebarAttribute>
 
                                     {app.referred_by && (
                                         <SidebarAttribute icon={User} label="Referred By">
                                             {app.referred_by}
+                                        </SidebarAttribute>
+                                    )}
+
+                                    <SidebarAttribute icon={User} label="Aboriginal / TSI">
+                                        {app.aboriginal_or_tsi === null ? '—' : app.aboriginal_or_tsi ? 'Yes' : 'No'}
+                                    </SidebarAttribute>
+                                </div>
+
+                                <Separator className="my-2" />
+
+                                {/* Occupation */}
+                                <div className="divide-y">
+                                    <SidebarAttribute icon={Wrench} label="Occupation">
+                                        <span>{occupationDisplay}</span>
+                                        {app.trade_qualified && <Badge variant="secondary" className="ml-1.5 text-[10px]">Trade Qualified</Badge>}
+                                    </SidebarAttribute>
+
+                                    {app.apprentice_year && (
+                                        <SidebarAttribute icon={Calendar} label="Apprentice Year">
+                                            Year {app.apprentice_year}
                                         </SidebarAttribute>
                                     )}
                                 </div>
@@ -1182,24 +1211,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </>
                                 )}
 
-                                {/* References summary */}
-                                {app.references.length > 0 && (
-                                    <>
-                                        <Separator className="my-2" />
-                                        <div className="py-2">
-                                            <p className="text-muted-foreground mb-2 text-xs">References ({app.references.length})</p>
-                                            <div className="space-y-1.5">
-                                                {app.references.map((ref) => (
-                                                    <div key={ref.id} className="text-xs">
-                                                        <span className="font-medium">{ref.contact_person}</span>
-                                                        <span className="text-muted-foreground"> — {ref.company_name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
                                 <Separator className="my-2" />
 
                                 {/* View Full Submission Link */}
@@ -1211,10 +1222,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     View Full Submission
                                     <ChevronRight className="ml-auto h-3.5 w-3.5" />
                                 </Link>
-                            </CardContent>
-                        </Card>
+                        </div>
                     </div>
-                </div>
+                </Card>
             </div>
 
             {/* Decline Dialog */}
