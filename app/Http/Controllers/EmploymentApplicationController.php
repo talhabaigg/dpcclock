@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmploymentApplicationRequest;
+use App\Models\ChecklistTemplate;
 use App\Models\EmploymentApplication;
 use App\Models\EmploymentApplicationSkill;
 use App\Models\Skill;
@@ -129,6 +130,19 @@ class EmploymentApplicationController extends Controller
             $query->where('occupation', $request->occupation);
         }
 
+        // Filter by suburb
+        if ($request->filled('suburb')) {
+            $query->where('suburb', 'like', "%{$request->suburb}%");
+        }
+
+        // Filter by date range
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
         // Search
         if ($request->filled('search')) {
             $search = $request->search;
@@ -140,19 +154,28 @@ class EmploymentApplicationController extends Controller
             });
         }
 
-        // Duplicate detection — add subquery count
-        $query->selectSub(
-            EmploymentApplication::selectRaw('count(*) - 1')
-                ->whereColumn('email', 'employment_applications.email'),
-            'duplicate_count'
-        );
+        // Duplicate detection — alias inner table so whereColumn correlates correctly
+        $query->selectRaw('(select count(*) - 1 from employment_applications as ea_dup where ea_dup.email = employment_applications.email) as duplicate_count');
+
+        // Filter duplicates only (after subquery is added)
+        if ($request->boolean('duplicates_only')) {
+            $query->having('duplicate_count', '>', 0);
+        }
 
         $applications = $query->latest()->paginate(25)->withQueryString();
 
+        // Get distinct occupations for filter dropdown
+        $occupations = EmploymentApplication::distinct()
+            ->whereNotNull('occupation')
+            ->pluck('occupation')
+            ->sort()
+            ->values();
+
         return Inertia::render('employment-applications/index', [
             'applications' => $applications,
-            'filters' => $request->only(['status', 'occupation', 'search']),
+            'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only']),
             'statuses' => EmploymentApplication::STATUSES,
+            'occupations' => $occupations,
         ]);
     }
 
@@ -162,6 +185,45 @@ class EmploymentApplicationController extends Controller
     public function show(EmploymentApplication $employmentApplication): Response
     {
         $employmentApplication->load(['references', 'skills', 'declinedByUser']);
+
+        // Auto-attach any missing auto-attach checklists (backfill for existing applications)
+        $employmentApplication->attachAutoChecklists();
+
+        $employmentApplication->load(['checklists.items.completedByUser']);
+
+        // Format checklists for frontend
+        $checklists = $employmentApplication->checklists->map(function ($checklist) {
+            return [
+                'id' => $checklist->id,
+                'name' => $checklist->name,
+                'checklist_template_id' => $checklist->checklist_template_id,
+                'sort_order' => $checklist->sort_order,
+                'items' => $checklist->items->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'checklist_id' => $item->checklist_id,
+                        'label' => $item->label,
+                        'sort_order' => $item->sort_order,
+                        'is_required' => $item->is_required,
+                        'completed_at' => $item->completed_at?->toISOString(),
+                        'completed_by' => $item->completed_by,
+                        'completed_by_user' => $item->completedByUser ? [
+                            'id' => $item->completedByUser->id,
+                            'name' => $item->completedByUser->name,
+                        ] : null,
+                        'notes' => $item->notes,
+                    ];
+                }),
+            ];
+        });
+
+        // Get available templates not yet attached
+        $attachedTemplateIds = $employmentApplication->checklists->pluck('checklist_template_id')->filter()->toArray();
+        $availableTemplates = ChecklistTemplate::active()
+            ->forModel(EmploymentApplication::class)
+            ->whereNotIn('id', $attachedTemplateIds)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // Load comments with user and media
         $comments = $employmentApplication->comments()
@@ -215,6 +277,8 @@ class EmploymentApplicationController extends Controller
         return Inertia::render('employment-applications/show', [
             'application' => $employmentApplication,
             'comments' => $comments,
+            'checklists' => $checklists,
+            'availableTemplates' => $availableTemplates,
             'duplicates' => $duplicates,
             'statuses' => EmploymentApplication::STATUSES,
         ]);
@@ -246,6 +310,14 @@ class EmploymentApplicationController extends Controller
         // Cannot set to declined via this method — use decline()
         if ($newStatus === EmploymentApplication::STATUS_DECLINED) {
             return back()->withErrors(['status' => 'Use the decline action instead.']);
+        }
+
+        // Gate: cannot move to "approved" if required checklist items are incomplete
+        if ($newStatus === EmploymentApplication::STATUS_APPROVED) {
+            $incomplete = $employmentApplication->incompleteRequiredChecklistItemsCount();
+            if ($incomplete > 0) {
+                return back()->withErrors(['status' => "Cannot approve: {$incomplete} required checklist item(s) still incomplete."]);
+            }
         }
 
         $oldStatus = $employmentApplication->status;

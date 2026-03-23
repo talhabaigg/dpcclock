@@ -1,8 +1,12 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -15,21 +19,32 @@ import {
     AlertTriangle,
     ArrowRight,
     Calendar,
+    Check,
+    CheckSquare,
+    ChevronDown,
     ChevronRight,
+    Clipboard,
     ExternalLink,
     FileIcon,
+    History,
+    ListChecks,
+    Loader2,
     Mail,
     MapPin,
-    MessageSquare,
     Paperclip,
+    Pencil,
     Phone,
+    Plus,
     Send,
+    Settings,
+    Share2,
+    Trash2,
     User,
     Wrench,
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 interface Skill {
     id: number;
@@ -68,6 +83,31 @@ interface CommentData {
     created_at: string;
     attachments: Attachment[];
     replies?: CommentData[];
+}
+
+interface ChecklistItemData {
+    id: number;
+    checklist_id: number;
+    label: string;
+    sort_order: number;
+    is_required: boolean;
+    completed_at: string | null;
+    completed_by: number | null;
+    completed_by_user: UserModel | null;
+    notes: string | null;
+}
+
+interface ChecklistData {
+    id: number;
+    name: string;
+    checklist_template_id: number | null;
+    sort_order: number;
+    items: ChecklistItemData[];
+}
+
+interface TemplateOption {
+    id: number;
+    name: string;
 }
 
 interface Application {
@@ -116,6 +156,15 @@ interface Application {
     references: Reference[];
 }
 
+interface ActivityEntry {
+    id: number;
+    event: string;
+    user: UserModel | null;
+    old: Record<string, unknown>;
+    new: Record<string, unknown>;
+    created_at: string;
+}
+
 interface Duplicate {
     id: number;
     first_name: string;
@@ -128,8 +177,9 @@ interface Duplicate {
 interface PageProps {
     application: Application;
     comments: CommentData[];
+    checklists: ChecklistData[];
+    availableTemplates: TemplateOption[];
     duplicates: Duplicate[];
-    statuses: string[];
     auth: { permissions?: string[]; isAdmin?: boolean };
 }
 
@@ -146,24 +196,11 @@ const STATUS_LABELS: Record<string, string> = {
     declined: 'Declined',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-    new: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
-    reviewing: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
-    phone_interview: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800',
-    reference_check: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-400 dark:border-cyan-800',
-    face_to_face: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800',
-    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
-    contract_sent: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800',
-    contract_signed: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800',
-    onboarded: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800',
-    declined: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-};
-
 const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
 
 function StatusBadge({ status, className }: { status: string; className?: string }) {
     return (
-        <Badge variant="outline" className={cn('text-xs', STATUS_COLORS[status], className)}>
+        <Badge variant="secondary" className={cn('text-xs', className)}>
             {STATUS_LABELS[status] ?? status}
         </Badge>
     );
@@ -197,9 +234,29 @@ function SidebarAttribute({ icon: Icon, label, children }: { icon: React.Element
     );
 }
 
-function CommentBubble({ comment }: { comment: CommentData }) {
+function getInitials(name: string): string {
+    return name.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+function UserAvatar({ name, className }: { name: string; className?: string }) {
+    return (
+        <Avatar className={cn('h-8 w-8', className)}>
+            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                {getInitials(name)}
+            </AvatarFallback>
+        </Avatar>
+    );
+}
+
+function CommentBubble({ comment, currentUserId, onEdit, onDelete }: {
+    comment: CommentData;
+    currentUserId?: number;
+    onEdit?: (comment: CommentData) => void;
+    onDelete?: (commentId: number) => void;
+}) {
     const isSystem = comment.metadata !== null;
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
+    const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
 
     if (isSystem && statusChange) {
         return (
@@ -223,21 +280,48 @@ function CommentBubble({ comment }: { comment: CommentData }) {
 
     return (
         <div className="flex gap-3">
-            <div className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-                isSystem ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10',
-            )}>
-                {isSystem ? (
+            {comment.user ? (
+                <UserAvatar name={comment.user.name} />
+            ) : (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
                     <ArrowRight className="h-4 w-4 text-slate-500" />
-                ) : (
-                    <MessageSquare className="text-primary h-4 w-4" />
-                )}
-            </div>
+                </div>
+            )}
             <div className="min-w-0 flex-1 pt-1">
-                <p className="text-sm">
-                    <span className="font-medium">{comment.user?.name ?? 'System'}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">{formatDateTime(comment.created_at)}</span>
-                </p>
+                <div className="flex items-center gap-2">
+                    <p className="text-sm">
+                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{formatDateTime(comment.created_at)}</span>
+                    </p>
+                    {isOwner && !isSystem && (
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button type="button" className="text-muted-foreground hover:text-foreground ml-auto shrink-0 p-0.5">
+                                    <Settings className="h-4 w-4" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="flex w-auto gap-1 p-1.5" side="top" align="end">
+                                <Button
+                                    size="sm"
+                                    className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+                                    onClick={() => onEdit?.(comment)}
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="h-8 gap-1.5"
+                                    onClick={() => onDelete?.(comment.id)}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete
+                                </Button>
+                            </PopoverContent>
+                        </Popover>
+                    )}
+                </div>
                 {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
                 {comment.attachments.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -266,7 +350,7 @@ function CommentBubble({ comment }: { comment: CommentData }) {
                 {comment.replies && comment.replies.length > 0 && (
                     <div className="mt-3 space-y-3 border-l-2 pl-4">
                         {comment.replies.map((reply) => (
-                            <CommentBubble key={reply.id} comment={reply} />
+                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} />
                         ))}
                     </div>
                 )}
@@ -275,8 +359,422 @@ function CommentBubble({ comment }: { comment: CommentData }) {
     );
 }
 
-export default function EmploymentApplicationShow({ application: app, comments, duplicates, statuses }: PageProps) {
-    const { auth } = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean } }>().props;
+function ChecklistSection({
+    checklists,
+    availableTemplates,
+    applicationId,
+    canScreen,
+}: {
+    checklists: ChecklistData[];
+    availableTemplates: TemplateOption[];
+    applicationId: number;
+    canScreen: boolean;
+}) {
+    const [addingItemTo, setAddingItemTo] = useState<number | null>(null);
+    const [newItemLabel, setNewItemLabel] = useState('');
+    const [togglingItems, setTogglingItems] = useState<Set<number>>(new Set());
+    const [collapsedChecklists, setCollapsedChecklists] = useState<Set<number>>(new Set());
+    const [showAddChecklist, setShowAddChecklist] = useState(false);
+    const [adHocName, setAdHocName] = useState('');
+    const [adHocItems, setAdHocItems] = useState<string[]>(['']);
+    const [historyItem, setHistoryItem] = useState<ChecklistItemData | null>(null);
+    const [historyEntries, setHistoryEntries] = useState<ActivityEntry[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+
+    const openHistory = useCallback((item: ChecklistItemData) => {
+        setHistoryItem(item);
+        setHistoryLoading(true);
+        setHistoryEntries([]);
+        fetch(route('checklist-items.history', item.id), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then((res) => res.json())
+            .then((data) => setHistoryEntries(data.activities ?? []))
+            .finally(() => setHistoryLoading(false));
+    }, []);
+
+    const totalItems = checklists.reduce((sum, cl) => sum + cl.items.length, 0);
+    const completedItems = checklists.reduce(
+        (sum, cl) => sum + cl.items.filter((i) => i.completed_at).length, 0,
+    );
+    const requiredIncomplete = checklists.reduce(
+        (sum, cl) => sum + cl.items.filter((i) => i.is_required && !i.completed_at).length, 0,
+    );
+
+    function toggleCollapse(checklistId: number) {
+        setCollapsedChecklists((prev) => {
+            const next = new Set(prev);
+            if (next.has(checklistId)) { next.delete(checklistId); } else { next.add(checklistId); }
+            return next;
+        });
+    }
+
+    function handleToggleItem(itemId: number) {
+        setTogglingItems((prev) => new Set(prev).add(itemId));
+        router.patch(route('checklist-items.toggle', itemId), {}, {
+            preserveScroll: true,
+            onFinish: () => {
+                setTogglingItems((prev) => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
+            },
+        });
+    }
+
+    function handleAddItem(checklistId: number) {
+        if (!newItemLabel.trim()) return;
+        router.post(route('checklists.add-item', checklistId), { label: newItemLabel.trim() }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setNewItemLabel('');
+                setAddingItemTo(null);
+            },
+        });
+    }
+
+    function handleDeleteItem(itemId: number) {
+        router.delete(route('checklist-items.destroy', itemId), {
+            preserveScroll: true,
+        });
+    }
+
+    function handleDeleteChecklist(checklistId: number) {
+        router.delete(route('checklists.destroy', checklistId), {
+            preserveScroll: true,
+        });
+    }
+
+    function handleAttachTemplate(templateId: string) {
+        router.post(route('checklists.attach-template'), {
+            checkable_type: 'employment_application',
+            checkable_id: applicationId,
+            checklist_template_id: Number(templateId),
+        }, { preserveScroll: true });
+    }
+
+    function handleCreateAdHoc() {
+        const items = adHocItems.filter((l) => l.trim() !== '').map((l) => ({ label: l.trim() }));
+        if (items.length === 0) return;
+        router.post(route('checklists.ad-hoc'), {
+            checkable_type: 'employment_application',
+            checkable_id: applicationId,
+            name: adHocName.trim() || 'General',
+            items,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowAddChecklist(false);
+                setAdHocName('');
+                setAdHocItems(['']);
+            },
+        });
+    }
+
+    return (
+        <Card className="rounded-xl">
+            <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="text-sm font-semibold">Checklists</CardTitle>
+                        {totalItems > 0 && (
+                            <span className="text-muted-foreground text-xs">
+                                {completedItems}/{totalItems}
+                                {requiredIncomplete > 0 && (
+                                    <span className="ml-1 text-amber-600">({requiredIncomplete} required remaining)</span>
+                                )}
+                            </span>
+                        )}
+                    </div>
+                    {canScreen && (
+                        <div className="flex items-center gap-2 text-xs">
+                            {availableTemplates.length > 0 && (
+                                <Select onValueChange={handleAttachTemplate}>
+                                    <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
+                                        <Plus className="h-3 w-3" />
+                                        <SelectValue placeholder="Add checklist" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableTemplates.map((t) => (
+                                            <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                            <button
+                                type="button"
+                                className="text-primary flex items-center gap-1 hover:underline"
+                                onClick={() => setShowAddChecklist(true)}
+                            >
+                                <ListChecks className="h-3 w-3" />
+                                Custom
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {checklists.length === 0 && !showAddChecklist && (
+                    <p className="text-muted-foreground text-sm italic">No checklists attached yet.</p>
+                )}
+
+                {checklists.map((checklist) => {
+                    const clCompleted = checklist.items.filter((i) => i.completed_at).length;
+                    const clTotal = checklist.items.length;
+                    const isCollapsed = collapsedChecklists.has(checklist.id);
+
+                    return (
+                        <div key={checklist.id} className="rounded-lg border">
+                            {/* Checklist header */}
+                            <div
+                                className="flex cursor-pointer items-center gap-2 px-3 py-2"
+                                onClick={() => toggleCollapse(checklist.id)}
+                            >
+                                <ChevronDown className={cn('h-4 w-4 transition-transform', isCollapsed && '-rotate-90')} />
+                                <CheckSquare className="text-muted-foreground h-4 w-4" />
+                                <span className="flex-1 text-sm font-medium">{checklist.name}</span>
+                                <span className="text-muted-foreground text-xs">{clCompleted}/{clTotal}</span>
+                                {/* Progress bar */}
+                                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                    <div
+                                        className={cn(
+                                            'h-full rounded-full transition-all',
+                                            clCompleted === clTotal ? 'bg-emerald-500' : 'bg-primary',
+                                        )}
+                                        style={{ width: clTotal > 0 ? `${(clCompleted / clTotal) * 100}%` : '0%' }}
+                                    />
+                                </div>
+                                {canScreen && (
+                                    <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-destructive ml-1"
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteChecklist(checklist.id); }}
+                                        title="Remove checklist"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Items */}
+                            {!isCollapsed && (
+                                <div className="border-t px-3 py-1">
+                                    {checklist.items.map((item) => (
+                                        <div key={item.id} className="group flex items-start gap-2.5 py-1.5">
+                                            <Checkbox
+                                                checked={!!item.completed_at}
+                                                disabled={!canScreen || togglingItems.has(item.id)}
+                                                onCheckedChange={() => handleToggleItem(item.id)}
+                                                className="mt-0.5"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <span className={cn(
+                                                    'text-sm',
+                                                    item.completed_at && 'text-muted-foreground line-through',
+                                                )}>
+                                                    {item.label}
+                                                </span>
+                                                {item.is_required && !item.completed_at && (
+                                                    <span className="ml-1.5 text-[10px] font-medium text-amber-600">Required</span>
+                                                )}
+                                                {item.completed_at && item.completed_by_user && (
+                                                    <span className="text-muted-foreground ml-2 text-[10px]">
+                                                        {item.completed_by_user.name} &middot; {formatDateTime(item.completed_at)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-foreground invisible shrink-0 group-hover:visible"
+                                                    onClick={() => openHistory(item)}
+                                                    title="View history"
+                                                >
+                                                    <History className="h-3.5 w-3.5" />
+                                                </button>
+                                                {canScreen && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-muted-foreground hover:text-destructive invisible shrink-0 group-hover:visible"
+                                                        onClick={() => handleDeleteItem(item.id)}
+                                                    >
+                                                        <XCircle className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* Add item inline */}
+                                    {canScreen && addingItemTo === checklist.id ? (
+                                        <div className="flex items-center gap-2 py-1.5">
+                                            <Input
+                                                autoFocus
+                                                value={newItemLabel}
+                                                onChange={(e) => setNewItemLabel(e.target.value)}
+                                                placeholder="New item..."
+                                                className="h-7 flex-1 text-sm"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') { e.preventDefault(); handleAddItem(checklist.id); }
+                                                    if (e.key === 'Escape') { setAddingItemTo(null); setNewItemLabel(''); }
+                                                }}
+                                            />
+                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handleAddItem(checklist.id)}>
+                                                Add
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setAddingItemTo(null); setNewItemLabel(''); }}>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    ) : canScreen && (
+                                        <button
+                                            type="button"
+                                            className="text-muted-foreground hover:text-primary flex items-center gap-1.5 py-1.5 text-xs"
+                                            onClick={() => { setAddingItemTo(checklist.id); setNewItemLabel(''); }}
+                                        >
+                                            <Plus className="h-3 w-3" /> Add item
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+
+                {/* Ad-hoc checklist creation */}
+                {showAddChecklist && (
+                    <div className="space-y-3 rounded-lg border p-3">
+                        <div>
+                            <Label className="text-xs">Checklist Name</Label>
+                            <Input
+                                value={adHocName}
+                                onChange={(e) => setAdHocName(e.target.value)}
+                                placeholder="e.g. Pre-Start Requirements"
+                                className="mt-1 h-8 text-sm"
+                            />
+                        </div>
+                        <div>
+                            <Label className="text-xs">Items</Label>
+                            <div className="mt-1 space-y-1.5">
+                                {adHocItems.map((item, i) => (
+                                    <div key={i} className="flex items-center gap-1.5">
+                                        <Input
+                                            value={item}
+                                            onChange={(e) => {
+                                                const next = [...adHocItems];
+                                                next[i] = e.target.value;
+                                                setAdHocItems(next);
+                                            }}
+                                            placeholder={`Item ${i + 1}`}
+                                            className="h-7 flex-1 text-sm"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    setAdHocItems([...adHocItems, '']);
+                                                }
+                                            }}
+                                        />
+                                        {adHocItems.length > 1 && (
+                                            <button type="button" onClick={() => setAdHocItems(adHocItems.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
+                                                <XCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-primary flex items-center gap-1 text-xs"
+                                    onClick={() => setAdHocItems([...adHocItems, ''])}
+                                >
+                                    <Plus className="h-3 w-3" /> Add another item
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-xs" onClick={handleCreateAdHoc}>Create</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowAddChecklist(false); setAdHocName(''); setAdHocItems(['']); }}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+
+            {/* History Dialog */}
+            <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm">Item History</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            {historyItem?.label}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[400px] overflow-y-auto">
+                        {historyLoading && (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+                            </div>
+                        )}
+                        {!historyLoading && historyEntries.length === 0 && (
+                            <p className="text-muted-foreground py-8 text-center text-sm italic">No history recorded yet.</p>
+                        )}
+                        {!historyLoading && historyEntries.length > 0 && (
+                            <div className="space-y-3">
+                                {historyEntries.map((entry) => (
+                                    <div key={entry.id} className="border-b pb-3 last:border-0">
+                                        <div className="flex items-center gap-2">
+                                            <History className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                                            <span className="text-sm font-medium capitalize">{entry.event}</span>
+                                            <span className="text-muted-foreground ml-auto text-[10px]">{formatDateTime(entry.created_at)}</span>
+                                        </div>
+                                        {entry.user && (
+                                            <p className="text-muted-foreground mt-0.5 pl-[22px] text-xs">by {entry.user.name}</p>
+                                        )}
+                                        <div className="mt-1.5 pl-[22px] text-xs">
+                                            {Object.keys(entry.new).map((key) => {
+                                                const oldVal = entry.old[key];
+                                                const newVal = entry.new[key];
+                                                const label = key.replace(/_/g, ' ');
+                                                return (
+                                                    <div key={key} className="flex items-baseline gap-1 py-0.5">
+                                                        <span className="text-muted-foreground capitalize">{label}:</span>
+                                                        {oldVal !== undefined && (
+                                                            <>
+                                                                <span className="text-red-500 line-through">{formatActivityValue(key, oldVal)}</span>
+                                                                <ArrowRight className="mx-0.5 inline h-2.5 w-2.5" />
+                                                            </>
+                                                        )}
+                                                        <span className="font-medium text-emerald-600">{formatActivityValue(key, newVal)}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </Card>
+    );
+}
+
+function formatActivityValue(key: string, value: unknown): string {
+    if (value === null || value === undefined) return '—';
+    if (key === 'completed_at') {
+        return value ? formatDateTime(String(value)) : 'unchecked';
+    }
+    if (key === 'completed_by') {
+        return value ? `User #${value}` : '—';
+    }
+    return String(value);
+}
+
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates }: PageProps) {
+    const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean }; errors: Record<string, string> }>().props;
+    const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
     const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
 
@@ -284,9 +782,23 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [commentBody, setCommentBody] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
+    const [inputFocused, setInputFocused] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(undefined);
 
-    const statusForm = useForm({ status: '' });
+    // Comment edit/delete state
+    const [editingComment, setEditingComment] = useState<CommentData | null>(null);
+    const [editBody, setEditBody] = useState('');
+    const [editSaving, setEditSaving] = useState(false);
+    const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
+
+    // Comment filter & sort
+    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
+    const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
+
+    const currentUserId = (usePage().props.auth as { user?: { id: number } })?.user?.id;
+
     const declineForm = useForm({ reason: '' });
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -297,12 +809,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const occupationDisplay = app.occupation === 'other' && app.occupation_other ? app.occupation_other : app.occupation.charAt(0).toUpperCase() + app.occupation.slice(1);
 
     function handleStatusChange(newStatus: string) {
+        if (newStatus === app.status) return;
         if (newStatus === 'declined') {
             setShowDeclineDialog(true);
             return;
         }
-        statusForm.setData('status', newStatus);
-        statusForm.patch(route('employment-applications.update-status', app.id), {
+        router.patch(route('employment-applications.update-status', app.id), { status: newStatus }, {
             preserveScroll: true,
         });
     }
@@ -345,6 +857,51 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         setAttachments((prev) => prev.filter((_, i) => i !== index));
     }
 
+    function handleEditComment(comment: CommentData) {
+        setEditingComment(comment);
+        setEditBody(comment.body);
+    }
+
+    function handleSaveEdit() {
+        if (!editingComment || !editBody.trim()) return;
+        setEditSaving(true);
+        router.patch(route('comments.update', editingComment.id), { body: editBody }, {
+            preserveScroll: true,
+            onSuccess: () => setEditingComment(null),
+            onFinish: () => setEditSaving(false),
+        });
+    }
+
+    function handleDeleteComment(commentId: number) {
+        setDeletingCommentId(commentId);
+    }
+
+    function confirmDelete() {
+        if (deletingCommentId === null) return;
+        setDeleteProcessing(true);
+        router.delete(route('comments.destroy', deletingCommentId), {
+            preserveScroll: true,
+            onSuccess: () => setDeletingCommentId(null),
+            onFinish: () => setDeleteProcessing(false),
+        });
+    }
+
+    // Compute filtered & sorted comments
+    const filteredComments = (() => {
+        let result = comments;
+        if (commentFilter === 'messages') {
+            result = result.filter((c) => c.metadata === null && c.attachments.length === 0);
+        } else if (commentFilter === 'attachments') {
+            result = result.filter((c) => c.attachments.length > 0);
+        } else if (commentFilter === 'history') {
+            result = result.filter((c) => c.metadata !== null);
+        }
+        if (commentSort === 'newest') {
+            result = [...result].reverse();
+        }
+        return result;
+    })();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Application`} />
@@ -383,37 +940,68 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     <div className="flex flex-col gap-4">
 
                         {/* Checklist Section */}
-                        <Card className="rounded-xl">
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-sm font-semibold">Checklist</CardTitle>
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <button type="button" className="text-primary hover:underline">+ New item</button>
-                                        <span className="text-muted-foreground">|</span>
-                                        <button type="button" className="text-primary hover:underline">+ Add checklist</button>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-muted-foreground text-sm italic">No checklist items yet.</p>
-                            </CardContent>
-                        </Card>
+                        <ChecklistSection
+                            checklists={checklists}
+                            availableTemplates={availableTemplates}
+                            applicationId={app.id}
+                            canScreen={canScreen}
+                        />
 
                         {/* Activity / Comments Feed */}
                         <Card className="flex min-h-[400px] flex-col rounded-xl">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-semibold">Activity</CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm font-semibold">Activity</CardTitle>
+                                </div>
+                                {/* Filter & Sort bar */}
+                                {comments.length > 0 && (
+                                    <div className="flex items-center justify-between pt-1">
+                                        <div className="flex items-center gap-1.5 text-xs">
+                                            <span className="text-muted-foreground">Show:</span>
+                                            <Select value={commentFilter} onValueChange={(v) => setCommentFilter(v as 'all' | 'messages' | 'attachments' | 'history')}>
+                                                <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All</SelectItem>
+                                                    <SelectItem value="messages">Messages</SelectItem>
+                                                    <SelectItem value="attachments">Attachments</SelectItem>
+                                                    <SelectItem value="history">History</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="text-primary flex items-center gap-1 text-xs font-medium"
+                                            onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
+                                        >
+                                            {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
+                                            <ArrowRight className={cn('h-3 w-3 transition-transform', commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90')} />
+                                        </button>
+                                    </div>
+                                )}
                             </CardHeader>
 
                             <CardContent className="flex-1 space-y-4">
-                                {comments.length === 0 && (
+                                {comments.length === 0 ? (
                                     <p className="text-muted-foreground py-8 text-center text-sm italic">
                                         No activity yet. Post a comment to get started.
                                     </p>
+                                ) : filteredComments.length === 0 ? (
+                                    <p className="text-muted-foreground py-8 text-center text-sm italic">
+                                        No {commentFilter === 'attachments' ? 'attachments' : commentFilter === 'history' ? 'history' : 'messages'} found.
+                                    </p>
+                                ) : (
+                                    filteredComments.map((comment) => (
+                                        <CommentBubble
+                                            key={comment.id}
+                                            comment={comment}
+                                            currentUserId={currentUserId}
+                                            onEdit={handleEditComment}
+                                            onDelete={handleDeleteComment}
+                                        />
+                                    ))
                                 )}
-                                {comments.map((comment) => (
-                                    <CommentBubble key={comment.id} comment={comment} />
-                                ))}
                             </CardContent>
 
                             {/* Comment Input */}
@@ -441,9 +1029,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                             onChange={handleFileSelect}
                                         />
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             size="icon"
-                                            className="shrink-0"
+                                            className="h-10 w-10 shrink-0"
                                             type="button"
                                             onClick={() => fileInputRef.current?.click()}
                                         >
@@ -455,6 +1043,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                             rows={1}
                                             value={commentBody}
                                             onChange={(e) => setCommentBody(e.target.value)}
+                                            onFocus={() => setInputFocused(true)}
+                                            onBlur={() => setInputFocused(false)}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                                                     e.preventDefault();
@@ -462,15 +1052,41 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 }
                                             }}
                                         />
-                                        <Button
-                                            size="sm"
-                                            className="shrink-0 gap-1.5"
-                                            onClick={handlePostComment}
-                                            disabled={submitting || (!commentBody.trim() && attachments.length === 0)}
-                                        >
-                                            <Send className="h-3.5 w-3.5" />
-                                            Share
-                                        </Button>
+                                        {inputFocused || commentBody.trim() || attachments.length > 0 ? (
+                                            <Button
+                                                size="icon"
+                                                className="h-10 w-10 shrink-0"
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={handlePostComment}
+                                                disabled={submitting || (!commentBody.trim() && attachments.length === 0)}
+                                            >
+                                                <Send className="h-4 w-4" />
+                                            </Button>
+                                        ) : (
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="outline" size="sm" className="h-10 shrink-0 gap-1.5">
+                                                        <Share2 className="h-3.5 w-3.5" />
+                                                        Share
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-1.5" side="top" align="end">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 gap-1.5"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(window.location.href);
+                                                            setLinkCopied(true);
+                                                            setTimeout(() => setLinkCopied(false), 2000);
+                                                        }}
+                                                    >
+                                                        {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                                        {linkCopied ? 'Copied!' : 'Copy link'}
+                                                    </Button>
+                                                </PopoverContent>
+                                            </Popover>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -492,20 +1108,21 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 {/* Status Controls */}
                                 {canScreen && (
                                     <div className="mb-4">
-                                        <Select onValueChange={handleStatusChange}>
+                                        <Select value={app.status} onValueChange={handleStatusChange}>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Change status..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {[...PIPELINE_STATUSES, 'declined']
-                                                    .filter((s) => s !== app.status)
-                                                    .map((s) => (
-                                                        <SelectItem key={s} value={s}>
-                                                            {STATUS_LABELS[s]}
-                                                        </SelectItem>
-                                                    ))}
+                                                {[...PIPELINE_STATUSES, 'declined'].map((s) => (
+                                                    <SelectItem key={s} value={s}>
+                                                        {STATUS_LABELS[s]}
+                                                    </SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
+                                        {pageErrors.status && (
+                                            <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{pageErrors.status}</p>
+                                        )}
                                     </div>
                                 )}
 
@@ -622,6 +1239,44 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                         <Button variant="outline" onClick={() => setShowDeclineDialog(false)}>Cancel</Button>
                         <Button variant="destructive" onClick={handleDecline} disabled={declineForm.processing}>
                             {declineForm.processing ? 'Declining...' : 'Decline'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Comment Dialog */}
+            <Dialog open={editingComment !== null} onOpenChange={(open) => { if (!open) setEditingComment(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Comment</DialogTitle>
+                        <DialogDescription>Update your comment below.</DialogDescription>
+                    </DialogHeader>
+                    <Textarea
+                        value={editBody}
+                        onChange={(e) => setEditBody(e.target.value)}
+                        rows={4}
+                        className="resize-none"
+                    />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingComment(null)}>Cancel</Button>
+                        <Button onClick={handleSaveEdit} disabled={editSaving || !editBody.trim()}>
+                            {editSaving ? 'Saving...' : 'Save'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Comment Confirmation */}
+            <Dialog open={deletingCommentId !== null} onOpenChange={(open) => { if (!open) setDeletingCommentId(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Comment</DialogTitle>
+                        <DialogDescription>Are you sure you want to delete this comment? This action cannot be undone.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeletingCommentId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmDelete} disabled={deleteProcessing}>
+                            {deleteProcessing ? 'Deleting...' : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

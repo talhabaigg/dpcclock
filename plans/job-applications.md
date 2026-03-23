@@ -327,48 +327,48 @@ New categories in `RolesAndPermissionsSeeder`:
 
 ## Implementation Steps
 
-### Phase 1: Database — Application Capture
-- [ ] Migration: `create_employment_applications_table` (including `status`, `declined_*` columns)
-- [ ] Migration: `create_employment_application_references_table`
-- [ ] Migration: `create_skills_table`
-- [ ] Migration: `create_employment_application_skills_table`
-- [ ] Seeder: `SkillsSeeder` (8 initial skills)
-- [ ] Models: `EmploymentApplication`, `EmploymentApplicationReference`, `Skill`, `EmploymentApplicationSkill`
+### Phase 1: Database — Application Capture ✅
+- [x] Migration: `create_employment_applications_table` (including `status`, `declined_*` columns)
+- [x] Migration: `create_employment_application_references_table`
+- [x] Migration: `create_skills_table`
+- [x] Migration: `create_employment_application_skills_table`
+- [x] Seeder: `SkillsSeeder` (8 initial skills)
+- [x] Models: `EmploymentApplication`, `EmploymentApplicationReference`, `Skill`, `EmploymentApplicationSkill`
 
-### Phase 2: Backend — Public Form + Admin API
-- [ ] Form request validation (with duplicate email/phone warning)
-- [ ] Controller (store, show, index, updateStatus, reopen, decline)
-- [ ] Routes (public form submission + authenticated admin views)
-- [ ] Add permissions to seeder
-- [ ] Duplicate detection logic (query by email/phone, return warning with links)
+### Phase 2: Backend — Public Form + Admin API ✅
+- [x] Form request validation (with duplicate email/phone warning)
+- [x] Controller (store, show, index, updateStatus, reopen, decline)
+- [x] Routes (public form submission + authenticated admin views)
+- [x] Add permissions to seeder
+- [x] Duplicate detection logic (query by email/phone, return warning with links)
 
-### Phase 3: Frontend — Form + Admin Views
+### Phase 3: Frontend — Form + Admin Views ✅
 - [x] Public application form (React + Inertia) — built, needs rename from `job-applications/` to `employment-applications/`
-- [ ] Wire form to backend (Inertia useForm POST, receive skills as props)
-- [ ] Admin list view with filtering (by status, occupation, date range) + duplicate badges
-- [ ] Admin detail view with status pipeline, comments, checklists, duplicate warning banner
-- [ ] Skills management page (CRUD for master list)
+- [x] Wire form to backend (Inertia useForm POST, receive skills as props)
+- [x] Admin list view with filtering (by status, occupation, date range) + duplicate badges
+- [x] Admin detail view with status pipeline, comments, checklists, duplicate warning banner
+- [ ] Skills management page (CRUD for master list) — deferred
 
-### Phase 4: Comments System (generic)
-- [ ] Migration: `create_comments_table` (polymorphic, soft deletes)
-- [ ] Migration: `create_comment_attachments_table`
-- [ ] Models: `Comment`, `CommentAttachment`
-- [ ] Trait: `HasComments` (polymorphic relationship + helpers)
-- [ ] Controller: `CommentController` (store, update, destroy, with attachment upload)
-- [ ] Frontend: comment thread UI with file upload, threaded replies
-- [ ] System comments: auto-post on status change with `metadata.status_change`
+### Phase 4: Comments System (generic) ✅
+- [x] Migration: `create_comments_table` (polymorphic, soft deletes)
+- [x] Migration: `create_comment_attachments_table`
+- [x] Models: `Comment`, `CommentAttachment`
+- [x] Trait: `HasComments` (polymorphic relationship + helpers)
+- [x] Controller: `CommentController` (store, update, destroy, with attachment upload)
+- [x] Frontend: comment thread UI with file upload, threaded replies
+- [x] System comments: auto-post on status change with `metadata.status_change`
 
-### Phase 5: Checklist System (generic)
-- [ ] Migration: `create_checklist_templates_table`
-- [ ] Migration: `create_checklist_template_items_table`
-- [ ] Migration: `create_checklists_table` (polymorphic)
-- [ ] Migration: `create_checklist_items_table`
-- [ ] Models: `ChecklistTemplate`, `ChecklistTemplateItem`, `Checklist`, `ChecklistItem` (`LogsActivity` trait for audit)
-- [ ] Trait: `HasChecklists` (polymorphic relationship + helpers, auto-attach logic, required-items gate)
-- [ ] Seeder: default checklist templates for employment application stages
-- [ ] Admin UI: template management (CRUD templates + items) — admin only
-- [ ] Inline checklist UI on employment application detail view
-- [ ] Enforce gate: block `approved` status if required checklist items incomplete
+### Phase 5: Checklist System (generic) ✅
+- [x] Migration: `create_checklist_templates_table`
+- [x] Migration: `create_checklist_template_items_table`
+- [x] Migration: `create_checklists_table` (polymorphic)
+- [x] Migration: `create_checklist_items_table`
+- [x] Models: `ChecklistTemplate`, `ChecklistTemplateItem`, `Checklist`, `ChecklistItem` (`LogsActivity` trait for audit)
+- [x] Trait: `HasChecklists` (polymorphic relationship + helpers, auto-attach logic, required-items gate)
+- [x] Seeder: default checklist templates for employment application stages
+- [x] Admin UI: template management (CRUD templates + items) — admin only
+- [x] Inline checklist UI on employment application detail view
+- [x] Enforce gate: block `approved` status if required checklist items incomplete
 
 ### Phase 6: Application ↔ Employee Linking (future)
 - [ ] Migration: `create_employment_application_employee_table`

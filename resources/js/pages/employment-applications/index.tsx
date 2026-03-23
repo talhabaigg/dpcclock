@@ -1,13 +1,14 @@
 import PaginationComponent, { type PaginationData } from '@/components/index-pagination';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
-import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, FileText, Search } from 'lucide-react';
+import { AlertTriangle, FileText, Filter, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface EmploymentApplication {
@@ -24,16 +25,23 @@ interface EmploymentApplication {
     duplicate_count: number;
 }
 
+interface Filters {
+    status?: string;
+    occupation?: string;
+    search?: string;
+    suburb?: string;
+    date_from?: string;
+    date_to?: string;
+    duplicates_only?: string;
+}
+
 interface PageProps {
     applications: {
         data: EmploymentApplication[];
     } & PaginationData;
-    filters: {
-        status?: string;
-        occupation?: string;
-        search?: string;
-    };
+    filters: Filters;
     statuses: string[];
+    occupations: string[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employment Applications', href: '/employment-applications' }];
@@ -51,22 +59,9 @@ const STATUS_LABELS: Record<string, string> = {
     declined: 'Declined',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-    new: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
-    reviewing: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
-    phone_interview: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800',
-    reference_check: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-400 dark:border-cyan-800',
-    face_to_face: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800',
-    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
-    contract_sent: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800',
-    contract_signed: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800',
-    onboarded: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800',
-    declined: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-};
-
 function StatusBadge({ status }: { status: string }) {
     return (
-        <Badge variant="outline" className={cn('text-xs', STATUS_COLORS[status])}>
+        <Badge variant="outline" className="text-xs">
             {STATUS_LABELS[status] ?? status}
         </Badge>
     );
@@ -85,35 +80,39 @@ function occupationLabel(app: EmploymentApplication) {
     return app.occupation.charAt(0).toUpperCase() + app.occupation.slice(1);
 }
 
-const STATUS_TABS = [
-    { value: '', label: 'All' },
-    { value: 'new', label: 'New' },
-    { value: 'reviewing', label: 'Reviewing' },
-    { value: 'phone_interview', label: 'Phone' },
-    { value: 'reference_check', label: 'Ref Check' },
-    { value: 'face_to_face', label: 'F2F' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'contract_sent', label: 'Contract Sent' },
-    { value: 'contract_signed', label: 'Signed' },
-    { value: 'onboarded', label: 'Onboarded' },
-    { value: 'declined', label: 'Declined' },
-];
 
-export default function EmploymentApplicationsIndex({ applications, filters }: PageProps) {
+export default function EmploymentApplicationsIndex({ applications, filters, occupations }: PageProps) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [suburb, setSuburb] = useState(filters.suburb ?? '');
+    const [showFilters, setShowFilters] = useState(() => {
+        return !!(filters.status || filters.occupation || filters.suburb || filters.date_from || filters.date_to || filters.duplicates_only);
+    });
     const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const suburbTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+    const activeFilterCount = [filters.status, filters.occupation, filters.suburb, filters.date_from || filters.date_to, filters.duplicates_only].filter(Boolean).length;
 
     const applyFilters = useCallback(
-        (newFilters: Partial<typeof filters>) => {
+        (newFilters: Partial<Filters>) => {
             const merged = { ...filters, ...newFilters };
             const query: Record<string, string> = {};
             if (merged.search) query.search = merged.search;
             if (merged.status) query.status = merged.status;
             if (merged.occupation) query.occupation = merged.occupation;
+            if (merged.suburb) query.suburb = merged.suburb;
+            if (merged.date_from) query.date_from = merged.date_from;
+            if (merged.date_to) query.date_to = merged.date_to;
+            if (merged.duplicates_only) query.duplicates_only = merged.duplicates_only;
             router.get('/employment-applications', query, { preserveState: true, preserveScroll: true });
         },
         [filters],
     );
+
+    const clearFilters = useCallback(() => {
+        setSearch('');
+        setSuburb('');
+        router.get('/employment-applications', {}, { preserveState: true, preserveScroll: true });
+    }, []);
 
     useEffect(() => {
         clearTimeout(searchTimeout.current);
@@ -130,28 +129,125 @@ export default function EmploymentApplicationsIndex({ applications, filters }: P
             <Head title="Employment Applications" />
 
             <div className="flex flex-col gap-4 p-3 sm:p-4">
-                {/* Status Tabs */}
-                <Tabs value={filters.status ?? ''} onValueChange={(v) => applyFilters({ status: v, search })}>
-                    <TabsList className="h-auto flex-wrap">
-                        {STATUS_TABS.map((tab) => (
-                            <TabsTrigger key={tab.value} value={tab.value} className="text-xs">
-                                {tab.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                </Tabs>
-
-                {/* Search */}
-                <div className="relative w-full sm:max-w-xs">
-                    <Search className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2" size={18} />
-                    <Input
-                        type="text"
-                        placeholder="Search by name, email, or phone"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-10"
-                    />
+                {/* Search + Filter Toggle */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2" size={18} />
+                        <Input
+                            type="text"
+                            placeholder="Search by name, email, or phone"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFilters(!showFilters)}>
+                        <Filter size={14} />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <Badge variant="secondary" className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-xs">
+                                {activeFilterCount}
+                            </Badge>
+                        )}
+                    </Button>
+                    {(activeFilterCount > 0 || filters.search) && (
+                        <Button variant="ghost" size="sm" className="text-muted-foreground gap-1 text-xs" onClick={clearFilters}>
+                            <X size={14} />
+                            Clear all
+                        </Button>
+                    )}
                 </div>
+
+                {/* Filter Bar */}
+                {showFilters && (
+                    <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+                        {/* Status */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-muted-foreground text-xs font-medium">Status</label>
+                            <Select value={filters.status ?? ''} onValueChange={(v) => applyFilters({ status: v === 'all' ? '' : v })}>
+                                <SelectTrigger className="w-[170px]">
+                                    <SelectValue placeholder="All statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Occupation */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-muted-foreground text-xs font-medium">Occupation</label>
+                            <Select value={filters.occupation ?? ''} onValueChange={(v) => applyFilters({ occupation: v === 'all' ? '' : v })}>
+                                <SelectTrigger className="w-[160px]">
+                                    <SelectValue placeholder="All occupations" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All occupations</SelectItem>
+                                    {occupations.map((occ) => (
+                                        <SelectItem key={occ} value={occ}>
+                                            {occ.charAt(0).toUpperCase() + occ.slice(1)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Suburb */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-muted-foreground text-xs font-medium">Suburb</label>
+                            <Input
+                                type="text"
+                                placeholder="Any suburb"
+                                value={suburb}
+                                onChange={(e) => {
+                                    setSuburb(e.target.value);
+                                    clearTimeout(suburbTimeout.current);
+                                    suburbTimeout.current = setTimeout(() => applyFilters({ suburb: e.target.value }), 400);
+                                }}
+                                className="w-[160px]"
+                            />
+                        </div>
+
+                        {/* Date From */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-muted-foreground text-xs font-medium">From date</label>
+                            <Input
+                                type="date"
+                                value={filters.date_from ?? ''}
+                                onChange={(e) => applyFilters({ date_from: e.target.value })}
+                                className="w-[150px]"
+                            />
+                        </div>
+
+                        {/* Date To */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-muted-foreground text-xs font-medium">To date</label>
+                            <Input
+                                type="date"
+                                value={filters.date_to ?? ''}
+                                onChange={(e) => applyFilters({ date_to: e.target.value })}
+                                className="w-[150px]"
+                            />
+                        </div>
+
+                        {/* Duplicates Only */}
+                        <div className="flex items-center gap-2 pb-2">
+                            <Checkbox
+                                id="duplicates_only"
+                                checked={filters.duplicates_only === '1'}
+                                onCheckedChange={(checked) => applyFilters({ duplicates_only: checked ? '1' : '' })}
+                            />
+                            <label htmlFor="duplicates_only" className="cursor-pointer text-sm whitespace-nowrap">
+                                Duplicates only
+                            </label>
+                        </div>
+                    </div>
+                )}
 
                 {/* Mobile card layout */}
                 <div className="flex flex-col gap-2 sm:hidden">

@@ -98,6 +98,12 @@ const mainNavItems: NavItem[] = [
         permission: 'employment-applications.view',
     },
     {
+        title: 'Checklist Templates',
+        href: '/checklist-templates',
+        icon: LayoutGrid,
+        permission: 'checklists.manage-templates',
+    },
+    {
         title: 'Kiosks',
         href: '/kiosks',
         icon: Clock,

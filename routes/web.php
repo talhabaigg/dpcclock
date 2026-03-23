@@ -50,6 +50,8 @@ use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
+use App\Http\Controllers\ChecklistController;
+use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
@@ -148,6 +150,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
     Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
+
+    // ============================================
+    // CHECKLISTS (generic)
+    // ============================================
+    Route::middleware('permission:employment-applications.screen')->group(function () {
+        Route::post('/checklists/attach-template', [ChecklistController::class, 'attachTemplate'])->name('checklists.attach-template');
+        Route::post('/checklists/ad-hoc', [ChecklistController::class, 'createAdHoc'])->name('checklists.ad-hoc');
+        Route::delete('/checklists/{checklist}', [ChecklistController::class, 'destroyChecklist'])->name('checklists.destroy');
+        Route::post('/checklists/{checklist}/items', [ChecklistController::class, 'addItem'])->name('checklists.add-item');
+        Route::patch('/checklist-items/{checklistItem}/toggle', [ChecklistController::class, 'toggleItem'])->name('checklist-items.toggle');
+        Route::patch('/checklist-items/{checklistItem}/notes', [ChecklistController::class, 'updateItemNotes'])->name('checklist-items.notes');
+        Route::get('/checklist-items/{checklistItem}/history', [ChecklistController::class, 'itemHistory'])->name('checklist-items.history');
+        Route::delete('/checklist-items/{checklistItem}', [ChecklistController::class, 'deleteItem'])->name('checklist-items.destroy');
+    });
+
+    // Checklist Templates (admin only)
+    Route::middleware('permission:checklists.manage-templates')->group(function () {
+        Route::get('/checklist-templates', [ChecklistTemplateController::class, 'index'])->name('checklist-templates.index');
+        Route::get('/checklist-templates/create', [ChecklistTemplateController::class, 'create'])->name('checklist-templates.create');
+        Route::post('/checklist-templates', [ChecklistTemplateController::class, 'store'])->name('checklist-templates.store');
+        Route::get('/checklist-templates/{checklistTemplate}/edit', [ChecklistTemplateController::class, 'edit'])->name('checklist-templates.edit');
+        Route::put('/checklist-templates/{checklistTemplate}', [ChecklistTemplateController::class, 'update'])->name('checklist-templates.update');
+        Route::delete('/checklist-templates/{checklistTemplate}', [ChecklistTemplateController::class, 'destroy'])->name('checklist-templates.destroy');
+    });
 
     // ============================================
     // EMPLOYEE MANAGEMENT
