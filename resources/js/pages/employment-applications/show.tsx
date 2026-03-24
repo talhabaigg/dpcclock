@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -377,6 +378,10 @@ function ChecklistSection({
     const [showAddChecklist, setShowAddChecklist] = useState(false);
     const [adHocName, setAdHocName] = useState('');
     const [adHocItems, setAdHocItems] = useState<string[]>(['']);
+    const [showQuickAddItem, setShowQuickAddItem] = useState(false);
+    const [quickItemLabel, setQuickItemLabel] = useState('');
+    const [quickItemChecklistId, setQuickItemChecklistId] = useState<number | null>(null);
+    const [confirmDeleteChecklistId, setConfirmDeleteChecklistId] = useState<number | null>(null);
     const [historyItem, setHistoryItem] = useState<ChecklistItemData | null>(null);
     const [historyEntries, setHistoryEntries] = useState<ActivityEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -441,9 +446,37 @@ function ChecklistSection({
     }
 
     function handleDeleteChecklist(checklistId: number) {
-        router.delete(route('checklists.destroy', checklistId), {
+        setConfirmDeleteChecklistId(checklistId);
+    }
+
+    function confirmDeleteChecklist() {
+        if (confirmDeleteChecklistId === null) return;
+        router.delete(route('checklists.destroy', confirmDeleteChecklistId), {
             preserveScroll: true,
+            onFinish: () => setConfirmDeleteChecklistId(null),
         });
+    }
+
+    function handleQuickAddItem() {
+        if (!quickItemLabel.trim()) return;
+        const targetId = quickItemChecklistId ?? (checklists.length > 0 ? checklists[0].id : null);
+        if (targetId) {
+            router.post(route('checklists.add-item', targetId), { label: quickItemLabel.trim() }, {
+                preserveScroll: true,
+                onSuccess: () => { setQuickItemLabel(''); setShowQuickAddItem(false); setQuickItemChecklistId(null); },
+            });
+        } else {
+            // No checklist exists — create a General one with this item
+            router.post(route('checklists.ad-hoc'), {
+                checkable_type: 'employment_application',
+                checkable_id: applicationId,
+                name: 'General',
+                items: [{ label: quickItemLabel.trim() }],
+            }, {
+                preserveScroll: true,
+                onSuccess: () => { setQuickItemLabel(''); setShowQuickAddItem(false); setQuickItemChecklistId(null); },
+            });
+        }
     }
 
     function handleAttachTemplate(templateId: string) {
@@ -508,35 +541,96 @@ function ChecklistSection({
                             </>
                         )}
                         {canScreen && (
-                            <>
-                                {availableTemplates.length > 0 && (
-                                    <Select onValueChange={handleAttachTemplate}>
-                                        <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
-                                            <Plus className="h-3 w-3" />
-                                            <SelectValue placeholder="Add checklist" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableTemplates.map((t) => (
-                                                <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                                <button
-                                    type="button"
-                                    className="text-primary flex items-center gap-1 hover:underline"
-                                    onClick={() => setShowAddChecklist(true)}
-                                >
-                                    <ListChecks className="h-3 w-3" />
-                                    Custom
-                                </button>
-                            </>
+                            <button
+                                type="button"
+                                className="text-primary flex items-center gap-1 text-xs hover:underline"
+                                onClick={() => { setShowQuickAddItem(true); setQuickItemChecklistId(checklists[0]?.id ?? null); }}
+                            >
+                                <Plus className="h-3 w-3" />
+                                New item
+                            </button>
+                        )}
+                        {canScreen && (
+                            <span className="text-muted-foreground/50">|</span>
+                        )}
+                        {canScreen && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="text-primary flex items-center gap-1 text-xs hover:underline"
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Add checklist
+                                        <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setShowAddChecklist(true)}>
+                                        <ListChecks className="mr-2 h-3.5 w-3.5" />
+                                        Create new checklist
+                                    </DropdownMenuItem>
+                                    {availableTemplates.length > 0 ? (
+                                        <DropdownMenuSub>
+                                            <DropdownMenuSubTrigger>
+                                                <Plus className="mr-2 h-3.5 w-3.5" />
+                                                Add existing checklist
+                                            </DropdownMenuSubTrigger>
+                                            <DropdownMenuSubContent>
+                                                {availableTemplates.map((t) => (
+                                                    <DropdownMenuItem key={t.id} onClick={() => handleAttachTemplate(String(t.id))}>
+                                                        {t.name}
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                    ) : (
+                                        <DropdownMenuItem disabled>
+                                            <Plus className="mr-2 h-3.5 w-3.5" />
+                                            Add existing checklist
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </div>
             </div>
             <div className="space-y-3">
-                {checklists.length === 0 && !showAddChecklist && (
+                {showQuickAddItem && (
+                    <div className="flex items-center gap-2">
+                        <Input
+                            autoFocus
+                            value={quickItemLabel}
+                            onChange={(e) => setQuickItemLabel(e.target.value)}
+                            placeholder="Item name..."
+                            className="h-7 flex-1 text-sm"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); handleQuickAddItem(); }
+                                if (e.key === 'Escape') { setShowQuickAddItem(false); setQuickItemLabel(''); }
+                            }}
+                        />
+                        {checklists.length > 1 && (
+                            <Select value={String(quickItemChecklistId ?? checklists[0].id)} onValueChange={(v) => setQuickItemChecklistId(Number(v))}>
+                                <SelectTrigger className="h-7 w-40 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {checklists.map((cl) => (
+                                        <SelectItem key={cl.id} value={String(cl.id)}>{cl.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                        <button type="button" onClick={handleQuickAddItem} className="text-emerald-600 hover:text-emerald-700" title="Add item">
+                            <Check className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => { setShowQuickAddItem(false); setQuickItemLabel(''); }} className="text-destructive hover:text-destructive/80" title="Cancel">
+                            <XCircle className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
+                {checklists.length === 0 && !showAddChecklist && !showQuickAddItem && (
                     <p className="text-muted-foreground text-sm italic">No checklists attached yet.</p>
                 )}
 
@@ -721,6 +815,20 @@ function ChecklistSection({
                     </div>
                 )}
             </div>
+
+            {/* Delete Checklist Confirm Dialog */}
+            <Dialog open={confirmDeleteChecklistId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteChecklistId(null); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Remove checklist?</DialogTitle>
+                        <DialogDescription>This will permanently delete the checklist and all its items.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setConfirmDeleteChecklistId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmDeleteChecklist}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* History Dialog */}
             <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>

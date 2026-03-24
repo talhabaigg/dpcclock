@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreEmploymentApplicationRequest;
 use App\Models\ChecklistTemplate;
 use App\Models\EmploymentApplication;
-use App\Models\EmploymentApplicationSkill;
 use App\Models\Skill;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -186,9 +186,6 @@ class EmploymentApplicationController extends Controller
     {
         $employmentApplication->load(['references', 'skills', 'declinedByUser']);
 
-        // Auto-attach any missing auto-attach checklists (backfill for existing applications)
-        $employmentApplication->attachAutoChecklists();
-
         $employmentApplication->load(['checklists.items.completedByUser']);
 
         // Format checklists for frontend
@@ -294,6 +291,22 @@ class EmploymentApplicationController extends Controller
         return Inertia::render('employment-applications/submission', [
             'application' => $employmentApplication,
         ]);
+    }
+
+    /**
+     * Download the full submission as a PDF.
+     */
+    public function submissionPdf(EmploymentApplication $employmentApplication)
+    {
+        $employmentApplication->load(['references', 'skills']);
+
+        $pdf = Pdf::loadView('employment-applications.submission-pdf', [
+            'app' => $employmentApplication,
+        ])->setPaper('a4', 'portrait')->setOption(['margin_top' => 0, 'margin_right' => 0, 'margin_bottom' => 15, 'margin_left' => 0]);
+
+        $filename = 'application-' . $employmentApplication->id . '-' . str($employmentApplication->first_name . '-' . $employmentApplication->surname)->slug() . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     /**

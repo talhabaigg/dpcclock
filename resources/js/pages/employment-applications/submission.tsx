@@ -1,10 +1,10 @@
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, CheckIcon, XIcon } from 'lucide-react';
+import React from 'react';
+import { ArrowLeft, CheckIcon, Download, XIcon } from 'lucide-react';
 
 interface Skill {
     id: number;
@@ -75,6 +75,15 @@ const SECTIONS = [
     { label: 'Medical & Declaration' },
 ];
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div className="grid gap-5 px-6 py-6">
+            <h2 className="text-sm font-semibold">{title}</h2>
+            {children}
+        </div>
+    );
+}
+
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
     return (
         <div className="grid gap-1">
@@ -126,210 +135,190 @@ export default function Submission({ application: app }: PageProps) {
             <Head title={`${app.first_name} ${app.surname} — Full Submission`} />
 
             <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-3 sm:p-6">
-                {/* Back link */}
-                <Link
-                    href={`/employment-applications/${app.id}`}
-                    className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to application
-                </Link>
+                {/* Back link + download */}
+                <div className="flex items-center justify-between">
+                    <Link
+                        href={`/employment-applications/${app.id}`}
+                        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to application
+                    </Link>
+                    <a
+                        href={`/employment-applications/${app.id}/submission/pdf`}
+                        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
+                    >
+                        <Download className="h-4 w-4" />
+                        Download PDF
+                    </a>
+                </div>
 
                 {/* Section indicator */}
-                <div className="flex items-center justify-between px-2">
+                <div className="flex items-start px-2">
                     {SECTIONS.map((s, i) => (
-                        <div key={i} className="flex items-center">
+                        <React.Fragment key={i}>
                             <div className="flex flex-col items-center gap-1.5">
-                                <div className="bg-primary border-primary text-primary-foreground flex size-8 items-center justify-center rounded-full border-2 text-xs font-semibold">
+                                <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                                     <CheckIcon className="size-4" />
                                 </div>
-                                <span className="text-muted-foreground hidden text-center text-xs font-medium sm:block">
+                                <span className="text-muted-foreground w-16 text-center text-[11px] font-medium leading-tight">
                                     {s.label}
                                 </span>
                             </div>
-                            {i < SECTIONS.length - 1 && <div className="bg-primary mx-1 h-0.5 w-6 sm:w-12" />}
-                        </div>
+                            {i < SECTIONS.length - 1 && (
+                                <div className="bg-border mt-4 h-0.5 flex-1" />
+                            )}
+                        </React.Fragment>
                     ))}
                 </div>
 
-                {/* Step 1: Personal Details */}
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Personal Details</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Submission body */}
+                <div className="overflow-hidden rounded-xl border">
+
+                    {/* Personal Details */}
+                    <Section title="Personal Details">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                             <Field label="Surname" value={app.surname} />
                             <Field label="First Name(s)" value={app.first_name} />
-                        </div>
-                        <Field label="Suburb" value={app.suburb} />
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <Field label="Email" value={app.email} />
                             <Field label="Phone" value={app.phone} />
+                            <Field label="Suburb" value={app.suburb} />
+                            <Field label="Date of Birth" value={formatDate(app.date_of_birth)} />
+                            <Field label="Referred By" value={app.referred_by} />
+                            <BoolField label="Aboriginal or Torres Strait Islander" value={app.aboriginal_or_tsi} />
                         </div>
-                        <Field label="Date of Birth" value={formatDate(app.date_of_birth)} />
                         <div className="grid gap-1">
                             <span className="text-muted-foreground text-xs font-medium">Why should we employ you?</span>
                             <p className="text-sm whitespace-pre-wrap">{app.why_should_we_employ_you || '—'}</p>
                         </div>
-                        <Field label="Referred By" value={app.referred_by} />
-                        <BoolField label="Aboriginal or Torres Strait Islander Origin" value={app.aboriginal_or_tsi} />
-                    </CardContent>
-                </Card>
+                    </Section>
 
-                {/* Step 2: Occupation & Skills */}
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Occupation</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <Field label="Occupation" value={occupationDisplay} />
-                        <Field label="Apprentice Year" value={app.apprentice_year ? `Year ${app.apprentice_year}` : 'Not an apprentice'} />
-                        <BoolField label="Trade Qualified" value={app.trade_qualified} />
-                        <Field label="Preferred Project/Site" value={app.preferred_project_site} />
-                    </CardContent>
-                </Card>
+                    <Separator />
 
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Skills</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        {masterSkills.length > 0 && (
-                            <div className="grid gap-1">
-                                <span className="text-muted-foreground text-xs font-medium">Selected Skills</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {masterSkills.map((s) => (
-                                        <Badge key={s.id} variant="secondary" className="text-xs">
-                                            {s.skill_name}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {customSkills.length > 0 && (
-                            <div className="grid gap-1">
-                                <span className="text-muted-foreground text-xs font-medium">Other Skills</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {customSkills.map((s) => (
-                                        <Badge key={s.id} variant="outline" className="text-xs">
-                                            {s.skill_name}
-                                        </Badge>
-                                    ))}
-                                </div>
+                    {/* Occupation & Skills */}
+                    <Section title="Occupation & Skills">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+                            <Field label="Occupation" value={occupationDisplay} />
+                            <Field label="Preferred Project/Site" value={app.preferred_project_site} />
+                            <Field label="Apprentice Year" value={app.apprentice_year ? `Year ${app.apprentice_year}` : 'Not an apprentice'} />
+                            <BoolField label="Trade Qualified" value={app.trade_qualified} />
+                        </div>
+                        {app.skills.length > 0 && (
+                            <div className="grid gap-3">
+                                {masterSkills.length > 0 && (
+                                    <div className="grid gap-1.5">
+                                        <span className="text-muted-foreground text-xs font-medium">Selected Skills</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {masterSkills.map((s) => (
+                                                <Badge key={s.id} variant="secondary" className="text-xs">{s.skill_name}</Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {customSkills.length > 0 && (
+                                    <div className="grid gap-1.5">
+                                        <span className="text-muted-foreground text-xs font-medium">Other Skills</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {customSkills.map((s) => (
+                                                <Badge key={s.id} variant="outline" className="text-xs">{s.skill_name}</Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {app.skills.length === 0 && <p className="text-muted-foreground text-sm">No skills listed.</p>}
-                    </CardContent>
-                </Card>
+                    </Section>
 
-                {/* Step 3: Licences & Tickets */}
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Licence & Ticket Details</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <Field label="Building Industry General Safety Induction Number" value={app.safety_induction_number} />
+                    <Separator />
 
-                        <div className="grid gap-1">
-                            <span className="text-muted-foreground text-xs font-medium">EWP Operator Licence</span>
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5">
-                                    {app.ewp_below_11m ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <XIcon className="h-4 w-4 text-red-400" />}
-                                    <span className="text-sm">Below 11m</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    {app.ewp_above_11m ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <XIcon className="h-4 w-4 text-red-400" />}
-                                    <span className="text-sm">Above 11m (high risk)</span>
+                    {/* Licences & Tickets */}
+                    <Section title="Licences & Tickets">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+                            <Field label="Safety Induction Number" value={app.safety_induction_number} />
+                            <Field label="Fork Lift Licence Number" value={app.forklift_licence_number} />
+                            <Field label="Scaffold Licence Number" value={app.scaffold_licence_number} />
+                            <Field label="First Aid Certificate" value={formatDate(app.first_aid_completion_date)} />
+                            <BoolField label="Work Safely at Heights" value={app.work_safely_at_heights} />
+                            <div className="grid gap-1">
+                                <span className="text-muted-foreground text-xs font-medium">EWP Operator Licence</span>
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5">
+                                        {app.ewp_below_11m ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <XIcon className="h-4 w-4 text-red-400" />}
+                                        <span className="text-sm">Below 11m</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {app.ewp_above_11m ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <XIcon className="h-4 w-4 text-red-400" />}
+                                        <span className="text-sm">Above 11m (high risk)</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+                            <BoolField label="Workplace Impairment Training (WIT)" value={app.workplace_impairment_training} />
+                            {app.workplace_impairment_training && (
+                                <Field label="WIT Completion Date" value={formatDate(app.wit_completion_date)} />
+                            )}
+                            <BoolField label="Asbestos Awareness Training" value={app.asbestos_awareness_training} />
+                            <BoolField label="10830NAT Crystalline Silica Course" value={app.crystalline_silica_course} />
+                            <BoolField label="Gender Equity Training" value={app.gender_equity_training} />
+                            <Field
+                                label="Quantitative Fit Test"
+                                value={app.quantitative_fit_test === 'quantitative' ? 'Quantitative' : 'No fit test completed'}
+                            />
+                        </div>
+                    </Section>
 
-                        <Field label="Fork Lift Licence Number" value={app.forklift_licence_number} />
-                        <BoolField label="Work Safely at Heights Training" value={app.work_safely_at_heights} />
-                        <Field label="Scaffold Licence Number" value={app.scaffold_licence_number} />
-                        <Field label="First Aid Certificate Completion Date" value={formatDate(app.first_aid_completion_date)} />
+                    <Separator />
 
-                        <Separator />
-
-                        <BoolField label="Workplace Impairment Training (WIT)" value={app.workplace_impairment_training} />
-                        {app.workplace_impairment_training && (
-                            <Field label="WIT Completion Date" value={formatDate(app.wit_completion_date)} />
-                        )}
-                        <BoolField label="Asbestos Awareness Training" value={app.asbestos_awareness_training} />
-                        <BoolField label="10830NAT Crystalline Silica Course" value={app.crystalline_silica_course} />
-                        <BoolField label="Gender Equity Training" value={app.gender_equity_training} />
-                        <Field
-                            label="Quantitative Fit Test"
-                            value={app.quantitative_fit_test === 'quantitative' ? 'Quantitative' : 'No fit test completed'}
-                        />
-                    </CardContent>
-                </Card>
-
-                {/* Step 4: References */}
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Employment References</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-6">
+                    {/* References */}
+                    <Section title="Employment References">
+                        {app.references.length === 0 && <p className="text-muted-foreground text-sm">No references provided.</p>}
                         {app.references.map((ref, index) => (
-                            <div key={ref.id}>
-                                {index > 0 && <Separator className="mb-6" />}
-                                <h4 className="mb-3 text-sm font-medium">Reference {ref.sort_order}</h4>
-                                <div className="grid gap-3">
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <Field label="Company Name" value={ref.company_name} />
-                                        <Field label="Position" value={ref.position} />
-                                    </div>
+                            <div key={ref.id} className="grid gap-3">
+                                {index > 0 && <Separator />}
+                                <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">Reference {ref.sort_order}</p>
+                                <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+                                    <Field label="Company Name" value={ref.company_name} />
+                                    <Field label="Position" value={ref.position} />
                                     <Field label="Employment Period" value={ref.employment_period} />
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <Field label="Contact Person" value={ref.contact_person} />
-                                        <Field label="Phone Number" value={ref.phone_number} />
-                                    </div>
+                                    <Field label="Contact Person" value={ref.contact_person} />
+                                    <Field label="Phone Number" value={ref.phone_number} />
                                 </div>
                             </div>
                         ))}
-                        {app.references.length === 0 && <p className="text-muted-foreground text-sm">No references provided.</p>}
-                    </CardContent>
-                </Card>
+                    </Section>
 
-                {/* Step 5: Medical & Declaration */}
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Medical History</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <BoolField label="Workcover Claim (last 2 years)" value={app.workcover_claim} />
-                        <Field
-                            label="Medical or Physical Condition"
-                            value={
-                                app.medical_condition === 'none' || !app.medical_condition
-                                    ? 'None'
-                                    : app.medical_condition === 'other'
-                                      ? app.medical_condition_other
-                                      : app.medical_condition.charAt(0).toUpperCase() + app.medical_condition.slice(1) + ' condition'
-                            }
-                        />
-                    </CardContent>
-                </Card>
+                    <Separator />
 
-                <Card className="rounded-xl">
-                    <CardHeader>
-                        <CardTitle>Declaration & Acceptance</CardTitle>
-                        <CardDescription>
+                    {/* Medical & Declaration */}
+                    <Section title="Medical & Declaration">
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+                            <BoolField label="Workcover Claim (last 2 years)" value={app.workcover_claim} />
+                            <Field
+                                label="Medical or Physical Condition"
+                                value={
+                                    app.medical_condition === 'none' || !app.medical_condition
+                                        ? 'None'
+                                        : app.medical_condition === 'other'
+                                          ? app.medical_condition_other
+                                          : app.medical_condition.charAt(0).toUpperCase() + app.medical_condition.slice(1) + ' condition'
+                                }
+                            />
+                        </div>
+                        <div className="bg-muted/40 rounded-lg p-4 text-sm text-muted-foreground italic">
                             I declare that the information provided in this application is true and correct. I understand that
                             providing false or misleading information may result in termination of employment.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-4">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        </div>
+                        <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                             <Field label="Full Name" value={app.acceptance_full_name} />
                             <Field label="Email Address" value={app.acceptance_email} />
+                            <Field label="Date Signed" value={formatDate(app.acceptance_date)} />
+                            <BoolField label="Declaration Accepted" value={app.declaration_accepted} />
                         </div>
-                        <Field label="Date" value={formatDate(app.acceptance_date)} />
-                        <BoolField label="Declaration Accepted" value={app.declaration_accepted} />
-                    </CardContent>
-                </Card>
+                    </Section>
+
+                </div>
 
                 {/* Submitted timestamp */}
                 <p className="text-muted-foreground text-center text-xs">Submitted on {formatDate(app.created_at)}</p>

@@ -140,6 +140,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications', [EmploymentApplicationController::class, 'index'])->name('employment-applications.index');
         Route::get('/employment-applications/{employmentApplication}', [EmploymentApplicationController::class, 'show'])->name('employment-applications.show');
         Route::get('/employment-applications/{employmentApplication}/submission', [EmploymentApplicationController::class, 'submission'])->name('employment-applications.submission');
+        Route::get('/employment-applications/{employmentApplication}/submission/pdf', [EmploymentApplicationController::class, 'submissionPdf'])->name('employment-applications.submission.pdf');
     });
     Route::middleware('permission:employment-applications.screen')->group(function () {
         Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
