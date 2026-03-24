@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Session;
@@ -295,14 +297,22 @@ class KioskController extends Controller
         $cachedToken = cache()->get("kiosk_token:{$kioskId}:{$token}");
 
         if ($token === ($cachedToken['token'] ?? null)) {
-            // Store kiosk access in session - no user login needed
+            // Store kiosk access in session (works in browser)
             Session::put('kiosk_access', [
                 'kiosk_id' => (int) $kioskId,
                 'validated_at' => now(),
-                'expires_at' => now()->addMinutes(30),
+                'expires_at' => now()->addYears(5),
             ]);
 
-            return redirect()->route('kiosks.show', ['kiosk' => $kioskId]);
+            // Also set a persistent cookie + cache entry (survives PWA "Add to Home Screen")
+            $workerToken = Str::uuid()->toString();
+            Cache::put("kiosk_worker:{$workerToken}", [
+                'kiosk_id' => (int) $kioskId,
+                'expires_at' => now()->addYears(5),
+            ], now()->addYears(5));
+
+            return redirect()->route('kiosks.show', ['kiosk' => $kioskId])
+                ->withCookie(cookie('kiosk_worker_token', $workerToken, 60 * 24 * 365 * 5)); // 5 years
         }
 
         return Inertia::render('kiosks/error/invalid-qr', [

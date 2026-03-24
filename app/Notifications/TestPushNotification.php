@@ -53,8 +53,10 @@ class TestPushNotification extends Notification
     public function toArray(object $notifiable): array
     {
         return [
+            'type' => 'TestPush',
             'title' => $this->title,
             'body' => $this->body,
+            'message' => $this->body,
         ];
     }
 }

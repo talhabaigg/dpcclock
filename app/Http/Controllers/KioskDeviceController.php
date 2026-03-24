@@ -88,11 +88,55 @@ class KioskDeviceController extends Controller
         Cache::forget("kiosk_device_register:{$kioskId}:{$token}");
 
         // Set a permanent cookie (5 years)
-        $cookie = cookie('kiosk_device_token', $deviceToken, 60 * 24 * 365 * 5);
+        $deviceCookie = cookie('kiosk_device_token', $deviceToken, 60 * 24 * 365 * 5);
+
+        // Also set a backup kiosk_worker_token (survives PWA context where device cookie may not transfer)
+        $workerToken = Str::uuid()->toString();
+        Cache::put("kiosk_worker:{$workerToken}", [
+            'kiosk_id' => $kiosk->id,
+            'expires_at' => now()->addYears(5),
+        ], now()->addYears(5));
+        $workerCookie = cookie('kiosk_worker_token', $workerToken, 60 * 24 * 365 * 5);
 
         return redirect()
             ->route('kiosks.show', $kiosk->id)
             ->with('success', "Device '{$cached['device_name']}' registered successfully.")
+            ->withCookie($deviceCookie)
+            ->withCookie($workerCookie);
+    }
+
+    /**
+     * Lock the current browser/device to a kiosk permanently.
+     * Manager logs in, navigates to kiosk, clicks "Lock Device" — sets permanent cookie and logs out.
+     */
+    public function lockDevice(Request $request, Kiosk $kiosk)
+    {
+        $request->validate([
+            'device_name' => 'required|string|max:255',
+        ]);
+
+        $deviceToken = Str::uuid()->toString();
+
+        KioskDevice::create([
+            'kiosk_id' => $kiosk->id,
+            'device_token' => $deviceToken,
+            'device_name' => $request->device_name,
+            'registered_by' => Auth::id(),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        // Log the manager out so the device is purely a kiosk
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        // Set permanent cookie (5 years)
+        $cookie = cookie('kiosk_device_token', $deviceToken, 60 * 24 * 365 * 5);
+
+        return redirect()
+            ->route('kiosks.show', $kiosk->id)
+            ->with('success', "Device locked to {$kiosk->name}.")
             ->withCookie($cookie);
     }
 

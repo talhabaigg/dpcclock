@@ -50,10 +50,13 @@ class AgentConfirmSendNotification extends Notification
         $poNumber = 'PO'.$this->requisition->po_number;
         $totalCost = number_format($this->requisition->lineItems->sum('total_cost'), 2);
 
+        $body = "{$poNumber} for {$supplierName} ({$locationName}) — \${$totalCost}. Confirm to send to supplier.";
+
         return [
             'type' => 'AgentConfirmSend',
             'title' => 'PO Ready to Send',
-            'body' => "{$poNumber} for {$supplierName} ({$locationName}) — \${$totalCost}. Confirm to send to supplier.",
+            'body' => $body,
+            'message' => $body,
             'requisition_id' => $this->requisition->id,
             'agent_task_id' => $this->task->id,
             'po_number' => $poNumber,

@@ -282,6 +282,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.edit');
     Route::delete('/kiosks/{kiosk}/devices/{device}', [KioskDeviceController::class, 'destroy'])->name('kiosk-devices.destroy')
         ->middleware('permission:kiosks.edit');
+    Route::post('/kiosks/{kiosk}/lock-device', [KioskDeviceController::class, 'lockDevice'])->name('kiosk-devices.lock-device');
 
     // ============================================
     // TIMESHEET MANAGEMENT

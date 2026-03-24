@@ -7,6 +7,7 @@ use App\Models\KioskDevice;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Session;
 use Inertia\Inertia;
 
@@ -28,6 +29,24 @@ class CheckKioskTokenValidation
         if ($deviceToken) {
             $device = KioskDevice::where('device_token', $deviceToken)->where('is_active', true)->first();
             if ($device) {
+                return $next($request);
+            }
+        }
+
+        // Allow persistent worker token through (survives PWA / Add to Home Screen)
+        $workerToken = $request->cookie('kiosk_worker_token');
+        if ($workerToken) {
+            $workerAccess = Cache::get("kiosk_worker:{$workerToken}");
+            if ($workerAccess && now()->isBefore($workerAccess['expires_at'])) {
+                // Restore session so kiosk scoping works on subsequent middleware checks
+                if (! Session::has('kiosk_access')) {
+                    Session::put('kiosk_access', [
+                        'kiosk_id' => $workerAccess['kiosk_id'],
+                        'validated_at' => now(),
+                        'expires_at' => $workerAccess['expires_at'],
+                    ]);
+                }
+
                 return $next($request);
             }
         }

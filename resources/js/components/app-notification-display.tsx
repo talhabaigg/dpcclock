@@ -40,7 +40,8 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
     return (
         <div className="space-y-1">
             {notifications.map((notification: NotificationProps) => {
-                const { type, message } = notification.data;
+                const { type, message, body, title } = notification.data;
+                const displayMessage = message || body || title || 'New notification';
 
                 // Decide which component to render based on type
                 switch (type) {
@@ -63,7 +64,7 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
                                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
                                     <Bell className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                                 </div>
-                                <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{message}</span>
+                                <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{displayMessage}</span>
                                 <Button
                                     className="h-7 w-7 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                     variant="ghost"

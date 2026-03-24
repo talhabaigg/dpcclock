@@ -11,8 +11,10 @@ import {
 import { cn } from '@/lib/utils';
 import HourSelector from '@/pages/timesheets/components/hourSelector';
 import MinuteSelector from '@/pages/timesheets/components/minuteSelector';
-import { useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Settings, ShieldCheck, User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { router, useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Lock, Settings, ShieldCheck, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
@@ -82,6 +84,9 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
     const [menuOpen, setMenuOpen] = useState(false);
     const [adminPinDialogOpen, setAdminPinDialogOpen] = useState(false);
     const [updateStartDialogOpen, setUpdateStartDialogOpen] = useState(false);
+    const [lockDeviceDialogOpen, setLockDeviceDialogOpen] = useState(false);
+    const [lockDeviceName, setLockDeviceName] = useState('');
+    const [isLocking, setIsLocking] = useState(false);
 
     const firstDialogFocusRef = useRef<HTMLButtonElement | null>(null);
     const filteredClockedInEmployees = employees.filter((emp) => emp.clocked_in === true);
@@ -134,6 +139,14 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
         form.setData('pin', '');
     };
 
+    const handleLockDevice = () => {
+        if (!lockDeviceName.trim()) return;
+        setIsLocking(true);
+        router.post(route('kiosk-devices.lock-device', kioskId), { device_name: lockDeviceName.trim() }, {
+            onError: () => setIsLocking(false),
+        });
+    };
+
     // In device mode, show manager selection first. In auth mode, go straight to PIN.
     const showManagerSelection = isDeviceMode && !selectedManager;
     const showPinEntry = !isDeviceMode || selectedManager;
@@ -172,6 +185,23 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                         >
                             Update start time
                         </DropdownMenuItem>
+                    )}
+
+                    {auth?.user && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                    setMenuOpen(false);
+                                    setLockDeviceName('');
+                                    setLockDeviceDialogOpen(true);
+                                }}
+                            >
+                                <Lock className="mr-2 h-4 w-4" />
+                                Lock Device to Kiosk
+                            </DropdownMenuItem>
+                        </>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -282,6 +312,58 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                             </div>
                         </>
                     ) : null}
+                </DialogContent>
+            </Dialog>
+
+            {/* Lock Device to Kiosk Dialog */}
+            <Dialog open={lockDeviceDialogOpen} onOpenChange={(open) => !isLocking && setLockDeviceDialogOpen(open)}>
+                <DialogContent className="max-w-sm">
+                    {isLocking ? (
+                        <div className="flex flex-col items-center justify-center gap-4 py-6">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+                                <Lock className="h-8 w-8 animate-pulse text-red-600" />
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                                <DialogTitle className="text-foreground text-base font-semibold">Locking Device</DialogTitle>
+                                <DialogDescription className="text-muted-foreground text-sm">Logging out and locking to kiosk...</DialogDescription>
+                            </div>
+                            <div className="flex gap-1.5">
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-red-500 [animation-delay:-0.3s]" />
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-red-500 [animation-delay:-0.15s]" />
+                                <div className="h-2 w-2 animate-bounce rounded-full bg-red-500" />
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <DialogHeader className="text-center">
+                                <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+                                    <Lock className="h-8 w-8 text-red-600" />
+                                </div>
+                                <DialogTitle className="text-center">Lock Device to Kiosk</DialogTitle>
+                                <DialogDescription className="text-center">
+                                    This will permanently lock this browser to kiosk mode and log you out. The device will only be able to access this kiosk.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 pt-2">
+                                <div className="space-y-2">
+                                    <Label>Device Name</Label>
+                                    <Input
+                                        placeholder="e.g. iPad - Front Gate"
+                                        value={lockDeviceName}
+                                        onChange={(e) => setLockDeviceName(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleLockDevice()}
+                                    />
+                                </div>
+                                <Button variant="destructive" className="w-full" onClick={handleLockDevice} disabled={!lockDeviceName.trim()}>
+                                    <Lock className="mr-2 h-4 w-4" />
+                                    Lock Device & Log Out
+                                </Button>
+                                <Button variant="outline" className="w-full" onClick={() => setLockDeviceDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
 

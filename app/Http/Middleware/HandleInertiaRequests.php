@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\KioskDevice;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -30,6 +31,15 @@ class HandleInertiaRequests extends Middleware
             $device = KioskDevice::where('device_token', $deviceToken)->where('is_active', true)->first();
             if ($device) {
                 return 'device';
+            }
+        }
+
+        // Worker token cookie (QR scan, persists in PWA)
+        $workerToken = $request->cookie('kiosk_worker_token');
+        if ($workerToken) {
+            $workerAccess = Cache::get("kiosk_worker:{$workerToken}");
+            if ($workerAccess && now()->isBefore($workerAccess['expires_at'])) {
+                return 'qr';
             }
         }
 
