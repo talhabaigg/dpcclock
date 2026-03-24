@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, X } from 'lucide-react';
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Printer, X } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ import LayoutManager from '@/components/dashboard/layout-manager';
 import { WIDGET_REGISTRY } from '@/components/dashboard/widget-registry';
 import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { ManagementReportDialog } from '@/components/dashboard/management-report-dialog';
 
 interface TimelineData {
     start_date: string;
@@ -113,12 +114,13 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('area');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
     const [reportOpen, setReportOpen] = useState(false);
+    const [printReportOpen, setPrintReportOpen] = useState(false);
     const [jobSelectorOpen, setJobSelectorOpen] = useState(false);
     const [widgetsOpen, setWidgetsOpen] = useState(false);
     const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
@@ -433,6 +435,17 @@ export default function Dashboard({ location, timelineData, asOfDate, projectInc
                                 </Popover>
                             </div>
                         )}
+                        <div className="hidden sm:block h-6 w-px bg-border" />
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="outline" size="icon" className="h-9 sm:h-8 w-9 sm:w-8 shrink-0 mr-2" onClick={() => setPrintReportOpen(true)}>
+                                        <Printer className="h-3.5 w-3.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p className="text-xs">Monthly Report</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
                 </div>
 
@@ -532,6 +545,24 @@ export default function Dashboard({ location, timelineData, asOfDate, projectInc
                     />
                 )}
             </div>
+
+            <ManagementReportDialog
+                open={printReportOpen}
+                onOpenChange={setPrintReportOpen}
+                location={location}
+                timelineData={timelineData}
+                asOfDate={asOfDate}
+                claimedToDate={claimedToDate}
+                cashRetention={cashRetention}
+                projectIncomeData={projectIncomeData}
+                variationsSummary={variationsSummary}
+                labourBudgetData={labourBudgetData}
+                vendorCommitmentsSummary={vendorCommitmentsSummary}
+                employeesOnSite={employeesOnSite}
+                productionCostCodes={productionCostCodes}
+                industrialActionHours={industrialActionHours}
+                dpcPercentComplete={dpcPercentComplete}
+            />
         </AppLayout>
     );
 }

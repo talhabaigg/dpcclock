@@ -15,6 +15,7 @@ export interface ProductionCostCode {
     est_hours: number;
     used_hours: number;
     remaining_hours: number;
+    actual_variance: number;
 }
 
 interface BudgetDonutCardProps {

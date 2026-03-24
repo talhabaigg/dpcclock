@@ -435,6 +435,7 @@ class LocationController extends Controller
                     DB::raw('SUM(est_hours) as est_hours'),
                     DB::raw('SUM(used_hours) as used_hours'),
                     DB::raw('GREATEST(SUM(est_hours) - SUM(used_hours), 0) as remaining_hours'),
+                    DB::raw('SUM(actual_variance) as actual_variance'),
                 )
                 ->where('cost_code', '!=', '')
                 ->groupBy('cost_code')
@@ -446,6 +447,7 @@ class LocationController extends Controller
                     'est_hours' => round((float) $row->est_hours, 2),
                     'used_hours' => round((float) $row->used_hours, 2),
                     'remaining_hours' => round((float) $row->remaining_hours, 2),
+                    'actual_variance' => round((float) $row->actual_variance, 2),
                 ])
                 ->values()
                 ->toArray();
