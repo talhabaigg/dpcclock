@@ -24,9 +24,10 @@ class EmployeeController extends Controller
     public function sync()
     {
         $apiKey = config('services.employment_hero.api_key');
+        $businessId = config('services.employment_hero.business_id');
         $response = Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
-        ])->get('https://api.yourpayroll.com.au/api/v2/business/431152/employee/details');
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/employee/unstructured");
 
         $employeeData = $response->json();
 
@@ -45,6 +46,7 @@ class EmployeeController extends Controller
                     'name' => $employeeInfo['firstName'].' '.$employeeInfo['surname'],
                     'external_id' => $employeeInfo['externalId'] ?? Str::uuid(),
                     'email' => $employeeInfo['emailAddress'] ?? null,
+                    'employment_type' => $employeeInfo['employmentType'] ?? null,
                     'pin' => 1234,
                 ]
             );

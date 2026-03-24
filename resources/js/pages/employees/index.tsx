@@ -3,6 +3,7 @@ import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
@@ -20,6 +21,7 @@ interface Employee {
     pin: string;
     external_id?: string;
     eh_employee_id?: string;
+    employment_type?: string;
     worktypes?: { eh_worktype_id: string; name: string }[];
 }
 
@@ -38,19 +40,31 @@ function SortHeader({ label, column }: { label: string; column: any }) {
 export default function EmployeesList() {
     const { employees, flash } = usePage<{ employees: Employee[]; flash: { success?: string } }>().props;
     const [searchQuery, setSearchQuery] = useState('');
+    const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>('all');
     const [open, setOpen] = useState(false);
     const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
 
+    const employmentTypes = useMemo(() => {
+        const types = new Set(employees.map((e) => e.employment_type).filter(Boolean));
+        return Array.from(types).sort() as string[];
+    }, [employees]);
+
     const filteredEmployees = useMemo(() => {
-        if (!searchQuery) return employees;
-        const query = searchQuery.toLowerCase();
-        return employees.filter(
-            (employee) =>
-                employee.name.toLowerCase().includes(query) ||
-                employee.external_id?.toLowerCase().includes(query) ||
-                employee.eh_employee_id?.toLowerCase().includes(query),
-        );
-    }, [employees, searchQuery]);
+        let filtered = employees;
+        if (employmentTypeFilter !== 'all') {
+            filtered = filtered.filter((e) => e.employment_type === employmentTypeFilter);
+        }
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(
+                (employee) =>
+                    employee.name.toLowerCase().includes(query) ||
+                    employee.external_id?.toLowerCase().includes(query) ||
+                    employee.eh_employee_id?.toLowerCase().includes(query),
+            );
+        }
+        return filtered;
+    }, [employees, searchQuery, employmentTypeFilter]);
 
     const columns: ColumnDef<Employee>[] = useMemo(
         () => [
@@ -93,6 +107,17 @@ export default function EmployeesList() {
                     ) : (
                         <span className="text-muted-foreground text-sm italic">N/A</span>
                     );
+                },
+            },
+            {
+                accessorKey: 'employment_type',
+                header: ({ column }) => <SortHeader label="Employment Type" column={column} />,
+                cell: ({ row }) => {
+                    const val = row.original.employment_type;
+                    if (!val) return <span className="text-muted-foreground text-sm italic">N/A</span>;
+                    const variant = val === 'FullTime' ? 'default' : val === 'Casual' ? 'outline' : 'secondary';
+                    const label = val.replace(/([A-Z])/g, ' $1').trim();
+                    return <Badge variant={variant} className="text-xs">{label}</Badge>;
                 },
             },
             {
@@ -182,6 +207,19 @@ export default function EmployeesList() {
                         <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                     </div>
                     <div className="flex items-center gap-2">
+                        <Select value={employmentTypeFilter} onValueChange={setEmploymentTypeFilter}>
+                            <SelectTrigger className="w-[160px] h-9 text-sm">
+                                <SelectValue placeholder="Employment Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                {employmentTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        {type.replace(/([A-Z])/g, ' $1').trim()}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <Link href="/employees/sync" method="get">
                             <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
                                 <RefreshCcw className="h-4 w-4" />
@@ -212,9 +250,14 @@ export default function EmployeesList() {
                                         showEmail
                                     />
                                 </div>
-                                <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                                <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
                                     {emp.external_id?.trim() && <span>Ext: {emp.external_id}</span>}
                                     {emp.eh_employee_id?.trim() && <span>EH: {emp.eh_employee_id}</span>}
+                                    {emp.employment_type && (
+                                        <Badge variant="outline" className="text-[10px]">
+                                            {emp.employment_type.replace(/([A-Z])/g, ' $1').trim()}
+                                        </Badge>
+                                    )}
                                 </div>
                                 {emp.worktypes && emp.worktypes.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1">

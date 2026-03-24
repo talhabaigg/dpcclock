@@ -15,6 +15,7 @@ class Employee extends Model
         'external_id',
         'email',
         'pin',
+        'employment_type',
     ];
 
     public function kiosks()

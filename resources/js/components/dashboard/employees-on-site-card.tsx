@@ -29,6 +29,7 @@ interface EmployeesOnSiteData {
     weekly_trend: WeeklyTrendRow[];
     total_workers?: number;
     prev_workers?: number;
+    casual_workers?: number;
 }
 
 interface EmployeesOnSiteCardProps {
@@ -71,6 +72,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
     // Delta calculation
     const total = data?.total_workers ?? 0;
     const prev = data?.prev_workers ?? 0;
+    const casuals = data?.casual_workers ?? 0;
     const delta = total - prev;
     const deltaPct = prev > 0 ? Math.round((delta / prev) * 100) : null;
 
@@ -171,6 +173,11 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 {deltaPct !== null && delta === 0 && (
                                     <span className="flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
                                         <Minus className="h-3 w-3" />
+                                    </span>
+                                )}
+                                {casuals > 0 && (
+                                    <span className="text-[10px] text-muted-foreground font-medium tabular-nums">
+                                        ({casuals} casual{casuals !== 1 ? 's' : ''})
                                     </span>
                                 )}
                             </div>
@@ -314,6 +321,11 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                     )}>
                                         {delta > 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
                                         {Math.abs(deltaPct)}%
+                                    </span>
+                                )}
+                                {casuals > 0 && (
+                                    <span className="text-xs text-muted-foreground font-medium tabular-nums">
+                                        ({casuals} casual{casuals !== 1 ? 's' : ''})
                                     </span>
                                 )}
                             </div>

@@ -381,11 +381,23 @@ class LocationController extends Controller
                 ->distinct('eh_employee_id')
                 ->count('eh_employee_id');
 
+            // Casual workers in last 30 days
+            $casualWorkers = (int) DB::table('clocks')
+                ->join('employees', 'clocks.eh_employee_id', '=', 'employees.eh_employee_id')
+                ->whereIn('clocks.eh_location_id', $locationIds)
+                ->where('clocks.status', 'processed')
+                ->whereNotNull('clocks.clock_out')
+                ->where('clocks.clock_in', '>=', now()->subDays(30))
+                ->where('employees.employment_type', 'Casual')
+                ->distinct('clocks.eh_employee_id')
+                ->count('clocks.eh_employee_id');
+
             $employeesOnSite = [
                 'by_type' => $byType,
                 'weekly_trend' => $weeklyTrend,
                 'total_workers' => $totalWorkers,
                 'prev_workers' => $prevWorkers,
+                'casual_workers' => $casualWorkers,
             ];
         }
 
