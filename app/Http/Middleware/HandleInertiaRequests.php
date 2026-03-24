@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\KioskDevice;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -17,6 +18,27 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    private function resolveKioskAccessMode(Request $request): ?string
+    {
+        if ($request->user()) {
+            return 'auth';
+        }
+
+        $deviceToken = $request->cookie('kiosk_device_token');
+        if ($deviceToken) {
+            $device = KioskDevice::where('device_token', $deviceToken)->where('is_active', true)->first();
+            if ($device) {
+                return 'device';
+            }
+        }
+
+        if ($request->session()->has('kiosk_access')) {
+            return 'qr';
+        }
+
+        return null;
+    }
 
     /**
      * Determines the current asset version.
@@ -91,6 +113,7 @@ class HandleInertiaRequests extends Middleware
                 'hasPasskeys' => $request->user()->passkeys()->exists(),
                 'dismissed' => (bool) $request->user()->passkey_prompt_dismissed,
             ] : null,
+            'kioskAccessMode' => fn () => $this->resolveKioskAccessMode($request),
         ];
     }
 }

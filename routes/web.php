@@ -21,6 +21,7 @@ use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\KioskController;
+use App\Http\Controllers\KioskDeviceController;
 use App\Http\Controllers\LabourForecastController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
@@ -269,15 +270,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.manage-managers');
     Route::post('/kiosks/{kioskId}/update-start-time', [ClockController::class, 'updateStartTimeForEmployees'])->name('clocks.updateStartTimeForEmployees')
         ->middleware('permission:clocks.manage');
-    Route::get('/kiosks/{kioskId}/disable-admin-mode', [KioskController::class, 'disableAdminMode'])->name('kiosks.disable-admin-mode')
-        ->middleware('permission:kiosks.edit');
-    Route::post('/validate-kiosk-admin-pin', [KioskController::class, 'validateKioskAdminPin'])->name('kiosk.validate-admin-pin');
     Route::put('/kiosks/settings/update', [KioskController::class, 'updateSettings'])->name('kiosks.updateSettings')
         ->middleware('permission:kiosks.edit');
-    Route::get('/generate-kiosk-token', [ClockController::class, 'generateKioskToken'])->name('clocks.generateKioskToken')
-        ->middleware('permission:kiosks.retrieve-token');
-    Route::get('/retrieve-kiosk-token', [ClockController::class, 'retrieveKioskToken'])->name('clocks.retrieveKioskToken')
-        ->middleware('permission:kiosks.retrieve-token');
+    // Kept in auth group for desktop admin access with permission check
+    // QR token routes also available via kiosk.access group below for device-token iPads
+
+    // Kiosk Device Registration (admin)
+    Route::post('/kiosks/{kiosk}/devices/generate-token', [KioskDeviceController::class, 'generateToken'])->name('kiosk-devices.generate-token')
+        ->middleware('permission:kiosks.edit');
+    Route::post('/kiosks/{kiosk}/devices/{device}/toggle', [KioskDeviceController::class, 'toggle'])->name('kiosk-devices.toggle')
+        ->middleware('permission:kiosks.edit');
+    Route::delete('/kiosks/{kiosk}/devices/{device}', [KioskDeviceController::class, 'destroy'])->name('kiosk-devices.destroy')
+        ->middleware('permission:kiosks.edit');
 
     // ============================================
     // TIMESHEET MANAGEMENT
@@ -922,12 +926,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 Route::get('kiosks/{kioskId}/validate-token', [KioskController::class, 'validateToken'])->name('kiosk.validateToken');
+Route::get('kiosks/{kioskId}/register-device', [KioskDeviceController::class, 'register'])->name('kiosk.register-device');
 
 // ============================================
 // KIOSK ACCESS ROUTES (QR code scanned users + authenticated admins)
 // ============================================
 Route::middleware('kiosk.access')->group(function () {
     Route::get('kiosks/{kiosk}', [KioskController::class, 'show'])->name('kiosks.show');
+    Route::post('/validate-kiosk-admin-pin', [KioskController::class, 'validateKioskAdminPin'])->name('kiosk.validate-admin-pin');
+    Route::post('/kiosks/{kiosk}/disable-admin-mode', [KioskController::class, 'disableAdminMode'])->name('kiosks.disable-admin-mode');
+    Route::get('/generate-kiosk-token', [ClockController::class, 'generateKioskToken'])->name('clocks.generateKioskToken');
+    Route::get('/retrieve-kiosk-token', [ClockController::class, 'retrieveKioskToken'])->name('clocks.retrieveKioskToken');
     Route::post('/clock/in', [ClockController::class, 'store'])->name('clocks.in');
     Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');

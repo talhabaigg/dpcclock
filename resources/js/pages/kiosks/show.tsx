@@ -35,13 +35,20 @@ export default function Kiosk() {
     const [flashMessage, setFlashMessage] = useState(flash);
     const [isVisible, setIsVisible] = useState(true);
 
-    useEffect(() => {
-        const channel = window.Echo.private(`kiosk.${kiosk.id}`);
+    const { auth } = usePage().props as unknown as { auth: { user: any } };
 
-        channel.listen('.employee.clocked', (data: any) => {
-            const clockedEmployees: Employee[] = data.employees;
-            setEmployees(clockedEmployees);
-        });
+    useEffect(() => {
+        let channel: any = null;
+
+        // Only subscribe to private channel if user is authenticated
+        // (device-token iPads have no auth user, so broadcasting/auth would 403)
+        if (auth?.user) {
+            channel = window.Echo.private(`kiosk.${kiosk.id}`);
+            channel.listen('.employee.clocked', (data: any) => {
+                const clockedEmployees: Employee[] = data.employees;
+                setEmployees(clockedEmployees);
+            });
+        }
 
         const timer =
             (flash.success || flash.error) &&
@@ -51,7 +58,9 @@ export default function Kiosk() {
             }, 3000);
 
         return () => {
-            window.Echo.leave(`private-kiosk.${kiosk.id}`);
+            if (channel) {
+                window.Echo.leave(`private-kiosk.${kiosk.id}`);
+            }
             if (timer) clearTimeout(timer);
         };
     }, [flash, kiosk.id]);

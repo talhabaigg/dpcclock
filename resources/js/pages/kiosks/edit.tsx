@@ -17,6 +17,7 @@ import MinuteSelector from '../timesheets/components/minuteSelector';
 import AddEmployeesToKiosk from './edit-partials/add-employees-kiosk-dialog';
 import AddManagerKioskDialog from './edit-partials/add-manager-kiosk-dialog';
 import GenerateTimesheetsAvailableEventsCard from './edit-partials/generate-timesheets-available-events-card';
+import RegisteredDevicesCard from './edit-partials/registered-devices-card';
 export default function Edit({ kiosk, employees, errors, flash, events, allEmployees, users }) {
     const { data, setData, post, processing } = useForm({
         zones: employees.map((emp) => ({
@@ -263,6 +264,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                         </div>
                     </CardContent>
                 </Card>
+                <RegisteredDevicesCard kioskId={kiosk.id} devices={kiosk.devices ?? []} />
                 <Card className="m-2 w-full">
                     <CardHeader className="flex items-center justify-between text-lg font-bold">
                         <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">

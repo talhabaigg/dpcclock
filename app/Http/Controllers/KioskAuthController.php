@@ -28,7 +28,7 @@ class KioskAuthController extends Controller
         $adminMode = $this->kioskService->isAdminModeActive();
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
-        $kiosk = Kiosk::with('employees', 'relatedKiosks')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
         $employees = $this->kioskService->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
 
@@ -88,7 +88,7 @@ class KioskAuthController extends Controller
     {
         // Frontend sends database IDs for this route
         $employee = Employee::findOrFail($employeeId);
-        $kiosk = Kiosk::with('employees')->findOrFail($kioskId);
+        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->findOrFail($kioskId);
 
         $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
@@ -131,7 +131,7 @@ class KioskAuthController extends Controller
 
     public function getKioskEmployeesWithClockedInState($kioskId)
     {
-        $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         // Load emloyees from Kiosk and check if they are clocked in using the method below and append clocked in status to each employee as true or false
         $employees = $kiosk->employees->map(function ($employee) use ($kioskId) {
             $clockedInQuery = Clock::where('eh_employee_id', $employee->eh_employee_id)
@@ -193,7 +193,7 @@ class KioskAuthController extends Controller
         $response = $this->resetPinRequest($employeeId, $kioskId);
         $user = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
 
-        $kiosk = Kiosk::with('employees')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
 
         $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
         if ($response == 'Pin reset email sent successfully.') {

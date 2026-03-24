@@ -30,11 +30,20 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     const [search, setSearch] = useState<string>('');
     const [exitAdminDialogOpen, setExitAdminDialogOpen] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
-    const { auth } = usePage().props as unknown as { auth: { user: any } };
+    const { auth, kioskAccessMode } = usePage().props as unknown as { auth: { user: any }; kioskAccessMode: string | null };
+    const isQrSession = kioskAccessMode === 'qr';
 
     const handleExitAdminMode = () => {
         setIsExiting(true);
-        router.visit(`/kiosks/${kiosk.id}/disable-admin-mode`);
+        router.post(`/kiosks/${kiosk.id}/disable-admin-mode`, {}, {
+            onError: () => {
+                setIsExiting(false);
+                setExitAdminDialogOpen(false);
+            },
+            onFinish: () => {
+                setIsExiting(false);
+            },
+        });
     };
 
     const isKioskUser = auth?.user?.roles?.some((role: any) => role.name === 'kiosk');
@@ -100,10 +109,12 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 <img src="/superior-group-logo-white.svg" alt="Logo" className="hidden h-8 dark:block" />
                 <img src="/superior-group-logo.svg" alt="Logo" className="h-8 dark:hidden" />
 
-                <div className="flex items-center gap-2">
-                    <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} />
-                    <KioskTokenDialog kioskId={kiosk.id} />
-                </div>
+                {!isQrSession && (
+                    <div className="flex items-center gap-2">
+                        <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} managers={kiosk.managers ?? []} />
+                        <KioskTokenDialog kioskId={kiosk.id} />
+                    </div>
+                )}
             </header>
 
             {/* Layout container */}
@@ -172,24 +183,16 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
             </div>
 
             {/* Exit Admin Mode Dialog */}
-            <Dialog open={exitAdminDialogOpen} onOpenChange={setExitAdminDialogOpen}>
+            <Dialog open={exitAdminDialogOpen} onOpenChange={(open) => !isExiting && setExitAdminDialogOpen(open)}>
                 <DialogContent className="max-w-sm">
-                    <DialogHeader className="text-center">
-                        <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
-                            <LogOut className="h-8 w-8 text-amber-600" />
-                        </div>
-                        <DialogTitle className="text-center">Exit Admin Mode</DialogTitle>
-                        <DialogDescription className="text-center">Are you sure you want to exit admin mode?</DialogDescription>
-                    </DialogHeader>
-
                     {isExiting ? (
                         <div className="flex flex-col items-center justify-center gap-4 py-6">
                             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
                                 <LogOut className="h-8 w-8 animate-pulse text-amber-600" />
                             </div>
                             <div className="flex flex-col items-center gap-1">
-                                <span className="text-foreground text-base font-semibold">Exiting Admin Mode</span>
-                                <span className="text-muted-foreground text-sm">Please wait...</span>
+                                <DialogTitle className="text-foreground text-base font-semibold">Exiting Admin Mode</DialogTitle>
+                                <DialogDescription className="text-muted-foreground text-sm">Please wait...</DialogDescription>
                             </div>
                             <div className="flex gap-1.5">
                                 <div className="h-2 w-2 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.3s]" />
@@ -198,15 +201,24 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-3 pt-4">
-                            <Button variant="destructive" className="w-full" onClick={handleExitAdminMode}>
-                                <LogOut className="mr-2 h-4 w-4" />
-                                Exit Admin Mode
-                            </Button>
-                            <Button variant="outline" className="w-full" onClick={() => setExitAdminDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                        </div>
+                        <>
+                            <DialogHeader className="text-center">
+                                <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
+                                    <LogOut className="h-8 w-8 text-amber-600" />
+                                </div>
+                                <DialogTitle className="text-center">Exit Admin Mode</DialogTitle>
+                                <DialogDescription className="text-center">Are you sure you want to exit admin mode?</DialogDescription>
+                            </DialogHeader>
+                            <div className="flex flex-col gap-3 pt-4">
+                                <Button variant="destructive" className="w-full" onClick={handleExitAdminMode}>
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    Exit Admin Mode
+                                </Button>
+                                <Button variant="outline" className="w-full" onClick={() => setExitAdminDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Kiosk;
+use App\Models\KioskDevice;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,15 @@ class CheckKioskTokenValidation
         // Allow authenticated users (admins/managers) through
         if (Auth::check()) {
             return $next($request);
+        }
+
+        // Allow registered kiosk devices through (device cookie = permanent access)
+        $deviceToken = $request->cookie('kiosk_device_token');
+        if ($deviceToken) {
+            $device = KioskDevice::where('device_token', $deviceToken)->where('is_active', true)->first();
+            if ($device) {
+                return $next($request);
+            }
         }
 
         // Check for valid kiosk session access

@@ -86,8 +86,8 @@ class KioskController extends Controller
 
         $adminMode = $this->kioskService->isAdminModeActive();
 
-        // Load employees related to the kiosk
-        $kiosk->load('employees', 'relatedKiosks');
+        // Load employees and managers related to the kiosk
+        $kiosk->load('employees', 'relatedKiosks', 'managers');
         $employees = $this->kioskService->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
         // Append clocked_in status to each employee based on the kiosk
         // $employees = $kiosk->employees->map(function ($employee) use ($kiosk) {
@@ -138,6 +138,7 @@ class KioskController extends Controller
             },
             'relatedKiosks',
             'managers',
+            'devices',
         ]);
 
         $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>=', now())->get();
@@ -313,17 +314,29 @@ class KioskController extends Controller
     {
         $validated = $request->validate([
             'pin' => ['required', 'string', 'size:4'],
-            'kioskId' => ['required', 'exists:kiosks,id'], // ensure this is the correct PK
+            'kioskId' => ['required', 'exists:kiosks,id'],
+            'managerId' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $user = Auth::user();
+
+        // Device-token mode: no logged-in user, manager selected from list
+        if (! $user && ! empty($validated['managerId'])) {
+            $kiosk = Kiosk::findOrFail($validated['kioskId']);
+            $isManager = $kiosk->managers()->where('users.id', $validated['managerId'])->exists();
+
+            if (! $isManager) {
+                return Redirect::back()->withErrors(['pin' => 'Not a manager of this kiosk.']);
+            }
+
+            $user = User::find($validated['managerId']);
+        }
+
         if (! $user || ! $user->admin_pin) {
             return Redirect::back()->withErrors(['pin' => 'Admin PIN not set.']);
         }
 
-        // Stored as bcrypt hash
         if (! Hash::check($validated['pin'], $user->admin_pin)) {
-            // Return a 422-style error so Inertia shows it nicely
             return Redirect::back()->withErrors(['pin' => 'Invalid PIN.']);
         }
 
@@ -339,13 +352,11 @@ class KioskController extends Controller
             ->with('success', 'Pin validated successfully.');
     }
 
-    public function disableAdminMode($kioskId)
+    public function disableAdminMode(Kiosk $kiosk)
     {
-        // Clear the admin mode session
         Session::forget('kiosk_admin_mode');
 
-        return redirect()
-            ->route('kiosks.show', $kioskId)
+        return Redirect::route('kiosks.show', $kiosk->id)
             ->with('success', 'Admin mode disabled successfully.');
     }
 

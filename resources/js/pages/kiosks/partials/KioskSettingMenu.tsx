@@ -11,22 +11,31 @@ import {
 import { cn } from '@/lib/utils';
 import HourSelector from '@/pages/timesheets/components/hourSelector';
 import MinuteSelector from '@/pages/timesheets/components/minuteSelector';
-import { useForm } from '@inertiajs/react';
-import { Settings, ShieldCheck } from 'lucide-react';
+import { useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Settings, ShieldCheck, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
+
+interface Manager {
+    id: number;
+    name: string;
+}
 
 interface KioskSettingMenuProps {
     kioskId: number;
     adminMode: boolean | undefined;
     employees: Array<any>;
+    managers: Manager[];
 }
 
-const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuProps) => {
-    const form = useForm<{ pin: string; kioskId: number }>({ pin: '', kioskId });
+const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSettingMenuProps) => {
+    const { auth } = usePage().props as unknown as { auth: { user: any } };
+    const isDeviceMode = !auth?.user;
+
+    const form = useForm<{ pin: string; kioskId: number; managerId: number | null }>({ pin: '', kioskId, managerId: null });
     const [showProcessing, setShowProcessing] = useState(false);
-    void employees; // Used for employee display
+    const [selectedManager, setSelectedManager] = useState<Manager | null>(null);
 
     const handleNumClick = (num: string) => {
         if (num === 'DEL') {
@@ -42,12 +51,25 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
         if (e) e.preventDefault();
         if (form.data.pin.length === 4) {
             setShowProcessing(true);
-            form.transform((data) => ({ ...data, kioskId: Number(kioskId) }));
+            const payload: Record<string, any> = {
+                pin: form.data.pin,
+                kioskId: Number(kioskId),
+            };
+            if (selectedManager) {
+                payload.managerId = selectedManager.id;
+            }
+            form.transform(() => payload);
             form.post(route('kiosk.validate-admin-pin'), {
+                onSuccess: () => {
+                    setAdminPinDialogOpen(false);
+                },
+                onError: (errors) => {
+                    setShowProcessing(false);
+                    form.setData('pin', '');
+                    console.error('Admin PIN validation failed:', errors);
+                },
                 onFinish: () => {
                     setShowProcessing(false);
-                    form.reset('pin');
-                    setAdminPinDialogOpen(false); // close dialog after submit
                 },
             });
         }
@@ -57,12 +79,10 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
         if (form.data.pin.length === 4) handleSubmit();
     }, [form.data.pin]);
 
-    // NEW: explicit control of dropdown + dialogs
     const [menuOpen, setMenuOpen] = useState(false);
     const [adminPinDialogOpen, setAdminPinDialogOpen] = useState(false);
     const [updateStartDialogOpen, setUpdateStartDialogOpen] = useState(false);
 
-    // optional: focus first interactive in dialog
     const firstDialogFocusRef = useRef<HTMLButtonElement | null>(null);
     const filteredClockedInEmployees = employees.filter((emp) => emp.clocked_in === true);
 
@@ -96,6 +116,28 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
         setUpdateStartDialogOpen(false);
     };
 
+    const handleOpenAdminDialog = () => {
+        setMenuOpen(false);
+        setSelectedManager(null);
+        form.setData('pin', '');
+        setAdminPinDialogOpen(true);
+    };
+
+    const handleCloseAdminDialog = () => {
+        setAdminPinDialogOpen(false);
+        setSelectedManager(null);
+        form.setData('pin', '');
+    };
+
+    const handleSelectManager = (manager: Manager) => {
+        setSelectedManager(manager);
+        form.setData('pin', '');
+    };
+
+    // In device mode, show manager selection first. In auth mode, go straight to PIN.
+    const showManagerSelection = isDeviceMode && !selectedManager;
+    const showPinEntry = !isDeviceMode || selectedManager;
+
     return (
         <>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -112,11 +154,8 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
                     {!adminMode && (
                         <DropdownMenuItem
                             onSelect={(e) => {
-                                // Prevent default item behavior and close menu first
                                 e.preventDefault();
-                                setMenuOpen(false);
-                                // Now open the dialog (focus will migrate into it)
-                                setAdminPinDialogOpen(true);
+                                handleOpenAdminDialog();
                             }}
                         >
                             Switch to Admin Mode
@@ -137,61 +176,112 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees }: KioskSettingMenuPro
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Admin PIN Dialog (opens AFTER menu closes) */}
-            <Dialog open={adminPinDialogOpen} onOpenChange={setAdminPinDialogOpen}>
+            {/* Admin PIN Dialog */}
+            <Dialog open={adminPinDialogOpen} onOpenChange={handleCloseAdminDialog}>
                 <DialogContent
                     className="max-w-sm sm:max-w-md"
                     onOpenAutoFocus={() => {
                         firstDialogFocusRef.current?.focus();
                     }}
                 >
-                    <DialogHeader className="text-center">
-                        <div className="bg-primary/10 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full">
-                            <ShieldCheck className="text-primary h-6 w-6" />
-                        </div>
-                        <DialogTitle className="text-center">Enter Admin PIN</DialogTitle>
-                        <DialogDescription className="text-center">Enter your 4-digit PIN to switch to Admin Mode</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex flex-col items-center justify-center py-4">
-                        {showProcessing ? (
-                            <div className="flex flex-col items-center justify-center gap-4 py-8">
-                                <div className="bg-primary/10 flex h-16 w-16 items-center justify-center rounded-full">
-                                    <ShieldCheck className="text-primary h-8 w-8 animate-pulse" />
-                                </div>
-                                <div className="flex flex-col items-center gap-1">
-                                    <span className="text-foreground text-base font-semibold">Verifying PIN</span>
-                                    <span className="text-muted-foreground text-sm">Please wait...</span>
-                                </div>
-                                <div className="flex gap-1.5">
-                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
-                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
-                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full" />
-                                </div>
+                    {showProcessing ? (
+                        <div className="flex flex-col items-center justify-center gap-4 py-8">
+                            <div className="bg-primary/10 flex h-16 w-16 items-center justify-center rounded-full">
+                                <ShieldCheck className="text-primary h-8 w-8 animate-pulse" />
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center gap-6">
-                                {/* PIN Display */}
-                                <PinInputBox pin={form.data.pin} />
-
-                                {/* Numpad */}
-                                <PinNumpad onClick={handleNumClick} />
-
-                                {/* Cancel Button */}
+                            <div className="flex flex-col items-center gap-1">
+                                <span className="text-foreground text-base font-semibold">Verifying PIN</span>
+                                <span className="text-muted-foreground text-sm">Please wait...</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                                <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
+                                <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
+                                <div className="bg-primary h-2 w-2 animate-bounce rounded-full" />
+                            </div>
+                        </div>
+                    ) : showManagerSelection ? (
+                        /* Step 1: Manager Selection (device mode only) */
+                        <>
+                            <DialogHeader className="text-center">
+                                <div className="bg-primary/10 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full">
+                                    <ShieldCheck className="text-primary h-6 w-6" />
+                                </div>
+                                <DialogTitle className="text-center">Select Manager</DialogTitle>
+                                <DialogDescription className="text-center">Choose your name to enter Admin Mode</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-2 py-4">
+                                {managers.length === 0 ? (
+                                    <p className="text-muted-foreground text-center text-sm">No managers assigned to this kiosk.</p>
+                                ) : (
+                                    managers.map((manager) => (
+                                        <button
+                                            key={manager.id}
+                                            type="button"
+                                            className="hover:bg-muted flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors"
+                                            onClick={() => handleSelectManager(manager)}
+                                        >
+                                            <div className="bg-primary/10 flex h-9 w-9 items-center justify-center rounded-full">
+                                                <User className="text-primary h-5 w-5" />
+                                            </div>
+                                            <span className="font-medium">{manager.name}</span>
+                                        </button>
+                                    ))
+                                )}
                                 <Button
                                     variant="ghost"
-                                    className={cn('text-muted-foreground hover:text-foreground', 'touch-manipulation')}
-                                    onClick={() => {
-                                        setAdminPinDialogOpen(false);
-                                        form.setData('pin', '');
-                                    }}
-                                    ref={firstDialogFocusRef}
+                                    className={cn('text-muted-foreground hover:text-foreground w-full', 'touch-manipulation')}
+                                    onClick={handleCloseAdminDialog}
                                 >
                                     Cancel
                                 </Button>
                             </div>
-                        )}
-                    </div>
+                        </>
+                    ) : showPinEntry ? (
+                        /* Step 2: PIN Entry */
+                        <>
+                            <DialogHeader className="text-center">
+                                <div className="bg-primary/10 mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full">
+                                    <ShieldCheck className="text-primary h-6 w-6" />
+                                </div>
+                                <DialogTitle className="text-center">Enter Admin PIN</DialogTitle>
+                                <DialogDescription className="text-center">
+                                    {selectedManager
+                                        ? `${selectedManager.name}, enter your 4-digit PIN`
+                                        : 'Enter your 4-digit PIN to switch to Admin Mode'}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex flex-col items-center justify-center py-4">
+                                <div className="flex flex-col items-center gap-6">
+                                    <PinInputBox pin={form.data.pin} />
+                                    <PinNumpad onClick={handleNumClick} />
+
+                                    <div className="flex gap-2">
+                                        {selectedManager && (
+                                            <Button
+                                                variant="ghost"
+                                                className={cn('text-muted-foreground hover:text-foreground', 'touch-manipulation')}
+                                                onClick={() => {
+                                                    setSelectedManager(null);
+                                                    form.setData('pin', '');
+                                                }}
+                                            >
+                                                <ArrowLeft className="mr-1 h-4 w-4" />
+                                                Back
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            className={cn('text-muted-foreground hover:text-foreground', 'touch-manipulation')}
+                                            onClick={handleCloseAdminDialog}
+                                            ref={firstDialogFocusRef}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    ) : null}
                 </DialogContent>
             </Dialog>
 
