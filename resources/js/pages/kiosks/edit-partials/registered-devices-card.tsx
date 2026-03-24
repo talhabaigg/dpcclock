@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 import { Check, Copy, Link2, Monitor, Plus, Power, Trash2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
 
 interface KioskDevice {
@@ -173,6 +174,11 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
                         </div>
                     ) : (
                         <div className="space-y-4 pt-2">
+                            <div className="flex justify-center">
+                                <div className="rounded-xl border-2 border-primary/20 bg-white p-4 shadow-lg shadow-primary/5">
+                                    <QRCodeSVG value={generatedUrl} size={200} level="M" includeMargin={false} />
+                                </div>
+                            </div>
                             <div className="space-y-2">
                                 <Label>Registration Link</Label>
                                 <div className="flex gap-2">
@@ -182,7 +188,7 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
                                     </Button>
                                 </div>
                                 <p className="text-muted-foreground text-xs">
-                                    This link expires in 10 minutes. Open it on the target device to register.
+                                    Scan the QR or open the link on the target device. Expires in 10 minutes.
                                 </p>
                             </div>
                             <Button variant="outline" className="w-full" onClick={handleCloseDialog}>
