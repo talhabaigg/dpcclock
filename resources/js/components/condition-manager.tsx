@@ -267,7 +267,7 @@ export function ConditionManager({
     const [formDescription, setFormDescription] = useState('');
     const [formHeight, setFormHeight] = useState('');
     const [formThickness, setFormThickness] = useState('');
-    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up' | 'detailed'>('build_up');
+    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up' | 'detailed'>('unit_rate');
 
     // Unit Rate form state
     const [formLabourUnitRate, setFormLabourUnitRate] = useState('');
@@ -435,7 +435,7 @@ export function ConditionManager({
         setFormDescription('');
         setFormHeight('');
         setFormThickness('');
-        setFormPricingMethod('build_up');
+        setFormPricingMethod('unit_rate');
         setFormLabourUnitRate('');
         setFormCostCodes([]);
         setCostCodeSearch('');
@@ -907,220 +907,37 @@ export function ConditionManager({
                     {/* Right: Detail / Form */}
                     <div className="flex-1 min-h-0 overflow-y-auto p-3">
                         {showForm ? (
-                            <div className="space-y-2.5">
-                                {/* 1. Name */}
-                                <div className="grid gap-1">
-                                    <Label className="text-[11px] font-semibold">Name</Label>
-                                    <Input
-                                        value={formName}
-                                        onChange={(e) => setFormName(e.target.value)}
-                                        placeholder="e.g. WT14 - Firefly Sarking"
-                                        className="h-7 text-xs rounded-sm"
-                                        autoFocus
-                                    />
-                                </div>
-
-                                {/* 2. Style + Condition Number */}
-                                <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-3">
+                                {/* 1. Name + Style */}
+                                <div className={`grid gap-2 ${formPricingMethod !== 'unit_rate' ? 'grid-cols-[1fr_120px]' : ''}`}>
                                     <div className="grid gap-1">
-                                        <Label className="text-[11px] font-semibold">Style</Label>
-                                        <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={editing}>
-                                            <SelectTrigger className="h-7 text-xs rounded-sm">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="linear">Linear</SelectItem>
-                                                <SelectItem value="area">Area</SelectItem>
-                                                <SelectItem value="count">Each</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-1">
-                                        <Label className="text-[11px] font-semibold">Condition #</Label>
-                                        <div className="flex items-center h-7 px-2 rounded-sm border bg-muted/30 text-[11px] text-muted-foreground">
-                                            {editing && selectedCondition?.condition_number != null
-                                                ? `#${selectedCondition.condition_number}`
-                                                : 'Auto-assigned'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 3. Type (Category) */}
-                                <div className="grid gap-1">
-                                    <Label className="text-[11px] font-semibold">Type</Label>
-                                    <Select value={formConditionTypeId || '__none__'} onValueChange={(v) => setFormConditionTypeId(v === '__none__' ? '' : v)}>
-                                        <SelectTrigger className="h-7 text-xs rounded-sm">
-                                            <SelectValue placeholder="Select type..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="__none__">None</SelectItem>
-                                            {conditionTypes.map((ct) => (
-                                                <SelectItem key={ct.id} value={ct.id.toString()}>
-                                                    {ct.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {/* Inline create + manage types */}
-                                    <div className="flex gap-1 items-center">
+                                        <Label className="text-[11px] font-semibold">Name</Label>
                                         <Input
-                                            value={newTypeName}
-                                            onChange={(e) => setNewTypeName(e.target.value)}
-                                            placeholder="New type name..."
-                                            className="h-6 text-[11px] flex-1 rounded-sm"
-                                            onKeyDown={(e) => e.key === 'Enter' && handleCreateType()}
+                                            value={formName}
+                                            onChange={(e) => setFormName(e.target.value)}
+                                            placeholder="e.g. WT14 - Firefly Sarking"
+                                            className="h-7 text-xs rounded-sm"
+                                            autoFocus
                                         />
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 rounded-sm"
-                                            onClick={handleCreateType}
-                                            disabled={creatingType || !newTypeName.trim()}
-                                        >
-                                            {creatingType ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
-                                        </Button>
                                     </div>
-                                    {conditionTypes.length > 0 && (
-                                        <div className="flex flex-wrap gap-1">
-                                            {conditionTypes.map((ct) => (
-                                                <Badge key={ct.id} variant="secondary" className="text-[9px] gap-0.5 pr-0.5 h-5 rounded-sm">
-                                                    {ct.name}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteType(ct.id)}
-                                                        className="hover:text-red-500 transition-colors"
-                                                    >
-                                                        <X className="h-2.5 w-2.5" />
-                                                    </button>
-                                                </Badge>
-                                            ))}
+                                    {formPricingMethod !== 'unit_rate' && (
+                                        <div className="grid gap-1">
+                                            <Label className="text-[11px] font-semibold">Style</Label>
+                                            <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={editing}>
+                                                <SelectTrigger className="h-7 text-xs rounded-sm">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="linear">Linear</SelectItem>
+                                                    <SelectItem value="area">Area</SelectItem>
+                                                    <SelectItem value="count">Each</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* 4. General: Height, Thickness */}
-                                <div className="rounded-sm border p-2 space-y-2">
-                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        General
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="grid gap-1">
-                                            <Label className="text-[11px]">Height (m)</Label>
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                value={formHeight}
-                                                onChange={(e) => setFormHeight(e.target.value)}
-                                                placeholder="e.g. 2.70"
-                                                className="h-7 text-xs rounded-sm"
-                                            />
-                                        </div>
-                                        <div className="grid gap-1">
-                                            <Label className="text-[11px]">Thickness (m)</Label>
-                                            <Input
-                                                type="number"
-                                                step="0.001"
-                                                min="0"
-                                                value={formThickness}
-                                                onChange={(e) => setFormThickness(e.target.value)}
-                                                placeholder="e.g. 0.013"
-                                                className="h-7 text-xs rounded-sm"
-                                            />
-                                        </div>
-                                    </div>
-                                    {formType === 'linear' && formHeight && (
-                                        <p className="text-[9px] text-muted-foreground">
-                                            Height converts linear meters to area for unit rate pricing: m2 = lm x height
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* 5. Appearance: Color, Opacity, Pattern */}
-                                <div className="rounded-sm border p-2 space-y-2">
-                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Appearance
-                                    </h4>
-                                    <div className="grid gap-1.5">
-                                        <Label className="text-[11px]">Color</Label>
-                                        <div className="flex gap-1.5 items-center">
-                                            <label
-                                                className="relative h-6 w-6 shrink-0 rounded-sm border-2 border-border cursor-pointer overflow-hidden transition-all hover:scale-105"
-                                                style={{ backgroundColor: formColor }}
-                                            >
-                                                <input
-                                                    type="color"
-                                                    value={formColor}
-                                                    onChange={(e) => setFormColor(e.target.value)}
-                                                    className="absolute inset-0 opacity-0 cursor-pointer"
-                                                />
-                                            </label>
-                                            <Input
-                                                value={formColor}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setFormColor(v);
-                                                }}
-                                                maxLength={7}
-                                                className="h-6 w-[5.5rem] font-mono text-[11px] px-1.5 rounded-sm"
-                                                placeholder="#3b82f6"
-                                            />
-                                            <div className="flex gap-0.5">
-                                                {PRESET_COLORS.map((color) => (
-                                                    <button
-                                                        key={color}
-                                                        type="button"
-                                                        className={`h-4 w-4 rounded-[2px] border transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
-                                                        style={{ backgroundColor: color }}
-                                                        onClick={() => setFormColor(color)}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="text-[11px]">Opacity</Label>
-                                            <span className="text-[10px] tabular-nums text-muted-foreground">{formOpacity}%</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Slider
-                                                min={5}
-                                                max={100}
-                                                step={5}
-                                                value={[formOpacity]}
-                                                onValueChange={([v]) => setFormOpacity(v)}
-                                                className="flex-1"
-                                            />
-                                        </div>
-                                        <div
-                                            className="h-3 rounded-sm border"
-                                            style={{ backgroundColor: formColor, opacity: formOpacity / 100 }}
-                                        />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label className="text-[11px]">Fill Pattern</Label>
-                                        <div className="grid grid-cols-3 gap-1">
-                                            {PATTERN_OPTIONS.map((opt) => (
-                                                <button
-                                                    key={opt.value}
-                                                    type="button"
-                                                    className={`rounded-sm border px-1 py-1 text-[10px] transition-colors flex items-center gap-1.5 ${
-                                                        formPattern === opt.value
-                                                            ? 'border-primary bg-primary/10 text-primary'
-                                                            : 'border-border hover:bg-muted/50'
-                                                    }`}
-                                                    onClick={() => setFormPattern(opt.value)}
-                                                >
-                                                    <PatternSwatch pattern={opt.value} color={formColor} opacity={formOpacity} size={20} />
-                                                    <span className="truncate">{opt.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 6. Pricing Method Toggle */}
+                                {/* 2. Pricing Method Toggle */}
                                 <div className="grid gap-1">
                                     <Label className="text-[11px] font-semibold">Pricing Method</Label>
                                     <div className="grid grid-cols-3 gap-1">
@@ -1138,34 +955,38 @@ export function ConditionManager({
                                                 Cost codes + flat $/unit
                                             </span>
                                         </button>
-                                        <button
-                                            type="button"
-                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
-                                                formPricingMethod === 'build_up'
-                                                    ? 'border-primary bg-primary/10 text-primary'
-                                                    : 'border-border hover:bg-muted/50'
-                                            }`}
-                                            onClick={() => setFormPricingMethod('build_up')}
-                                        >
-                                            Build-Up
-                                            <span className="block text-[9px] font-normal text-muted-foreground">
-                                                Materials + production rate
-                                            </span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
-                                                formPricingMethod === 'detailed'
-                                                    ? 'border-primary bg-primary/10 text-primary'
-                                                    : 'border-border hover:bg-muted/50'
-                                            }`}
-                                            onClick={() => setFormPricingMethod('detailed')}
-                                        >
-                                            Detailed
-                                            <span className="block text-[9px] font-normal text-muted-foreground">
-                                                Line items + sections
-                                            </span>
-                                        </button>
+                                        {!import.meta.env.PROD && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
+                                                        formPricingMethod === 'build_up'
+                                                            ? 'border-primary bg-primary/10 text-primary'
+                                                            : 'border-border hover:bg-muted/50'
+                                                    }`}
+                                                    onClick={() => setFormPricingMethod('build_up')}
+                                                >
+                                                    Build-Up
+                                                    <span className="block text-[9px] font-normal text-muted-foreground">
+                                                        Materials + production rate
+                                                    </span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
+                                                        formPricingMethod === 'detailed'
+                                                            ? 'border-primary bg-primary/10 text-primary'
+                                                            : 'border-border hover:bg-muted/50'
+                                                    }`}
+                                                    onClick={() => setFormPricingMethod('detailed')}
+                                                >
+                                                    Detailed
+                                                    <span className="block text-[9px] font-normal text-muted-foreground">
+                                                        Line items + sections
+                                                    </span>
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 
@@ -1436,8 +1257,170 @@ export function ConditionManager({
                                     </>
                                 )}
 
-                                {/* 8. Labour Cost Codes (Production Tracking) */}
-                                <div className="rounded-sm border p-2 space-y-2">
+                                {formPricingMethod !== 'unit_rate' && (
+                                    <>
+                                        {/* 3. General: Height + Thickness */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Height (m)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={formHeight}
+                                                    onChange={(e) => setFormHeight(e.target.value)}
+                                                    placeholder="e.g. 2.70"
+                                                    className="h-7 text-xs rounded-sm"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Thickness (m)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.001"
+                                                    min="0"
+                                                    value={formThickness}
+                                                    onChange={(e) => setFormThickness(e.target.value)}
+                                                    placeholder="e.g. 0.013"
+                                                    className="h-7 text-xs rounded-sm"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* 4. Appearance */}
+                                        <div className="grid gap-1.5">
+                                            <Label className="text-[11px] font-semibold">Appearance</Label>
+                                            <div className="flex items-center gap-1.5">
+                                                <label
+                                                    className="relative h-7 w-7 shrink-0 rounded-sm border-2 border-border cursor-pointer overflow-hidden transition-all hover:scale-105"
+                                                    style={{ backgroundColor: formColor }}
+                                                >
+                                                    <input
+                                                        type="color"
+                                                        value={formColor}
+                                                        onChange={(e) => setFormColor(e.target.value)}
+                                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                                    />
+                                                </label>
+                                                <Input
+                                                    value={formColor}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setFormColor(v);
+                                                    }}
+                                                    maxLength={7}
+                                                    className="h-7 w-[5.5rem] font-mono text-[11px] px-1.5 rounded-sm"
+                                                    placeholder="#3b82f6"
+                                                />
+                                                <div className="flex gap-0.5">
+                                                    {PRESET_COLORS.map((color) => (
+                                                        <button
+                                                            key={color}
+                                                            type="button"
+                                                            className={`h-5 w-5 rounded-[2px] border transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                                                            style={{ backgroundColor: color }}
+                                                            onClick={() => setFormColor(color)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 ml-auto">
+                                                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{formOpacity}%</span>
+                                                    <Slider
+                                                        min={5}
+                                                        max={100}
+                                                        step={5}
+                                                        value={[formOpacity]}
+                                                        onValueChange={([v]) => setFormOpacity(v)}
+                                                        className="w-20"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-9 gap-0.5">
+                                                {PATTERN_OPTIONS.map((opt) => (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        title={opt.label}
+                                                        className={`rounded-sm border p-1 flex items-center justify-center transition-colors ${
+                                                            formPattern === opt.value
+                                                                ? 'border-primary bg-primary/10'
+                                                                : 'border-border hover:bg-muted/50'
+                                                        }`}
+                                                        onClick={() => setFormPattern(opt.value)}
+                                                    >
+                                                        <PatternSwatch pattern={opt.value} color={formColor} opacity={formOpacity} size={16} />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* 5. Category + Notes */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Category</Label>
+                                                <Select value={formConditionTypeId || '__none__'} onValueChange={(v) => setFormConditionTypeId(v === '__none__' ? '' : v)}>
+                                                    <SelectTrigger className="h-7 text-xs rounded-sm">
+                                                        <SelectValue placeholder="None" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="__none__">None</SelectItem>
+                                                        {conditionTypes.map((ct) => (
+                                                            <SelectItem key={ct.id} value={ct.id.toString()}>
+                                                                {ct.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="flex gap-1 items-center">
+                                                    <Input
+                                                        value={newTypeName}
+                                                        onChange={(e) => setNewTypeName(e.target.value)}
+                                                        placeholder="New category..."
+                                                        className="h-6 text-[11px] flex-1 rounded-sm"
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleCreateType()}
+                                                    />
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0 rounded-sm shrink-0"
+                                                        onClick={handleCreateType}
+                                                        disabled={creatingType || !newTypeName.trim()}
+                                                    >
+                                                        {creatingType ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
+                                                    </Button>
+                                                </div>
+                                                {conditionTypes.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {conditionTypes.map((ct) => (
+                                                            <Badge key={ct.id} variant="secondary" className="text-[9px] gap-0.5 pr-0.5 h-5 rounded-sm">
+                                                                {ct.name}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteType(ct.id)}
+                                                                    className="hover:text-red-500 transition-colors"
+                                                                >
+                                                                    <X className="h-2.5 w-2.5" />
+                                                                </button>
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="grid gap-1">
+                                                <Label className="text-[11px]">Notes</Label>
+                                                <Textarea
+                                                    value={formDescription}
+                                                    onChange={(e) => setFormDescription(e.target.value)}
+                                                    placeholder="Notes about this condition..."
+                                                    className="h-14 resize-none text-xs rounded-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 6. Labour Cost Codes (Production Tracking) — hidden for unit rate */}
+                                {formPricingMethod !== 'unit_rate' && <div className="rounded-sm border p-2 space-y-2">
                                     <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                         Labour Cost Codes (Production)
                                     </h4>
@@ -1605,18 +1588,7 @@ export function ConditionManager({
                                             Search and add labour cost codes above, or create new ones.
                                         </p>
                                     )}
-                                </div>
-
-                                {/* 9. Notes */}
-                                <div className="grid gap-1">
-                                    <Label className="text-[11px] font-semibold">Notes</Label>
-                                    <Textarea
-                                        value={formDescription}
-                                        onChange={(e) => setFormDescription(e.target.value)}
-                                        placeholder="Notes about this condition..."
-                                        className="h-14 resize-none text-xs rounded-sm"
-                                    />
-                                </div>
+                                </div>}
 
                                 {/* Save / Cancel */}
                                 <div className="flex justify-end gap-1.5 border-t pt-2">
