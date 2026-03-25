@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { fmtCurrency } from '@/lib/utils';
 import axios from 'axios';
-import { Download, Loader2, Send, Zap } from 'lucide-react';
+import { Download, ExternalLink, Loader2, Send, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
@@ -128,8 +128,21 @@ export default function PremierVariationTab({
         <div className="space-y-4">
             {/* Base Totals Summary */}
             <div className="bg-muted/50 rounded-lg border p-4">
-                <div className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
-                    Base Totals from Pricing Items
+                <div className="mb-3 flex items-center justify-between">
+                    <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                        Base Totals from Pricing Items
+                    </div>
+                    {locationId && (
+                        <a
+                            href={`/location/${locationId}/cost-codes/edit`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+                        >
+                            Edit variation ratios
+                            <ExternalLink className="h-3 w-3" />
+                        </a>
+                    )}
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                     <div className="flex items-center gap-4">
