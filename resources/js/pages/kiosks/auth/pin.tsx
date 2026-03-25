@@ -14,6 +14,7 @@ import PinInputBox from './components/pinInputBox';
 interface Employee {
     id: number;
     name: string;
+    display_name: string;
     email: string;
     eh_employee_id: number;
     pin?: string;
@@ -133,9 +134,9 @@ export default function ShowPin() {
                 {/* Employee Avatar & Greeting */}
                 <div className="mb-8 flex flex-col items-center">
                     <Avatar className="border-primary/20 mb-4 h-20 w-20 border-4 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">{getInitials(employee.display_name || employee.name)}</AvatarFallback>
                     </Avatar>
-                    <h2 className="text-foreground text-2xl font-bold">Hi, {employee.name.split(' ')[0]}!</h2>
+                    <h2 className="text-foreground text-2xl font-bold">Hi, {(employee.display_name || employee.name).split(' ')[0]}!</h2>
                     <p className="text-muted-foreground mt-1">Enter your 4-digit PIN to continue</p>
                 </div>
 

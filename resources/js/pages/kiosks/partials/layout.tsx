@@ -62,8 +62,8 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     }, [isKioskUser]);
 
     const filteredEmployees = employees
-        .filter((emp) => emp.name.toLowerCase().includes(search.toLowerCase()))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter((emp) => (emp.display_name || emp.name).toLowerCase().includes(search.toLowerCase()))
+        .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
 
     const allKiosks = [kiosk, ...(kiosk.related_kiosks ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 

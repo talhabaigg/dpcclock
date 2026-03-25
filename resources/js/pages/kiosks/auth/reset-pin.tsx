@@ -13,6 +13,7 @@ interface Employee {
     eh_employee_id: unknown;
     id: number;
     name: string;
+    display_name: string;
     email: string;
 }
 
@@ -217,11 +218,11 @@ export default function ResetPin() {
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-4">
                         <Avatar className="border-primary/20 h-16 w-16 border-4 shadow-lg">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
+                            <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">{getInitials(employee.display_name || employee.name)}</AvatarFallback>
                         </Avatar>
                     </div>
                     <CardTitle className="text-xl font-bold">Reset Your PIN</CardTitle>
-                    <CardDescription>Hi {employee.name.split(' ')[0]}, enter the PIN from your email and set a new PIN</CardDescription>
+                    <CardDescription>Hi {(employee.display_name || employee.name).split(' ')[0]}, enter the PIN from your email and set a new PIN</CardDescription>
                 </CardHeader>
 
                 <CardContent>

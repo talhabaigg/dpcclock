@@ -7,6 +7,7 @@ import EmployeeListButton from './employeeButton';
 interface Employee {
     id: number;
     name: string;
+    display_name: string;
     email: string;
     pin: string;
     eh_employee_id: string;
@@ -21,7 +22,7 @@ interface Props {
 
 export default function EmployeeList({ employees, selectedEmployee, kioskId }: Props) {
     const groupedEmployees = employees.reduce<Record<string, Employee[]>>((acc, emp) => {
-        const firstLetter = emp.name[0].toUpperCase();
+        const firstLetter = (emp.display_name || emp.name)[0].toUpperCase();
         if (!acc[firstLetter]) acc[firstLetter] = [];
         acc[firstLetter].push(emp);
         return acc;
