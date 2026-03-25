@@ -381,6 +381,164 @@ class ChangeOrderGenerator
         ];
     }
 
+    /**
+     * Same logic as generateFromPricingItems but does NOT save — returns line items only.
+     *
+     * @param  array  $pricingItems  Raw pricing item data from the request
+     * @return array{line_items: array, summary: array}
+     */
+    public function previewFromPricingItems(array $pricingItems, Location $location): array
+    {
+        $totalLabour = 0;
+        $materialByCostCode = [];
+
+        foreach ($pricingItems as $item) {
+            $totalLabour += (float) ($item['labour_cost'] ?? 0);
+
+            $conditionId = $item['takeoff_condition_id'] ?? null;
+            if (! $conditionId) {
+                continue;
+            }
+
+            $condition = TakeoffCondition::with([
+                'costCodes.costCode',
+                'materials.materialItem.costCode',
+            ])->find($conditionId);
+
+            if (! $condition) {
+                continue;
+            }
+
+            $costs = $this->calculator->compute($condition, (float) ($item['qty'] ?? 1));
+
+            if ($condition->pricing_method === 'unit_rate') {
+                foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
+                    $code = $cc['cost_code'] ?? null;
+                    if (! $code) {
+                        continue;
+                    }
+                    if (! isset($materialByCostCode[$code])) {
+                        $materialByCostCode[$code] = [
+                            'cost_code_id' => $cc['cost_code_id'],
+                            'description' => $cc['description'] ?? $code,
+                            'total' => 0,
+                        ];
+                    }
+                    $materialByCostCode[$code]['total'] += $cc['line_cost'];
+                }
+            } else {
+                foreach ($costs['breakdown']['materials'] ?? [] as $mat) {
+                    $code = $mat['cost_code'] ?? null;
+                    $costCodeId = $mat['cost_code_id'] ?? null;
+
+                    if (! $code && isset($mat['material_item_id'])) {
+                        $mi = MaterialItem::with('costCode')->find($mat['material_item_id']);
+                        $code = $mi?->costCode?->code;
+                        $costCodeId = $mi?->cost_code_id;
+                    }
+
+                    if (! $code) {
+                        continue;
+                    }
+
+                    if (! isset($materialByCostCode[$code])) {
+                        $materialByCostCode[$code] = [
+                            'cost_code_id' => $costCodeId,
+                            'description' => $mat['description'] ?? $code,
+                            'total' => 0,
+                        ];
+                    }
+                    $materialByCostCode[$code]['total'] += $mat['line_cost'];
+                }
+            }
+        }
+
+        $locationCostCodes = $location->costCodes()->with('costType')->distinct()->get();
+
+        $lineItems = [];
+        $lineNumber = 1;
+
+        if ($totalLabour > 0) {
+            foreach ($locationCostCodes as $costCode) {
+                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
+
+                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
+                    continue;
+                }
+
+                $lineAmount = round($totalLabour * ($variationRatio / 100), 2);
+                $lineItems[] = [
+                    'line_number' => $lineNumber++,
+                    'description' => $costCode->description,
+                    'qty' => 1,
+                    'unit_cost' => $lineAmount,
+                    'total_cost' => $lineAmount,
+                    'cost_item' => $costCode->code,
+                    'cost_type' => $costCode->costType?->code ?? '',
+                    'revenue' => 0,
+                    'cost_code_id' => $costCode->id,
+                ];
+            }
+        }
+
+        $totalMaterial = 0;
+        foreach ($materialByCostCode as $code => $data) {
+            $amount = round($data['total'], 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $totalMaterial += $amount;
+            $lineItems[] = [
+                'line_number' => $lineNumber++,
+                'description' => $data['description'],
+                'qty' => 1,
+                'unit_cost' => $amount,
+                'total_cost' => $amount,
+                'cost_item' => $code,
+                'cost_type' => 'MAT',
+                'revenue' => 0,
+                'cost_code_id' => $data['cost_code_id'],
+            ];
+        }
+
+        if ($totalMaterial > 0) {
+            foreach ($locationCostCodes as $costCode) {
+                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
+
+                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
+                    continue;
+                }
+
+                $lineAmount = round($totalMaterial * ($variationRatio / 100), 2);
+                $lineItems[] = [
+                    'line_number' => $lineNumber++,
+                    'description' => $costCode->description,
+                    'qty' => 1,
+                    'unit_cost' => $lineAmount,
+                    'total_cost' => $lineAmount,
+                    'cost_item' => $costCode->code,
+                    'cost_type' => $costCode->costType?->code ?? '',
+                    'revenue' => 0,
+                    'cost_code_id' => $costCode->id,
+                ];
+            }
+        }
+
+        $totalCost = array_sum(array_column($lineItems, 'total_cost'));
+
+        return [
+            'line_items' => $lineItems,
+            'summary' => [
+                'labour_base' => round($totalLabour, 2),
+                'material_base' => round($totalMaterial, 2),
+                'total_cost' => $totalCost,
+                'line_count' => count($lineItems),
+            ],
+        ];
+    }
+
     private function findBaseCostCode($costCodes, string $type): string
     {
         $match = $costCodes->first(function ($cc) use ($type) {

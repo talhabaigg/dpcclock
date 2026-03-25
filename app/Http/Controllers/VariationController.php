@@ -784,6 +784,28 @@ class VariationController extends Controller
     }
 
     /**
+     * Preview Premier line items from pricing items without saving anything.
+     * Used when the variation hasn't been saved yet.
+     */
+    public function previewPremierLines(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'location_id' => 'required|integer|exists:locations,id',
+            'pricing_items' => 'required|array',
+            'pricing_items.*.labour_cost' => 'required|numeric',
+            'pricing_items.*.material_cost' => 'required|numeric',
+            'pricing_items.*.qty' => 'required|numeric',
+            'pricing_items.*.takeoff_condition_id' => 'nullable|integer',
+        ]);
+
+        $location = Location::findOrFail($validated['location_id']);
+        $generator = app(ChangeOrderGenerator::class);
+        $result = $generator->previewFromPricingItems($validated['pricing_items'], $location);
+
+        return response()->json($result);
+    }
+
+    /**
      * Generate Premier line items from pricing items.
      * Wipes existing line_items and regenerates from pricing item totals.
      */

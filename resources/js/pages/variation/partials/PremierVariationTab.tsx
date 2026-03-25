@@ -30,18 +30,18 @@ interface LineItem {
 
 interface PremierVariationTabProps {
     variationId?: number;
+    locationId?: number | string;
     pricingItems: PricingItem[];
     lineItems: LineItem[];
     onLineItemsChange: (items: LineItem[]) => void;
-    onSaveFirst?: () => Promise<number | undefined>;
 }
 
 export default function PremierVariationTab({
     variationId,
+    locationId,
     pricingItems,
     lineItems,
     onLineItemsChange,
-    onSaveFirst,
 }: PremierVariationTabProps) {
     const [generating, setGenerating] = useState(false);
     const [sending, setSending] = useState(false);
@@ -62,20 +62,35 @@ export default function PremierVariationTab({
         }
         setGenerating(true);
         try {
-            let varId = variationId;
-            if (!varId) {
-                if (!onSaveFirst) {
-                    toast.error('Please save the variation first');
+            let lineItemsResult: LineItem[];
+            let summary: { line_count: number };
+
+            if (variationId) {
+                // Saved variation: generate and persist to DB
+                const { data } = await axios.post(`/variations/${variationId}/generate-premier`);
+                lineItemsResult = data.variation.line_items;
+                summary = data.summary;
+            } else {
+                // Unsaved variation: compute only, no DB writes
+                if (!locationId) {
+                    toast.error('Please select a location first');
                     return;
                 }
-                varId = await onSaveFirst();
-                if (!varId) {
-                    return;
-                }
+                const { data } = await axios.post('/variations/preview-premier-lines', {
+                    location_id: Number(locationId),
+                    pricing_items: pricingItems.map((i) => ({
+                        labour_cost: i.labour_cost,
+                        material_cost: i.material_cost,
+                        qty: i.qty,
+                        takeoff_condition_id: i.takeoff_condition_id ?? null,
+                    })),
+                });
+                lineItemsResult = data.line_items;
+                summary = data.summary;
             }
-            const { data } = await axios.post(`/variations/${varId}/generate-premier`);
-            onLineItemsChange(data.variation.line_items);
-            toast.success(`Generated ${data.summary.line_count} Premier lines`);
+
+            onLineItemsChange(lineItemsResult);
+            toast.success(`Generated ${summary.line_count} Premier lines`);
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Failed to generate Premier lines');
         } finally {
