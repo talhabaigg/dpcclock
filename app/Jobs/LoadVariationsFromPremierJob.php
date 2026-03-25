@@ -77,6 +77,14 @@ class LoadVariationsFromPremierJob implements ShouldQueue
             $variationsProcessed = 0;
 
             foreach ($data as $item) {
+                // If a variation was created in the app before syncing, it will have
+                // premier_co_id = null. Stamp it with the premier_co_id so updateOrCreate
+                // can find it instead of creating a duplicate.
+                Variation::where('location_id', $this->location->id)
+                    ->where('co_number', $item['ChangeOrderNumber'])
+                    ->whereNull('premier_co_id')
+                    ->update(['premier_co_id' => $item['ChangeOrderID']]);
+
                 $variation = Variation::updateOrCreate(
                     [
                         'premier_co_id' => $item['ChangeOrderID'],

@@ -33,6 +33,7 @@ interface PremierVariationTabProps {
     pricingItems: PricingItem[];
     lineItems: LineItem[];
     onLineItemsChange: (items: LineItem[]) => void;
+    onSaveFirst?: () => Promise<number | undefined>;
 }
 
 export default function PremierVariationTab({
@@ -40,6 +41,7 @@ export default function PremierVariationTab({
     pricingItems,
     lineItems,
     onLineItemsChange,
+    onSaveFirst,
 }: PremierVariationTabProps) {
     const [generating, setGenerating] = useState(false);
     const [sending, setSending] = useState(false);
@@ -54,17 +56,24 @@ export default function PremierVariationTab({
     const hasExistingLines = lineItems.length > 0;
 
     const handleGenerate = async () => {
-        if (!variationId) {
-            toast.error('Please save the variation first');
-            return;
-        }
         if (pricingItems.length === 0) {
             toast.error('Add pricing items first');
             return;
         }
         setGenerating(true);
         try {
-            const { data } = await axios.post(`/variations/${variationId}/generate-premier`);
+            let varId = variationId;
+            if (!varId) {
+                if (!onSaveFirst) {
+                    toast.error('Please save the variation first');
+                    return;
+                }
+                varId = await onSaveFirst();
+                if (!varId) {
+                    return;
+                }
+            }
+            const { data } = await axios.post(`/variations/${varId}/generate-premier`);
             onLineItemsChange(data.variation.line_items);
             toast.success(`Generated ${data.summary.line_count} Premier lines`);
         } catch (err: any) {

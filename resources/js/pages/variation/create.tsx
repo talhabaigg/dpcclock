@@ -255,6 +255,34 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const handleLineItemsChange = (lineItems: any[]) => setData('line_items', lineItems);
     const handleSelectionChange = (count: number) => setSelectedCount(count);
 
+    // --- Save variation (without full form submit) for generate-premier flow ---
+    const saveVariationForGenerate = async (): Promise<number | undefined> => {
+        if (savedVariationId) {
+            await persistUnsavedPricingItems(savedVariationId);
+            return savedVariationId;
+        }
+        if (!data.location_id || !data.co_number || !data.description) {
+            toast.error('Please fill in Location, Variation Number, and Description first');
+            return undefined;
+        }
+        try {
+            const { data: response } = await axios.post('/variations/quick-store', {
+                location_id: parseInt(data.location_id),
+                co_number: data.co_number,
+                description: data.description,
+                type: data.type || 'extra',
+            });
+            const varId = response.variation.id;
+            setSavedVariationId(varId);
+            window.history.replaceState({}, '', `/variations/${varId}/edit`);
+            await persistUnsavedPricingItems(varId);
+            return varId;
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Failed to save variation');
+            return undefined;
+        }
+    };
+
     // --- Submit ---
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -729,6 +757,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                         pricingItems={pricingItems}
                                         lineItems={data.line_items}
                                         onLineItemsChange={(items) => setData('line_items', items)}
+                                        onSaveFirst={saveVariationForGenerate}
                                     />
                                 </CardContent>
                             </Card>

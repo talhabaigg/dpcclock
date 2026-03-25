@@ -184,6 +184,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 onDelete: onDeleteRow,
                 canDelete: canDelete,
             },
+            cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' },
             suppressMovable: true,
         },
     ];

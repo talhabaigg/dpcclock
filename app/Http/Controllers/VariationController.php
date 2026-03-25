@@ -478,6 +478,7 @@ class VariationController extends Controller
             ->post($base_url.'/api/ChangeOrder/CreateChangeOrders', $data);
         if ($response->successful()) {
             $variation->status = 'sent';
+            $variation->premier_co_id = $response->json('Data.0.ChangeOrderId');
             $variation->save();
             Log::info('Variation sent to Premier successfully.', $response->json());
 
