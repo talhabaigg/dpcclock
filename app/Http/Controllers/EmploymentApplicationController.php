@@ -205,7 +205,7 @@ class EmploymentApplicationController extends Controller
      */
     public function show(EmploymentApplication $employmentApplication): Response
     {
-        $employmentApplication->load(['references', 'skills', 'declinedByUser']);
+        $employmentApplication->load(['references.referenceCheck.completedByUser', 'skills', 'declinedByUser']);
 
         $employmentApplication->load(['checklists.items.completedByUser']);
 

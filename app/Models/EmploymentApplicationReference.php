@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EmploymentApplicationReference extends Model
 {
@@ -20,5 +21,10 @@ class EmploymentApplicationReference extends Model
     public function application(): BelongsTo
     {
         return $this->belongsTo(EmploymentApplication::class, 'employment_application_id');
+    }
+
+    public function referenceCheck(): HasOne
+    {
+        return $this->hasOne(EmploymentApplicationReferenceCheck::class, 'employment_application_reference_id');
     }
 }

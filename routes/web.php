@@ -54,6 +54,7 @@ use App\Http\Controllers\VariationController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
+use App\Http\Controllers\ReferenceCheckController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
 use App\Models\Employee;
@@ -146,6 +147,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
         Route::post('/employment-applications/{employmentApplication}/decline', [EmploymentApplicationController::class, 'decline'])->name('employment-applications.decline');
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
+
+        // Reference Checks
+        Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');
+        Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
+        Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
     });
 
     // Comments (generic)
