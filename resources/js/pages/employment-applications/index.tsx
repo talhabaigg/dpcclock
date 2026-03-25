@@ -159,7 +159,7 @@ function KanbanLane({ status, apps }: { status: string; apps: EmploymentApplicat
                 <span className="truncate text-xs font-semibold" title={STATUS_LABELS[status]}>
                     {STATUS_LABELS[status] ?? status}
                 </span>
-                <Badge variant="secondary" className="ml-1 h-4 shrink-0 rounded-full px-1.5 text-xs">
+                <Badge variant="secondary" className="ml-1 h-4 shrink-0 rounded-full px-1.5 text-xs leading-none overflow-hidden">
                     {apps.length}
                 </Badge>
             </div>

@@ -25,14 +25,30 @@ class EmployeeController extends Controller
     {
         $apiKey = config('services.employment_hero.api_key');
         $businessId = config('services.employment_hero.business_id');
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
-        ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/employee/unstructured");
 
-        $employeeData = $response->json();
+        $allEmployees = [];
+        $page = 1;
+        $pageSize = 100;
+
+        do {
+            $response = Http::withHeaders([
+                'Authorization' => 'Basic '.base64_encode($apiKey.':'),
+            ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/employee/unstructured", [
+                '$top' => $pageSize,
+                '$skip' => ($page - 1) * $pageSize,
+            ]);
+
+            $pageData = $response->json();
+            if (! is_array($pageData) || empty($pageData)) {
+                break;
+            }
+
+            $allEmployees = array_merge($allEmployees, $pageData);
+            $page++;
+        } while (count($pageData) === $pageSize);
 
         // Filter only active employees (no endDate)
-        $employeeData = array_filter($employeeData, fn ($employee) => empty($employee['endDate']));
+        $employeeData = array_filter($allEmployees, fn ($employee) => empty($employee['endDate']));
 
         $apiEmployeeIds = [];
 
