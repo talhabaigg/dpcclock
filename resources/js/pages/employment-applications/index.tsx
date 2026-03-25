@@ -35,6 +35,9 @@ interface Filters {
     date_from?: string;
     date_to?: string;
     duplicates_only?: string;
+    apprentice?: string;
+    apprentice_year?: string;
+
 }
 
 interface PageProps {
@@ -238,7 +241,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
     const [search, setSearch] = useState(filters.search ?? '');
     const [suburb, setSuburb] = useState(filters.suburb ?? '');
     const [showFilters, setShowFilters] = useState(() => {
-        return !!(filters.status || filters.occupation || filters.suburb || filters.date_from || filters.date_to || filters.duplicates_only);
+        return !!(filters.status || filters.occupation || filters.suburb || filters.date_from || filters.date_to || filters.duplicates_only || filters.apprentice || filters.apprentice_year);
     });
     const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suburbTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -249,7 +252,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
         setLocalApplications(applications.data);
     }, [applications.data]);
 
-    const activeFilterCount = [filters.status, filters.occupation, filters.suburb, filters.date_from || filters.date_to, filters.duplicates_only].filter(Boolean).length;
+    const activeFilterCount = [filters.status, filters.occupation, filters.suburb, filters.date_from || filters.date_to, filters.duplicates_only, filters.apprentice, filters.apprentice_year].filter(Boolean).length;
 
     const buildQuery = useCallback(
         (overrides: Partial<Filters & { view: string }> = {}) => {
@@ -262,6 +265,8 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             if (merged.date_from) query.date_from = merged.date_from;
             if (merged.date_to) query.date_to = merged.date_to;
             if (merged.duplicates_only) query.duplicates_only = merged.duplicates_only;
+            if (merged.apprentice) query.apprentice = merged.apprentice;
+            if (merged.apprentice_year) query.apprentice_year = merged.apprentice_year;
             if (merged.view && merged.view !== 'list') query.view = merged.view;
             return query;
         },
@@ -358,85 +363,124 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
 
                 {/* Filter Bar */}
                 {showFilters && (
-                    <div className="flex shrink-0 flex-wrap items-end gap-3 rounded-lg border p-3">
-                        <div className="flex flex-col gap-1">
-                            <label className="text-muted-foreground text-xs font-medium">Status</label>
-                            <Select value={filters.status ?? ''} onValueChange={(v) => applyFilters({ status: v === 'all' ? '' : v })}>
-                                <SelectTrigger className="w-[170px]">
-                                    <SelectValue placeholder="All statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                                        <SelectItem key={value} value={value}>
-                                            {label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    <div className="shrink-0 rounded-lg border p-3">
+                        <div className="flex flex-wrap gap-x-4 gap-y-3">
+                            {/* Status */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium">Status</label>
+                                <Select value={filters.status ?? ''} onValueChange={(v) => applyFilters({ status: v === 'all' ? '' : v })}>
+                                    <SelectTrigger className="w-[160px]">
+                                        <SelectValue placeholder="All statuses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All statuses</SelectItem>
+                                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="flex flex-col gap-1">
-                            <label className="text-muted-foreground text-xs font-medium">Occupation</label>
-                            <Select value={filters.occupation ?? ''} onValueChange={(v) => applyFilters({ occupation: v === 'all' ? '' : v })}>
-                                <SelectTrigger className="w-[160px]">
-                                    <SelectValue placeholder="All occupations" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All occupations</SelectItem>
-                                    {occupations.map((occ) => (
-                                        <SelectItem key={occ} value={occ}>
-                                            {occ.charAt(0).toUpperCase() + occ.slice(1)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                            {/* Occupation */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium">Occupation</label>
+                                <Select value={filters.occupation ?? ''} onValueChange={(v) => applyFilters({ occupation: v === 'all' ? '' : v })}>
+                                    <SelectTrigger className="w-[160px]">
+                                        <SelectValue placeholder="All occupations" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All occupations</SelectItem>
+                                        {occupations.map((occ) => (
+                                            <SelectItem key={occ} value={occ}>
+                                                {occ.charAt(0).toUpperCase() + occ.slice(1)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="flex flex-col gap-1">
-                            <label className="text-muted-foreground text-xs font-medium">Suburb</label>
-                            <Input
-                                type="text"
-                                placeholder="Any suburb"
-                                value={suburb}
-                                onChange={(e) => {
-                                    setSuburb(e.target.value);
-                                    clearTimeout(suburbTimeout.current);
-                                    suburbTimeout.current = setTimeout(() => applyFilters({ suburb: e.target.value }), 400);
-                                }}
-                                className="w-[160px]"
-                            />
-                        </div>
+                            {/* Apprentices */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium">Apprentices</label>
+                                <Select value={filters.apprentice ?? ''} onValueChange={(v) => applyFilters({ apprentice: v === 'all' ? '' : v, apprentice_year: v !== 'only' ? '' : filters.apprentice_year })}>
+                                    <SelectTrigger className="w-[160px]">
+                                        <SelectValue placeholder="All applicants" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All applicants</SelectItem>
+                                        <SelectItem value="only">Apprentices only</SelectItem>
+                                        <SelectItem value="exclude">Exclude apprentices</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="flex flex-col gap-1">
-                            <label className="text-muted-foreground text-xs font-medium">From date</label>
-                            <Input
-                                type="date"
-                                value={filters.date_from ?? ''}
-                                onChange={(e) => applyFilters({ date_from: e.target.value })}
-                                className="w-[150px]"
-                            />
-                        </div>
+                            {/* Apprentice year — only when filtering apprentices */}
+                            {filters.apprentice === 'only' && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-muted-foreground text-xs font-medium">Apprentice year</label>
+                                    <Select value={filters.apprentice_year ?? ''} onValueChange={(v) => applyFilters({ apprentice_year: v === 'all' ? '' : v })}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Any year" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Any year</SelectItem>
+                                            <SelectItem value="1">Year 1</SelectItem>
+                                            <SelectItem value="2">Year 2</SelectItem>
+                                            <SelectItem value="3">Year 3</SelectItem>
+                                            <SelectItem value="4">Year 4</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
 
-                        <div className="flex flex-col gap-1">
-                            <label className="text-muted-foreground text-xs font-medium">To date</label>
-                            <Input
-                                type="date"
-                                value={filters.date_to ?? ''}
-                                onChange={(e) => applyFilters({ date_to: e.target.value })}
-                                className="w-[150px]"
-                            />
-                        </div>
+                            {/* Suburb */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium">Suburb</label>
+                                <Input
+                                    type="text"
+                                    placeholder="Any suburb"
+                                    value={suburb}
+                                    onChange={(e) => {
+                                        setSuburb(e.target.value);
+                                        clearTimeout(suburbTimeout.current);
+                                        suburbTimeout.current = setTimeout(() => applyFilters({ suburb: e.target.value }), 400);
+                                    }}
+                                    className="w-[160px]"
+                                />
+                            </div>
 
-                        <div className="flex items-center gap-2 pb-2">
-                            <Checkbox
-                                id="duplicates_only"
-                                checked={filters.duplicates_only === '1'}
-                                onCheckedChange={(checked) => applyFilters({ duplicates_only: checked ? '1' : '' })}
-                            />
-                            <label htmlFor="duplicates_only" className="cursor-pointer text-sm whitespace-nowrap">
-                                Duplicates only
-                            </label>
+                            {/* Date range */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium">Date range</label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="date"
+                                        value={filters.date_from ?? ''}
+                                        onChange={(e) => applyFilters({ date_from: e.target.value })}
+                                        className="w-[140px]"
+                                    />
+                                    <span className="text-muted-foreground text-xs">to</span>
+                                    <Input
+                                        type="date"
+                                        value={filters.date_to ?? ''}
+                                        onChange={(e) => applyFilters({ date_to: e.target.value })}
+                                        className="w-[140px]"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Duplicates checkbox */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-muted-foreground text-xs font-medium invisible">Show</label>
+                                <label htmlFor="duplicates_only" className="flex h-9 cursor-pointer items-center gap-2">
+                                    <Checkbox
+                                        id="duplicates_only"
+                                        checked={filters.duplicates_only === '1'}
+                                        onCheckedChange={(checked) => applyFilters({ duplicates_only: checked ? '1' : '' })}
+                                    />
+                                    <span className="text-sm whitespace-nowrap">Duplicates only</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 )}

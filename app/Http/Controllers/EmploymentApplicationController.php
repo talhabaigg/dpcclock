@@ -154,6 +154,20 @@ class EmploymentApplicationController extends Controller
             });
         }
 
+        // Filter by apprentice status
+        if ($request->filled('apprentice')) {
+            if ($request->apprentice === 'only') {
+                $query->whereNotNull('apprentice_year');
+            } elseif ($request->apprentice === 'exclude') {
+                $query->whereNull('apprentice_year');
+            }
+        }
+
+        // Filter by specific apprentice year
+        if ($request->filled('apprentice_year')) {
+            $query->where('apprentice_year', $request->integer('apprentice_year'));
+        }
+
         // Duplicate detection — alias inner table so whereColumn correlates correctly
         $query->selectRaw('(select count(*) - 1 from employment_applications as ea_dup where ea_dup.email = employment_applications.email) as duplicate_count');
 
@@ -179,7 +193,7 @@ class EmploymentApplicationController extends Controller
 
         return Inertia::render('employment-applications/index', [
             'applications' => $applications,
-            'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only']),
+            'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only', 'apprentice', 'apprentice_year']),
             'statuses' => EmploymentApplication::STATUSES,
             'occupations' => $occupations,
             'view' => $view,
