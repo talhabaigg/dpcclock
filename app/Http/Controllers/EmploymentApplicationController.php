@@ -162,7 +162,13 @@ class EmploymentApplicationController extends Controller
             $query->having('duplicate_count', '>', 0);
         }
 
-        $applications = $query->latest()->paginate(25)->withQueryString();
+        $view = $request->input('view', 'list');
+
+        if ($view === 'kanban') {
+            $applications = ['data' => $query->latest()->get()];
+        } else {
+            $applications = $query->latest()->paginate(25)->withQueryString();
+        }
 
         // Get distinct occupations for filter dropdown
         $occupations = EmploymentApplication::distinct()
@@ -176,6 +182,7 @@ class EmploymentApplicationController extends Controller
             'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only']),
             'statuses' => EmploymentApplication::STATUSES,
             'occupations' => $occupations,
+            'view' => $view,
         ]);
     }
 

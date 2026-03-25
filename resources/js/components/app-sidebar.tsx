@@ -1,41 +1,43 @@
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { TokenUsageWidget } from '@/components/token-usage-widget';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
-    Binary,
-
-    Box,
+    BadgeDollarSign,
     Building,
     CalendarDays,
     ChartArea,
     ChartLine,
+    ClipboardCheck,
     Clock,
     Database,
     DollarSign,
-    File,
+    FileDiff,
+    FileBarChart,
     FileSpreadsheet,
     FileText,
-    Folder,
     FolderTree,
     GitCompare,
     Hammer,
+    HardHat,
+    Hash,
     Hourglass,
-    Key,
     LayoutDashboard,
     LayoutGrid,
-    PersonStanding,
+    Layers,
+    ListChecks,
+    Monitor,
     Pickaxe,
+    PiggyBank,
     RefreshCcw,
-    RefreshCw,
-    Settings,
-    Shield,
     ShieldAlert,
-    Target,
+    ShoppingCart,
+    SlidersHorizontal,
+    Store,
+    Tags,
     UserX,
     UsersRound,
 } from 'lucide-react';
@@ -70,7 +72,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Labour Forecast',
         href: '/labour-forecast',
-        icon: PersonStanding,
+        icon: HardHat,
         permission: 'turnover-forecast.view',
     },
     {
@@ -80,57 +82,27 @@ const mainNavItems: NavItem[] = [
         permission: 'cash-forecast.view',
     },
     {
-        title: 'Budget Management',
-        href: '/budget-management',
-        icon: Target,
-        permission: 'budget.view',
-    },
-    {
-        title: 'Employees',
-        href: '/employees',
-        icon: UsersRound,
-        permission: 'employees.view',
-    },
-    {
         title: 'Employment Applications',
         href: '/employment-applications',
         icon: FileText,
         permission: 'employment-applications.view',
     },
     {
-        title: 'Checklist Templates',
-        href: '/checklist-templates',
-        icon: LayoutGrid,
-        permission: 'checklists.manage-templates',
-    },
-    {
         title: 'Kiosks',
         href: '/kiosks',
-        icon: Clock,
+        icon: Monitor,
         permission: 'kiosks.view',
-    },
-    {
-        title: 'Worktypes',
-        href: '/worktypes',
-        icon: Hammer,
-        permission: 'worktypes.view',
-    },
-    {
-        title: 'Users',
-        href: '/users',
-        icon: UsersRound,
-        permission: 'users.view',
     },
     {
         title: 'Requisitions',
         href: '/requisition/all',
-        icon: Folder,
+        icon: ShoppingCart,
         permission: 'requisitions.view',
     },
     {
         title: 'Variations',
         href: '/variations',
-        icon: File,
+        icon: FileDiff,
         permission: 'variations.view',
     },
 ];
@@ -150,7 +122,7 @@ const timesheets = [
             {
                 name: 'Review',
                 url: '/timesheets/review',
-                icon: Hourglass,
+                icon: ClipboardCheck,
                 permission: 'timesheets.review',
             },
         ],
@@ -159,7 +131,7 @@ const timesheets = [
 
 const documents = [
     {
-        name: 'Data',
+        name: 'Master Data',
         icon: Database,
         permission: 'materials.view',
         groupByAlpha: true,
@@ -171,16 +143,28 @@ const documents = [
                 permission: 'employees.manage-worktypes',
             },
             {
+                name: 'Budget Management',
+                url: '/budget-management',
+                icon: PiggyBank,
+                permission: 'budget.view',
+            },
+            {
                 name: 'Cost Codes',
                 url: '/cost-codes',
-                icon: Binary,
+                icon: Hash,
                 permission: 'costcodes.view',
             },
             {
                 name: 'Cost Types',
                 url: '/cost-types',
-                icon: Binary,
+                icon: Layers,
                 permission: 'costtypes.view',
+            },
+            {
+                name: 'Employees',
+                url: '/employees',
+                icon: UsersRound,
+                permission: 'employees.view',
             },
             {
                 name: 'Material',
@@ -191,7 +175,7 @@ const documents = [
             {
                 name: 'Pay Rate Templates',
                 url: '/pay-rate-templates',
-                icon: DollarSign,
+                icon: BadgeDollarSign,
                 permission: 'employees.manage-worktypes',
             },
             {
@@ -209,14 +193,20 @@ const documents = [
             {
                 name: 'Suppliers',
                 url: '/suppliers',
-                icon: Box,
+                icon: Store,
                 permission: 'suppliers.view',
             },
             {
                 name: 'Update Pricing',
                 url: '/update-pricing',
-                icon: RefreshCw,
+                icon: Tags,
                 permission: 'materials.edit',
+            },
+            {
+                name: 'Worktypes',
+                url: '/worktypes',
+                icon: Hammer,
+                permission: 'worktypes.view',
             },
         ],
     },
@@ -231,7 +221,7 @@ const reports = [
             {
                 name: 'Req Line Desc Report',
                 url: '/reports/req-line-items-desc',
-                icon: Pickaxe,
+                icon: FileBarChart,
                 permission: 'reports.requisition-lines',
             },
             {
@@ -256,27 +246,22 @@ const reports = [
     },
 ];
 
-const admin = [
+const configuration = [
     {
-        name: 'Administration',
-        icon: Settings,
-        permission: 'admin.roles',
+        name: 'Configuration',
+        icon: SlidersHorizontal,
+        permission: 'checklists.manage-templates',
         subItems: [
             {
-                name: 'Roles & Permissions',
-                url: '/admin/roles',
-                icon: Shield,
-                permission: 'admin.roles',
-            },
-            {
-                name: 'All Permissions',
-                url: '/admin/permissions',
-                icon: Key,
-                permission: 'admin.roles',
+                name: 'Checklist Templates',
+                url: '/checklist-templates',
+                icon: ListChecks,
+                permission: 'checklists.manage-templates',
             },
         ],
     },
 ];
+
 
 const footerNavItems: NavItem[] = [
     {
@@ -319,7 +304,7 @@ export function AppSidebar() {
     const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredAdmin = admin.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredConfiguration = configuration.filter((item) => !item.permission || permissions.includes(item.permission));
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -340,11 +325,10 @@ export function AppSidebar() {
                 <NavDocuments items={filteredTimesheets} permissions={permissions} />
                 <NavDocuments items={filteredDocuments} permissions={permissions} />
                 <NavDocuments items={filteredReports} permissions={permissions} />
-                <NavDocuments items={filteredAdmin} permissions={permissions} />
+                <NavDocuments items={filteredConfiguration} permissions={permissions} />
             </SidebarContent>
 
             <SidebarFooter>
-                <TokenUsageWidget className="mb-2" />
                 <NavFooter items={footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission))} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
