@@ -44,6 +44,7 @@ class EmployeeController extends Controller
                 ['eh_employee_id' => $employeeInfo['id']],
                 [
                     'name' => $employeeInfo['firstName'].' '.$employeeInfo['surname'],
+                    'preferred_name' => $employeeInfo['preferredName'] ?? null,
                     'external_id' => $employeeInfo['externalId'] ?? Str::uuid(),
                     'email' => $employeeInfo['emailAddress'] ?? null,
                     'employment_type' => $employeeInfo['employmentType'] ?? null,

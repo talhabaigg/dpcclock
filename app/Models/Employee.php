@@ -12,11 +12,19 @@ class Employee extends Model
     protected $fillable = [
         'eh_employee_id',
         'name',
+        'preferred_name',
         'external_id',
         'email',
         'pin',
         'employment_type',
     ];
+
+    protected $appends = ['display_name'];
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->preferred_name ?: $this->name;
+    }
 
     public function kiosks()
     {

@@ -17,6 +17,7 @@ import { useMemo, useState } from 'react';
 interface Employee {
     id: number;
     name: string;
+    preferred_name: string | null;
     email: string;
     pin: string;
     external_id?: string;
@@ -59,6 +60,7 @@ export default function EmployeesList() {
             filtered = filtered.filter(
                 (employee) =>
                     employee.name.toLowerCase().includes(query) ||
+                    employee.preferred_name?.toLowerCase().includes(query) ||
                     employee.external_id?.toLowerCase().includes(query) ||
                     employee.eh_employee_id?.toLowerCase().includes(query),
             );
@@ -84,6 +86,18 @@ export default function EmployeesList() {
                         />
                     </div>
                 ),
+            },
+            {
+                accessorKey: 'preferred_name',
+                header: ({ column }) => <SortHeader label="Preferred Name" column={column} />,
+                cell: ({ row }) => {
+                    const val = row.original.preferred_name;
+                    return val ? (
+                        <span className="text-sm">{val}</span>
+                    ) : (
+                        <span className="text-muted-foreground text-sm italic">—</span>
+                    );
+                },
             },
             {
                 accessorKey: 'external_id',
@@ -250,6 +264,9 @@ export default function EmployeesList() {
                                         showEmail
                                     />
                                 </div>
+                                {emp.preferred_name && (
+                                    <p className="text-muted-foreground mt-0.5 text-xs italic">Known as "{emp.preferred_name}"</p>
+                                )}
                                 <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
                                     {emp.external_id?.trim() && <span>Ext: {emp.external_id}</span>}
                                     {emp.eh_employee_id?.trim() && <span>EH: {emp.eh_employee_id}</span>}

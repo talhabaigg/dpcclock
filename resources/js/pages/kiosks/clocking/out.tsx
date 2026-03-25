@@ -19,6 +19,8 @@ dayjs.extend(customParseFormat);
 interface Employee {
     id: number;
     name: string;
+    preferred_name: string | null;
+    display_name: string;
     email: string;
 }
 
@@ -248,7 +250,7 @@ export default function Clockout() {
                 <div className="mb-4 flex items-center justify-between">
                     <div>
                         <h2 className="text-foreground text-xl font-bold sm:text-2xl">Clock Out</h2>
-                        <p className="text-muted-foreground text-sm">{employee.name}</p>
+                        <p className="text-muted-foreground text-sm">{employee.display_name}</p>
                     </div>
                     <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-emerald-600">
                         <Clock className="h-4 w-4" />

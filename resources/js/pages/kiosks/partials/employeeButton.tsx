@@ -6,6 +6,8 @@ import { ChevronRight, Clock } from 'lucide-react';
 interface Employee {
     id: number;
     name: string;
+    preferred_name: string | null;
+    display_name: string;
     email: string;
     pin: string;
     eh_employee_id: string;
@@ -47,7 +49,7 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
                             isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary',
                         )}
                     >
-                        {getInitials(emp.name)}
+                        {getInitials(emp.display_name)}
                     </AvatarFallback>
                 </Avatar>
                 {emp.clocked_in && !isSelected && (
@@ -57,7 +59,7 @@ export default function EmployeeListButton({ emp, isSelected, onClick }: Props) 
 
             {/* Name & Status */}
             <div className="min-w-0 flex-1">
-                <p className={cn('truncate font-medium', isSelected ? 'text-primary-foreground' : 'text-foreground')}>{emp.name}</p>
+                <p className={cn('truncate font-medium', isSelected ? 'text-primary-foreground' : 'text-foreground')}>{emp.display_name}</p>
                 {emp.clocked_in && (
                     <p
                         className={cn(

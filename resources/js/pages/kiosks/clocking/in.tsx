@@ -11,6 +11,8 @@ import KioskLayout from '../partials/layout';
 interface Employee {
     id: number;
     name: string;
+    preferred_name: string | null;
+    display_name: string;
     email: string;
 }
 
@@ -103,9 +105,9 @@ export default function ClockIn() {
                 {/* Employee Info */}
                 <div className="mb-8 flex flex-col items-center">
                     <Avatar className="border-primary/20 mb-4 h-24 w-24 border-4 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-primary text-3xl font-semibold">{getInitials(employee.name)}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary text-3xl font-semibold">{getInitials(employee.display_name)}</AvatarFallback>
                     </Avatar>
-                    <h2 className="text-foreground text-2xl font-bold">{employee.name}</h2>
+                    <h2 className="text-foreground text-2xl font-bold">{employee.display_name}</h2>
                 </div>
 
                 {/* Status Badge */}
