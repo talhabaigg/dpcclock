@@ -239,6 +239,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.edit');
     Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy')
         ->middleware('permission:locations.delete');
+    Route::patch('/locations/{location}/variation-number-start', [LocationController::class, 'updateVariationNumberStart'])->name('locations.variation-number-start.update')
+        ->middleware('role:admin');
     Route::post('/locations/{location}/close', [LocationController::class, 'close'])->name('locations.close')
         ->middleware('permission:locations.close');
     Route::post('/locations/{location}/reopen', [LocationController::class, 'reopen'])->name('locations.reopen')

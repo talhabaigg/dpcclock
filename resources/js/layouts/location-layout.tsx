@@ -46,6 +46,8 @@ export type LocationBase = {
     eh_location_id: string;
     eh_parent_id: string;
     external_id: string;
+    variation_number_start: number | null;
+    variation_next_number: number | null;
     worktypes: Array<{
         id: number;
         name: string;
@@ -67,8 +69,11 @@ interface LocationLayoutProps {
 }
 
 export default function LocationLayout({ location, activeTab, children }: LocationLayoutProps) {
-    const { flash } = usePage<{ flash: { success?: string } }>().props;
+    const { flash, auth } = usePage<{ flash: { success?: string }; auth: { isAdmin: boolean } }>().props;
     const [openDialog, setOpenDialog] = useState(false);
+    const [editingVarStart, setEditingVarStart] = useState(false);
+    const [varStartInput, setVarStartInput] = useState(String(location.variation_number_start ?? ''));
+    const [savingVarStart, setSavingVarStart] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -100,6 +105,27 @@ export default function LocationLayout({ location, activeTab, children }: Locati
 
         formData.reset();
         setOpenDialog(false);
+    };
+
+    const handleSaveVarStart = async () => {
+        const num = parseInt(varStartInput);
+        if (!varStartInput || isNaN(num) || num < 1) {
+            toast.error('Please enter a valid starting number');
+            return;
+        }
+        setSavingVarStart(true);
+        try {
+            await router.patch(`/locations/${location.id}/variation-number-start`, { variation_number_start: num }, {
+                onSuccess: () => {
+                    setEditingVarStart(false);
+                    toast.success('Variation number start updated');
+                },
+                onError: () => toast.error('Failed to update'),
+                onFinish: () => setSavingVarStart(false),
+            });
+        } catch {
+            setSavingVarStart(false);
+        }
     };
 
     useEffect(() => {
@@ -244,6 +270,53 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                     </div>
                                     <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_parent_id}</code>
                                 </div>
+                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
+                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                                        <Hash className="h-4 w-4" />
+                                        Variation Number Start
+                                    </div>
+                                    {editingVarStart ? (
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                className="h-7 w-24 text-sm"
+                                                value={varStartInput}
+                                                onChange={(e) => setVarStartInput(e.target.value)}
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveVarStart();
+                                                    if (e.key === 'Escape') setEditingVarStart(false);
+                                                }}
+                                            />
+                                            <Button size="sm" className="h-7 px-2" onClick={handleSaveVarStart} disabled={savingVarStart}>
+                                                Save
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingVarStart(false)}>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            {location.variation_number_start != null ? (
+                                                <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
+                                                    VA-{String(location.variation_number_start).padStart(3, '0')}
+                                                    {location.variation_next_number != null && location.variation_next_number !== location.variation_number_start && (
+                                                        <span className="text-muted-foreground ml-1 text-xs">(next: VA-{String(location.variation_next_number).padStart(3, '0')})</span>
+                                                    )}
+                                                </code>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm italic">Not set</span>
+                                            )}
+                                            {auth.isAdmin && (
+                                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setVarStartInput(String(location.variation_number_start ?? '')); setEditingVarStart(true); }}>
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="px-3 py-2.5 sm:px-6 sm:py-3">
                                     <div className="text-muted-foreground mb-2 flex items-center gap-2 text-sm">
                                         <Star className="h-4 w-4" />

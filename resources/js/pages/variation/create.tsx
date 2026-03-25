@@ -46,6 +46,7 @@ interface Location {
     id: number;
     name: string;
     cost_codes: CostCode[];
+    variation_next_number: number | null;
 }
 
 interface VariationData {
@@ -53,6 +54,7 @@ interface VariationData {
     location_id: number;
     type: string;
     co_number: string;
+    status: string;
     description: string;
     client_notes: string | null;
     amount: number | string;
@@ -175,7 +177,8 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const selectedLocation = locations.find((loc) => String(loc.id) === data.location_id);
     const costData = selectedLocation?.cost_codes ?? [];
     const sortedLocations = useMemo(() => [...locations].sort((a, b) => a.name.localeCompare(b.name)), [locations]);
-    const canProceedToStep2 = data.location_id && data.co_number.trim() && data.description.trim();
+    const hasAutoNumbering = selectedLocation?.variation_next_number != null && variation?.status !== 'sent';
+    const canProceedToStep2 = data.location_id && (hasAutoNumbering || data.co_number.trim()) && data.description.trim();
 
     const gridTotals = useMemo(() => {
         const totalCost = data.line_items.reduce((sum: number, i: any) => sum + (Number(i.total_cost) || 0), 0);
@@ -547,15 +550,20 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="co_number">
-                                            Variation Number <span className="text-destructive">*</span>
-                                        </Label>
-                                        <Input
-                                            id="co_number"
-                                            value={data.co_number}
-                                            onChange={(e) => setData('co_number', e.target.value)}
-                                            placeholder="e.g. VAR-001"
-                                        />
+                                        <Label htmlFor="co_number">Variation Number</Label>
+                                        {selectedLocation?.variation_next_number != null && variation?.status !== 'sent' ? (
+                                            <div className="bg-muted text-muted-foreground flex h-9 items-center rounded-md border px-3 font-mono text-sm">
+                                                VA-{String(selectedLocation.variation_next_number).padStart(3, '0')}
+                                                <span className="ml-2 text-xs opacity-60">(assigned on send)</span>
+                                            </div>
+                                        ) : (
+                                            <Input
+                                                id="co_number"
+                                                value={data.co_number}
+                                                onChange={(e) => setData('co_number', e.target.value)}
+                                                placeholder="e.g. VAR-001"
+                                            />
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">

@@ -770,6 +770,20 @@ class LocationController extends Controller
         //
     }
 
+    public function updateVariationNumberStart(Request $request, Location $location): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'variation_number_start' => 'required|integer|min:1',
+        ]);
+
+        $location->update([
+            'variation_number_start' => $validated['variation_number_start'],
+            'variation_next_number' => $validated['variation_number_start'],
+        ]);
+
+        return response()->json(['variation_number_start' => $location->variation_number_start]);
+    }
+
     public function close(Location $location)
     {
         $location->update([

@@ -449,7 +449,30 @@ class VariationController extends Controller
         $token = $authService->getAccessToken();
         $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
         $base_url = config('premier.swagger_api.base_url');
-        // dd($variation->co_date);
+
+        $variation->loadMissing('location');
+
+        // Atomically assign next VA-XXX number if the location has numbering configured.
+        $assignedCoNumber = \DB::transaction(function () use ($variation) {
+            $location = Location::lockForUpdate()->find($variation->location_id);
+
+            if (is_null($location->variation_next_number)) {
+                return null; // No numbering configured — use existing co_number as-is
+            }
+
+            $number = $location->variation_next_number;
+            $coNumber = 'VA-' . str_pad($number, 3, '0', STR_PAD_LEFT);
+
+            $location->increment('variation_next_number');
+
+            $variation->co_number = $coNumber;
+            $variation->save();
+
+            return $coNumber;
+        });
+
+        $coNumber = $assignedCoNumber ?? $variation->co_number;
+
         $lineItems = $variation->lineItems->map(function ($item) {
             return [
                 'LineNumber' => $item->line_number,
@@ -463,11 +486,10 @@ class VariationController extends Controller
         })->toArray();
 
         $data = [
-            // Construct the data payload as per Premier's API requirements
             'Company' => $companyId,
             'JobSubledger' => 'SWCJOB',
             'Job' => $variation->location->external_id,
-            'ChangeOrderNumber' => $variation->co_number,
+            'ChangeOrderNumber' => $coNumber,
             'Description' => $variation->description,
             'ChangeOrderDate' => $variation->co_date,
             'ChangeOrderLines' => $lineItems,

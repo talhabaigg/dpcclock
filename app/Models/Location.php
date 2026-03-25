@@ -19,6 +19,8 @@ class Location extends Model
         'dashboard_settings',
         'closed_at',
         'closed_by',
+        'variation_number_start',
+        'variation_next_number',
     ];
 
     protected $casts = [
