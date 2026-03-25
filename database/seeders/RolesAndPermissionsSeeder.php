@@ -397,6 +397,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.view',
             'requisitions.create',
             'requisitions.edit',
+            'requisitions.send',
             'requisitions.export',
             // Materials (view material list only)
             'materials.view',
