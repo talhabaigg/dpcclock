@@ -28,6 +28,7 @@ import type {
     BreakdownFilter,
     BreakdownRow,
     CashInSplit,
+    CashInTransaction,
     CashOutSplit,
     GeneralCost,
     GstQuarterBreakdown,
@@ -799,11 +800,13 @@ type CashInAdjustmentModalProps = {
     splitTotal: number;
     isOverBudget: boolean;
     monthOptions: string[];
+    transactions: CashInTransaction[];
     onSourceMonthChange: (month: string) => void;
     onSplitChange: (index: number, changes: Partial<CashInSplit>) => void;
     onAddSplit: () => void;
     onRemoveSplit: (index: number) => void;
     onSetSingleSplit: (offsetMonths: number) => void;
+    onSplitByTransactions: () => void;
     onSave: () => void;
     onReset: () => void;
 };
@@ -819,11 +822,13 @@ export const CashInAdjustmentModal = ({
     splitTotal,
     isOverBudget,
     monthOptions,
+    transactions,
     onSourceMonthChange,
     onSplitChange,
     onAddSplit,
     onRemoveSplit,
     onSetSingleSplit,
+    onSplitByTransactions,
     onSave,
     onReset,
 }: CashInAdjustmentModalProps) => {
@@ -853,12 +858,34 @@ export const CashInAdjustmentModal = ({
                                 </Select>
                             </div>
                             <div className="flex-1 space-y-1.5">
-                                <Label>Billed Amount</Label>
+                                <Label>Total Billed</Label>
                                 <div className="bg-muted text-foreground rounded-md border px-3 py-2 text-sm tabular-nums">
                                     ${formatAmount(sourceAmount)}
                                 </div>
                             </div>
                         </div>
+
+                        {transactions.length > 1 && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-muted-foreground text-xs">Invoices ({transactions.length})</Label>
+                                    <Button type="button" variant="outline" size="sm" onClick={onSplitByTransactions} className="h-7 text-xs">
+                                        Split by Invoices
+                                    </Button>
+                                </div>
+                                <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
+                                    {transactions.map((txn, i) => (
+                                        <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-muted-foreground font-mono text-xs">{txn.invoice_number}</span>
+                                                {txn.memo && <span className="text-muted-foreground truncate text-xs max-w-[200px]">{txn.memo}</span>}
+                                            </div>
+                                            <span className="tabular-nums font-medium">${formatAmount(txn.amount)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <SplitTable
                             splits={splits}

@@ -1075,11 +1075,13 @@ const ShowCashForecast = ({
                 splitTotal={cashInAdjustmentHook.splitTotal}
                 isOverBudget={cashInAdjustmentHook.isOverBudget}
                 monthOptions={monthOptions}
+                transactions={cashInAdjustmentHook.transactions}
                 onSourceMonthChange={cashInAdjustmentHook.updateSourceMonth}
                 onSplitChange={cashInAdjustmentHook.updateSplit}
                 onAddSplit={cashInAdjustmentHook.addSplit}
                 onRemoveSplit={cashInAdjustmentHook.removeSplit}
                 onSetSingleSplit={cashInAdjustmentHook.setSingleSplit}
+                onSplitByTransactions={cashInAdjustmentHook.splitByTransactions}
                 onSave={cashInAdjustmentHook.saveAdjustments}
                 onReset={cashInAdjustmentHook.resetAdjustments}
             />

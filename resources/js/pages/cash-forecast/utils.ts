@@ -17,6 +17,11 @@ export const GENERAL_COST_LABELS: Record<string, string> = {
 };
 
 /**
+ * Round a number to 2 decimal places (cents) to avoid floating-point errors in currency arithmetic.
+ */
+export const roundCents = (value: number): number => Math.round(value * 100) / 100;
+
+/**
  * Format a number as currency without decimal places
  */
 export const formatAmount = (value: number): string => value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });

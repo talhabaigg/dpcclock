@@ -51,12 +51,19 @@ export type GeneralCost = {
     flow_type: 'cash_in' | 'cash_out';
 };
 
+export type CashInTransaction = {
+    invoice_number: string;
+    amount: number;
+    memo: string | null;
+};
+
 export type CashInSource = {
     job_number: string;
     month: string;
     amount: number;
     retainage?: number;
     source?: DataSource;
+    transactions?: CashInTransaction[];
 };
 
 export type RetentionSetting = {

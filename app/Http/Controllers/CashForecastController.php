@@ -905,6 +905,27 @@ class CashForecastController extends Controller
             return $carry;
         }, []);
 
+        // Pre-aggregate cash-in totals (ex-GST + actual GST) per job+month so that
+        // adjustment splits can proportion GST correctly across multiple invoice rows.
+        $cashInTotals = $forecastData->reduce(function ($carry, $item) use ($cashInCode) {
+            if ($item->cost_item !== $cashInCode) {
+                return $carry;
+            }
+            $key = $item->job_number.'|'.$item->month;
+            if (! isset($carry[$key])) {
+                $carry[$key] = ['amount' => 0, 'gst' => 0, 'source' => $item->source ?? null];
+            }
+            $carry[$key]['amount'] += (float) $item->forecast_amount;
+            $hasActualGst = isset($item->actual_gst) && ($item->source ?? null) === 'actual';
+            $carry[$key]['gst'] += $hasActualGst ? (float) $item->actual_gst : 0;
+
+            return $carry;
+        }, []);
+
+        // Track which cash-in adjustment keys have been emitted to avoid
+        // double-counting when multiple invoice rows share the same job+month.
+        $processedCashInAdjKeys = [];
+
         return $forecastData->flatMap(function ($item) use (
             $cashInCode,
             $wageCodes,
@@ -919,7 +940,9 @@ class CashForecastController extends Controller
             $cashOutAdjustments,
             $vendorPaymentDelays,
             $vendorTotals,
-            $vendorWideTotals
+            $vendorWideTotals,
+            $cashInTotals,
+            &$processedCashInAdjKeys
         ) {
             $costItem = $item->cost_item;
             $prefix = $this->getCostItemPrefix($costItem);
@@ -960,11 +983,23 @@ class CashForecastController extends Controller
                 $grossAmount = $hasActualGst ? ($amount + $actualGst) : ($amount * (1 + $revenueGstRate));
 
                 if (! empty($adjustments)) {
-                    $adjustedTotal = collect($adjustments)->sum('amount');
-                    $rows = collect($adjustments)->map(function ($adjustment) use ($item, $revenueGstRate, $hasActualGst, $actualGst, $amount) {
+                    // Adjustments are stored against the aggregated job+month total,
+                    // but forecastData may have multiple invoice rows for the same key.
+                    // Emit the adjustment splits only on the first row; skip duplicates.
+                    if (isset($processedCashInAdjKeys[$adjustmentKey])) {
+                        return [];
+                    }
+                    $processedCashInAdjKeys[$adjustmentKey] = true;
+
+                    // Use pre-aggregated totals across all invoice rows for this key
+                    $totals = $cashInTotals[$adjustmentKey] ?? ['amount' => $amount, 'gst' => 0, 'source' => null];
+                    $totalSourceAmount = $totals['amount'];
+                    $isActualSource = $totals['source'] === 'actual';
+                    $totalGst = $isActualSource && $totals['gst'] > 0 ? $totals['gst'] : ($totalSourceAmount * $revenueGstRate);
+
+                    $rows = collect($adjustments)->map(function ($adjustment) use ($item, $revenueGstRate, $isActualSource, $totalGst, $totalSourceAmount) {
                         $adjAmount = (float) $adjustment['amount'];
-                        // Proportion the actual GST for this adjustment
-                        $adjGst = $hasActualGst && $amount > 0 ? ($actualGst * $adjAmount / $amount) : ($adjAmount * $revenueGstRate);
+                        $adjGst = $totalSourceAmount > 0 ? ($totalGst * $adjAmount / $totalSourceAmount) : ($adjAmount * $revenueGstRate);
 
                         return (object) [
                             'month' => $adjustment['receipt_month'],
@@ -974,32 +1009,11 @@ class CashForecastController extends Controller
                             'vendor' => $item->vendor ?? null,
                             'forecast_amount' => $adjAmount + $adjGst,
                             'gst_rate' => $revenueGstRate,
-                            'actual_gst_amount' => $hasActualGst ? $adjGst : null,
+                            'actual_gst_amount' => $isActualSource ? $adjGst : null,
                             'source' => $item->source ?? null,
                             'rule' => 'Cash-in adjustment (manual)',
                         ];
                     });
-
-                    $remaining = $amount - $adjustedTotal;
-                    if ($remaining > 0.01) {
-                        $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
-                            ->addMonths($revenueDelayMonths)
-                            ->format('Y-m');
-
-                        $remainingGst = $hasActualGst && $amount > 0 ? ($actualGst * $remaining / $amount) : ($remaining * $revenueGstRate);
-                        $rows->push((object) [
-                            'month' => $delayedMonth,
-                            'source_month' => $item->month,
-                            'cost_item' => $costItem,
-                            'job_number' => $item->job_number,
-                            'vendor' => $item->vendor ?? null,
-                            'forecast_amount' => $remaining + $remainingGst,
-                            'gst_rate' => $revenueGstRate,
-                            'actual_gst_amount' => $hasActualGst ? $remainingGst : null,
-                            'source' => $item->source ?? null,
-                            'rule' => "Revenue +".$revenueDelayMonths."m delay (remainder after adj)",
-                        ]);
-                    }
 
                     return $rows;
                 }
@@ -1835,7 +1849,7 @@ class CashForecastController extends Controller
 
         // Use AR Posted Invoices with invoice_date and subtotal (ex-GST amount)
         // Only include actuals BEFORE current month (current month uses forecast only)
-        $actuals = ArPostedInvoice::select('job_number', 'invoice_date', 'subtotal', 'retainage')
+        $actuals = ArPostedInvoice::select('job_number', 'invoice_date', 'subtotal', 'retainage', 'invoice_number', 'memo')
             ->where('invoice_date', '>=', $startMonth)
             ->where('invoice_date', '<', Carbon::createFromFormat('Y-m', $currentMonth)->startOfMonth())
             ->where('invoice_status', '!=', 'VOID')
@@ -1848,12 +1862,21 @@ class CashForecastController extends Controller
             ->map(function ($items, $key) {
                 [$jobNumber, $month] = explode('|', $key, 2);
 
+                $transactions = $items->map(function ($inv) {
+                    return [
+                        'invoice_number' => $inv->invoice_number,
+                        'amount' => (float) $inv->subtotal,
+                        'memo' => $inv->memo,
+                    ];
+                })->values()->all();
+
                 return [
                     'job_number' => $jobNumber,
                     'month' => $month,
                     'amount' => (float) $items->sum('subtotal'),  // ex-GST amount
                     'retainage' => (float) $items->sum('retainage'),  // retention held back
                     'source' => 'actual',
+                    'transactions' => $transactions,
                 ];
             })
             ->values();

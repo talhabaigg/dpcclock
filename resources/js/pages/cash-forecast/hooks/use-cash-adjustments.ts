@@ -6,6 +6,7 @@ import type {
     CashInModalState,
     CashInSource,
     CashInSplit,
+    CashInTransaction,
     CashOutAdjustment,
     CashOutModalState,
     CashOutSource,
@@ -14,7 +15,7 @@ import type {
     VendorPaymentDelay,
     VendorPaymentDelaySplit,
 } from '../types';
-import { addMonthsToString } from '../utils';
+import { addMonthsToString, roundCents } from '../utils';
 
 type UseCashInAdjustmentsProps = {
     cashInSources: CashInSource[];
@@ -137,6 +138,30 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
         [modalState.sourceMonth, modalState.jobNumber, getSourceAmount],
     );
 
+    const getTransactions = useCallback(
+        (jobNumber: string | null, sourceMonth: string | null): CashInTransaction[] => {
+            if (!jobNumber || !sourceMonth) return [];
+            return cashInSources.find((s) => s.job_number === jobNumber && s.month === sourceMonth)?.transactions ?? [];
+        },
+        [cashInSources],
+    );
+
+    const transactions = useMemo(
+        () => getTransactions(modalState.jobNumber, modalState.sourceMonth),
+        [getTransactions, modalState.jobNumber, modalState.sourceMonth],
+    );
+
+    const splitByTransactions = useCallback(() => {
+        if (!modalState.sourceMonth || !modalState.jobNumber || transactions.length < 2) return;
+        setModalState((prev) => ({
+            ...prev,
+            splits: transactions.map((txn) => ({
+                receipt_month: addMonthsToString(modalState.sourceMonth!, 2),
+                amount: txn.amount,
+            })),
+        }));
+    }, [modalState.sourceMonth, modalState.jobNumber, transactions]);
+
     const saveAdjustments = useCallback(() => {
         if (!modalState.jobNumber || !modalState.sourceMonth) return;
         router.post(
@@ -171,14 +196,14 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
         );
     }, [modalState, closeModal]);
 
-    const splitTotal = useMemo(() => modalState.splits.reduce((sum, split) => sum + split.amount, 0), [modalState.splits]);
+    const splitTotal = useMemo(() => roundCents(modalState.splits.reduce((sum, split) => sum + split.amount, 0)), [modalState.splits]);
 
     const sourceAmount = useMemo(
         () => getSourceAmount(modalState.jobNumber, modalState.sourceMonth),
         [getSourceAmount, modalState.jobNumber, modalState.sourceMonth],
     );
 
-    const isOverBudget = splitTotal > sourceAmount + 0.01;
+    const isOverBudget = roundCents(splitTotal) > roundCents(sourceAmount);
 
     return {
         modalState,
@@ -195,6 +220,8 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
         splitTotal,
         sourceAmount,
         isOverBudget,
+        transactions,
+        splitByTransactions,
     };
 };
 
@@ -396,14 +423,14 @@ export const useCashOutAdjustments = ({ cashOutSources, cashOutAdjustments }: Us
         );
     }, [modalState, closeModal]);
 
-    const splitTotal = useMemo(() => modalState.splits.reduce((sum, split) => sum + split.amount, 0), [modalState.splits]);
+    const splitTotal = useMemo(() => roundCents(modalState.splits.reduce((sum, split) => sum + split.amount, 0)), [modalState.splits]);
 
     const sourceAmount = useMemo(
         () => getSourceAmount(modalState.jobNumber, modalState.costItem, modalState.vendor, modalState.sourceMonth),
         [getSourceAmount, modalState],
     );
 
-    const isOverBudget = splitTotal > sourceAmount + 0.01;
+    const isOverBudget = roundCents(splitTotal) > roundCents(sourceAmount);
 
     return {
         modalState,
@@ -585,14 +612,14 @@ export const useVendorPaymentDelays = ({ cashOutSources, vendorPaymentDelays }: 
         );
     }, [modalState, closeModal]);
 
-    const splitTotal = useMemo(() => modalState.splits.reduce((sum, split) => sum + split.amount, 0), [modalState.splits]);
+    const splitTotal = useMemo(() => roundCents(modalState.splits.reduce((sum, split) => sum + split.amount, 0)), [modalState.splits]);
 
     const sourceAmount = useMemo(
         () => getSourceAmount(modalState.vendor, modalState.sourceMonth),
         [getSourceAmount, modalState.vendor, modalState.sourceMonth],
     );
 
-    const isOverBudget = splitTotal > sourceAmount + 0.01;
+    const isOverBudget = roundCents(splitTotal) > roundCents(sourceAmount);
 
     return {
         modalState,
