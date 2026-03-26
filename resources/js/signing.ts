@@ -239,11 +239,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateUI();
     } catch (err) {
         pdfLoading.textContent = 'Failed to load document. Please refresh the page.';
+        // eslint-disable-next-line no-console
         console.error('PDF load error:', err);
         return;
     }
 
     // ─── Signature pad setup ────────────────────────────────
+    // eslint-disable-next-line prefer-const
     let signaturePad: SignaturePad;
 
     function resizeSignatureCanvas() {

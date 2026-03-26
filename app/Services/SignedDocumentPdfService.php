@@ -30,7 +30,7 @@ class SignedDocumentPdfService
 
         $pdf = Pdf::loadHTML($html)
             ->setPaper('a4', 'portrait')
-            ->setOption(['margin_top' => 15, 'margin_right' => 15, 'margin_bottom' => 15, 'margin_left' => 15]);
+            ->setOption(['margin_top' => 25, 'margin_right' => 19, 'margin_bottom' => 25, 'margin_left' => 19]);
 
         return $pdf->output();
     }
@@ -72,7 +72,7 @@ class SignedDocumentPdfService
 
         $pdf = Pdf::loadHTML($html)
             ->setPaper('a4', 'portrait')
-            ->setOption(['margin_top' => 15, 'margin_right' => 15, 'margin_bottom' => 15, 'margin_left' => 15]);
+            ->setOption(['margin_top' => 25, 'margin_right' => 19, 'margin_bottom' => 25, 'margin_left' => 19]);
 
         $pdfOutput = $pdf->output();
 

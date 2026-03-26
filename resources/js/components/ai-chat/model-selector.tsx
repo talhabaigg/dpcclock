@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import { ChevronDown, Check, Zap, Sparkles, Cpu, BrainCircuit } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, type AiModel } from './types';
+import { AVAILABLE_MODELS, type AiModel } from './types';
 
 interface ModelSelectorProps {
     selectedModelId: string;

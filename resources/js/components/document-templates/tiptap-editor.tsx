@@ -27,7 +27,6 @@ import {
     Italic,
     List,
     ListOrdered,
-    Minus,
     PenLine,
     Plus,
     Redo,
