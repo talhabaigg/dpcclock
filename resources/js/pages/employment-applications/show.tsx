@@ -48,6 +48,7 @@ import {
     Trash2,
     User,
     Wrench,
+    FileSignature,
     XCircle,
     XIcon,
 } from 'lucide-react';
@@ -260,6 +261,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
 
+/** Statuses set only by the system (signing service, event listeners) — not user-selectable */
+const SYSTEM_STATUSES = ['contract_sent', 'contract_signed'];
+
+/** Statuses that are selectable in the dropdown */
+const SELECTABLE_STATUSES = PIPELINE_STATUSES.filter((s) => !SYSTEM_STATUSES.includes(s));
+
 function StatusBadge({ status, className }: { status: string; className?: string }) {
     return (
         <Badge variant="secondary" className={cn('text-xs', className)}>
@@ -320,7 +327,33 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     const isSystem = comment.metadata !== null;
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
     const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
+    const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
+
+    if (isSystem && contractSignedMeta) {
+        return (
+            <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100">
+                    <FileSignature className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="min-w-0 flex-1 pt-1">
+                    <p className="text-sm">
+                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
+                        <span className="text-muted-foreground"> {comment.body}</span>
+                    </p>
+                    <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
+                    <button
+                        type="button"
+                        onClick={() => window.open(route('signing-requests.download', contractSignedMeta.signing_request_id), '_blank')}
+                        className="mt-1.5 flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-xs font-medium text-green-700 shadow-sm hover:bg-green-50 transition-colors"
+                    >
+                        <FileSignature className="h-3.5 w-3.5" />
+                        View Signed Document
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (isSystem && refCheckMeta) {
         return (
@@ -1632,14 +1665,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     function handleStatusChange(newStatus: string) {
         if (newStatus === app.status) return;
-        if (newStatus === 'declined') {
-            setShowDeclineDialog(true);
-            return;
-        }
-        if (newStatus === 'contract_sent') {
-            setShowSigningModal(true);
-            return;
-        }
         router.patch(route('employment-applications.update-status', app.id), { status: newStatus }, {
             preserveScroll: true,
         });
@@ -1948,13 +1973,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 {/* Status Controls */}
                                 {canScreen && (
-                                    <div className="mb-4">
+                                    <div className="mb-4 space-y-2">
                                         <Select value={app.status} onValueChange={handleStatusChange}>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Change status..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {[...PIPELINE_STATUSES, 'declined'].map((s) => (
+                                                {SELECTABLE_STATUSES.map((s) => (
                                                     <SelectItem key={s} value={s}>
                                                         {STATUS_LABELS[s]}
                                                     </SelectItem>
@@ -1964,11 +1989,27 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         {pageErrors.status && (
                                             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{pageErrors.status}</p>
                                         )}
+
+                                        {/* Action Buttons — contextual based on current status */}
+                                        <div className="flex gap-2">
+                                            {app.status === 'approved' && (
+                                                <Button size="sm" variant="outline" className="flex-1" onClick={() => setShowSigningModal(true)}>
+                                                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                                                    Send Contract
+                                                </Button>
+                                            )}
+                                            {!['declined', 'contract_signed', 'onboarded'].includes(app.status) && (
+                                                <Button size="sm" variant="secondary" className="flex-1" onClick={() => setShowDeclineDialog(true)}>
+                                                    <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                                                    Decline
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Signing Request Status */}
-                                {signingRequest && (
+                                {/* Signing Request Status - hide when signed (shown as comment instead) */}
+                                {signingRequest && signingRequest.status !== 'signed' && (
                                     <div className="mb-4 rounded-lg border bg-background p-3">
                                         <div className="mb-2 flex items-center justify-between">
                                             <span className="text-xs font-medium text-muted-foreground">Contract Signing</span>
