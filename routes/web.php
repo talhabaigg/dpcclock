@@ -8,6 +8,7 @@ use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CommentController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\DashboardLayoutController;
@@ -97,6 +98,9 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'permission:ai.chat'])->group(function () {
     Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream'])->name('chat.stream');
+    Route::get('/chat/conversations', [ConversationController::class, 'index'])->name('chat.conversations.index');
+    Route::get('/chat/conversations/{conversationId}', [ConversationController::class, 'show'])->name('chat.conversations.show');
+    Route::delete('/chat/conversations/{conversationId}', [ConversationController::class, 'destroy'])->name('chat.conversations.destroy');
 });
 
 // AI Voice Routes (restricted to users with ai.voice permission)

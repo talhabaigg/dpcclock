@@ -26,6 +26,7 @@
         "league/flysystem-sftp-v3": "^3.29",
         "maatwebsite/excel": "^3.1",
         "predis/predis": "^3.3",
+        "smalot/pdfparser": "^2.12",
         "spatie/laravel-activitylog": "^4.10",
         "spatie/laravel-medialibrary": "^11.0",
         "spatie/laravel-one-time-passwords": "^1.0",

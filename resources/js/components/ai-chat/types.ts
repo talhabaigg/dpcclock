@@ -1,16 +1,23 @@
 // AI Chat Types - Production-grade type definitions
 
+export interface ChatAttachment {
+    name: string;
+    type: string;
+    size: number;
+    url?: string;
+}
+
 export interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
     timestamp: Date;
     status: 'sending' | 'streaming' | 'complete' | 'error';
+    attachments?: ChatAttachment[];
     metadata?: {
         model?: string;
         tokensUsed?: number;
         sources?: string[];
-        forceTool?: string;
     };
 }
 
@@ -57,6 +64,13 @@ export interface StreamEvent {
     };
 }
 
+export interface ConversationSummary {
+    conversation_id: string;
+    title: string;
+    last_message_at: string;
+    message_count: number;
+}
+
 export interface UseChatOptions {
     conversationId?: string | null;
     onError?: (error: Error) => void;
@@ -68,8 +82,9 @@ export interface UseChatReturn {
     isLoading: boolean;
     error: Error | null;
     conversationId: string | null;
-    sendMessage: (content: string, forceTool?: string) => Promise<void>;
+    sendMessage: (content: string, attachments?: File[]) => Promise<void>;
     regenerateLastMessage: () => Promise<void>;
     clearMessages: () => void;
     stopGeneration: () => void;
+    loadMessages: (messages: ChatMessage[], conversationId: string) => void;
 }

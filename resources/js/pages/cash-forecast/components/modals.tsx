@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -189,7 +188,7 @@ export const GeneralCostsModal = ({
             category: cost.category,
             start_date: cost.start_date,
             end_date: cost.end_date,
-            includes_gst: cost.includes_gst,
+            gst_type: cost.gst_type,
             is_active: cost.is_active,
         });
         setConfirmDeleteId(null);
@@ -441,13 +440,21 @@ export const GeneralCostsModal = ({
                                             />
                                         </div>
                                     )}
-                                    <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                        <Checkbox
-                                            id="edit-includes-gst"
-                                            checked={editCost.includes_gst ?? true}
-                                            onCheckedChange={(checked) => setEditCost({ ...editCost, includes_gst: Boolean(checked) })}
-                                        />
-                                        <Label htmlFor="edit-includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">GST</Label>
+                                        <Select
+                                            value={editCost.gst_type ?? 'inclusive'}
+                                            onValueChange={(value) => setEditCost({ ...editCost, gst_type: value as 'inclusive' | 'exclusive' | 'free' })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="GST treatment" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="inclusive">Amount includes GST</SelectItem>
+                                                <SelectItem value="exclusive">Amount excludes GST</SelectItem>
+                                                <SelectItem value="free">No GST</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                                 <div className="flex justify-end gap-2">
@@ -600,13 +607,26 @@ export const GeneralCostsModal = ({
                                             />
                                         </div>
                                     )}
-                                    <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                        <Checkbox
-                                            id="includes-gst"
-                                            checked={newCost.includes_gst ?? true}
-                                            onCheckedChange={(checked) => onNewCostChange({ ...newCost, includes_gst: Boolean(checked) })}
-                                        />
-                                        <Label htmlFor="includes-gst" className="text-sm font-normal">Amount includes GST</Label>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">GST</Label>
+                                        <Select
+                                            value={newCost.gst_type ?? 'inclusive'}
+                                            onValueChange={(value) =>
+                                                onNewCostChange({
+                                                    ...newCost,
+                                                    gst_type: value as 'inclusive' | 'exclusive' | 'free',
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="GST treatment" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="inclusive">Amount includes GST</SelectItem>
+                                                <SelectItem value="exclusive">Amount excludes GST</SelectItem>
+                                                <SelectItem value="free">No GST</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                                 <div className="flex justify-end">

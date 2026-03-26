@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Check, Copy, Download, Image as ImageIcon, RefreshCw, Sparkles, User } from 'lucide-react';
+import { Check, Copy, Download, FileText, RefreshCw, Sparkles, User } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -563,7 +563,20 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
 
     const handleCopy = async () => {
         try {
-            await navigator.clipboard.writeText(message.content);
+            // Strip markdown formatting for plain text copy
+            const plain = message.content
+                .replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/, '').replace(/```$/, '').trim())
+                .replace(/`([^`]+)`/g, '$1')
+                .replace(/\*\*(.+?)\*\*/g, '$1')
+                .replace(/\*(.+?)\*/g, '$1')
+                .replace(/^#{1,6}\s+/gm, '')
+                .replace(/^\s*[-*+]\s+/gm, '- ')
+                .replace(/^\s*\d+\.\s+/gm, (m) => m.trim() + ' ')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/^>\s+/gm, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+            await navigator.clipboard.writeText(plain);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch {
@@ -598,10 +611,38 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                     {showTimestamp && <span className="text-muted-foreground text-xs">{formatTime(message.timestamp)}</span>}
                 </div>
 
+                {/* Attachments */}
+                {message.attachments && message.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {message.attachments.map((attachment, index) =>
+                            attachment.type.startsWith('image/') && attachment.url ? (
+                                <img
+                                    key={index}
+                                    src={attachment.url}
+                                    alt={attachment.name}
+                                    className="border-border h-auto max-h-40 max-w-[200px] rounded-lg border object-cover"
+                                />
+                            ) : (
+                                <div key={index} className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm">
+                                    <FileText className="text-muted-foreground size-3.5" />
+                                    <span className="max-w-[150px] truncate">{attachment.name}</span>
+                                    <span className="text-muted-foreground text-xs">
+                                        {attachment.size < 1024
+                                            ? `${attachment.size}B`
+                                            : attachment.size < 1048576
+                                              ? `${(attachment.size / 1024).toFixed(0)}KB`
+                                              : `${(attachment.size / 1048576).toFixed(1)}MB`}
+                                    </span>
+                                </div>
+                            ),
+                        )}
+                    </div>
+                )}
+
                 {/* Message Content */}
                 <div className={cn('prose prose-sm dark:prose-invert max-w-none', isError && 'text-destructive')}>
                     {isStreaming && !message.content ? (
-                        <StreamingIndicator forceTool={message.metadata?.forceTool} />
+                        <StreamingIndicator />
                     ) : (
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -734,58 +775,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
     );
 });
 
-function StreamingIndicator({ forceTool }: { forceTool?: string }) {
-    const isGeneratingImage = forceTool === 'generate_image';
-
-    if (isGeneratingImage) {
-        return (
-            <div className="space-y-4">
-                {/* Animated generating image text */}
-                <div className="flex items-center gap-2">
-                    <ImageIcon className="size-4 animate-pulse text-pink-500" />
-                    <span className="animate-pulse bg-gradient-to-r from-pink-500 via-rose-500 to-orange-500 bg-clip-text text-sm font-medium text-transparent">
-                        Generating image...
-                    </span>
-                </div>
-
-                {/* Image placeholder with animated border */}
-                <div className="relative h-64 w-64 overflow-hidden rounded-xl">
-                    {/* Animated gradient border */}
-                    <div
-                        className="absolute inset-0 rounded-xl"
-                        style={{
-                            background: 'linear-gradient(90deg, #ec4899, #f43f5e, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6, #ec4899)',
-                            backgroundSize: '200% 100%',
-                            animation: 'rainbow-shift 3s linear infinite',
-                            padding: '2px',
-                        }}
-                    >
-                        <div className="bg-card h-full w-full rounded-xl" />
-                    </div>
-
-                    {/* Inner content */}
-                    <div className="bg-muted/30 absolute inset-[2px] flex flex-col items-center justify-center gap-3 rounded-xl">
-                        {/* Spinning loader */}
-                        <div className="relative size-12">
-                            <div className="absolute inset-0 rounded-full border-2 border-pink-500/20" />
-                            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-pink-500" />
-                            <ImageIcon className="absolute inset-0 m-auto size-5 text-pink-500/60" />
-                        </div>
-                        <span className="text-muted-foreground text-xs">Creating your image...</span>
-                    </div>
-                </div>
-
-                {/* CSS for rainbow border animation */}
-                <style>{`
-                    @keyframes rainbow-shift {
-                        0% { background-position: 0% 50%; }
-                        100% { background-position: 200% 50%; }
-                    }
-                `}</style>
-            </div>
-        );
-    }
-
+function StreamingIndicator() {
     return (
         <div className="space-y-3">
             {/* Animated thinking text with sparkle */}

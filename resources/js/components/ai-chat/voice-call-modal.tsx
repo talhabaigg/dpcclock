@@ -137,9 +137,6 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
         onError: (error) => {
             console.error('Voice call error:', error);
         },
-        onStatusChange: (newStatus) => {
-            console.log('Voice status:', newStatus);
-        },
     });
 
     // Auto-start call when modal opens

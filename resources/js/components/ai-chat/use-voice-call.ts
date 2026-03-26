@@ -67,17 +67,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                 const message = JSON.parse(event.data);
                 const type = message.type as string;
 
-                // Log all events for debugging
-                console.log('Realtime event:', type, message);
-
                 switch (type) {
                     case 'session.created':
-                        console.log('Session created:', message.session?.id);
-                        console.log('Session config:', message.session);
-                        break;
-
                     case 'session.updated':
-                        console.log('Session updated:', message.session);
                         break;
 
                     case 'input_audio_buffer.speech_started':
@@ -97,13 +89,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     }
 
                     case 'response.audio.delta':
-                        // Audio is being streamed - this means AI is speaking
-                        // The actual audio is handled by WebRTC, but this tells us speech is happening
-                        break;
-
                     case 'response.audio.done':
-                        // Audio output finished
-                        console.log('Audio output completed');
                         break;
 
                     case 'response.audio_transcript.delta': {
@@ -123,8 +109,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     }
 
                     case 'response.output_item.done':
-                        // An output item (audio/text) completed
-                        console.log('Output item done:', message.item?.type);
                         break;
 
                     case 'response.function_call_arguments.done': {
@@ -133,7 +117,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         const toolName = message.name;
                         const toolArgs = JSON.parse(message.arguments || '{}');
 
-                        console.log('Tool call requested:', toolName, toolArgs);
                         onToolCall?.(toolName, toolArgs);
 
                         // Execute tool via server
@@ -219,14 +202,12 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             }
 
             const sessionData = await sessionResponse.json();
-            console.log('Session response:', sessionData);
 
             const ephemeralKey = sessionData.client_secret?.value;
             voiceSessionIdRef.current = sessionData.voice_session_id;
 
             if (!ephemeralKey) {
-                console.error('Session data:', sessionData);
-                throw new Error('No ephemeral key received. Check console for session data.');
+                throw new Error('No ephemeral key received');
             }
 
             // Step 2: Create WebRTC peer connection
@@ -262,7 +243,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             dataChannelRef.current = dc;
 
             dc.onopen = () => {
-                console.log('Data channel opened');
                 updateStatus('connected');
                 // Clear transcripts for new call
                 setUserTranscript('');
@@ -287,7 +267,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             };
 
             dc.onclose = () => {
-                console.log('Data channel closed');
                 if (status !== 'idle' && status !== 'disconnected') {
                     updateStatus('disconnected');
                 }
@@ -349,7 +328,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Voice session ended:', data);
                     onCallEnded?.({
                         durationSeconds: data.duration_seconds,
                         durationMinutes: data.duration_minutes,

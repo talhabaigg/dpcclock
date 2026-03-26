@@ -1,45 +1,19 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ArrowUp, BarChart3, Check, FileText, Image, MapPin, Package, Paperclip, Plus, Square, Users, X } from 'lucide-react';
+import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
-// Available tools that can be forced
-export interface AiTool {
-    id: string;
-    name: string;
-    description: string;
-    icon: React.ComponentType<{ className?: string }>;
-}
-
-const AVAILABLE_TOOLS: AiTool[] = [
-    { id: 'generate_image', name: 'Generate Image', description: 'Create AI-generated images', icon: Image },
-    { id: 'get_job_summary', name: 'Job Summary', description: 'View job costs, revenue & dates', icon: BarChart3 },
-    { id: 'search_requisitions', name: 'Search Orders', description: 'Find requisitions & POs', icon: FileText },
-    { id: 'search_materials', name: 'Search Materials', description: 'Find materials & pricing', icon: Package },
-    { id: 'list_locations', name: 'Locations', description: 'View all locations', icon: MapPin },
-    { id: 'list_suppliers', name: 'Suppliers', description: 'View all suppliers', icon: Users },
-];
-
 export interface ChatInputProps {
-    onSubmit: (message: string, attachments?: File[], forceTool?: string) => void;
+    onSubmit: (message: string, attachments?: File[]) => void;
     onStop?: () => void;
     isLoading?: boolean;
     disabled?: boolean;
     placeholder?: string;
     maxLength?: number;
     enableAttachments?: boolean;
-    enableToolSelector?: boolean;
     className?: string;
 }
 
@@ -58,7 +32,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         placeholder = 'Message Superior AI...',
         maxLength = 10000,
         enableAttachments = false,
-        enableToolSelector = true,
         className,
     },
     ref,
@@ -66,7 +39,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     const [value, setValue] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [isFocused, setIsFocused] = useState(false);
-    const [selectedTool, setSelectedTool] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,7 +48,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         clear: () => {
             setValue('');
             setAttachments([]);
-            setSelectedTool(null);
         },
         setValue: (newValue: string) => setValue(newValue),
     }));
@@ -94,18 +65,15 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     const handleSubmit = useCallback(() => {
         if (!value.trim() || disabled) return;
 
-        onSubmit(value.trim(), attachments.length > 0 ? attachments : undefined, selectedTool || undefined);
+        onSubmit(value.trim(), attachments.length > 0 ? attachments : undefined);
         setValue('');
         setAttachments([]);
-        setSelectedTool(null);
 
         // Reset textarea height
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
         }
-    }, [value, attachments, disabled, onSubmit, selectedTool]);
-
-    const selectedToolData = AVAILABLE_TOOLS.find((t) => t.id === selectedTool);
+    }, [value, attachments, disabled, onSubmit]);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -120,8 +88,15 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     );
 
     const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        setAttachments((prev) => [...prev, ...files]);
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const files = Array.from(e.target.files || []).filter((f) => {
+            if (f.size > MAX_FILE_SIZE) {
+                alert(`File "${f.name}" exceeds the 10MB limit.`);
+                return false;
+            }
+            return true;
+        });
+        setAttachments((prev) => [...prev, ...files].slice(0, 5));
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -135,19 +110,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
 
     return (
         <div className={cn('relative w-full', className)}>
-            {/* Selected tool indicator */}
-            {selectedTool && selectedToolData && (
-                <div className="mb-2 flex items-center gap-2 px-2">
-                    <div className="flex items-center gap-2 rounded-full bg-violet-500/10 px-3 py-1.5 text-sm text-violet-600 dark:text-violet-400">
-                        <selectedToolData.icon className="size-3.5" />
-                        <span>Using: {selectedToolData.name}</span>
-                        <button type="button" onClick={() => setSelectedTool(null)} className="ml-1 hover:text-violet-700 dark:hover:text-violet-300">
-                            <X className="size-3.5" />
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {/* Attachments preview */}
             {attachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2 px-2">
@@ -180,66 +142,6 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                         isFocused && 'border-border shadow-md',
                     )}
                 >
-                    {/* Plus button with tools dropdown */}
-                    {enableToolSelector && (
-                        <DropdownMenu>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className={cn(
-                                                'size-9 shrink-0 rounded-full transition-colors',
-                                                selectedTool
-                                                    ? 'bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400'
-                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                                            )}
-                                            disabled={disabled || isLoading}
-                                        >
-                                            <Plus className="size-5" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent>Tools</TooltipContent>
-                            </Tooltip>
-                            <DropdownMenuContent align="start" className="w-64">
-                                <DropdownMenuLabel>Select a tool to use</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {AVAILABLE_TOOLS.map((tool) => {
-                                    const Icon = tool.icon;
-                                    const isSelected = selectedTool === tool.id;
-                                    return (
-                                        <DropdownMenuItem
-                                            key={tool.id}
-                                            onClick={() => setSelectedTool(isSelected ? null : tool.id)}
-                                            className="flex items-center gap-3 py-2"
-                                        >
-                                            <Icon className={cn('size-4', isSelected && 'text-violet-500')} />
-                                            <div className="flex-1">
-                                                <div className={cn('text-sm font-medium', isSelected && 'text-violet-600 dark:text-violet-400')}>
-                                                    {tool.name}
-                                                </div>
-                                                <div className="text-muted-foreground text-xs">{tool.description}</div>
-                                            </div>
-                                            {isSelected && <Check className="size-4 text-violet-500" />}
-                                        </DropdownMenuItem>
-                                    );
-                                })}
-                                {selectedTool && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => setSelectedTool(null)} className="text-muted-foreground">
-                                            <X className="mr-2 size-4" />
-                                            Clear selection
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-
                     {/* Attachment button */}
                     {enableAttachments && (
                         <>

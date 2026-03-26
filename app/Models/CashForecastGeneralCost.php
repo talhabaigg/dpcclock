@@ -15,7 +15,7 @@ class CashForecastGeneralCost extends Model
         'description',
         'type',
         'amount',
-        'includes_gst',
+        'gst_type',
         'frequency',
         'start_date',
         'end_date',
@@ -26,7 +26,7 @@ class CashForecastGeneralCost extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'includes_gst' => 'boolean',
+        'gst_type' => 'string',
         'start_date' => 'date',
         'end_date' => 'date',
         'is_active' => 'boolean',
@@ -105,8 +105,8 @@ class CashForecastGeneralCost extends Model
             default => $amount,
         };
 
-        // Add GST if not already included
-        if (! $this->includes_gst) {
+        // Add GST if excluded (but not for GST-free transactions)
+        if ($this->gst_type === 'exclusive') {
             $gstRate = (float) (CashForecastSetting::current()->gst_rate ?? 0.10);
             $monthlyAmount *= (1 + $gstRate);
         }

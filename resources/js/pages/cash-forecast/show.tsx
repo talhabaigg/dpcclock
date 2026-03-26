@@ -85,7 +85,7 @@ const ShowCashForecast = ({
     const [newCost, setNewCost] = useState<Partial<GeneralCost>>({
         type: 'recurring',
         frequency: 'monthly',
-        includes_gst: true,
+        gst_type: 'inclusive' as const,
         flow_type: 'cash_out',
         start_date: new Date().toISOString().split('T')[0],
     });
@@ -190,7 +190,7 @@ const ShowCashForecast = ({
             '/cash-forecast/general-costs',
             {
                 ...newCost,
-                includes_gst: newCost.includes_gst ?? true,
+                gst_type: newCost.gst_type ?? 'inclusive',
             },
             {
                 preserveScroll: true,
@@ -205,7 +205,7 @@ const ShowCashForecast = ({
                     setNewCost({
                         type: 'recurring',
                         frequency: 'monthly',
-                        includes_gst: true,
+                        gst_type: 'inclusive' as const,
                         flow_type: 'cash_out',
                         start_date: new Date().toISOString().split('T')[0],
                     });
@@ -226,7 +226,7 @@ const ShowCashForecast = ({
             `/cash-forecast/general-costs/${id}`,
             {
                 ...data,
-                includes_gst: data.includes_gst ?? true,
+                gst_type: data.gst_type ?? 'inclusive',
             },
             {
                 preserveScroll: true,

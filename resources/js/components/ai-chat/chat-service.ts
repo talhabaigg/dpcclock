@@ -1,5 +1,5 @@
 // Chat Service - API abstraction layer for AI chat
-import type { StreamEvent } from './types';
+import type { ConversationSummary, StreamEvent } from './types';
 
 // Using web routes (not api) for session-based authentication
 const API_BASE = '';
@@ -21,24 +21,38 @@ export class ChatService {
     /**
      * Send a message and receive a streaming response
      */
-    async *streamMessage(message: string, conversationId: string | null, forceTool?: string): AsyncGenerator<StreamEvent> {
+    async *streamMessage(message: string, conversationId: string | null, files?: File[]): AsyncGenerator<StreamEvent> {
         this.abortController = new AbortController();
 
         try {
-            const response = await fetch(`${API_BASE}/chat/stream`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'text/event-stream',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
+            let body: BodyInit;
+            const headers: Record<string, string> = {
+                Accept: 'text/event-stream',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            };
+
+            if (files && files.length > 0) {
+                const formData = new FormData();
+                formData.append('message', message);
+                if (conversationId) {
+                    formData.append('conversation_id', conversationId);
+                }
+                files.forEach((file) => formData.append('files[]', file));
+                body = formData;
+            } else {
+                headers['Content-Type'] = 'application/json';
+                body = JSON.stringify({
                     message,
                     conversation_id: conversationId,
-                    force_tool: forceTool,
-                }),
+                });
+            }
+
+            const response = await fetch(`${API_BASE}/chat/stream`, {
+                method: 'POST',
+                headers,
+                credentials: 'same-origin',
+                body,
                 signal: this.abortController.signal,
             });
 
@@ -189,6 +203,59 @@ export class ChatService {
             reply: data.reply,
             conversationId: data.conversation_id,
         };
+    }
+    /**
+     * Get all conversations for the current user
+     */
+    async getConversations(): Promise<ConversationSummary[]> {
+        const response = await fetch(`${API_BASE}/chat/conversations`, {
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
+
+    /**
+     * Load messages for a specific conversation
+     */
+    async getConversation(conversationId: string): Promise<{
+        conversation_id: string;
+        messages: Array<{ id: number; role: string; content: string; created_at: string }>;
+    }> {
+        const response = await fetch(`${API_BASE}/chat/conversations/${conversationId}`, {
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
+
+    /**
+     * Delete a conversation
+     */
+    async deleteConversation(conversationId: string): Promise<void> {
+        const response = await fetch(`${API_BASE}/chat/conversations/${conversationId}`, {
+            method: 'DELETE',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
     }
 }
 

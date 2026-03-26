@@ -42,7 +42,7 @@ export type GeneralCost = {
     description: string | null;
     type: 'one_off' | 'recurring';
     amount: number;
-    includes_gst: boolean;
+    gst_type: 'inclusive' | 'exclusive' | 'free';
     frequency: string | null;
     start_date: string;
     end_date: string | null;

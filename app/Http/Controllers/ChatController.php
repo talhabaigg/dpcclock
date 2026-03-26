@@ -147,6 +147,8 @@ INSTRUCTIONS;
             'message' => ['required', 'string', 'max:'.self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
             'force_tool' => ['nullable', 'string', 'max:50'],
+            'files' => ['nullable', 'array', 'max:5'],
+            'files.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,csv,xlsx,xls,doc,docx,txt'],
         ]);
     }
 
@@ -178,6 +180,102 @@ INSTRUCTIONS;
                 'content' => $msg->message,
             ])
             ->toArray();
+    }
+
+    /**
+     * Process uploaded files into image inputs and document context text
+     */
+    private function processUploadedFiles(array $files): array
+    {
+        $imageInputs = [];
+        $documentContext = '';
+
+        foreach ($files as $file) {
+            $mime = $file->getMimeType();
+            $name = $file->getClientOriginalName();
+
+            if (str_starts_with($mime, 'image/')) {
+                $base64 = base64_encode(file_get_contents($file->getRealPath()));
+                $imageInputs[] = [
+                    'type' => 'input_image',
+                    'image_url' => "data:{$mime};base64,{$base64}",
+                ];
+            } else {
+                $text = $this->extractTextFromFile($file);
+                if ($text) {
+                    $documentContext .= "\n\n--- File: {$name} ---\n{$text}";
+                }
+            }
+        }
+
+        return [
+            'image_inputs' => $imageInputs,
+            'document_context' => trim($documentContext),
+        ];
+    }
+
+    /**
+     * Extract text content from an uploaded file
+     */
+    private function extractTextFromFile(\Illuminate\Http\UploadedFile $file): string
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+        $mime = $file->getMimeType();
+
+        try {
+            // Plain text / CSV
+            if (in_array($extension, ['txt', 'csv']) || in_array($mime, ['text/plain', 'text/csv'])) {
+                return mb_substr(file_get_contents($file->getRealPath()), 0, 50000);
+            }
+
+            // PDF
+            if ($extension === 'pdf' || $mime === 'application/pdf') {
+                $parser = new \Smalot\PdfParser\Parser();
+                $pdf = $parser->parseFile($file->getRealPath());
+
+                return mb_substr($pdf->getText(), 0, 50000);
+            }
+
+            // Excel
+            if (in_array($extension, ['xlsx', 'xls'])) {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getRealPath());
+                $text = '';
+                foreach ($spreadsheet->getAllSheets() as $sheet) {
+                    $text .= "Sheet: {$sheet->getTitle()}\n";
+                    foreach ($sheet->toArray() as $row) {
+                        $text .= implode("\t", array_map(fn ($v) => $v ?? '', $row))."\n";
+                    }
+                    $text .= "\n";
+                }
+
+                return mb_substr($text, 0, 50000);
+            }
+
+            // DOCX
+            if ($extension === 'docx') {
+                $zip = new \ZipArchive();
+                if ($zip->open($file->getRealPath()) === true) {
+                    $xml = $zip->getFromName('word/document.xml');
+                    $zip->close();
+                    if ($xml) {
+                        $text = strip_tags(str_replace('<', ' <', $xml));
+
+                        return mb_substr(preg_replace('/\s+/', ' ', $text), 0, 50000);
+                    }
+                }
+            }
+
+            // Legacy DOC
+            if ($extension === 'doc') {
+                return '[Old .doc format – please convert to .docx for best results]';
+            }
+
+            return '';
+        } catch (Throwable $e) {
+            Log::warning('File text extraction failed', ['file' => $file->getClientOriginalName(), 'error' => $e->getMessage()]);
+
+            return '[Failed to extract text from this file]';
+        }
     }
 
     /**
@@ -1618,6 +1716,12 @@ INSTRUCTIONS;
             $userId = $this->getUserId();
             $forceTool = $data['force_tool'] ?? null;
 
+            // Process uploaded files before entering the stream
+            $fileData = ['image_inputs' => [], 'document_context' => ''];
+            if ($request->hasFile('files')) {
+                $fileData = $this->processUploadedFiles($request->file('files'));
+            }
+
             // Save the user message
             AiChatMessage::create([
                 'user_id' => $userId,
@@ -1628,6 +1732,28 @@ INSTRUCTIONS;
 
             // Build conversation history
             $input = $this->buildConversationHistory($conversationId);
+
+            // If files were uploaded, modify the last user message to include file content
+            if (! empty($fileData['image_inputs']) || ! empty($fileData['document_context'])) {
+                $lastIndex = count($input) - 1;
+                $messageText = $input[$lastIndex]['content'];
+
+                if (! empty($fileData['document_context'])) {
+                    $messageText = "The user has uploaded the following file(s) for analysis:\n"
+                        .$fileData['document_context']
+                        ."\n\nUser's message: ".$messageText;
+                }
+
+                $contentParts = [
+                    ['type' => 'input_text', 'text' => $messageText],
+                ];
+
+                foreach ($fileData['image_inputs'] as $imageInput) {
+                    $contentParts[] = $imageInput;
+                }
+
+                $input[$lastIndex]['content'] = $contentParts;
+            }
 
             // Get API key before entering stream to fail early
             $apiKey = $this->getApiKey();

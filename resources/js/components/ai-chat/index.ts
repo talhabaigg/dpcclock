@@ -9,11 +9,15 @@ export { useVoiceCall } from './use-voice-call';
 export { VoiceCallModal } from './voice-call-modal';
 
 // Types
+export { ConversationPanelToggle, ConversationSidebar } from './conversation-sidebar';
+
 export type {
     ChatApiResponse,
+    ChatAttachment,
     ChatConfig,
     ChatMessage as ChatMessageType,
     Conversation,
+    ConversationSummary,
     StreamEvent,
     SuggestedPrompt,
     UseChatOptions,

@@ -1,7 +1,7 @@
 // useChat Hook - Production-grade chat state management
 import { useCallback, useRef, useState } from 'react';
 import { chatService } from './chat-service';
-import type { ChatMessage, UseChatOptions, UseChatReturn } from './types';
+import type { ChatAttachment, ChatMessage, UseChatOptions, UseChatReturn } from './types';
 
 function generateId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -19,7 +19,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     const lastUserMessageRef = useRef<string | null>(null);
 
     const sendMessage = useCallback(
-        async (content: string, forceTool?: string) => {
+        async (content: string, attachments?: File[]) => {
             if (!content.trim() || isLoading) return;
 
             const trimmedContent = content.trim();
@@ -28,6 +28,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             setIsLoading(true);
             isStreamingRef.current = true;
 
+            // Map files to attachment metadata for display
+            const chatAttachments: ChatAttachment[] | undefined = attachments?.map((f) => ({
+                name: f.name,
+                type: f.type,
+                size: f.size,
+                url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
+            }));
+
             // Add user message
             const userMessage: ChatMessage = {
                 id: generateId(),
@@ -35,6 +43,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 content: trimmedContent,
                 timestamp: new Date(),
                 status: 'complete',
+                attachments: chatAttachments,
             };
 
             // Add assistant placeholder
@@ -45,13 +54,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 content: '',
                 timestamp: new Date(),
                 status: 'streaming',
-                metadata: forceTool ? { forceTool } : undefined,
             };
 
             setMessages((prev) => [...prev, userMessage, assistantMessage]);
 
             try {
-                const stream = chatService.streamMessage(trimmedContent, conversationId, forceTool);
+                const stream = chatService.streamMessage(trimmedContent, conversationId, attachments);
                 let receivedDone = false;
                 let hasError = false;
 
@@ -186,6 +194,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         setMessages((prev) => prev.map((m) => (m.status === 'streaming' ? { ...m, status: 'complete' as const } : m)));
     }, []);
 
+    const loadMessages = useCallback((msgs: ChatMessage[], convId: string) => {
+        setMessages(msgs);
+        setConversationId(convId);
+        setError(null);
+        lastUserMessageRef.current = null;
+    }, []);
+
     return {
         messages,
         isLoading,
@@ -195,5 +210,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         regenerateLastMessage,
         clearMessages,
         stopGeneration,
+        loadMessages,
     };
 }
