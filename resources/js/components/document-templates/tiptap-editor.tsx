@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
 import { Extension } from '@tiptap/core';
@@ -27,6 +27,7 @@ import {
     Italic,
     List,
     ListOrdered,
+    Minus,
     PenLine,
     Plus,
     Redo,
@@ -36,6 +37,8 @@ import {
     Underline as UnderlineIcon,
     Undo,
     Variable,
+    ZoomIn,
+    ZoomOut,
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -51,13 +54,49 @@ interface TiptapEditorProps {
     placeholders?: Placeholder[];
 }
 
-const DEFAULT_PLACEHOLDERS: Placeholder[] = [
-    { key: 'recipient_name', label: 'Recipient Name' },
-    { key: 'recipient_email', label: 'Recipient Email' },
-    { key: 'recipient_phone', label: 'Recipient Phone' },
-    { key: 'recipient_address', label: 'Recipient Address' },
-    { key: 'recipient_position', label: 'Position' },
-    { key: 'date_signed', label: 'Date Signed' },
+type PlaceholderField = Placeholder | { divider: true };
+
+interface PlaceholderGroup {
+    label: string;
+    fields: PlaceholderField[];
+}
+
+const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
+    {
+        label: 'Applicant',
+        fields: [
+            { key: 'applicant_first_name', label: 'First Name' },
+            { key: 'applicant_surname', label: 'Surname' },
+            { key: 'applicant_full_name', label: 'Full Name' },
+            { key: 'applicant_email', label: 'Email' },
+            { key: 'applicant_phone', label: 'Phone' },
+            { key: 'applicant_suburb', label: 'Suburb' },
+            { key: 'applicant_date_of_birth', label: 'Date of Birth' },
+            { key: 'applicant_referred_by', label: 'Referred By' },
+            { divider: true },
+            { key: 'applicant_occupation', label: 'Occupation' },
+            { key: 'applicant_apprentice_year', label: 'Apprentice Year' },
+            { key: 'applicant_trade_qualified', label: 'Trade Qualified' },
+            { key: 'applicant_preferred_project_site', label: 'Preferred Project Site' },
+            { divider: true },
+            { key: 'applicant_status', label: 'Application Status' },
+        ],
+    },
+    {
+        label: 'Sender (You)',
+        fields: [
+            { key: 'sender_name', label: 'Sender Name' },
+            { key: 'sender_email', label: 'Sender Email' },
+            { key: 'sender_phone', label: 'Sender Phone' },
+            { key: 'sender_role', label: 'Sender Role' },
+        ],
+    },
+    {
+        label: 'General',
+        fields: [
+            { key: 'date_signed', label: 'Date Signed' },
+        ],
+    },
 ];
 
 const SIGNATURE_PLACEHOLDERS: Record<string, string> = {
@@ -97,7 +136,10 @@ const SignatureBoxDecoration = Extension.create({
 });
 
 export default function TiptapEditor({ content, onChange, placeholders = [] }: TiptapEditorProps) {
-    const allPlaceholders = [...DEFAULT_PLACEHOLDERS, ...placeholders.filter((p) => !DEFAULT_PLACEHOLDERS.some((d) => d.key === p.key))];
+    // Merge any custom placeholders passed from the create/edit form
+    const allGroups = placeholders.length > 0
+        ? [...PLACEHOLDER_GROUPS, { label: 'Custom', fields: placeholders.filter((p) => !PLACEHOLDER_GROUPS.some((g) => g.fields.some((f) => 'key' in f && f.key === p.key))) as PlaceholderField[] }].filter((g) => g.fields.length > 0)
+        : PLACEHOLDER_GROUPS;
 
     const editor = useEditor({
         extensions: [
@@ -215,6 +257,23 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
         },
         [editor, onChange],
     );
+
+    const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    const [zoom, setZoom] = useState(1);
+
+    const zoomIn = useCallback(() => {
+        setZoom((prev) => {
+            const next = ZOOM_LEVELS.find((z) => z > prev);
+            return next ?? prev;
+        });
+    }, []);
+
+    const zoomOut = useCallback(() => {
+        setZoom((prev) => {
+            const next = [...ZOOM_LEVELS].reverse().find((z) => z < prev);
+            return next ?? prev;
+        });
+    }, []);
 
     const [tableRows, setTableRows] = useState(3);
     const [tableCols, setTableCols] = useState(3);
@@ -439,12 +498,22 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                             <ChevronDown className="h-3 w-3" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                        {allPlaceholders.map((p) => (
-                            <DropdownMenuItem key={p.key} onClick={() => insertPlaceholder(p.key)}>
-                                <span className="font-mono text-xs text-muted-foreground">{`{{${p.key}}}`}</span>
-                                <span className="ml-2">{p.label}</span>
-                            </DropdownMenuItem>
+                    <DropdownMenuContent align="start" className="w-64">
+                        {allGroups.map((group) => (
+                            <DropdownMenuSub key={group.label}>
+                                <DropdownMenuSubTrigger>{group.label}</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                    {group.fields.map((p, idx) =>
+                                        'divider' in p ? (
+                                            <DropdownMenuSeparator key={`div-${idx}`} />
+                                        ) : (
+                                            <DropdownMenuItem key={p.key} onClick={() => insertPlaceholder(p.key)} className="font-mono text-xs">
+                                                {`{{${p.key}}}`}
+                                            </DropdownMenuItem>
+                                        ),
+                                    )}
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -485,11 +554,55 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Zoom controls */}
+                <div className="flex items-center gap-0.5">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        type="button"
+                        onClick={zoomOut}
+                        disabled={zoom <= ZOOM_LEVELS[0]}
+                    >
+                        <ZoomOut className="h-3.5 w-3.5" />
+                    </Button>
+                    <button
+                        type="button"
+                        onClick={() => setZoom(1)}
+                        className="min-w-[3rem] rounded px-1.5 py-0.5 text-center text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        title="Reset zoom"
+                    >
+                        {Math.round(zoom * 100)}%
+                    </button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        type="button"
+                        onClick={zoomIn}
+                        disabled={zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+                    >
+                        <ZoomIn className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
             </div>
 
             {/* Editor Content — A4-page preview */}
             <div className="bg-muted/40 overflow-auto p-6" style={{ maxHeight: '70vh' }}>
-                <div className="mx-auto shadow-md" style={{ width: '210mm', maxWidth: '100%', background: 'white' }}>
+                <div
+                    className="mx-auto shadow-md"
+                    style={{
+                        width: '210mm',
+                        maxWidth: '100%',
+                        background: 'white',
+                        transform: `scale(${zoom})`,
+                        transformOrigin: 'top center',
+                    }}
+                >
                     <EditorContent editor={editor} />
                 </div>
             </div>

@@ -55,6 +55,8 @@ class SigningRequest extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('signature')->singleFile();
+        $this->addMediaCollection('initials')->singleFile();
+        $this->addMediaCollection('preview_document')->singleFile();
         $this->addMediaCollection('signed_document')->singleFile();
     }
 

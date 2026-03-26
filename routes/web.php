@@ -75,6 +75,7 @@ Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, '
 
 // Document Signing — public routes (token-based, no auth)
 Route::get('/sign/{token}', [SigningRequestController::class, 'show'])->name('signing.show');
+Route::get('/sign/{token}/preview-pdf', [SigningRequestController::class, 'previewPdf'])->name('signing.preview-pdf');
 Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
 Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
 Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');

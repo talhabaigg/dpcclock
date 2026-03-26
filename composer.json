@@ -26,6 +26,7 @@
         "league/flysystem-sftp-v3": "^3.29",
         "maatwebsite/excel": "^3.1",
         "predis/predis": "^3.3",
+        "setasign/fpdi": "^2.6",
         "smalot/pdfparser": "^2.12",
         "spatie/laravel-activitylog": "^4.10",
         "spatie/laravel-medialibrary": "^11.0",
@@ -34,6 +35,7 @@
         "spatie/laravel-permission": "^6.16",
         "symfony/http-client": "^7.2",
         "symfony/postmark-mailer": "^7.2",
+        "tecnickcom/tcpdf": "^6.11",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {

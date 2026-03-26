@@ -30,6 +30,39 @@ class SigningRequestController extends Controller
         ]);
 
         $template = DocumentTemplate::findOrFail($validated['document_template_id']);
+
+        // Validate custom fields against template placeholder definitions
+        $placeholders = $template->placeholders ?? [];
+        $customFields = $validated['custom_fields'] ?? [];
+        $fieldErrors = [];
+
+        foreach ($placeholders as $placeholder) {
+            $key = $placeholder['key'];
+            $value = trim($customFields[$key] ?? '');
+            $label = $placeholder['label'] ?? $key;
+            $type = $placeholder['type'] ?? 'text';
+            $required = $placeholder['required'] ?? false;
+
+            if ($required && $value === '') {
+                $fieldErrors["custom_fields.{$key}"] = "{$label} is required.";
+                continue;
+            }
+
+            if ($value !== '' && $type !== 'text') {
+                match ($type) {
+                    'date' => ! strtotime($value) ? $fieldErrors["custom_fields.{$key}"] = "{$label} must be a valid date." : null,
+                    'number' => ! is_numeric($value) ? $fieldErrors["custom_fields.{$key}"] = "{$label} must be a valid number." : null,
+                    'email' => ! filter_var($value, FILTER_VALIDATE_EMAIL) ? $fieldErrors["custom_fields.{$key}"] = "{$label} must be a valid email address." : null,
+                    'phone' => ! preg_match('/^[+\d\s().\-]{7,}$/', $value) ? $fieldErrors["custom_fields.{$key}"] = "{$label} must be a valid phone number." : null,
+                    default => null,
+                };
+            }
+        }
+
+        if (! empty($fieldErrors)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($fieldErrors);
+        }
+
         $signable = null;
 
         if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
@@ -119,6 +152,26 @@ class SigningRequestController extends Controller
         ]);
     }
 
+    public function previewPdf(string $token)
+    {
+        $signingRequest = $this->findByToken($token);
+
+        if ($signingRequest->isExpired() || $signingRequest->isCancelled()) {
+            abort(403, 'This signing request is no longer available.');
+        }
+
+        $media = $signingRequest->getFirstMedia('preview_document');
+
+        if (! $media) {
+            abort(404, 'Preview document not found.');
+        }
+
+        return response()->file($media->getPath(), [
+            'Content-Type' => 'application/pdf',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
     public function markViewed(string $token, Request $request)
     {
         $signingRequest = $this->findByToken($token);
@@ -133,6 +186,7 @@ class SigningRequestController extends Controller
 
         $validated = $request->validate([
             'signature_data' => 'required|string',
+            'initials_data' => 'required|string',
             'signer_full_name' => 'required|string|max:255',
         ]);
 
@@ -142,6 +196,7 @@ class SigningRequestController extends Controller
                 $validated['signature_data'],
                 $validated['signer_full_name'],
                 $request,
+                $validated['initials_data'],
             );
         } catch (\RuntimeException $e) {
             return view('signing.expired', ['message' => $e->getMessage()]);

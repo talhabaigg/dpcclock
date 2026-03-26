@@ -8,7 +8,34 @@ use Carbon\Carbon;
 
 class SignedDocumentPdfService
 {
-    public function generate(SigningRequest $signingRequest, string $signatureBase64): string
+    /**
+     * Generate a preview PDF (unsigned) for the signer to view before signing.
+     */
+    public function generatePreview(SigningRequest $signingRequest): string
+    {
+        $html = $signingRequest->document_html;
+
+        // Replace signature placeholders with visual placeholder boxes
+        $signaturePlaceholder = '<div style="border: 2px dashed #94a3b8; border-radius: 8px; padding: 20px; text-align: center; color: #94a3b8; margin: 16px 0; font-style: italic;">Signature will appear here after signing</div>';
+        $html = str_replace('{{signature_box}}', $signaturePlaceholder, $html);
+        $html = str_replace('{{sender_signature}}', '', $html);
+        $html = str_replace('{{date_signed}}', '<em style="color: #94a3b8;">Date will appear upon signing</em>', $html);
+
+        // Strip problematic table styles
+        $html = preg_replace('/(<(?:table|td|th|col|colgroup|tr)\b[^>]*?)\s*style="[^"]*"/', '$1', $html);
+        $html = preg_replace('/<colgroup>.*?<\/colgroup>/s', '', $html);
+
+        $html = $this->keepHeadingsWithContent($html);
+        $html = $this->wrapInDocument($html, '');
+
+        $pdf = Pdf::loadHTML($html)
+            ->setPaper('a4', 'portrait')
+            ->setOption(['margin_top' => 15, 'margin_right' => 15, 'margin_bottom' => 15, 'margin_left' => 15]);
+
+        return $pdf->output();
+    }
+
+    public function generate(SigningRequest $signingRequest, string $signatureBase64, ?string $initialsBase64 = null): string
     {
         $html = $signingRequest->document_html;
 
@@ -37,6 +64,8 @@ class SignedDocumentPdfService
         // Remove colgroup/col elements entirely — they only carry width info
         $html = preg_replace('/<colgroup>.*?<\/colgroup>/s', '', $html);
 
+        $html = $this->keepHeadingsWithContent($html);
+
         // Append Certificate of Signing page
         $certificate = $this->buildCertificateHtml($signingRequest);
         $html = $this->wrapInDocument($html, $certificate);
@@ -45,7 +74,62 @@ class SignedDocumentPdfService
             ->setPaper('a4', 'portrait')
             ->setOption(['margin_top' => 15, 'margin_right' => 15, 'margin_bottom' => 15, 'margin_left' => 15]);
 
-        return $pdf->output();
+        $pdfOutput = $pdf->output();
+
+        // Stamp initials on every page if provided
+        if ($initialsBase64) {
+            $pdfOutput = $this->stampInitialsOnAllPages($pdfOutput, $initialsBase64);
+        }
+
+        return $pdfOutput;
+    }
+
+    /**
+     * Use FPDI + TCPDF to overlay initials image on every page of an existing PDF.
+     */
+    private function stampInitialsOnAllPages(string $pdfContent, string $initialsBase64): string
+    {
+        // Write PDF to temp file (FPDI needs a file path)
+        $tempPdf = tempnam(sys_get_temp_dir(), 'sign_') . '.pdf';
+        file_put_contents($tempPdf, $pdfContent);
+
+        // Write initials image to temp file
+        $initialsData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $initialsBase64));
+        $tempInitials = tempnam(sys_get_temp_dir(), 'init_') . '.png';
+        file_put_contents($tempInitials, $initialsData);
+
+        try {
+            $fpdi = new \setasign\Fpdi\Tcpdf\Fpdi();
+            $fpdi->setPrintHeader(false);
+            $fpdi->setPrintFooter(false);
+            $fpdi->SetAutoPageBreak(false, 0);
+
+            $pageCount = $fpdi->setSourceFile($tempPdf);
+
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $template = $fpdi->importPage($i);
+                $size = $fpdi->getTemplateSize($template);
+                $fpdi->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                $fpdi->useTemplate($template);
+
+                // Stamp initials on document pages only, skip the certificate (last page)
+                if ($i < $pageCount) {
+                    // Stamp initials in bottom-right corner — 30x15mm, within the margin area
+                    $fpdi->Image(
+                        $tempInitials,
+                        $size['width'] - 45,  // 45mm from right edge
+                        $size['height'] - 20, // 20mm from bottom edge
+                        30,                    // 30mm wide
+                        15,                    // 15mm tall
+                    );
+                }
+            }
+
+            return $fpdi->Output('', 'S');
+        } finally {
+            @unlink($tempPdf);
+            @unlink($tempInitials);
+        }
     }
 
     private function buildCertificateHtml(SigningRequest $signingRequest): string
@@ -96,6 +180,58 @@ class SignedDocumentPdfService
         HTML;
     }
 
+    /**
+     * Wrap each heading + its following content block in a div with page-break-inside: avoid,
+     * so DomPDF keeps headings together with their content instead of orphaning them.
+     * Only processes top-level headings (not those inside table cells).
+     */
+    private function keepHeadingsWithContent(string $html): string
+    {
+        $dom = new \DOMDocument();
+        @$dom->loadHTML('<meta charset="utf-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+        $xpath = new \DOMXPath($dom);
+        // Only select headings that are NOT inside a table
+        $headings = $xpath->query('//h1[not(ancestor::table)] | //h2[not(ancestor::table)] | //h3[not(ancestor::table)]');
+
+        foreach ($headings as $heading) {
+            $sibling = $heading->nextSibling;
+            // Skip whitespace text nodes
+            while ($sibling && $sibling->nodeType === XML_TEXT_NODE && trim($sibling->textContent) === '') {
+                $sibling = $sibling->nextSibling;
+            }
+
+            if (! $sibling || ! ($sibling instanceof \DOMElement)) {
+                continue;
+            }
+
+            // Only wrap with block-level content siblings
+            $tag = strtolower($sibling->tagName);
+            if (! in_array($tag, ['p', 'ul', 'ol', 'div'])) {
+                continue;
+            }
+
+            $wrapper = $dom->createElement('div');
+            $wrapper->setAttribute('style', 'page-break-inside: avoid;');
+
+            $heading->parentNode->insertBefore($wrapper, $heading);
+            $wrapper->appendChild($heading);
+            $wrapper->appendChild($sibling);
+        }
+
+        $body = $dom->getElementsByTagName('body')->item(0);
+        if (! $body) {
+            return $html;
+        }
+
+        $result = '';
+        foreach ($body->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+
+        return $result;
+    }
+
     private function wrapInDocument(string $bodyHtml, string $certificateHtml): string
     {
         $logoPath = public_path('logo.png');
@@ -115,7 +251,12 @@ class SignedDocumentPdfService
                 th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; font-size: 10px; line-height: 1.3; word-wrap: break-word; overflow: hidden; }
                 th { background-color: #e5e7eb; font-weight: 600; }
                 col, colgroup { width: auto !important; }
-                ul, ol { padding-left: 20px; }
+                ul, ol { padding-left: 20px; list-style-position: outside; }
+                ol { list-style-type: decimal; }
+                ul { list-style-type: disc; }
+                li { margin: 1px 0; }
+                h1, h2, h3 { page-break-after: avoid; }
+                table, ul, ol, blockquote, p { page-break-inside: avoid; }
             </style>
         </head>
         <body>

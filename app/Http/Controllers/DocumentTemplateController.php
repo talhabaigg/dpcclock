@@ -34,6 +34,8 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
+            'placeholders.*.type' => 'nullable|string|in:text,date,number,email,phone',
+            'placeholders.*.required' => 'nullable|boolean',
         ]);
 
         $template = DocumentTemplate::create([
@@ -63,6 +65,8 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
+            'placeholders.*.type' => 'nullable|string|in:text,date,number,email,phone',
+            'placeholders.*.required' => 'nullable|boolean',
             'is_active' => 'boolean',
         ]);
 

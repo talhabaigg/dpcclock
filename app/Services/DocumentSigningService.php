@@ -41,11 +41,38 @@ class DocumentSigningService
                 });
         }
 
-        // Render template HTML with placeholder values
+        // Build placeholder values — auto-resolve applicant fields if signable is an employment application
         $placeholderValues = array_merge($customFields, [
             'recipient_name' => $recipientName,
             'recipient_email' => $recipientEmail ?? '',
         ]);
+
+        if ($signable instanceof \App\Models\EmploymentApplication) {
+            $placeholderValues = array_merge($placeholderValues, [
+                'applicant_first_name' => $signable->first_name ?? '',
+                'applicant_surname' => $signable->surname ?? '',
+                'applicant_full_name' => $signable->full_name ?? '',
+                'applicant_email' => $signable->email ?? '',
+                'applicant_phone' => $signable->phone ?? '',
+                'applicant_suburb' => $signable->suburb ?? '',
+                'applicant_date_of_birth' => $signable->date_of_birth?->format('d/m/Y') ?? '',
+                'applicant_referred_by' => $signable->referred_by ?? '',
+                'applicant_occupation' => $signable->occupation ?? '',
+                'applicant_apprentice_year' => $signable->apprentice_year ? (string) $signable->apprentice_year : '',
+                'applicant_trade_qualified' => $signable->trade_qualified ? 'Yes' : 'No',
+                'applicant_preferred_project_site' => $signable->preferred_project_site ?? '',
+                'applicant_status' => $signable->status ?? '',
+            ]);
+        }
+
+        // Auto-resolve sender (authenticated user) fields
+        $placeholderValues = array_merge($placeholderValues, [
+            'sender_name' => $admin->name ?? '',
+            'sender_email' => $admin->email ?? '',
+            'sender_phone' => $admin->phone ?? '',
+            'sender_role' => $admin->roles->first()?->name ?? '',
+        ]);
+
         $documentHtml = $template->renderHtml($placeholderValues);
 
         // Replace sender signature placeholder with rendered HTML if provided
@@ -78,6 +105,12 @@ class DocumentSigningService
             'sender_full_name' => $senderFullName,
             'expires_at' => now()->addDays(7),
         ]);
+
+        // Generate preview PDF for the signer to view (paginated, no signatures)
+        $previewPdf = $this->pdfService->generatePreview($signingRequest);
+        $signingRequest->addMediaFromString($previewPdf)
+            ->usingFileName('preview-document.pdf')
+            ->toMediaCollection('preview_document');
 
         $signingRequest->logEvent('created', 'admin', $admin->id);
 
@@ -148,6 +181,7 @@ class DocumentSigningService
         string $signatureDataUrl,
         string $signerFullName,
         Request $request,
+        ?string $initialsDataUrl = null,
     ): void {
         if ($signingRequest->isSigned()) {
             throw new \RuntimeException('This document has already been signed.');
@@ -179,8 +213,15 @@ class DocumentSigningService
             ->usingFileName('signature.png')
             ->toMediaCollection('signature');
 
-        // Generate signed PDF
-        $pdfContent = $this->pdfService->generate($signingRequest, $signatureDataUrl);
+        // Store initials image
+        if ($initialsDataUrl) {
+            $signingRequest->addMediaFromBase64($initialsDataUrl)
+                ->usingFileName('initials.png')
+                ->toMediaCollection('initials');
+        }
+
+        // Generate signed PDF (with initials stamped on every page)
+        $pdfContent = $this->pdfService->generate($signingRequest, $signatureDataUrl, $initialsDataUrl);
 
         $signingRequest->addMediaFromString($pdfContent)
             ->usingFileName('signed-document.pdf')
@@ -192,10 +233,18 @@ class DocumentSigningService
         // Fire event for listeners (e.g., update employment application status)
         DocumentSigned::dispatch($signingRequest);
 
-        // Notify admins
-        $admin = $signingRequest->sentBy;
-        if ($admin) {
-            $admin->notify(new DocumentSignedNotification($signingRequest));
+        // Notify admins — wrapped in try/catch so notification failures
+        // (e.g. web-push encryption issues) don't break the signing flow
+        try {
+            $admin = $signingRequest->sentBy;
+            if ($admin) {
+                $admin->notify(new DocumentSignedNotification($signingRequest));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to send DocumentSigned notification', [
+                'signing_request_id' => $signingRequest->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

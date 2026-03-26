@@ -12,7 +12,7 @@ import SignaturePad from 'signature_pad';
 interface DocumentTemplate {
     id: number;
     name: string;
-    placeholders: { key: string; label: string }[] | null;
+    placeholders: { key: string; label: string; type?: string; required?: boolean }[] | null;
     body_html: string | null;
 }
 
@@ -96,6 +96,28 @@ export default function SendForSigningModal({
         setCustomFields({});
     };
 
+    const validateFieldValue = (value: string, type: string): string | null => {
+        if (!value) return null;
+        switch (type) {
+            case 'date': {
+                const d = new Date(value);
+                if (isNaN(d.getTime())) return 'Must be a valid date.';
+                return null;
+            }
+            case 'number':
+                if (isNaN(Number(value))) return 'Must be a valid number.';
+                return null;
+            case 'email':
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Must be a valid email address.';
+                return null;
+            case 'phone':
+                if (!/^[+\d\s().-]{7,}$/.test(value)) return 'Must be a valid phone number.';
+                return null;
+            default:
+                return null;
+        }
+    };
+
     const handleSubmit = () => {
         const newErrors: Record<string, string> = {};
         if (!selectedTemplateId) newErrors.template = 'Please select a template.';
@@ -104,6 +126,19 @@ export default function SendForSigningModal({
         if (requiresSenderSignature) {
             if (!senderFullName.trim()) newErrors.sender_full_name = 'Your full name is required.';
             if (senderSignaturePadRef.current?.isEmpty()) newErrors.sender_signature = 'Please draw your signature before sending.';
+        }
+
+        // Validate required and typed custom fields
+        for (const p of templatePlaceholders) {
+            const val = customFields[p.key]?.trim() ?? '';
+            if (p.required && !val) {
+                newErrors[`cf_${p.key}`] = `${p.label} is required.`;
+                continue;
+            }
+            if (val && p.type) {
+                const typeError = validateFieldValue(val, p.type);
+                if (typeError) newErrors[`cf_${p.key}`] = typeError;
+            }
         }
 
         if (Object.keys(newErrors).length > 0) {
@@ -219,19 +254,25 @@ export default function SendForSigningModal({
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
-                                {templatePlaceholders.map((p) => (
-                                    <div key={p.key} className="space-y-1">
-                                        <Label htmlFor={`cf-${p.key}`} className="text-xs">
-                                            {p.label}
-                                        </Label>
-                                        <Input
-                                            id={`cf-${p.key}`}
-                                            value={customFields[p.key] ?? ''}
-                                            onChange={(e) => setCustomFields((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                                            placeholder={p.label}
-                                        />
-                                    </div>
-                                ))}
+                                {templatePlaceholders.map((p) => {
+                                    const inputType = p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text';
+                                    return (
+                                        <div key={p.key} className="space-y-1">
+                                            <Label htmlFor={`cf-${p.key}`} className="text-xs">
+                                                {p.label}
+                                                {p.required && <span className="text-destructive ml-0.5">*</span>}
+                                            </Label>
+                                            <Input
+                                                id={`cf-${p.key}`}
+                                                type={inputType}
+                                                value={customFields[p.key] ?? ''}
+                                                onChange={(e) => setCustomFields((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                                                placeholder={p.type === 'date' ? '' : p.label}
+                                            />
+                                            {errors[`cf_${p.key}`] && <p className="text-xs text-destructive">{errors[`cf_${p.key}`]}</p>}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
