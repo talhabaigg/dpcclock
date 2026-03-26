@@ -24,11 +24,15 @@ class ChatController extends Controller
      */
     private const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 
+    private const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
     private const DEFAULT_MODEL = 'gpt-4.1';
 
     private const MAX_MESSAGE_LENGTH = 10000;
 
     private const MAX_HISTORY_MESSAGES = 50;
+
+    private const CLAUDE_MODELS = ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'];
 
     /**
      * Get the OpenAI API key from environment
@@ -42,6 +46,28 @@ class ChatController extends Controller
         }
 
         return $key;
+    }
+
+    /**
+     * Get the Anthropic API key from environment
+     */
+    private function getAnthropicApiKey(): string
+    {
+        $key = config('services.anthropic.api_key') ?: env('ANTHROPIC_API_KEY');
+
+        if (! $key) {
+            throw new \RuntimeException('Anthropic API key is not configured');
+        }
+
+        return $key;
+    }
+
+    /**
+     * Check if the given model is a Claude model
+     */
+    private function isClaudeModel(string $model): bool
+    {
+        return in_array($model, self::CLAUDE_MODELS);
     }
 
     /**
@@ -147,6 +173,7 @@ INSTRUCTIONS;
             'message' => ['required', 'string', 'max:'.self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
             'force_tool' => ['nullable', 'string', 'max:50'],
+            'model' => ['nullable', 'string', 'in:gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o4-mini,gpt-4o,gpt-4o-mini,claude-sonnet-4-20250514,claude-3-5-haiku-20241022'],
             'files' => ['nullable', 'array', 'max:5'],
             'files.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,csv,xlsx,xls,doc,docx,txt'],
         ]);
@@ -1715,6 +1742,7 @@ INSTRUCTIONS;
             $conversationId = $data['conversation_id'] ?? Str::uuid()->toString();
             $userId = $this->getUserId();
             $forceTool = $data['force_tool'] ?? null;
+            $selectedModel = $data['model'] ?? self::DEFAULT_MODEL;
 
             // Process uploaded files before entering the stream
             $fileData = ['image_inputs' => [], 'document_context' => ''];
@@ -1760,238 +1788,25 @@ INSTRUCTIONS;
             $instructions = $this->getSystemInstructions();
             $tools = $this->buildToolsConfig();
 
-            Log::info('Chat stream starting', ['conversation_id' => $conversationId, 'user_id' => $userId, 'force_tool' => $forceTool]);
+            Log::info('Chat stream starting', ['conversation_id' => $conversationId, 'user_id' => $userId, 'force_tool' => $forceTool, 'model' => $selectedModel]);
 
-            return response()->stream(function () use ($input, $conversationId, $userId, $apiKey, $instructions, $tools, $forceTool) {
+            // Get Anthropic key early if needed
+            $anthropicApiKey = $this->isClaudeModel($selectedModel) ? $this->getAnthropicApiKey() : null;
+
+            return response()->stream(function () use ($input, $conversationId, $userId, $apiKey, $anthropicApiKey, $instructions, $tools, $forceTool, $selectedModel) {
                 $this->configureStreamOutput();
 
                 $fullText = '';
                 $totalTokens = 0;
                 $inputTokens = 0;
                 $outputTokens = 0;
-                $maxIterations = 10; // Prevent infinite loops
-                $currentInput = $input;
 
                 try {
-                    for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
-                        Log::info('Making OpenAI API request', ['iteration' => $iteration]);
-
-                        // Build request payload
-                        $requestPayload = [
-                            'model' => self::DEFAULT_MODEL,
-                            'input' => $currentInput,
-                            'instructions' => $instructions,
-                            'tools' => $tools,
-                            'stream' => true,
-                        ];
-
-                        // Force specific tool if requested (only on first iteration)
-                        if ($forceTool && $iteration === 0) {
-                            $requestPayload['tool_choice'] = [
-                                'type' => 'function',
-                                'name' => $forceTool,
-                            ];
-                        }
-
-                        $response = Http::withToken($apiKey)
-                            ->withHeaders([
-                                'Accept' => 'text/event-stream',
-                                'Content-Type' => 'application/json',
-                            ])
-                            ->withOptions(['stream' => true])
-                            ->timeout(120)
-                            ->post(self::OPENAI_API_URL, $requestPayload);
-
-                        // Check for HTTP errors before trying to get stream
-                        if ($response->failed()) {
-                            Log::error('OpenAI API failed', ['status' => $response->status(), 'body' => $response->body()]);
-                            $this->sendSSEData(['error' => 'OpenAI API request failed: '.$response->status()]);
-                            break;
-                        }
-
-                        $stream = $response->toPsrResponse()->getBody();
-                        $buffer = '';
-                        $pendingToolCalls = [];
-                        $currentToolCall = null;
-                        $needsToolExecution = false;
-
-                        while (! $stream->eof()) {
-                            $chunk = $stream->read(1024);
-                            if ($chunk === '' || $chunk === false) {
-                                usleep(20000);
-
-                                continue;
-                            }
-
-                            $buffer .= $chunk;
-
-                            while (($pos = strpos($buffer, "\n")) !== false) {
-                                $line = trim(substr($buffer, 0, $pos));
-                                $buffer = substr($buffer, $pos + 1);
-
-                                if ($line === '' || strpos($line, 'data: ') !== 0) {
-                                    continue;
-                                }
-
-                                $payload = substr($line, 6);
-
-                                if ($payload === '[DONE]') {
-                                    break 2;
-                                }
-
-                                $event = json_decode($payload, true);
-                                if (! is_array($event)) {
-                                    continue;
-                                }
-
-                                $eventType = $event['type'] ?? null;
-
-                                // Handle text deltas
-                                if ($eventType === 'response.output_text.delta') {
-                                    $delta = $event['delta'] ?? '';
-                                    if (is_string($delta) && $delta !== '') {
-                                        $fullText .= $delta;
-                                        $this->sendSSEData(['delta' => $delta]);
-                                    }
-                                }
-
-                                // Handle function call start
-                                if ($eventType === 'response.function_call_arguments.start') {
-                                    $currentToolCall = [
-                                        'call_id' => $event['call_id'] ?? $event['item_id'] ?? null,
-                                        'name' => $event['name'] ?? null,
-                                        'arguments' => '',
-                                    ];
-                                }
-
-                                // Handle function call arguments delta
-                                if ($eventType === 'response.function_call_arguments.delta') {
-                                    if ($currentToolCall !== null) {
-                                        $currentToolCall['arguments'] .= $event['delta'] ?? '';
-                                    }
-                                }
-
-                                // Handle function call done
-                                if ($eventType === 'response.function_call_arguments.done') {
-                                    if ($currentToolCall !== null) {
-                                        // Use the final arguments from the done event, or fall back to accumulated
-                                        $currentToolCall['arguments'] = $event['arguments'] ?? $currentToolCall['arguments'];
-                                        $pendingToolCalls[] = $currentToolCall;
-                                        $currentToolCall = null;
-                                        $needsToolExecution = true;
-                                    }
-                                }
-
-                                // Handle output item added (for function calls)
-                                // Note: This event fires BEFORE arguments are streamed, so we just set up the currentToolCall
-                                // and wait for arguments to be streamed or for response.completed to get full data
-                                if ($eventType === 'response.output_item.added') {
-                                    $item = $event['item'] ?? [];
-                                    if (($item['type'] ?? null) === 'function_call') {
-                                        // Initialize current tool call tracking - don't add to pending yet
-                                        // Wait for response.completed to get the full arguments
-                                        $callId = $item['call_id'] ?? $item['id'] ?? null;
-                                        $name = $item['name'] ?? null;
-
-                                        if ($callId && $name && $currentToolCall === null) {
-                                            $currentToolCall = [
-                                                'call_id' => $callId,
-                                                'name' => $name,
-                                                'arguments' => '',
-                                            ];
-                                        }
-                                    }
-                                }
-
-                                // Handle completion
-                                if ($eventType === 'response.completed') {
-                                    $usage = $event['response']['usage'] ?? [];
-                                    $totalTokens += $usage['total_tokens'] ?? 0;
-                                    $inputTokens += $usage['input_tokens'] ?? 0;
-                                    $outputTokens += $usage['output_tokens'] ?? 0;
-
-                                    // Check if there are function calls in the output
-                                    // The completed event has the FINAL state with full arguments
-                                    $output = $event['response']['output'] ?? [];
-
-                                    foreach ($output as $item) {
-                                        if (($item['type'] ?? null) === 'function_call') {
-                                            $callId = $item['call_id'] ?? $item['id'] ?? null;
-                                            $name = $item['name'] ?? null;
-                                            $args = $item['arguments'] ?? '';
-
-                                            if ($callId && $name) {
-                                                // Update existing or add new
-                                                $found = false;
-                                                foreach ($pendingToolCalls as &$tc) {
-                                                    if ($tc['call_id'] === $callId) {
-                                                        // Update with final arguments from completed event
-                                                        $tc['arguments'] = $args;
-                                                        $found = true;
-                                                        $needsToolExecution = true;
-                                                        break;
-                                                    }
-                                                }
-                                                unset($tc);
-
-                                                if (! $found) {
-                                                    $pendingToolCalls[] = [
-                                                        'call_id' => $callId,
-                                                        'name' => $name,
-                                                        'arguments' => $args,
-                                                    ];
-                                                    $needsToolExecution = true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    break 2;
-                                }
-                            }
-                        }
-
-                        // If there are pending tool calls, execute them and continue
-                        if ($needsToolExecution && ! empty($pendingToolCalls)) {
-                            Log::info('Executing tool calls', ['tools' => array_column($pendingToolCalls, 'name')]);
-
-                            // Notify client that we're using tools
-                            $this->sendSSEData(['status' => 'calling_tools', 'tools' => array_column($pendingToolCalls, 'name')]);
-
-                            // Build the next input with function calls AND their outputs
-                            // The Responses API requires both the function_call and function_call_output items
-                            $toolItems = [];
-                            foreach ($pendingToolCalls as $toolCall) {
-                                // First, add the function_call item
-                                $toolItems[] = [
-                                    'type' => 'function_call',
-                                    'call_id' => $toolCall['call_id'],
-                                    'name' => $toolCall['name'],
-                                    'arguments' => $toolCall['arguments'],
-                                ];
-
-                                // Execute the tool
-                                $args = json_decode($toolCall['arguments'], true) ?? [];
-                                $result = $this->executeToolCall($toolCall['name'], $args);
-
-                                // Then add the function_call_output item
-                                $toolItems[] = [
-                                    'type' => 'function_call_output',
-                                    'call_id' => $toolCall['call_id'],
-                                    'output' => $result,
-                                ];
-
-                                Log::info('Tool executed', ['tool' => $toolCall['name'], 'result_length' => strlen($result)]);
-                            }
-
-                            // Add tool items to input for next iteration
-                            $currentInput = array_merge($currentInput, $toolItems);
-                            $pendingToolCalls = [];
-
-                            continue; // Go to next iteration to get the final response
-                        }
-
-                        // No more tool calls, we're done
-                        break;
+                    // Route to Claude or OpenAI based on model
+                    if ($this->isClaudeModel($selectedModel) && $anthropicApiKey) {
+                        $this->streamClaudeResponse($input, $instructions, $selectedModel, $anthropicApiKey, $fullText, $totalTokens, $inputTokens, $outputTokens);
+                    } else {
+                        $this->streamOpenAiResponse($input, $instructions, $tools, $selectedModel, $apiKey, $forceTool, $fullText, $totalTokens, $inputTokens, $outputTokens);
                     }
                 } catch (Throwable $e) {
                     Log::error('Stream error', [
@@ -2010,7 +1825,7 @@ INSTRUCTIONS;
                         'conversation_id' => $conversationId,
                         'role' => 'assistant',
                         'message' => $fullText,
-                        'model_used' => self::DEFAULT_MODEL,
+                        'model_used' => $selectedModel,
                         'tokens_used' => $totalTokens,
                         'input_tokens' => $inputTokens,
                         'output_tokens' => $outputTokens,
@@ -2032,6 +1847,333 @@ INSTRUCTIONS;
                 'error' => 'Failed to start chat stream',
                 'message' => app()->isProduction() ? 'Please try again later' : $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Stream response from OpenAI API with tool call support
+     */
+    private function streamOpenAiResponse(array $input, string $instructions, array $tools, string $model, string $apiKey, ?string $forceTool, string &$fullText, int &$totalTokens, int &$inputTokens, int &$outputTokens): void
+    {
+        $maxIterations = 10;
+        $currentInput = $input;
+
+        for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
+            Log::info('Making OpenAI API request', ['iteration' => $iteration]);
+
+            $requestPayload = [
+                'model' => $model,
+                'input' => $currentInput,
+                'instructions' => $instructions,
+                'tools' => $tools,
+                'stream' => true,
+            ];
+
+            if ($forceTool && $iteration === 0) {
+                $requestPayload['tool_choice'] = [
+                    'type' => 'function',
+                    'name' => $forceTool,
+                ];
+            }
+
+            $response = Http::withToken($apiKey)
+                ->withHeaders([
+                    'Accept' => 'text/event-stream',
+                    'Content-Type' => 'application/json',
+                ])
+                ->withOptions(['stream' => true])
+                ->timeout(120)
+                ->post(self::OPENAI_API_URL, $requestPayload);
+
+            if ($response->failed()) {
+                Log::error('OpenAI API failed', ['status' => $response->status(), 'body' => $response->body()]);
+                $this->sendSSEData(['error' => 'OpenAI API request failed: '.$response->status()]);
+                break;
+            }
+
+            $stream = $response->toPsrResponse()->getBody();
+            $buffer = '';
+            $pendingToolCalls = [];
+            $currentToolCall = null;
+            $needsToolExecution = false;
+
+            while (! $stream->eof()) {
+                $chunk = $stream->read(1024);
+                if ($chunk === '' || $chunk === false) {
+                    usleep(20000);
+                    continue;
+                }
+
+                $buffer .= $chunk;
+
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
+
+                    if ($line === '' || strpos($line, 'data: ') !== 0) {
+                        continue;
+                    }
+
+                    $payload = substr($line, 6);
+
+                    if ($payload === '[DONE]') {
+                        break 2;
+                    }
+
+                    $event = json_decode($payload, true);
+                    if (! is_array($event)) {
+                        continue;
+                    }
+
+                    $eventType = $event['type'] ?? null;
+
+                    if ($eventType === 'response.output_text.delta') {
+                        $delta = $event['delta'] ?? '';
+                        if (is_string($delta) && $delta !== '') {
+                            $fullText .= $delta;
+                            $this->sendSSEData(['delta' => $delta]);
+                        }
+                    }
+
+                    if ($eventType === 'response.function_call_arguments.start') {
+                        $currentToolCall = [
+                            'call_id' => $event['call_id'] ?? $event['item_id'] ?? null,
+                            'name' => $event['name'] ?? null,
+                            'arguments' => '',
+                        ];
+                    }
+
+                    if ($eventType === 'response.function_call_arguments.delta') {
+                        if ($currentToolCall !== null) {
+                            $currentToolCall['arguments'] .= $event['delta'] ?? '';
+                        }
+                    }
+
+                    if ($eventType === 'response.function_call_arguments.done') {
+                        if ($currentToolCall !== null) {
+                            $currentToolCall['arguments'] = $event['arguments'] ?? $currentToolCall['arguments'];
+                            $pendingToolCalls[] = $currentToolCall;
+                            $currentToolCall = null;
+                            $needsToolExecution = true;
+                        }
+                    }
+
+                    if ($eventType === 'response.output_item.added') {
+                        $item = $event['item'] ?? [];
+                        if (($item['type'] ?? null) === 'function_call') {
+                            $callId = $item['call_id'] ?? $item['id'] ?? null;
+                            $name = $item['name'] ?? null;
+                            if ($callId && $name && $currentToolCall === null) {
+                                $currentToolCall = [
+                                    'call_id' => $callId,
+                                    'name' => $name,
+                                    'arguments' => '',
+                                ];
+                            }
+                        }
+                    }
+
+                    if ($eventType === 'response.completed') {
+                        $usage = $event['response']['usage'] ?? [];
+                        $totalTokens += $usage['total_tokens'] ?? 0;
+                        $inputTokens += $usage['input_tokens'] ?? 0;
+                        $outputTokens += $usage['output_tokens'] ?? 0;
+
+                        $output = $event['response']['output'] ?? [];
+                        foreach ($output as $item) {
+                            if (($item['type'] ?? null) === 'function_call') {
+                                $callId = $item['call_id'] ?? $item['id'] ?? null;
+                                $name = $item['name'] ?? null;
+                                $args = $item['arguments'] ?? '';
+
+                                if ($callId && $name) {
+                                    $found = false;
+                                    foreach ($pendingToolCalls as &$tc) {
+                                        if ($tc['call_id'] === $callId) {
+                                            $tc['arguments'] = $args;
+                                            $found = true;
+                                            $needsToolExecution = true;
+                                            break;
+                                        }
+                                    }
+                                    unset($tc);
+
+                                    if (! $found) {
+                                        $pendingToolCalls[] = [
+                                            'call_id' => $callId,
+                                            'name' => $name,
+                                            'arguments' => $args,
+                                        ];
+                                        $needsToolExecution = true;
+                                    }
+                                }
+                            }
+                        }
+                        break 2;
+                    }
+                }
+            }
+
+            if ($needsToolExecution && ! empty($pendingToolCalls)) {
+                Log::info('Executing tool calls', ['tools' => array_column($pendingToolCalls, 'name')]);
+                $this->sendSSEData(['status' => 'calling_tools', 'tools' => array_column($pendingToolCalls, 'name')]);
+
+                $toolItems = [];
+                foreach ($pendingToolCalls as $toolCall) {
+                    $toolItems[] = [
+                        'type' => 'function_call',
+                        'call_id' => $toolCall['call_id'],
+                        'name' => $toolCall['name'],
+                        'arguments' => $toolCall['arguments'],
+                    ];
+
+                    $args = json_decode($toolCall['arguments'], true) ?? [];
+                    $result = $this->executeToolCall($toolCall['name'], $args);
+
+                    $toolItems[] = [
+                        'type' => 'function_call_output',
+                        'call_id' => $toolCall['call_id'],
+                        'output' => $result,
+                    ];
+
+                    Log::info('Tool executed', ['tool' => $toolCall['name'], 'result_length' => strlen($result)]);
+                }
+
+                $currentInput = array_merge($currentInput, $toolItems);
+                $pendingToolCalls = [];
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    /**
+     * Stream response from Anthropic Claude API
+     */
+    private function streamClaudeResponse(array $input, string $instructions, string $model, string $apiKey, string &$fullText, int &$totalTokens, int &$inputTokens, int &$outputTokens): void
+    {
+        // Convert OpenAI-style input to Anthropic messages format
+        $messages = [];
+        foreach ($input as $item) {
+            $role = $item['role'] ?? null;
+            $content = $item['content'] ?? '';
+
+            if ($role === 'user' || $role === 'assistant') {
+                // Handle array content (multimodal)
+                if (is_array($content)) {
+                    $anthropicContent = [];
+                    foreach ($content as $part) {
+                        if (($part['type'] ?? '') === 'input_text') {
+                            $anthropicContent[] = ['type' => 'text', 'text' => $part['text']];
+                        } elseif (($part['type'] ?? '') === 'input_image') {
+                            $anthropicContent[] = [
+                                'type' => 'image',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $part['image_url']['detail'] ?? 'image/jpeg',
+                                    'data' => $part['image_url']['url'] ?? '',
+                                ],
+                            ];
+                        }
+                    }
+                    $messages[] = ['role' => $role, 'content' => $anthropicContent];
+                } else {
+                    $messages[] = ['role' => $role, 'content' => $content];
+                }
+            }
+        }
+
+        $requestPayload = [
+            'model' => $model,
+            'max_tokens' => 4096,
+            'system' => $instructions,
+            'messages' => $messages,
+            'stream' => true,
+        ];
+
+        Log::info('Making Anthropic API request', ['model' => $model]);
+
+        $response = Http::withHeaders([
+            'x-api-key' => $apiKey,
+            'anthropic-version' => '2023-06-01',
+            'Accept' => 'text/event-stream',
+            'Content-Type' => 'application/json',
+        ])
+            ->withOptions(['stream' => true])
+            ->timeout(120)
+            ->post(self::ANTHROPIC_API_URL, $requestPayload);
+
+        if ($response->failed()) {
+            Log::error('Anthropic API failed', ['status' => $response->status(), 'body' => $response->body()]);
+            $this->sendSSEData(['error' => 'Anthropic API request failed: '.$response->status()]);
+
+            return;
+        }
+
+        $stream = $response->toPsrResponse()->getBody();
+        $buffer = '';
+
+        while (! $stream->eof()) {
+            $chunk = $stream->read(1024);
+            if ($chunk === '' || $chunk === false) {
+                usleep(20000);
+                continue;
+            }
+
+            $buffer .= $chunk;
+
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $pos));
+                $buffer = substr($buffer, $pos + 1);
+
+                if ($line === '' || strpos($line, 'data: ') !== 0) {
+                    continue;
+                }
+
+                $payload = substr($line, 6);
+                $event = json_decode($payload, true);
+
+                if (! is_array($event)) {
+                    continue;
+                }
+
+                $eventType = $event['type'] ?? null;
+
+                // Handle text deltas
+                if ($eventType === 'content_block_delta') {
+                    $delta = $event['delta']['text'] ?? '';
+                    if ($delta !== '') {
+                        $fullText .= $delta;
+                        $this->sendSSEData(['delta' => $delta]);
+                    }
+                }
+
+                // Handle usage from message_start
+                if ($eventType === 'message_start') {
+                    $usage = $event['message']['usage'] ?? [];
+                    $inputTokens += $usage['input_tokens'] ?? 0;
+                }
+
+                // Handle message_delta (stop reason + output token usage)
+                if ($eventType === 'message_delta') {
+                    $usage = $event['usage'] ?? [];
+                    $outputTokens += $usage['output_tokens'] ?? 0;
+                    $totalTokens = $inputTokens + $outputTokens;
+                }
+
+                // Handle message_stop
+                if ($eventType === 'message_stop') {
+                    break 2;
+                }
+
+                // Handle errors
+                if ($eventType === 'error') {
+                    $errorMsg = $event['error']['message'] ?? 'Unknown Anthropic error';
+                    $this->sendSSEData(['error' => $errorMsg]);
+                    break 2;
+                }
+            }
         }
     }
 

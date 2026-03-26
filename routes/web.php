@@ -54,8 +54,10 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
+use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
 use App\Http\Controllers\ReferenceCheckController;
+use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
 use App\Models\Employee;
@@ -70,6 +72,12 @@ Route::get('/', function () {
 Route::get('/work-with-us', [EmploymentApplicationController::class, 'create'])->name('employment-applications.create');
 Route::post('/work-with-us', [EmploymentApplicationController::class, 'store'])->name('employment-applications.store');
 Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, 'thankYou'])->name('employment-applications.thank-you');
+
+// Document Signing — public routes (token-based, no auth)
+Route::get('/sign/{token}', [SigningRequestController::class, 'show'])->name('signing.show');
+Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
+Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
+Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
 
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
@@ -157,6 +165,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
         Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
     });
+
+    // ============================================
+    // DOCUMENT TEMPLATES & SIGNING
+    // ============================================
+    Route::middleware('permission:document-templates.manage')->group(function () {
+        Route::get('/document-templates', [DocumentTemplateController::class, 'index'])->name('document-templates.index');
+        Route::get('/document-templates/create', [DocumentTemplateController::class, 'create'])->name('document-templates.create');
+        Route::post('/document-templates', [DocumentTemplateController::class, 'store'])->name('document-templates.store');
+        Route::get('/document-templates/{documentTemplate}/edit', [DocumentTemplateController::class, 'edit'])->name('document-templates.edit');
+        Route::put('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'update'])->name('document-templates.update');
+        Route::delete('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'destroy'])->name('document-templates.destroy');
+    });
+
+    Route::post('/signing-requests', [SigningRequestController::class, 'store'])->name('signing-requests.store');
+    Route::post('/signing-requests/{signingRequest}/cancel', [SigningRequestController::class, 'cancel'])->name('signing-requests.cancel');
+    Route::post('/signing-requests/{signingRequest}/resend', [SigningRequestController::class, 'resend'])->name('signing-requests.resend');
+    Route::get('/signing-requests/{signingRequest}/download', [SigningRequestController::class, 'download'])->name('signing-requests.download');
 
     // Comments (generic)
     Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');

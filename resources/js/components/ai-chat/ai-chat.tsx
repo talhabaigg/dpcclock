@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { BrickWall, Coins, GraduationCap, Phone, Sparkles, Trash2 } from 'lucide-react';
+import { DEFAULT_MODEL_ID } from './types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatInput, ChatInputRef } from './chat-input';
 import { ChatMessage } from './chat-message';
@@ -54,6 +55,7 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
     const chatInputRef = useRef<ChatInputRef>(null);
     const [isVoiceCallOpen, setIsVoiceCallOpen] = useState(false);
     const [panelOpen, setPanelOpen] = useState(false);
+    const [selectedModelId, setSelectedModelId] = useState(DEFAULT_MODEL_ID);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const loadingRef = useRef(false);
 
@@ -112,9 +114,9 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
 
     const handleSubmit = useCallback(
         (message: string, attachments?: File[]) => {
-            sendMessage(message, attachments);
+            sendMessage(message, attachments, selectedModelId);
         },
-        [sendMessage],
+        [sendMessage, selectedModelId],
     );
 
     const lastAssistantIndex = messages.findLastIndex((m) => m.role === 'assistant');
@@ -158,6 +160,8 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                                 centered={true}
                                 className="h-full"
                                 onVoiceCall={enableVoice ? () => setIsVoiceCallOpen(true) : undefined}
+                                selectedModelId={selectedModelId}
+                                onModelChange={setSelectedModelId}
                             />
                         </>
                     ) : (
@@ -233,6 +237,8 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                                         isLoading={isLoading}
                                         placeholder={placeholder}
                                         enableAttachments={true}
+                                        selectedModelId={selectedModelId}
+                                        onModelChange={setSelectedModelId}
                                     />
                                     <p className="text-muted-foreground mt-2 text-center text-xs">
                                         Superior AI can make mistakes. Please verify important information.
@@ -318,6 +324,8 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                     isLoading={isLoading}
                     placeholder={placeholder}
                     enableAttachments={true}
+                    selectedModelId={selectedModelId}
+                    onModelChange={setSelectedModelId}
                 />
                 <p className="text-muted-foreground mt-2 text-center text-xs">Superior AI can make mistakes. Please verify important information.</p>
             </div>

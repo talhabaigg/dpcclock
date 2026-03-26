@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Events\DocumentSigned;
 use App\Listeners\BroadcastQueueJobEvents;
+use App\Listeners\UpdateEmploymentApplicationOnSigned;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -35,6 +37,9 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Requisition::observe(RequisitionObserver::class);
+
+        // Document signing events
+        Event::listen(DocumentSigned::class, UpdateEmploymentApplicationOnSigned::class);
 
         // Register queue event listeners for real-time broadcasting
         Event::listen(JobProcessing::class, [BroadcastQueueJobEvents::class, 'handleJobProcessing']);

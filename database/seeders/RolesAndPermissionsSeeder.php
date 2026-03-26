@@ -241,6 +241,13 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // DOCUMENT TEMPLATES & SIGNING
+        // ============================================
+        'Document Templates' => [
+            'document-templates.manage' => 'Create and manage document templates for signing',
+        ],
+
+        // ============================================
         // CHECKLISTS
         // ============================================
         'Checklists' => [
@@ -376,6 +383,8 @@ class RolesAndPermissionsSeeder extends Seeder
             // Employment Applications
             'employment-applications.view',
             'employment-applications.screen',
+            // Document Templates
+            'document-templates.manage',
         ],
 
         'manager' => [

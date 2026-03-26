@@ -64,6 +64,26 @@ export interface StreamEvent {
     };
 }
 
+export interface AiModel {
+    id: string;
+    name: string;
+    provider: string;
+    description?: string;
+}
+
+export const AVAILABLE_MODELS: AiModel[] = [
+    { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', description: 'Most capable model' },
+    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', description: 'Fast & efficient' },
+    { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'OpenAI', description: 'Lightweight' },
+    { id: 'o4-mini', name: 'O4 Mini', provider: 'OpenAI', description: 'Reasoning model' },
+    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', description: 'Multimodal' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', description: 'Fast multimodal' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'Anthropic', description: 'Balanced performance' },
+    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'Anthropic', description: 'Fast & affordable' },
+];
+
+export const DEFAULT_MODEL_ID = 'gpt-4.1';
+
 export interface ConversationSummary {
     conversation_id: string;
     title: string;
@@ -82,7 +102,7 @@ export interface UseChatReturn {
     isLoading: boolean;
     error: Error | null;
     conversationId: string | null;
-    sendMessage: (content: string, attachments?: File[]) => Promise<void>;
+    sendMessage: (content: string, attachments?: File[], model?: string) => Promise<void>;
     regenerateLastMessage: () => Promise<void>;
     clearMessages: () => void;
     stopGeneration: () => void;

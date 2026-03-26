@@ -3,8 +3,10 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, AudioWaveform, Sparkles } from 'lucide-react';
+import { ArrowRight, ArrowUp, AudioLines, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ModelSelector } from './model-selector';
+import { DEFAULT_MODEL_ID } from './types';
 import type { SuggestedPrompt } from './types';
 
 interface ChatWelcomeProps {
@@ -23,6 +25,10 @@ interface ChatWelcomeProps {
     isLoading?: boolean;
     /** Called when user clicks the voice call button */
     onVoiceCall?: () => void;
+    /** Currently selected model ID */
+    selectedModelId?: string;
+    /** Called when user changes the model */
+    onModelChange?: (modelId: string) => void;
 }
 
 // Animated text component for typing effect
@@ -125,6 +131,8 @@ export function ChatWelcome({
     onSubmit,
     isLoading = false,
     onVoiceCall,
+    selectedModelId = DEFAULT_MODEL_ID,
+    onModelChange,
 }: ChatWelcomeProps) {
     const [inputValue, setInputValue] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -221,12 +229,21 @@ export function ChatWelcome({
                                         onClick={onVoiceCall}
                                         title="Start voice call"
                                     >
-                                        <AudioWaveform className="size-5" />
+                                        <AudioLines className="size-5" />
                                     </button>
                                 ) : null}
                             </div>
                         </div>
                     </div>
+                    {/* Model selector below input */}
+                    {onModelChange && (
+                        <div className="mt-1.5 px-1">
+                            <ModelSelector
+                                selectedModelId={selectedModelId}
+                                onModelChange={onModelChange}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Suggested prompts as list items */}

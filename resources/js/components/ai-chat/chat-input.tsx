@@ -5,6 +5,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { ModelSelector } from './model-selector';
+import { DEFAULT_MODEL_ID } from './types';
 
 export interface ChatInputProps {
     onSubmit: (message: string, attachments?: File[]) => void;
@@ -15,6 +17,8 @@ export interface ChatInputProps {
     maxLength?: number;
     enableAttachments?: boolean;
     className?: string;
+    selectedModelId?: string;
+    onModelChange?: (modelId: string) => void;
 }
 
 export interface ChatInputRef {
@@ -33,6 +37,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         maxLength = 10000,
         enableAttachments = false,
         className,
+        selectedModelId = DEFAULT_MODEL_ID,
+        onModelChange,
     },
     ref,
 ) {
@@ -225,12 +231,22 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 </div>
             </div>
 
-            {/* Character count */}
-            {value.length > maxLength * 0.8 && (
-                <div className="text-muted-foreground mt-1 text-right text-xs">
-                    {value.length.toLocaleString()} / {maxLength.toLocaleString()}
+            {/* Model selector & character count row */}
+            <div className="mt-1.5 flex items-center justify-between px-1">
+                <div>
+                    {onModelChange && (
+                        <ModelSelector
+                            selectedModelId={selectedModelId}
+                            onModelChange={onModelChange}
+                        />
+                    )}
                 </div>
-            )}
+                {value.length > maxLength * 0.8 && (
+                    <div className="text-muted-foreground text-right text-xs">
+                        {value.length.toLocaleString()} / {maxLength.toLocaleString()}
+                    </div>
+                )}
+            </div>
 
             {/* CSS animation for rainbow effect */}
             <style>{`

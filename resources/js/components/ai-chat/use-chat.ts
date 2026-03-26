@@ -19,7 +19,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     const lastUserMessageRef = useRef<string | null>(null);
 
     const sendMessage = useCallback(
-        async (content: string, attachments?: File[]) => {
+        async (content: string, attachments?: File[], model?: string) => {
             if (!content.trim() || isLoading) return;
 
             const trimmedContent = content.trim();
@@ -59,7 +59,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             setMessages((prev) => [...prev, userMessage, assistantMessage]);
 
             try {
-                const stream = chatService.streamMessage(trimmedContent, conversationId, attachments);
+                const stream = chatService.streamMessage(trimmedContent, conversationId, attachments, model);
                 let receivedDone = false;
                 let hasError = false;
 

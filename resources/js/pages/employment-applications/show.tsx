@@ -1,3 +1,4 @@
+import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -211,6 +212,28 @@ interface Duplicate {
     created_at: string;
 }
 
+interface SigningRequestData {
+    id: number;
+    status: string;
+    delivery_method: string;
+    recipient_name: string;
+    recipient_email: string | null;
+    signed_at: string | null;
+    opened_at: string | null;
+    viewed_at: string | null;
+    expires_at: string;
+    signer_full_name: string | null;
+    document_template: { id: number; name: string } | null;
+    sent_by: { id: number; name: string } | null;
+}
+
+interface DocumentTemplateOption {
+    id: number;
+    name: string;
+    placeholders: { key: string; label: string }[] | null;
+    body_html: string | null;
+}
+
 interface PageProps {
     application: Application;
     comments: CommentData[];
@@ -218,6 +241,8 @@ interface PageProps {
     availableTemplates: TemplateOption[];
     duplicates: Duplicate[];
     auth: { permissions?: string[]; isAdmin?: boolean };
+    signingRequest: SigningRequestData | null;
+    documentTemplates: DocumentTemplateOption[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1557,13 +1582,14 @@ function ReadOnlyRefCheck({
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequest, documentTemplates }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
     const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
+    const [showSigningModal, setShowSigningModal] = useState(false);
 
     // Reference check dialog
     const [refCheckOpen, setRefCheckOpen] = useState(false);
@@ -1608,6 +1634,10 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         if (newStatus === app.status) return;
         if (newStatus === 'declined') {
             setShowDeclineDialog(true);
+            return;
+        }
+        if (newStatus === 'contract_sent') {
+            setShowSigningModal(true);
             return;
         }
         router.patch(route('employment-applications.update-status', app.id), { status: newStatus }, {
@@ -1937,6 +1967,60 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </div>
                                 )}
 
+                                {/* Signing Request Status */}
+                                {signingRequest && (
+                                    <div className="mb-4 rounded-lg border bg-background p-3">
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <span className="text-xs font-medium text-muted-foreground">Contract Signing</span>
+                                            <Badge variant={signingRequest.status === 'signed' ? 'default' : 'secondary'} className="text-xs">
+                                                {signingRequest.status}
+                                            </Badge>
+                                        </div>
+                                        {signingRequest.document_template && (
+                                            <p className="text-sm font-medium">{signingRequest.document_template.name}</p>
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            {signingRequest.delivery_method === 'email' ? 'Sent via email' : 'In-person signing'}
+                                            {signingRequest.sent_by && ` by ${signingRequest.sent_by.name}`}
+                                        </p>
+                                        {signingRequest.signed_at && (
+                                            <p className="mt-1 text-xs text-green-600">
+                                                Signed {new Date(signingRequest.signed_at).toLocaleDateString('en-AU')} by {signingRequest.signer_full_name}
+                                            </p>
+                                        )}
+                                        {signingRequest.status === 'signed' && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="mt-2 w-full text-xs"
+                                                onClick={() => window.open(route('signing-requests.download', signingRequest.id), '_blank')}
+                                            >
+                                                Download Signed PDF
+                                            </Button>
+                                        )}
+                                        {canScreen && signingRequest.status !== 'signed' && signingRequest.status !== 'cancelled' && (
+                                            <div className="mt-2 flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-xs"
+                                                    onClick={() => router.post(route('signing-requests.resend', signingRequest.id), {}, { preserveScroll: true })}
+                                                >
+                                                    Resend
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-xs text-destructive"
+                                                    onClick={() => router.post(route('signing-requests.cancel', signingRequest.id), {}, { preserveScroll: true })}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 <Separator className="mb-2" />
 
                                 {/* Personal Details */}
@@ -2094,6 +2178,20 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Send for Signing Modal */}
+            <SendForSigningModal
+                open={showSigningModal}
+                onOpenChange={setShowSigningModal}
+                templates={documentTemplates ?? []}
+                recipientName={`${app.first_name} ${app.surname}`}
+                recipientEmail={app.email}
+                recipientAddress={app.suburb}
+                recipientPhone={app.phone}
+                recipientPosition={app.occupation === 'other' && app.occupation_other ? app.occupation_other : app.occupation}
+                signableType="App\Models\EmploymentApplication"
+                signableId={app.id}
+            />
 
         </AppLayout>
     );

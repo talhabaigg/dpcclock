@@ -292,6 +292,16 @@ class EmploymentApplicationController extends Controller
             ->latest()
             ->get();
 
+        // Load latest signing request
+        $signingRequest = $employmentApplication->latestSigningRequest;
+        $signingRequest?->load(['documentTemplate:id,name', 'sentBy:id,name']);
+
+        // Load active document templates for the signing modal
+        $documentTemplates = \App\Models\DocumentTemplate::active()
+            ->category('employment')
+            ->orderBy('name')
+            ->get(['id', 'name', 'placeholders', 'body_html']);
+
         return Inertia::render('employment-applications/show', [
             'application' => $employmentApplication,
             'comments' => $comments,
@@ -299,6 +309,27 @@ class EmploymentApplicationController extends Controller
             'availableTemplates' => $availableTemplates,
             'duplicates' => $duplicates,
             'statuses' => EmploymentApplication::STATUSES,
+            'signingRequest' => $signingRequest ? [
+                'id' => $signingRequest->id,
+                'status' => $signingRequest->status,
+                'delivery_method' => $signingRequest->delivery_method,
+                'recipient_name' => $signingRequest->recipient_name,
+                'recipient_email' => $signingRequest->recipient_email,
+                'signed_at' => $signingRequest->signed_at?->toISOString(),
+                'opened_at' => $signingRequest->opened_at?->toISOString(),
+                'viewed_at' => $signingRequest->viewed_at?->toISOString(),
+                'expires_at' => $signingRequest->expires_at->toISOString(),
+                'signer_full_name' => $signingRequest->signer_full_name,
+                'document_template' => $signingRequest->documentTemplate ? [
+                    'id' => $signingRequest->documentTemplate->id,
+                    'name' => $signingRequest->documentTemplate->name,
+                ] : null,
+                'sent_by' => $signingRequest->sentBy ? [
+                    'id' => $signingRequest->sentBy->id,
+                    'name' => $signingRequest->sentBy->name,
+                ] : null,
+            ] : null,
+            'documentTemplates' => $documentTemplates,
         ]);
     }
 
@@ -344,6 +375,11 @@ class EmploymentApplicationController extends Controller
         // Cannot set to declined via this method — use decline()
         if ($newStatus === EmploymentApplication::STATUS_DECLINED) {
             return back()->withErrors(['status' => 'Use the decline action instead.']);
+        }
+
+        // Cannot set to contract_sent directly — use the Send for Signing modal
+        if ($newStatus === EmploymentApplication::STATUS_CONTRACT_SENT) {
+            return back()->withErrors(['status' => 'Use the Send for Signing action instead.']);
         }
 
         // Gate: cannot move to "approved" if required checklist items are incomplete

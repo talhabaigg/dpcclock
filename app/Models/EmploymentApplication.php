@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Models\Concerns\HasChecklists;
 use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasSigningRequests;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EmploymentApplication extends Model
 {
-    use HasChecklists, HasComments;
+    use HasChecklists, HasComments, HasSigningRequests;
     public const STATUS_NEW = 'new';
     public const STATUS_REVIEWING = 'reviewing';
     public const STATUS_PHONE_INTERVIEW = 'phone_interview';

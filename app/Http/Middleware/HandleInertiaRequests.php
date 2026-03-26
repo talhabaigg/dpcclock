@@ -90,6 +90,7 @@ class HandleInertiaRequests extends Middleware
                 'issues_file' => fn () => $request->session()->get('issues_file'),
                 'imported_count' => fn () => $request->session()->get('imported_count'),
                 'issues_count' => fn () => $request->session()->get('issues_count'),
+                'signing_url' => fn () => $request->session()->get('signing_url'),
             ],
             'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),

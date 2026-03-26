@@ -21,7 +21,7 @@ export class ChatService {
     /**
      * Send a message and receive a streaming response
      */
-    async *streamMessage(message: string, conversationId: string | null, files?: File[]): AsyncGenerator<StreamEvent> {
+    async *streamMessage(message: string, conversationId: string | null, files?: File[], model?: string): AsyncGenerator<StreamEvent> {
         this.abortController = new AbortController();
 
         try {
@@ -39,12 +39,16 @@ export class ChatService {
                     formData.append('conversation_id', conversationId);
                 }
                 files.forEach((file) => formData.append('files[]', file));
+                if (model) {
+                    formData.append('model', model);
+                }
                 body = formData;
             } else {
                 headers['Content-Type'] = 'application/json';
                 body = JSON.stringify({
                     message,
                     conversation_id: conversationId,
+                    ...(model && { model }),
                 });
             }
 
