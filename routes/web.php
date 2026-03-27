@@ -32,6 +32,7 @@ use App\Http\Controllers\MissingSignOutReportController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\PendingPurchaseOrderController;
 use App\Http\Controllers\ProductionUploadController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
@@ -530,6 +531,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'update'])->name('allowance-types.update')
         ->middleware('permission:materials.view');
     Route::delete('/allowance-types/{allowanceType}', [AllowanceTypeController::class, 'destroy'])->name('allowance-types.destroy')
+        ->middleware('permission:materials.view');
+
+    // Pending Purchase Orders (OData)
+    Route::get('/locations/{location}/pending-purchase-orders', [PendingPurchaseOrderController::class, 'index'])->name('locations.pending-purchase-orders.index')
         ->middleware('permission:materials.view');
 
     // Oncosts

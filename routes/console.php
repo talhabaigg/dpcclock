@@ -2,6 +2,7 @@
 
 use App\Jobs\LoadApPostedInvoiceLines;
 use App\Jobs\LoadApPostedInvoices;
+use App\Jobs\LoadApPurchaseOrders;
 use App\Jobs\LoadArPostedInvoices;
 use App\Jobs\LoadArProgressBillingSummaries;
 use App\Jobs\LoadJobCostData;
@@ -39,6 +40,10 @@ Schedule::job(LoadApPostedInvoices::class)
     ->withoutOverlapping();
 
 Schedule::job(LoadApPostedInvoiceLines::class)
+    ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+Schedule::job(LoadApPurchaseOrders::class)
     ->dailyAt('05:00')
     ->withoutOverlapping();
 

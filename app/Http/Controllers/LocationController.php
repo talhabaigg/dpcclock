@@ -293,15 +293,29 @@ class LocationController extends Controller
 
         // Vendor commitments summary split by PO and SC
         $vendorCommitmentsSummary = null;
+
         if ($location->vendorCommitments->isNotEmpty()) {
             $commitments = $location->vendorCommitments;
 
-            // SC = has subcontract_no, PO = everything else
+            // SC = has subcontract_no
             $scCommitments = $commitments->filter(fn($c) => !empty($c->subcontract_no));
+
+            // PO transaction lines = no subcontract_no
             $poCommitments = $commitments->filter(fn($c) => empty($c->subcontract_no));
 
             $vendorCommitmentsSummary = [
                 'po_outstanding' => round((float) $poCommitments->sum('os_commitment'), 2),
+                'po_lines' => $poCommitments->map(fn($c) => [
+                    'vendor' => $c->vendor,
+                    'po_no' => $c->po_no,
+                    'approval_status' => $c->approval_status,
+                    'original_commitment' => round((float) $c->original_commitment, 2),
+                    'approved_changes' => round((float) $c->approved_changes, 2),
+                    'current_commitment' => round((float) $c->current_commitment, 2),
+                    'total_billed' => round((float) $c->total_billed, 2),
+                    'os_commitment' => round((float) $c->os_commitment, 2),
+                    'updated_at' => $c->updated_at?->toDateString(),
+                ])->values()->toArray(),
                 'sc_outstanding' => round((float) $scCommitments->sum('os_commitment'), 2),
                 'sc_summary' => [
                     'value' => round((float) $scCommitments->sum('original_commitment'), 2),
@@ -310,6 +324,25 @@ class LocationController extends Controller
                     'remaining_balance' => round((float) $scCommitments->sum('os_commitment'), 2),
                 ],
             ];
+        }
+
+        // Pending POs from OData AP Purchase Orders (scoped to as-of month)
+        $pendingPos = null;
+        if ($location->external_id) {
+            $pendingPoLines = \App\Models\ApPurchaseOrder::where('job_number', $location->external_id)
+                ->where('status', 'PENDING')
+                ->whereYear('po_date', $asOfDate->year)
+                ->whereMonth('po_date', $asOfDate->month)
+                ->where('po_date', '<=', $asOfDate)
+                ->get();
+
+            if ($pendingPoLines->isNotEmpty()) {
+                $pendingPos = [
+                    'total' => round((float) $pendingPoLines->sum('amount'), 2),
+                    'po_count' => $pendingPoLines->pluck('po_number')->unique()->count(),
+                    'line_count' => $pendingPoLines->count(),
+                ];
+            }
         }
 
         // Employees on site - unique count by worktype + monthly trend
@@ -576,6 +609,7 @@ class LocationController extends Controller
             'variationsSummary' => $variationsSummaryData,
             'labourBudgetData' => $labourBudgetData,
             'vendorCommitmentsSummary' => $vendorCommitmentsSummary,
+            'pendingPos' => $pendingPos,
             'employeesOnSite' => $employeesOnSite,
             'availableLocations' => $availableLocations,
             'productionCostCodes' => $productionCostCodes,
@@ -982,6 +1016,7 @@ class LocationController extends Controller
             'ap_posted_invoices' => ['label' => 'AP Posted Invoices', 'class' => \App\Jobs\LoadApPostedInvoices::class],
             'ap_posted_invoice_lines' => ['label' => 'AP Posted Invoice Lines', 'class' => \App\Jobs\LoadApPostedInvoiceLines::class],
             'job_vendor_commitments' => ['label' => 'Job Vendor Commitments', 'class' => \App\Jobs\LoadJobVendorCommitments::class],
+            'ap_purchase_orders' => ['label' => 'AP Purchase Orders', 'class' => \App\Jobs\LoadApPurchaseOrders::class],
         ];
 
         $syncLogs = \App\Models\DataSyncLog::all()->keyBy('job_name');
@@ -1008,7 +1043,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
-            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders',
             'force_full' => 'boolean',
         ]);
 
@@ -1023,6 +1058,7 @@ class LocationController extends Controller
             'ap_posted_invoices' => \App\Jobs\LoadApPostedInvoices::class,
             'ap_posted_invoice_lines' => \App\Jobs\LoadApPostedInvoiceLines::class,
             'job_vendor_commitments' => \App\Jobs\LoadJobVendorCommitments::class,
+            'ap_purchase_orders' => \App\Jobs\LoadApPurchaseOrders::class,
         ];
 
         $dispatched = [];

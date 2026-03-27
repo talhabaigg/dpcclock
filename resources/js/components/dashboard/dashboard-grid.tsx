@@ -19,6 +19,7 @@ import ClaimVsProductionCard from './claim-vs-production-card';
 import BudgetWeatherCard from './budget-weather-card';
 import IndustrialActionCard from './industrial-action-card';
 import OncostRatioCard from './oncost-ratio-card';
+import PendingPosCard, { type PendingPosData } from './pending-pos-card';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -40,6 +41,7 @@ const MOBILE_WIDGET_CONFIG: Record<string, { minH: number; size: 'sm' | 'md' | '
     'employees-on-site':    { minH: 280, size: 'lg' },
     'claim-vs-production':  { minH: 150, size: 'sm' },
     'oncost-ratio':         { minH: 150, size: 'sm' },
+    'pending-pos':           { minH: 140, size: 'sm' },
     'project-income':       { minH: 220, size: 'md' },
     'labour-budget':        { minH: 300, size: 'lg' },
 };
@@ -81,9 +83,11 @@ export interface DashboardGridProps {
     labourBudgetData: LabourBudgetRow[];
     vendorCommitmentsSummary: {
         po_outstanding: number;
+        po_lines?: { vendor: string; po_no: string; approval_status: string | null; original_commitment: number; approved_changes: number; current_commitment: number; total_billed: number; os_commitment: number; updated_at: string | null }[];
         sc_outstanding: number;
         sc_summary: { value: number; variations: number; invoiced_to_date: number; remaining_balance: number };
     } | null;
+    pendingPos: PendingPosData | null;
     employeesOnSite: {
         by_type: { worktype: string; count: number }[];
         weekly_trend: { week_ending: string; month: string; count: number }[];
@@ -133,7 +137,7 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
         case 'margin-health':
             return <MarginHealthCard location={props.location} isEditing={isEditing} />;
 case 'po-commitments':
-            return <POCommitmentsCard value={props.vendorCommitmentsSummary?.po_outstanding ?? null} isEditing={isEditing} />;
+            return <POCommitmentsCard value={props.vendorCommitmentsSummary?.po_outstanding ?? null} poLines={props.vendorCommitmentsSummary?.po_lines} isEditing={isEditing} />;
         case 'sc-commitments':
             return <SCCommitmentsCard data={props.vendorCommitmentsSummary ? { sc_outstanding: props.vendorCommitmentsSummary.sc_outstanding, sc_summary: props.vendorCommitmentsSummary.sc_summary } : null} isEditing={isEditing} />;
         case 'employees-on-site':
@@ -158,6 +162,8 @@ case 'po-commitments':
             return <LabourBudgetCard data={props.labourBudgetData} isEditing={isEditing} />;
         case 'oncost-ratio':
             return <OncostRatioCard data={props.labourBudgetData} isEditing={isEditing} />;
+        case 'pending-pos':
+            return <PendingPosCard data={props.pendingPos} locationId={props.location.id} asOfDate={props.asOfDate} isEditing={isEditing} />;
         default:
             return null;
     }
@@ -437,7 +443,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
             const LANDSCAPE_ROWS: { ids: string[]; spans?: number[]; minH: number }[] = [
                 { ids: ['project-details', 'variations'], spans: [1, 2], minH: 280 },
                 { ids: ['budget-safety', 'budget-weather', 'industrial-action'], minH: 200 },
-                { ids: ['margin-health', 'po-commitments', 'sc-commitments'], minH: 160 },
+                { ids: ['margin-health', 'po-commitments', 'sc-commitments', 'pending-pos'], minH: 160 },
                 { ids: ['claim-vs-production', 'oncost-ratio', 'project-income'], spans: [1, 1, 2], minH: 200 },
                 { ids: ['labour-budget'], minH: 260 },
                 { ids: ['employees-on-site'], minH: 240 },
@@ -507,6 +513,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
             { ids: ['budget-safety', 'budget-weather'], minH: 240 },
             { ids: ['industrial-action', 'margin-health'], minH: 120 },
             { ids: ['po-commitments', 'sc-commitments'], minH: 140 },
+            { ids: ['pending-pos'], minH: 140 },
             { ids: ['claim-vs-production', 'oncost-ratio'], minH: 150 },
             { ids: ['project-income'], minH: 220 },
             { ids: ['labour-budget'], minH: 300 },

@@ -82,8 +82,14 @@ interface DashboardProps {
     labourBudgetData: LabourBudgetRow[];
     vendorCommitmentsSummary: {
         po_outstanding: number;
+        po_lines?: { vendor: string; po_no: string; approval_status: string | null; original_commitment: number; approved_changes: number; current_commitment: number; total_billed: number; os_commitment: number; updated_at: string | null }[];
         sc_outstanding: number;
         sc_summary: { value: number; variations: number; invoiced_to_date: number; remaining_balance: number };
+    } | null;
+    pendingPos: {
+        total: number;
+        po_count: number;
+        line_count: number;
     } | null;
     employeesOnSite: {
         by_type: { worktype: string; count: number }[];
@@ -114,7 +120,7 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
+export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, pendingPos, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('area');
@@ -458,6 +464,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         variationsSummary={variationsSummary}
                         labourBudgetData={labourBudgetData}
                         vendorCommitmentsSummary={vendorCommitmentsSummary}
+                        pendingPos={pendingPos}
                         employeesOnSite={employeesOnSite}
                         productionCostCodes={productionCostCodes}
                         industrialActionHours={industrialActionHours}
