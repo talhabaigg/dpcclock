@@ -112,9 +112,10 @@ export function transformToUnifiedRows(
         let revenueContractFY = 0;
         let revenueActualsFY = 0;
         months.forEach((month) => {
-            const { value, isActual } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
+            const { value } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
             revenueContractFY += value;
-            if (isActual) revenueActualsFY += value;
+            // FY To Date: sum raw actuals directly (not dependent on display preference)
+            revenueActualsFY += safeNumber(job.revenue_actuals?.[month]);
         });
 
         // Revenue row (always visible)
@@ -153,9 +154,10 @@ export function transformToUnifiedRows(
             let costContractFY = 0;
             let costActualsFY = 0;
             months.forEach((month) => {
-                const { value, isActual } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
+                const { value } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
                 costContractFY += value;
-                if (isActual) costActualsFY += value;
+                // FY To Date: sum raw actuals directly (not dependent on display preference)
+                costActualsFY += safeNumber(job.cost_actuals?.[month]);
             });
 
             // Cost row
@@ -327,7 +329,7 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         id: 'actual-row',
         rowType: 'revenue',
         jobId: 0,
-        jobNumber: 'Actual + Forecast',
+        jobNumber: 'Work in Hand',
         jobName: '',
         projectType: 'summary',
         totalValue: null,

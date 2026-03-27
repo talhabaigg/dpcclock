@@ -517,9 +517,9 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                             )}
                         </div>
 
-                        {/* 3 key metrics */}
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                            <div className="space-y-0.5">
+                        {/* 3 key metrics — widths aligned with progress bar sections */}
+                        <div className="flex">
+                            <div className="shrink-0 space-y-0.5" style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}>
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
                                     Completed YTD
@@ -529,7 +529,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 </div>
                                 <div className="text-muted-foreground text-[11px] sm:text-xs">Actual billed revenue</div>
                             </div>
-                            <div className="space-y-0.5">
+                            <div className="flex-1 space-y-0.5">
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 dark:bg-sky-500" />
                                     Work in Hand
@@ -539,28 +539,18 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 </div>
                                 <div className="text-muted-foreground text-[11px] sm:text-xs">Forecasted revenue</div>
                             </div>
-                            <div className="col-span-2 border-t pt-2 sm:col-span-1 sm:border-t-0 sm:pt-0 sm:text-right">
-                                <div className="flex items-baseline justify-between sm:block sm:space-y-0.5">
-                                    <div>
-                                        <div className="text-muted-foreground text-xs font-medium">FY Budget</div>
-                                        <div className="text-xl font-bold tracking-tight sm:text-2xl">
-                                            {formatCurrency(turnoverTargetFYTotal)}
-                                        </div>
+                            {remainingTargetToAchieve > 0 && (
+                                <div className="shrink-0 space-y-0.5 text-right">
+                                    <div className="text-muted-foreground flex items-center justify-end gap-1.5 text-xs font-medium">
+                                        <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 dark:bg-amber-500" />
+                                        Remaining Budget
                                     </div>
-                                    <div className="text-muted-foreground text-right text-[11px] sm:text-xs">
-                                        {turnoverTargetFYTotal > 0 ? (
-                                            <>
-                                                <span>{formatPercent(completedTurnoverYTD, turnoverTargetFYTotal)}% billed</span>
-                                                <span className="mx-1 hidden sm:inline">&middot;</span>
-                                                <br className="sm:hidden" />
-                                                <span>{formatPercent(totalFY, turnoverTargetFYTotal)}% incl. forecast</span>
-                                            </>
-                                        ) : (
-                                            'No budget set'
-                                        )}
+                                    <div className="text-xl font-bold tracking-tight sm:text-2xl">
+                                        {formatCurrency(remainingTargetToAchieve)}
                                     </div>
+                                    <div className="text-muted-foreground text-[11px] sm:text-xs">Remaining to FY budget</div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Single unified progress bar with budget marker */}
@@ -597,7 +587,23 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                             </p>
                                         </HoverCardContent>
                                     </HoverCard>
-                                    {remainingTargetToAchieve > 0 && <div className="flex-1" />}
+                                    {remainingTargetToAchieve > 0 && (
+                                        <HoverCard openDelay={100}>
+                                            <HoverCardTrigger asChild>
+                                                <div
+                                                    className="cursor-help bg-amber-400 transition-all hover:brightness-110 dark:bg-amber-500"
+                                                    style={{ width: `${formatPercent(remainingTargetToAchieve, targetBaseline)}%` }}
+                                                />
+                                            </HoverCardTrigger>
+                                            <HoverCardContent className="w-64" side="top">
+                                                <h4 className="mb-1 font-semibold">Remaining Budget</h4>
+                                                <div className="text-lg font-bold">{formatCurrency(remainingTargetToAchieve)}</div>
+                                                <p className="text-muted-foreground text-sm">
+                                                    {formatPercent(remainingTargetToAchieve, targetBaseline)}% of budget &middot; Remaining target
+                                                </p>
+                                            </HoverCardContent>
+                                        </HoverCard>
+                                    )}
                                 </div>
                                 {/* Budget YTD marker line overlaid on bar */}
                                 {targetTurnoverYTD > 0 && (
@@ -630,11 +636,15 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                         Forecast
                                     </span>
                                     <span className="flex items-center gap-1">
+                                        <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 dark:bg-amber-500" />
+                                        Remaining
+                                    </span>
+                                    <span className="flex items-center gap-1">
                                         <span className="h-2 w-2 shrink-0 rounded-sm bg-amber-500" />
                                         Budget YTD
                                     </span>
                                 </div>
-                                {remainingTargetToAchieve > 0 && <span>{formatCurrency(remainingTargetToAchieve)} to budget</span>}
+                                {turnoverTargetFYTotal > 0 && <span className="text-foreground text-xs font-semibold sm:text-sm">FY Budget: {formatCurrency(turnoverTargetFYTotal)}</span>}
                             </div>
                         </div>
 

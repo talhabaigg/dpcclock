@@ -636,7 +636,7 @@ export function TurnoverPrintReport({
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.target[month])}</td>`).join('')}
                                 </tr>
                                 <tr style="background: white;">
-                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Actual + Forecast</td>
+                                    <td style="padding: 5px 6px; border: 1px solid #e2e8f0; font-size: 9px; color: #334155; font-weight: 600;">Work in Hand</td>
                                     <td colspan="6" style="padding: 5px 4px; border: 1px solid #e2e8f0; text-align: right; font-size: 9px; color: #334155; font-weight: 600;">${formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
                                     ${months.map((month) => `<td style="padding: 4px 2px; border: 1px solid #e2e8f0; text-align: right; font-size: 8px;">${formatCompactCurrency(reportData.revenueTargets.actual[month])}</td>`).join('')}
                                 </tr>
@@ -1069,7 +1069,7 @@ export function TurnoverPrintReport({
                                     ))}
                                 </tr>
                                 <tr className="bg-white font-semibold text-slate-700">
-                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Actual + Forecast</td>
+                                    <td className="border border-slate-200 px-1.5 py-1 text-[9px]">Work in Hand</td>
                                     <td colSpan={6} className="border border-slate-200 px-1 py-1 text-right text-[9px]">{formatCompactCurrency(reportData.revenueTargets.actualTotal)}</td>
                                     {months.map((month) => (
                                         <td key={month} className="border border-slate-200 px-0.5 py-1 text-right text-[8px]">

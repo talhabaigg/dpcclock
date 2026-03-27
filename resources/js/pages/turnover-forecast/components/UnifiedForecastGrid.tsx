@@ -168,7 +168,7 @@ export function UnifiedForecastGrid({
                 headerComponent: () => (
                     <HeaderWithHelp
                         displayName="Metric"
-                        helpText="Revenue Target: Monthly budget targets. Actual + Forecast: Combined actuals and forecasts. Variance: Difference between actual/forecast and target."
+                        helpText="Revenue Target: Monthly budget targets. Work in Hand: Combined actuals and forecasts. Variance: Difference between actual/forecast and target."
                     />
                 ),
                 field: 'jobNumber',
