@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
         Route::post('/employment-applications/{employmentApplication}/decline', [EmploymentApplicationController::class, 'decline'])->name('employment-applications.decline');
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
+        Route::post('/employment-applications/{employmentApplication}/onboard', [EmploymentApplicationController::class, 'onboard'])->name('employment-applications.onboard');
 
         // Reference Checks
         Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');

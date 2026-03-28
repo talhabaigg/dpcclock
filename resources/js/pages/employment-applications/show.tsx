@@ -235,6 +235,13 @@ interface DocumentTemplateOption {
     body_html: string | null;
 }
 
+interface OnboardingLocation {
+    id: number;
+    name: string;
+    eh_location_id: string;
+    eh_parent_id: string;
+}
+
 interface PageProps {
     application: Application;
     comments: CommentData[];
@@ -244,6 +251,7 @@ interface PageProps {
     auth: { permissions?: string[]; isAdmin?: boolean };
     signingRequest: SigningRequestData | null;
     documentTemplates: DocumentTemplateOption[];
+    onboardingLocations: Record<string, OnboardingLocation[]>;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -261,8 +269,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
 
-/** Statuses set only by the system (signing service, event listeners) — not user-selectable */
-const SYSTEM_STATUSES = ['contract_sent', 'contract_signed'];
+/** Statuses set only by the system (signing service, event listeners, onboarding) — not user-selectable */
+const SYSTEM_STATUSES = ['contract_sent', 'contract_signed', 'onboarded'];
 
 /** Statuses that are selectable in the dropdown */
 const SELECTABLE_STATUSES = PIPELINE_STATUSES.filter((s) => !SYSTEM_STATUSES.includes(s));
@@ -328,7 +336,25 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
     const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
     const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
+    const onboardedMeta = comment.metadata?.type === 'onboarded' ? comment.metadata as { type: string; eh_employee_id: number; location_name: string; company_code: string } : undefined;
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
+
+    if (isSystem && onboardedMeta) {
+        return (
+            <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                    <User className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="min-w-0 flex-1 pt-1">
+                    <p className="text-sm">
+                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
+                        <span className="text-muted-foreground"> {comment.body}</span>
+                    </p>
+                    <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
+                </div>
+            </div>
+        );
+    }
 
     if (isSystem && contractSignedMeta) {
         return (
@@ -1613,9 +1639,146 @@ function ReadOnlyRefCheck({
     );
 }
 
+// ─── Send to Payroll Modal ──────────────────────────────────────────────────────
+
+function SendToPayrollModal({ open, onOpenChange, application, locations }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    application: Application;
+    locations: Record<string, OnboardingLocation[]>;
+}) {
+    const [selectedLocation, setSelectedLocation] = useState('');
+    const [qualificationsRequired, setQualificationsRequired] = useState(false);
+    const [emergencyContactRequired, setEmergencyContactRequired] = useState(true);
+    const [processing, setProcessing] = useState(false);
+    const [error, setError] = useState('');
+
+    function handleSubmit() {
+        if (!selectedLocation) {
+            setError('Please select a location.');
+            return;
+        }
+        setProcessing(true);
+        setError('');
+
+        router.post(route('employment-applications.onboard', application.id), {
+            eh_location_id: selectedLocation,
+            qualifications_required: qualificationsRequired,
+            emergency_contact_required: emergencyContactRequired,
+        }, {
+            onSuccess: () => {
+                setProcessing(false);
+                onOpenChange(false);
+                setSelectedLocation('');
+            },
+            onError: (errors) => {
+                setProcessing(false);
+                setError(errors.onboard || errors.eh_location_id || 'Something went wrong.');
+            },
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Send to Payroll</DialogTitle>
+                    <DialogDescription>
+                        Send a self-service onboarding invite to <strong>{application.first_name} {application.surname}</strong>. They will receive an email to complete their TFN, super, and bank details.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                    {/* Read-only applicant details */}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <Label className="text-muted-foreground text-xs">Name</Label>
+                            <p className="font-medium">{application.first_name} {application.surname}</p>
+                        </div>
+                        <div>
+                            <Label className="text-muted-foreground text-xs">Email</Label>
+                            <p className="font-medium">{application.email}</p>
+                        </div>
+                        <div>
+                            <Label className="text-muted-foreground text-xs">Phone</Label>
+                            <p className="font-medium">{application.phone}</p>
+                        </div>
+                        <div>
+                            <Label className="text-muted-foreground text-xs">Occupation</Label>
+                            <p className="font-medium capitalize">{application.occupation === 'other' && application.occupation_other ? application.occupation_other : application.occupation}</p>
+                        </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Location selector */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="onboard-location">Location <span className="text-red-500">*</span></Label>
+                        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                            <SelectTrigger id="onboard-location">
+                                <SelectValue placeholder="Select a location..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(locations).map(([company, locs]) => (
+                                    <div key={company}>
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{company}</div>
+                                        {locs.map((loc) => (
+                                            <SelectItem key={loc.eh_location_id} value={loc.eh_location_id}>
+                                                {loc.name}
+                                            </SelectItem>
+                                        ))}
+                                    </div>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Options */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                id="emergency-contact"
+                                checked={emergencyContactRequired}
+                                onCheckedChange={(checked) => setEmergencyContactRequired(checked === true)}
+                            />
+                            <Label htmlFor="emergency-contact" className="text-sm font-normal">Require emergency contact details</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                id="qualifications"
+                                checked={qualificationsRequired}
+                                onCheckedChange={(checked) => setQualificationsRequired(checked === true)}
+                            />
+                            <Label htmlFor="qualifications" className="text-sm font-normal">Require qualifications</Label>
+                        </div>
+                    </div>
+
+                    {error && (
+                        <p className="text-sm text-red-600">{error}</p>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>Cancel</Button>
+                    <Button onClick={handleSubmit} disabled={processing}>
+                        {processing ? (
+                            <>
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                Sending...
+                            </>
+                        ) : (
+                            'Send to Payroll'
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequest, documentTemplates }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequest, documentTemplates, onboardingLocations }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
@@ -1623,6 +1786,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
     const [showSigningModal, setShowSigningModal] = useState(false);
+    const [showOnboardModal, setShowOnboardModal] = useState(false);
 
     // Reference check dialog
     const [refCheckOpen, setRefCheckOpen] = useState(false);
@@ -1998,6 +2162,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                     Send Contract
                                                 </Button>
                                             )}
+                                            {['contract_signed', 'onboarded'].includes(app.status) && (
+                                                <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
+                                                    <User className="mr-1.5 h-3.5 w-3.5" />
+                                                    Send to Payroll
+                                                </Button>
+                                            )}
                                             {!['declined', 'contract_signed', 'onboarded'].includes(app.status) && (
                                                 <Button size="sm" variant="secondary" className="flex-1" onClick={() => setShowDeclineDialog(true)}>
                                                     <XCircle className="mr-1.5 h-3.5 w-3.5" />
@@ -2232,6 +2402,14 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 recipientPosition={app.occupation === 'other' && app.occupation_other ? app.occupation_other : app.occupation}
                 signableType="App\Models\EmploymentApplication"
                 signableId={app.id}
+            />
+
+            {/* Send to Payroll Modal */}
+            <SendToPayrollModal
+                open={showOnboardModal}
+                onOpenChange={setShowOnboardModal}
+                application={app}
+                locations={onboardingLocations ?? {}}
             />
 
         </AppLayout>

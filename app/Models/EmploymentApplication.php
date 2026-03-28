@@ -7,6 +7,7 @@ use App\Models\Concerns\HasComments;
 use App\Models\Concerns\HasSigningRequests;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EmploymentApplication extends Model
@@ -135,5 +136,12 @@ class EmploymentApplication extends Model
                 $q->orWhere('phone', $phone);
             }
         });
+    }
+
+    public function employees(): BelongsToMany
+    {
+        return $this->belongsToMany(Employee::class, 'employment_application_employee')
+            ->withPivot('eh_location_id', 'linked_at')
+            ->withTimestamps();
     }
 }

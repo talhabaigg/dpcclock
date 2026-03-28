@@ -52,4 +52,11 @@ class Employee extends Model
     {
         return $this->hasMany(IncidentReport::class);
     }
+
+    public function employmentApplications()
+    {
+        return $this->belongsToMany(EmploymentApplication::class, 'employment_application_employee')
+            ->withPivot('eh_location_id', 'linked_at')
+            ->withTimestamps();
+    }
 }

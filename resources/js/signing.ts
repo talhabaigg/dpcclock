@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Create initials pad
         initialsPad = new SignaturePad(initialsCanvas, {
-            backgroundColor: 'rgb(255, 255, 255)',
+            backgroundColor: 'rgba(0, 0, 0, 0)',
             penColor: 'rgb(0, 0, 0)',
             minWidth: 0.5,
             maxWidth: 2,

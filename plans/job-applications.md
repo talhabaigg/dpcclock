@@ -142,18 +142,9 @@ Replaces the earlier `employment_application_notes` table with a full-featured c
 | `updated_at` | timestamp | auto | |
 | `deleted_at` | timestamp, nullable | auto | soft delete |
 
-#### `comment_attachments`
+#### Comment Attachments
 
-| Column | Type | Required | Notes |
-|--------|------|----------|-------|
-| `id` | bigint PK | auto | |
-| `comment_id` | FK → comments | yes | cascade delete |
-| `file_path` | string | yes | S3 path |
-| `file_name` | string | yes | original filename |
-| `file_size` | int | yes | bytes |
-| `mime_type` | string | yes | e.g. `image/jpeg`, `application/pdf` |
-| `created_at` | timestamp | auto | |
-| `updated_at` | timestamp | auto | |
+> **Implementation note:** The plan originally specified a separate `comment_attachments` table, but the actual implementation uses **Spatie Media Library** (`InteractsWithMedia` trait on Comment model) with an `'attachments'` media collection. This is superior — handles file storage, conversions, and cleanup automatically.
 
 ---
 
@@ -343,20 +334,21 @@ New categories in `RolesAndPermissionsSeeder`:
 - [x] Duplicate detection logic (query by email/phone, return warning with links)
 
 ### Phase 3: Frontend — Form + Admin Views ✅
-- [x] Public application form (React + Inertia) — built, needs rename from `job-applications/` to `employment-applications/`
+- [x] Public application form (React + Inertia) — renamed to `employment-applications/`
 - [x] Wire form to backend (Inertia useForm POST, receive skills as props)
 - [x] Admin list view with filtering (by status, occupation, date range) + duplicate badges
 - [x] Admin detail view with status pipeline, comments, checklists, duplicate warning banner
-- [ ] Skills management page (CRUD for master list) — deferred
+- [x] Kanban view with drag-and-drop between status lanes (dnd-kit)
+- [x] PDF export of application submission (Barryvdh/DomPDF)
+- [ ] Skills management page (CRUD for master list) — deferred, no admin UI exists yet
 
 ### Phase 4: Comments System (generic) ✅
 - [x] Migration: `create_comments_table` (polymorphic, soft deletes)
-- [x] Migration: `create_comment_attachments_table`
-- [x] Models: `Comment`, `CommentAttachment`
+- [x] Model: `Comment` with `InteractsWithMedia` (Spatie Media Library) — attachments stored via media library, not separate `comment_attachments` table
 - [x] Trait: `HasComments` (polymorphic relationship + helpers)
 - [x] Controller: `CommentController` (store, update, destroy, with attachment upload)
 - [x] Frontend: comment thread UI with file upload, threaded replies
-- [x] System comments: auto-post on status change with `metadata.status_change`
+- [x] System comments: auto-post on status change, reference check, contract signing via `metadata`
 
 ### Phase 5: Checklist System (generic) ✅
 - [x] Migration: `create_checklist_templates_table`
@@ -365,18 +357,40 @@ New categories in `RolesAndPermissionsSeeder`:
 - [x] Migration: `create_checklist_items_table`
 - [x] Models: `ChecklistTemplate`, `ChecklistTemplateItem`, `Checklist`, `ChecklistItem` (`LogsActivity` trait for audit)
 - [x] Trait: `HasChecklists` (polymorphic relationship + helpers, auto-attach logic, required-items gate)
-- [x] Seeder: default checklist templates for employment application stages
+- [x] Seeder: default checklist templates for employment application stages (4 templates)
 - [x] Admin UI: template management (CRUD templates + items) — admin only
 - [x] Inline checklist UI on employment application detail view
 - [x] Enforce gate: block `approved` status if required checklist items incomplete
 
-### Phase 6: Application ↔ Employee Linking (future)
+### Phase 5b: Reference Check System ✅ (added beyond original plan)
+- [x] Migration: `create_employment_application_reference_checks_table` (30+ fields, Parts A-D)
+- [x] Model: `EmploymentApplicationReferenceCheck` with relationships to reference + application
+- [x] Controller: `ReferenceCheckController` (create, store, show)
+- [x] Frontend: `reference-check.tsx` — full reference check form and read-only view
+- [x] System comment auto-created when reference check is completed
+
+### Phase 5c: Contract Signing Integration ✅ (added beyond original plan)
+- [x] Trait: `HasSigningRequests` on `EmploymentApplication`
+- [x] Event listener: `UpdateEmploymentApplicationOnSigned` — auto-transitions status to `contract_signed`
+- [x] Frontend: "Send for Signing" modal on approved applications, signing status display
+- [x] System comment auto-created when contract is signed
+
+---
+
+## Remaining Work
+
+### Phase 6: Skills Management (deferred)
+- [ ] Admin page to list, create, edit, deactivate skills from master list
+- [ ] Toggle `is_active` to hide skills from public form without deleting historical data
+- Currently skills are only manageable via the `SkillsSeeder` — no UI
+
+### Phase 7: Application ↔ Employee Linking (future)
 - [ ] Migration: `create_employment_application_employee_table`
 - [ ] Add `belongsToMany` relationships on `EmploymentApplication` and `Employee` models
 - [ ] Admin UI to link an application to employee record(s) when hired
 - [ ] Transition status to `onboarded` when linked
 
-### Phase 7: Document Collection (future)
+### Phase 8: Document Collection (future)
 - [ ] Design `employment_application_documents` schema
 - [ ] Signed URL generation + expiry logic
 - [ ] Public upload form (applicant-facing, no auth required)

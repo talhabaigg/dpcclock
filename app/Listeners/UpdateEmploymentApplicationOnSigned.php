@@ -25,10 +25,18 @@ class UpdateEmploymentApplicationOnSigned
             $application->update(['status' => EmploymentApplication::STATUS_CONTRACT_SIGNED]);
         }
 
-        $application->addSystemComment(
-            "Contract signed by {$signingRequest->signer_full_name}",
-            ['type' => 'contract_signed', 'signing_request_id' => $signingRequest->id],
-            $signingRequest->sent_by,
-        );
+        // Prevent duplicate comments if event fires more than once
+        $alreadyCommented = $application->comments()
+            ->where('metadata->type', 'contract_signed')
+            ->where('metadata->signing_request_id', $signingRequest->id)
+            ->exists();
+
+        if (! $alreadyCommented) {
+            $application->addSystemComment(
+                "Contract signed by {$signingRequest->signer_full_name}",
+                ['type' => 'contract_signed', 'signing_request_id' => $signingRequest->id],
+                $signingRequest->sent_by,
+            );
+        }
     }
 }

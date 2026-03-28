@@ -1,12 +1,9 @@
 import InputError from '@/components/input-error';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +50,20 @@ const STEPS = [
     { label: 'References', shortLabel: 'References' },
     { label: 'Medical & Declaration', shortLabel: 'Medical' },
 ];
+
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+    return (
+        <div className="mb-6 border-b border-gray-200 pb-4">
+            <h2 className="text-lg font-semibold text-gray-800 sm:text-xl">{title}</h2>
+            {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+        </div>
+    );
+}
+
+/* Touch-friendly wrapper for radio/checkbox rows — 44px min tap target */
+function TouchRow({ children, className }: { children: React.ReactNode; className?: string }) {
+    return <div className={cn('flex min-h-[44px] items-center gap-3', className)}>{children}</div>;
+}
 
 export default function Apply({ skills }: Props) {
     const [step, setStep] = useState(0);
@@ -193,19 +204,19 @@ export default function Apply({ skills }: Props) {
     const allErrors = { ...clientErrors, ...errors };
 
     return (
-        <div className="flex min-h-svh flex-col items-center p-6 md:p-10">
-            <div className="flex w-full max-w-2xl flex-col gap-6">
+        <div className="flex min-h-svh flex-col items-center bg-white px-3 py-6 font-[system-ui,_-apple-system,_sans-serif] sm:px-4 sm:py-8 md:px-8 md:py-12">
+            <div className="flex w-full max-w-2xl flex-col gap-6 sm:gap-8">
                 {/* Step Indicator */}
-                <div className="flex items-center justify-between px-2">
+                <div className="flex items-center justify-between">
                     {STEPS.map((s, i) => (
                         <div key={i} className="flex items-center">
                             <div className="flex flex-col items-center gap-1.5">
                                 <div
                                     className={cn(
-                                        'flex size-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors',
-                                        i < step && 'bg-primary border-primary text-primary-foreground',
-                                        i === step && 'border-primary text-primary',
-                                        i > step && 'border-muted-foreground/30 text-muted-foreground/50',
+                                        'flex size-9 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors',
+                                        i < step && 'border-[#2e6da4] bg-[#2e6da4] text-white',
+                                        i === step && 'border-[#2e6da4] text-[#2e6da4]',
+                                        i > step && 'border-gray-300 text-gray-400',
                                     )}
                                 >
                                     {i < step ? <CheckIcon className="size-4" /> : i + 1}
@@ -213,14 +224,14 @@ export default function Apply({ skills }: Props) {
                                 <span
                                     className={cn(
                                         'hidden text-center text-xs font-medium sm:block',
-                                        i === step ? 'text-primary' : 'text-muted-foreground',
+                                        i === step ? 'text-[#2e6da4]' : 'text-gray-400',
                                     )}
                                 >
                                     {s.shortLabel}
                                 </span>
                             </div>
                             {i < STEPS.length - 1 && (
-                                <div className={cn('mx-1 h-0.5 w-6 sm:w-12', i < step ? 'bg-primary' : 'bg-muted-foreground/20')} />
+                                <div className={cn('mx-1.5 h-0.5 w-8 sm:w-14', i < step ? 'bg-[#2e6da4]' : 'bg-gray-200')} />
                             )}
                         </div>
                     ))}
@@ -229,120 +240,114 @@ export default function Apply({ skills }: Props) {
                 <form onSubmit={handleSubmit}>
                     {/* Step 1: Personal Details */}
                     {step === 0 && (
-                        <Card className="rounded-xl">
-                            <CardHeader>
-                                <CardTitle>Personal Details</CardTitle>
-                                <CardDescription>Tell us about yourself</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-4">
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="surname">
-                                            Surname <span className="text-destructive">*</span>
+                        <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                            <SectionHeader title="Personal Details" description="Tell us about yourself" />
+
+                            <div className="grid gap-5">
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="surname" className="text-sm font-medium text-gray-700">
+                                            Surname <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input id="surname" value={data.surname} onChange={(e) => setData('surname', e.target.value)} />
+                                        <Input id="surname" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.surname} onChange={(e) => setData('surname', e.target.value)} />
                                         <InputError message={allErrors.surname} />
                                     </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="first_name">
-                                            First Name(s) <span className="text-destructive">*</span>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="first_name" className="text-sm font-medium text-gray-700">
+                                            First Name(s) <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input id="first_name" value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
+                                        <Input id="first_name" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
                                         <InputError message={allErrors.first_name} />
                                     </div>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="suburb">
-                                        Suburb <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="suburb" className="text-sm font-medium text-gray-700">
+                                        Suburb <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input id="suburb" value={data.suburb} onChange={(e) => setData('suburb', e.target.value)} />
+                                    <Input id="suburb" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.suburb} onChange={(e) => setData('suburb', e.target.value)} />
                                     <InputError message={allErrors.suburb} />
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="email">
-                                            Email <span className="text-destructive">*</span>
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                                            Email <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
+                                        <Input id="email" type="email" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.email} onChange={(e) => setData('email', e.target.value)} />
                                         <InputError message={allErrors.email} />
                                     </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="phone">
-                                            Phone <span className="text-destructive">*</span>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                                            Phone <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input id="phone" type="tel" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
+                                        <Input id="phone" type="tel" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
                                         <InputError message={allErrors.phone} />
                                     </div>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="date_of_birth">
-                                        Date of Birth <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="date_of_birth" className="text-sm font-medium text-gray-700">
+                                        Date of Birth <span className="text-red-500">*</span>
                                     </Label>
                                     <Input
                                         id="date_of_birth"
                                         type="date"
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                         value={data.date_of_birth}
                                         onChange={(e) => setData('date_of_birth', e.target.value)}
                                     />
                                     <InputError message={allErrors.date_of_birth} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="why_should_we_employ_you">
-                                        Why should we employ you? <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="why_should_we_employ_you" className="text-sm font-medium text-gray-700">
+                                        Why should we employ you? <span className="text-red-500">*</span>
                                     </Label>
                                     <Textarea
                                         id="why_should_we_employ_you"
+                                        className="border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:text-sm"
                                         value={data.why_should_we_employ_you}
                                         onChange={(e) => setData('why_should_we_employ_you', e.target.value)}
                                     />
                                     <InputError message={allErrors.why_should_we_employ_you} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="referred_by">Did someone refer you to this page?</Label>
-                                    <Input id="referred_by" value={data.referred_by} onChange={(e) => setData('referred_by', e.target.value)} />
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="referred_by" className="text-sm font-medium text-gray-700">Did someone refer you to this page?</Label>
+                                    <Input id="referred_by" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.referred_by} onChange={(e) => setData('referred_by', e.target.value)} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>Are you of Aboriginal or Torres Strait Islander Origin?</Label>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">Are you of Aboriginal or Torres Strait Islander Origin?</Label>
                                     <RadioGroup value={data.aboriginal_or_tsi} onValueChange={(v) => setData('aboriginal_or_tsi', v)}>
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="atsi_yes" />
-                                            <Label htmlFor="atsi_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="atsi_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="atsi_no" />
-                                            <Label htmlFor="atsi_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="atsi_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     )}
 
                     {/* Step 2: Occupation & Skills */}
                     {step === 1 && (
-                        <div className="flex flex-col gap-6">
-                            <Card className="rounded-xl">
-                                <CardHeader>
-                                    <CardTitle>Occupation</CardTitle>
-                                    <CardDescription>Your trade and qualifications</CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-4">
-                                    <div className="grid gap-2">
-                                        <Label>
-                                            Occupation <span className="text-destructive">*</span>
+                        <div className="flex flex-col gap-8">
+                            <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                                <SectionHeader title="Occupation" description="Your trade and qualifications" />
+
+                                <div className="grid gap-5">
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-sm font-medium text-gray-700">
+                                            Occupation <span className="text-red-500">*</span>
                                         </Label>
                                         <Select value={data.occupation} onValueChange={(v) => setData('occupation', v)}>
-                                            <SelectTrigger>
+                                            <SelectTrigger className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm">
                                                 <SelectValue placeholder="Select your occupation" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -357,12 +362,13 @@ export default function Apply({ skills }: Props) {
                                     </div>
 
                                     {data.occupation === 'other' && (
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="occupation_other">
-                                                Please Specify <span className="text-destructive">*</span>
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="occupation_other" className="text-sm font-medium text-gray-700">
+                                                Please Specify <span className="text-red-500">*</span>
                                             </Label>
                                             <Input
                                                 id="occupation_other"
+                                                className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                 value={data.occupation_other}
                                                 onChange={(e) => setData('occupation_other', e.target.value)}
                                             />
@@ -370,10 +376,10 @@ export default function Apply({ skills }: Props) {
                                         </div>
                                     )}
 
-                                    <div className="grid gap-2">
-                                        <Label>Apprentice Year</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-sm font-medium text-gray-700">Apprentice Year</Label>
                                         <Select value={data.apprentice_year} onValueChange={(v) => setData('apprentice_year', v)}>
-                                            <SelectTrigger>
+                                            <SelectTrigger className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm">
                                                 <SelectValue placeholder="Not an apprentice" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -386,41 +392,36 @@ export default function Apply({ skills }: Props) {
                                         </Select>
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label>Trade Qualified</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-sm font-medium text-gray-700">Trade Qualified</Label>
                                         <RadioGroup value={data.trade_qualified} onValueChange={(v) => setData('trade_qualified', v)}>
-                                            <div className="flex items-center gap-2">
+                                            <TouchRow>
                                                 <RadioGroupItem value="yes" id="tq_yes" />
-                                                <Label htmlFor="tq_yes" className="font-normal">
-                                                    Yes
-                                                </Label>
-                                            </div>
-                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="tq_yes" className="font-normal text-gray-600">Yes</Label>
+                                            </TouchRow>
+                                            <TouchRow>
                                                 <RadioGroupItem value="no" id="tq_no" />
-                                                <Label htmlFor="tq_no" className="font-normal">
-                                                    No
-                                                </Label>
-                                            </div>
+                                                <Label htmlFor="tq_no" className="font-normal text-gray-600">No</Label>
+                                            </TouchRow>
                                         </RadioGroup>
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="preferred_project_site">Preferred Project/Site</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="preferred_project_site" className="text-sm font-medium text-gray-700">Preferred Project/Site</Label>
                                         <Input
                                             id="preferred_project_site"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                             value={data.preferred_project_site}
                                             onChange={(e) => setData('preferred_project_site', e.target.value)}
                                         />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
 
-                            <Card className="rounded-xl">
-                                <CardHeader>
-                                    <CardTitle>Skills</CardTitle>
-                                    <CardDescription>Select all that apply</CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-4">
+                            <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                                <SectionHeader title="Skills" description="Select all that apply" />
+
+                                <div className="grid gap-5">
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         {skills.map((skill) => (
                                             <div key={skill.id} className="flex items-center gap-2">
@@ -429,48 +430,49 @@ export default function Apply({ skills }: Props) {
                                                     checked={data.selected_skills.includes(skill.id)}
                                                     onCheckedChange={() => toggleSkill(skill.id)}
                                                 />
-                                                <Label htmlFor={`skill_${skill.id}`} className="font-normal">
+                                                <Label htmlFor={`skill_${skill.id}`} className="font-normal text-gray-600">
                                                     {skill.name}
                                                 </Label>
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="custom_skills">Other Skills (please specify)</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="custom_skills" className="text-sm font-medium text-gray-700">Other Skills (please specify)</Label>
                                         <Textarea
                                             id="custom_skills"
+                                            className="border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:text-sm"
                                             value={data.custom_skills}
                                             onChange={(e) => setData('custom_skills', e.target.value)}
                                             placeholder="Enter any additional skills, separated by commas..."
                                         />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {/* Step 3: Licences & Tickets */}
                     {step === 2 && (
-                        <Card className="rounded-xl">
-                            <CardHeader>
-                                <CardTitle>Licence & Ticket Details</CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="safety_induction_number">
-                                        Building Industry General Safety Induction Number <span className="text-destructive">*</span>
+                        <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                            <SectionHeader title="Licence & Ticket Details" />
+
+                            <div className="grid gap-5">
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="safety_induction_number" className="text-sm font-medium text-gray-700">
+                                        Building Industry General Safety Induction Number <span className="text-red-500">*</span>
                                     </Label>
                                     <Input
                                         id="safety_induction_number"
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                         value={data.safety_induction_number}
                                         onChange={(e) => setData('safety_induction_number', e.target.value)}
                                     />
                                     <InputError message={allErrors.safety_induction_number} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>EWP Operator Licence</Label>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">EWP Operator Licence</Label>
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center gap-2">
                                             <Checkbox
@@ -478,9 +480,7 @@ export default function Apply({ skills }: Props) {
                                                 checked={data.ewp_below_11m}
                                                 onCheckedChange={(checked) => setData('ewp_below_11m', checked === true)}
                                             />
-                                            <Label htmlFor="ewp_below_11m" className="font-normal">
-                                                Below 11m
-                                            </Label>
+                                            <Label htmlFor="ewp_below_11m" className="font-normal text-gray-600">Below 11m</Label>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Checkbox
@@ -488,252 +488,233 @@ export default function Apply({ skills }: Props) {
                                                 checked={data.ewp_above_11m}
                                                 onCheckedChange={(checked) => setData('ewp_above_11m', checked === true)}
                                             />
-                                            <Label htmlFor="ewp_above_11m" className="font-normal">
-                                                Above 11m (high risk)
-                                            </Label>
+                                            <Label htmlFor="ewp_above_11m" className="font-normal text-gray-600">Above 11m (high risk)</Label>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="forklift_licence_number">Fork Lift Licence Number</Label>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="forklift_licence_number" className="text-sm font-medium text-gray-700">Fork Lift Licence Number</Label>
                                     <Input
                                         id="forklift_licence_number"
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                         value={data.forklift_licence_number}
                                         onChange={(e) => setData('forklift_licence_number', e.target.value)}
                                     />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        Work Safely at Heights Training <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Work Safely at Heights Training <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup value={data.work_safely_at_heights} onValueChange={(v) => setData('work_safely_at_heights', v)}>
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="heights_yes" />
-                                            <Label htmlFor="heights_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="heights_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="heights_no" />
-                                            <Label htmlFor="heights_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="heights_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.work_safely_at_heights} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="scaffold_licence_number">Scaffold Licence Number</Label>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="scaffold_licence_number" className="text-sm font-medium text-gray-700">Scaffold Licence Number</Label>
                                     <Input
                                         id="scaffold_licence_number"
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                         value={data.scaffold_licence_number}
                                         onChange={(e) => setData('scaffold_licence_number', e.target.value)}
                                     />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="first_aid_completion_date">First Aid Certificate Completion Date</Label>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="first_aid_completion_date" className="text-sm font-medium text-gray-700">First Aid Certificate Completion Date</Label>
                                     <Input
                                         id="first_aid_completion_date"
                                         type="date"
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                         value={data.first_aid_completion_date}
                                         onChange={(e) => setData('first_aid_completion_date', e.target.value)}
                                     />
                                 </div>
 
-                                <Separator />
+                                <hr className="border-gray-200" />
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        Workplace Impairment Training (WIT) <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Workplace Impairment Training (WIT) <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup
                                         value={data.workplace_impairment_training}
                                         onValueChange={(v) => setData('workplace_impairment_training', v)}
                                     >
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="wit_yes" />
-                                            <Label htmlFor="wit_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="wit_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="wit_no" />
-                                            <Label htmlFor="wit_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="wit_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.workplace_impairment_training} />
                                 </div>
 
                                 {data.workplace_impairment_training === 'yes' && (
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="wit_completion_date">WIT Completion Date</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="wit_completion_date" className="text-sm font-medium text-gray-700">WIT Completion Date</Label>
                                         <Input
                                             id="wit_completion_date"
                                             type="date"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                             value={data.wit_completion_date}
                                             onChange={(e) => setData('wit_completion_date', e.target.value)}
                                         />
                                     </div>
                                 )}
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        Asbestos Awareness Training <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Asbestos Awareness Training <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup
                                         value={data.asbestos_awareness_training}
                                         onValueChange={(v) => setData('asbestos_awareness_training', v)}
                                     >
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="asbestos_yes" />
-                                            <Label htmlFor="asbestos_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="asbestos_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="asbestos_no" />
-                                            <Label htmlFor="asbestos_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="asbestos_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.asbestos_awareness_training} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        10830NAT Crystalline Silica Course <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        10830NAT Crystalline Silica Course <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup
                                         value={data.crystalline_silica_course}
                                         onValueChange={(v) => setData('crystalline_silica_course', v)}
                                     >
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="silica_yes" />
-                                            <Label htmlFor="silica_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="silica_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="silica_no" />
-                                            <Label htmlFor="silica_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="silica_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.crystalline_silica_course} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        Gender Equity Training <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Gender Equity Training <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup value={data.gender_equity_training} onValueChange={(v) => setData('gender_equity_training', v)}>
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="yes" id="gender_yes" />
-                                            <Label htmlFor="gender_yes" className="font-normal">
-                                                Yes
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="gender_yes" className="font-normal text-gray-600">Yes</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no" id="gender_no" />
-                                            <Label htmlFor="gender_no" className="font-normal">
-                                                No
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="gender_no" className="font-normal text-gray-600">No</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.gender_equity_training} />
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label>
-                                        Quantitative Fit Test <span className="text-destructive">*</span>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-sm font-medium text-gray-700">
+                                        Quantitative Fit Test <span className="text-red-500">*</span>
                                     </Label>
                                     <RadioGroup value={data.quantitative_fit_test} onValueChange={(v) => setData('quantitative_fit_test', v)}>
-                                        <div className="flex items-center gap-2">
+                                        <TouchRow>
                                             <RadioGroupItem value="quantitative" id="fit_quant" />
-                                            <Label htmlFor="fit_quant" className="font-normal">
-                                                Quantitative
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="fit_quant" className="font-normal text-gray-600">Quantitative</Label>
+                                        </TouchRow>
+                                        <TouchRow>
                                             <RadioGroupItem value="no_fit_test" id="fit_none" />
-                                            <Label htmlFor="fit_none" className="font-normal">
-                                                No fit test completed
-                                            </Label>
-                                        </div>
+                                            <Label htmlFor="fit_none" className="font-normal text-gray-600">No fit test completed</Label>
+                                        </TouchRow>
                                     </RadioGroup>
                                     <InputError message={allErrors.quantitative_fit_test} />
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     )}
 
                     {/* Step 4: References */}
                     {step === 3 && (
-                        <Card className="rounded-xl">
-                            <CardHeader>
-                                <CardTitle>Employment References</CardTitle>
-                                <CardDescription>Please provide at least 2 employment references</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-6">
+                        <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                            <SectionHeader title="Employment References" description="Please provide at least 2 employment references" />
+
+                            <div className="grid gap-8">
                                 {data.references.map((ref, index) => (
                                     <div key={index}>
-                                        {index > 0 && <Separator className="mb-6" />}
-                                        <h4 className="mb-3 text-sm font-medium">
-                                            Reference {index + 1} {index < 2 && <span className="text-destructive">*</span>}
+                                        {index > 0 && <hr className="mb-8 border-gray-200" />}
+                                        <h4 className="mb-4 text-sm font-semibold text-gray-700">
+                                            Reference {index + 1} {index < 2 && <span className="text-red-500">*</span>}
                                         </h4>
-                                        <div className="grid gap-3">
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor={`ref_company_${index}`}>Company Name</Label>
+                                        <div className="grid gap-4">
+                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                                <div className="grid gap-1.5">
+                                                    <Label htmlFor={`ref_company_${index}`} className="text-sm font-medium text-gray-700">Company Name</Label>
                                                     <Input
                                                         id={`ref_company_${index}`}
+                                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                         value={ref.company_name}
                                                         onChange={(e) => setReference(index, 'company_name', e.target.value)}
                                                     />
                                                     <InputError message={allErrors[`ref_${index}_company`]} />
                                                 </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor={`ref_position_${index}`}>Position</Label>
+                                                <div className="grid gap-1.5">
+                                                    <Label htmlFor={`ref_position_${index}`} className="text-sm font-medium text-gray-700">Position</Label>
                                                     <Input
                                                         id={`ref_position_${index}`}
+                                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                         value={ref.position}
                                                         onChange={(e) => setReference(index, 'position', e.target.value)}
                                                     />
                                                     <InputError message={allErrors[`ref_${index}_position`]} />
                                                 </div>
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label htmlFor={`ref_period_${index}`}>Employment Period</Label>
+                                            <div className="grid gap-1.5">
+                                                <Label htmlFor={`ref_period_${index}`} className="text-sm font-medium text-gray-700">Employment Period</Label>
                                                 <Input
                                                     id={`ref_period_${index}`}
+                                                    className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                     value={ref.employment_period}
                                                     onChange={(e) => setReference(index, 'employment_period', e.target.value)}
                                                 />
                                                 <InputError message={allErrors[`ref_${index}_period`]} />
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor={`ref_contact_${index}`}>Contact Person</Label>
+                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                                <div className="grid gap-1.5">
+                                                    <Label htmlFor={`ref_contact_${index}`} className="text-sm font-medium text-gray-700">Contact Person</Label>
                                                     <Input
                                                         id={`ref_contact_${index}`}
+                                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                         value={ref.contact_person}
                                                         onChange={(e) => setReference(index, 'contact_person', e.target.value)}
                                                     />
                                                     <InputError message={allErrors[`ref_${index}_contact`]} />
                                                 </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor={`ref_phone_${index}`}>Phone Number</Label>
+                                                <div className="grid gap-1.5">
+                                                    <Label htmlFor={`ref_phone_${index}`} className="text-sm font-medium text-gray-700">Phone Number</Label>
                                                     <Input
                                                         id={`ref_phone_${index}`}
                                                         type="tel"
+                                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                         value={ref.phone_number}
                                                         onChange={(e) => setReference(index, 'phone_number', e.target.value)}
                                                     />
@@ -743,40 +724,35 @@ export default function Apply({ skills }: Props) {
                                         </div>
                                     </div>
                                 ))}
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     )}
 
                     {/* Step 5: Medical & Declaration */}
                     {step === 4 && (
-                        <div className="flex flex-col gap-6">
-                            <Card className="rounded-xl">
-                                <CardHeader>
-                                    <CardTitle>Medical History</CardTitle>
-                                </CardHeader>
-                                <CardContent className="grid gap-4">
-                                    <div className="grid gap-2">
-                                        <Label>Workcover Claim (last 2 years)</Label>
+                        <div className="flex flex-col gap-8">
+                            <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                                <SectionHeader title="Medical History" />
+
+                                <div className="grid gap-5">
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-sm font-medium text-gray-700">Workcover Claim (last 2 years)</Label>
                                         <RadioGroup value={data.workcover_claim} onValueChange={(v) => setData('workcover_claim', v)}>
-                                            <div className="flex items-center gap-2">
+                                            <TouchRow>
                                                 <RadioGroupItem value="yes" id="wc_yes" />
-                                                <Label htmlFor="wc_yes" className="font-normal">
-                                                    Yes
-                                                </Label>
-                                            </div>
-                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="wc_yes" className="font-normal text-gray-600">Yes</Label>
+                                            </TouchRow>
+                                            <TouchRow>
                                                 <RadioGroupItem value="no" id="wc_no" />
-                                                <Label htmlFor="wc_no" className="font-normal">
-                                                    No
-                                                </Label>
-                                            </div>
+                                                <Label htmlFor="wc_no" className="font-normal text-gray-600">No</Label>
+                                            </TouchRow>
                                         </RadioGroup>
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label>Medical or Physical Condition</Label>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-sm font-medium text-gray-700">Medical or Physical Condition</Label>
                                         <Select value={data.medical_condition} onValueChange={(v) => setData('medical_condition', v)}>
-                                            <SelectTrigger>
+                                            <SelectTrigger className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm">
                                                 <SelectValue placeholder="Select if applicable" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -790,46 +766,48 @@ export default function Apply({ skills }: Props) {
                                     </div>
 
                                     {data.medical_condition === 'other' && (
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="medical_condition_other">Please specify</Label>
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="medical_condition_other" className="text-sm font-medium text-gray-700">Please specify</Label>
                                             <Input
                                                 id="medical_condition_other"
+                                                className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                 value={data.medical_condition_other}
                                                 onChange={(e) => setData('medical_condition_other', e.target.value)}
                                             />
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
 
-                            <Card className="rounded-xl">
-                                <CardHeader>
-                                    <CardTitle>Declaration & Acceptance</CardTitle>
-                                    <CardDescription>
-                                        I declare that the information provided in this application is true and correct. I understand that
-                                        providing false or misleading information may result in termination of employment.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid gap-4">
-                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="acceptance_full_name">
-                                                Full Name <span className="text-destructive">*</span>
+                            <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
+                                <SectionHeader title="Declaration & Acceptance" />
+                                <p className="mb-6 text-sm leading-relaxed text-gray-600">
+                                    I declare that the information provided in this application is true and correct. I understand that
+                                    providing false or misleading information may result in termination of employment.
+                                </p>
+
+                                <div className="grid gap-5">
+                                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="acceptance_full_name" className="text-sm font-medium text-gray-700">
+                                                Full Name <span className="text-red-500">*</span>
                                             </Label>
                                             <Input
                                                 id="acceptance_full_name"
+                                                className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                 value={data.acceptance_full_name}
                                                 onChange={(e) => setData('acceptance_full_name', e.target.value)}
                                             />
                                             <InputError message={allErrors.acceptance_full_name} />
                                         </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="acceptance_email">
-                                                Email Address <span className="text-destructive">*</span>
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="acceptance_email" className="text-sm font-medium text-gray-700">
+                                                Email Address <span className="text-red-500">*</span>
                                             </Label>
                                             <Input
                                                 id="acceptance_email"
                                                 type="email"
+                                                className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                                 value={data.acceptance_email}
                                                 onChange={(e) => setData('acceptance_email', e.target.value)}
                                             />
@@ -837,13 +815,14 @@ export default function Apply({ skills }: Props) {
                                         </div>
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="acceptance_date">
-                                            Date <span className="text-destructive">*</span>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="acceptance_date" className="text-sm font-medium text-gray-700">
+                                            Date <span className="text-red-500">*</span>
                                         </Label>
                                         <Input
                                             id="acceptance_date"
                                             type="date"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
                                             value={data.acceptance_date}
                                             onChange={(e) => setData('acceptance_date', e.target.value)}
                                         />
@@ -856,41 +835,53 @@ export default function Apply({ skills }: Props) {
                                             checked={data.declaration_accepted}
                                             onCheckedChange={(checked) => setData('declaration_accepted', checked === true)}
                                         />
-                                        <Label htmlFor="declaration_accepted" className="font-normal leading-snug">
+                                        <Label htmlFor="declaration_accepted" className="font-normal leading-snug text-gray-600">
                                             I confirm that the above information is true and correct to the best of my knowledge, and I
                                             acknowledge the privacy notice{' '}
-                                            <span className="text-destructive">*</span>
+                                            <span className="text-red-500">*</span>
                                         </Label>
                                     </div>
                                     <InputError message={allErrors.declaration_accepted} />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {/* Navigation Buttons */}
-                    <div className="mt-6 flex gap-3">
+                    <div className="mt-6 flex gap-3 sm:mt-8">
                         {step > 0 && (
-                            <Button type="button" variant="outline" onClick={goBack} className="flex-1">
+                            <button
+                                type="button"
+                                onClick={goBack}
+                                className="flex-1 rounded border border-gray-300 bg-white px-6 py-3.5 text-base font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100 sm:py-3 sm:text-sm"
+                            >
                                 Back
-                            </Button>
+                            </button>
                         )}
                         {step < STEPS.length - 1 ? (
-                            <Button type="button" onClick={goNext} className="flex-1">
+                            <button
+                                type="button"
+                                onClick={goNext}
+                                className="flex-1 rounded bg-[#2e6da4] px-6 py-3.5 text-base font-medium text-white transition-colors hover:bg-[#255a87] active:bg-[#1e4d6e] sm:py-3 sm:text-sm"
+                            >
                                 Continue
-                            </Button>
+                            </button>
                         ) : (
-                            <Button type="submit" className="flex-1" disabled={processing || !data.declaration_accepted}>
+                            <button
+                                type="submit"
+                                className="flex-1 rounded bg-[#2e6da4] px-6 py-3.5 text-base font-medium text-white transition-colors hover:bg-[#255a87] active:bg-[#1e4d6e] disabled:opacity-50 sm:py-3 sm:text-sm"
+                                disabled={processing || !data.declaration_accepted}
+                            >
                                 {processing ? 'Submitting...' : 'Submit Application'}
-                            </Button>
+                            </button>
                         )}
                     </div>
                 </form>
 
-                {/* Privacy Notice — persistent across all steps */}
-                <div className="text-muted-foreground mt-2 space-y-1.5 px-1 text-xs">
+                {/* Privacy Notice */}
+                <div className="mt-4 space-y-2 text-xs leading-relaxed text-gray-400">
                     <p>
-                        <span className="font-medium">Privacy Notice:</span> Superior Group collects personal information including
+                        <span className="font-medium text-gray-500">Privacy Notice:</span> Superior Group collects personal information including
                         your name, contact details, employment history, qualifications, and medical information for the purpose of
                         assessing your suitability for employment. This information is handled in accordance with the Privacy Act 1988
                         (Cth) and the Australian Privacy Principles.
@@ -901,7 +892,7 @@ export default function Apply({ skills }: Props) {
                         only be accessed by authorised personnel involved in the recruitment process and will not be shared with third
                         parties without your consent. If your application is unsuccessful, your data will be retained for up to 12 months
                         then securely deleted. You may request access to, correction, or deletion of your information by contacting us at{' '}
-                        <span className="font-medium">privacy@superiorgroup.com.au</span>.
+                        <span className="font-medium text-gray-500">privacy@superiorgroup.com.au</span>.
                     </p>
                 </div>
             </div>

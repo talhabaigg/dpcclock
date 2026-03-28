@@ -4,11 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmploymentApplicationRequest;
 use App\Models\ChecklistTemplate;
+use App\Models\Employee;
 use App\Models\EmploymentApplication;
+use App\Models\Location;
 use App\Models\Skill;
+use App\Services\EmploymentHeroService;
+use App\Services\GetCompanyCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -302,6 +307,15 @@ class EmploymentApplicationController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'placeholders', 'body_html']);
 
+        // Load locations for onboarding modal (grouped by company)
+        $companyCodeService = new GetCompanyCodeService;
+        $onboardingLocations = Location::open()
+            ->whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+            ->select('id', 'name', 'eh_location_id', 'eh_parent_id')
+            ->orderBy('name')
+            ->get()
+            ->groupBy(fn ($loc) => $companyCodeService->getCompanyCode($loc->eh_parent_id) ?? 'Other');
+
         return Inertia::render('employment-applications/show', [
             'application' => $employmentApplication,
             'comments' => $comments,
@@ -309,6 +323,7 @@ class EmploymentApplicationController extends Controller
             'availableTemplates' => $availableTemplates,
             'duplicates' => $duplicates,
             'statuses' => EmploymentApplication::STATUSES,
+            'onboardingLocations' => $onboardingLocations,
             'signingRequest' => $signingRequest ? [
                 'id' => $signingRequest->id,
                 'status' => $signingRequest->status,
@@ -380,6 +395,11 @@ class EmploymentApplicationController extends Controller
         // Cannot set to contract_sent directly — use the Send for Signing modal
         if ($newStatus === EmploymentApplication::STATUS_CONTRACT_SENT) {
             return back()->withErrors(['status' => 'Use the Send for Signing action instead.']);
+        }
+
+        // Cannot set to onboarded directly — use the Send to Payroll action
+        if ($newStatus === EmploymentApplication::STATUS_ONBOARDED) {
+            return back()->withErrors(['status' => 'Use the Send to Payroll action instead.']);
         }
 
         // Gate: cannot move to "approved" if required checklist items are incomplete
@@ -456,5 +476,86 @@ class EmploymentApplicationController extends Controller
         ]);
 
         return back();
+    }
+
+    /**
+     * Onboard an applicant to payroll via Employment Hero self-service.
+     */
+    public function onboard(Request $request, EmploymentApplication $employmentApplication, EmploymentHeroService $ehService): RedirectResponse
+    {
+        $request->validate([
+            'eh_location_id' => ['required', 'string', 'exists:locations,eh_location_id'],
+            'qualifications_required' => ['boolean'],
+            'emergency_contact_required' => ['boolean'],
+        ]);
+
+        $location = Location::where('eh_location_id', $request->eh_location_id)->firstOrFail();
+
+        // Check if this person already exists in payroll (re-hire scenario)
+        $existingEmployee = Employee::withTrashed()
+            ->where('email', $employmentApplication->email)
+            ->first();
+
+        try {
+            $payload = [
+                'firstName' => $employmentApplication->first_name,
+                'surname' => $employmentApplication->surname,
+                'email' => $employmentApplication->email,
+                'mobile' => $employmentApplication->phone,
+                'employingEntityId' => is_numeric($location->eh_parent_id) ? (int) $location->eh_parent_id : null,
+                'qualificationsRequired' => $request->boolean('qualifications_required'),
+                'emergencyContactDetailsRequired' => $request->boolean('emergency_contact_required'),
+            ];
+
+            // Pass existing EH ID so KeyPay updates rather than creating a duplicate
+            if ($existingEmployee?->eh_employee_id) {
+                $payload['id'] = (int) $existingEmployee->eh_employee_id;
+            }
+
+            $response = $ehService->initiateSelfServiceOnboarding($payload);
+
+            $ehEmployeeId = $response['id'] ?? null;
+
+            if ($ehEmployeeId) {
+                $employee = Employee::withTrashed()->updateOrCreate(
+                    ['eh_employee_id' => $ehEmployeeId],
+                    [
+                        'name' => $employmentApplication->first_name.' '.$employmentApplication->surname,
+                        'email' => $employmentApplication->email,
+                        'external_id' => Str::uuid(),
+                        'pin' => 1234,
+                    ]
+                );
+
+                if ($employee->trashed()) {
+                    $employee->restore();
+                }
+
+                $employmentApplication->employees()->attach($employee->id, [
+                    'eh_location_id' => $request->eh_location_id,
+                    'linked_at' => now(),
+                ]);
+            }
+
+            $oldStatus = $employmentApplication->status;
+            $employmentApplication->update(['status' => EmploymentApplication::STATUS_ONBOARDED]);
+
+            $companyCode = (new GetCompanyCodeService)->getCompanyCode($location->eh_parent_id);
+            $employmentApplication->addSystemComment(
+                "Sent to payroll — **{$location->name}** ({$companyCode}). Self-service onboarding invite sent to {$employmentApplication->email}.",
+                [
+                    'type' => 'onboarded',
+                    'status_change' => ['from' => $oldStatus, 'to' => EmploymentApplication::STATUS_ONBOARDED],
+                    'eh_employee_id' => $ehEmployeeId,
+                    'eh_location_id' => $request->eh_location_id,
+                    'location_name' => $location->name,
+                    'company_code' => $companyCode,
+                ],
+            );
+
+            return back()->with('success', 'Onboarding invite sent to '.$employmentApplication->email);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['onboard' => 'Failed to send to payroll. Please try again or contact support.']);
+        }
     }
 }
