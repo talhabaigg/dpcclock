@@ -16,6 +16,8 @@ use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
 use App\Http\Controllers\DrawingMeasurementController;
 use App\Http\Controllers\DrawingObservationController;
+use App\Http\Controllers\FormRequestController;
+use App\Http\Controllers\FormTemplateController;
 use App\Http\Controllers\TakeoffConditionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ForecastProjectController;
@@ -70,16 +72,27 @@ Route::get('/', function () {
 })->name('home');
 
 // Employment Applications — public routes
-Route::get('/work-with-us', [EmploymentApplicationController::class, 'create'])->name('employment-applications.create');
-Route::post('/work-with-us', [EmploymentApplicationController::class, 'store'])->name('employment-applications.store');
-Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, 'thankYou'])->name('employment-applications.thank-you');
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/work-with-us', [EmploymentApplicationController::class, 'create'])->name('employment-applications.create');
+    Route::post('/work-with-us', [EmploymentApplicationController::class, 'store'])->name('employment-applications.store')->middleware('throttle:5,1');
+    Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, 'thankYou'])->name('employment-applications.thank-you');
+});
 
 // Document Signing — public routes (token-based, no auth)
-Route::get('/sign/{token}', [SigningRequestController::class, 'show'])->name('signing.show');
-Route::get('/sign/{token}/preview-pdf', [SigningRequestController::class, 'previewPdf'])->name('signing.preview-pdf');
-Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
-Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
-Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/sign/{token}', [SigningRequestController::class, 'show'])->name('signing.show');
+    Route::get('/sign/{token}/preview-pdf', [SigningRequestController::class, 'previewPdf'])->name('signing.preview-pdf');
+    Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
+    Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
+    Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
+});
+
+// Public form routes (no auth — token-based)
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/form/{token}', [FormRequestController::class, 'show'])->name('form.show');
+    Route::post('/form/{token}/submit', [FormRequestController::class, 'submit'])->name('form.submit')->middleware('throttle:10,1');
+    Route::get('/form/{token}/thank-you', [FormRequestController::class, 'thankYou'])->name('form.thank-you');
+});
 
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
@@ -181,15 +194,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'destroy'])->name('document-templates.destroy');
     });
 
+    // Form Templates CRUD
+    Route::middleware('permission:document-templates.manage')->group(function () {
+        Route::get('/form-templates', [FormTemplateController::class, 'index'])->name('form-templates.index');
+        Route::get('/form-templates/create', [FormTemplateController::class, 'create'])->name('form-templates.create');
+        Route::post('/form-templates', [FormTemplateController::class, 'store'])->name('form-templates.store');
+        Route::get('/form-templates/{formTemplate}/edit', [FormTemplateController::class, 'edit'])->name('form-templates.edit');
+        Route::put('/form-templates/{formTemplate}', [FormTemplateController::class, 'update'])->name('form-templates.update');
+        Route::delete('/form-templates/{formTemplate}', [FormTemplateController::class, 'destroy'])->name('form-templates.destroy');
+    });
+
+    // Form Requests (admin actions)
+    Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
+    Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
+
     Route::post('/signing-requests', [SigningRequestController::class, 'store'])->name('signing-requests.store');
+    Route::post('/signing-requests/batch', [SigningRequestController::class, 'storeBatch'])->name('signing-requests.store-batch');
     Route::post('/signing-requests/{signingRequest}/cancel', [SigningRequestController::class, 'cancel'])->name('signing-requests.cancel');
     Route::post('/signing-requests/{signingRequest}/resend', [SigningRequestController::class, 'resend'])->name('signing-requests.resend');
     Route::get('/signing-requests/{signingRequest}/download', [SigningRequestController::class, 'download'])->name('signing-requests.download');
 
-    // Comments (generic)
-    Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
-    Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
-    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
+    // Comments (generic — currently only employment applications use comments)
+    Route::middleware('permission:employment-applications.view')->group(function () {
+        Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
+        Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
+        Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
+    });
 
     // ============================================
     // CHECKLISTS (generic)

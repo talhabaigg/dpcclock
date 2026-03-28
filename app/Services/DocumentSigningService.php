@@ -30,11 +30,12 @@ class DocumentSigningService
         ?string $senderSignature = null,
         ?string $senderFullName = null,
     ): SigningRequest {
-        // Cancel any existing pending requests for the same signable
+        // Cancel any existing pending requests for the same signable + template
         if ($signable) {
             SigningRequest::query()
                 ->where('signable_type', get_class($signable))
                 ->where('signable_id', $signable->getKey())
+                ->where('document_template_id', $template->id)
                 ->whereIn('status', ['pending', 'sent', 'opened', 'viewed'])
                 ->each(function (SigningRequest $existing) use ($admin) {
                     $this->cancel($existing, $admin);
@@ -105,12 +106,6 @@ class DocumentSigningService
             'sender_full_name' => $senderFullName,
             'expires_at' => now()->addDays(7),
         ]);
-
-        // Generate preview PDF for the signer to view (paginated, no signatures)
-        $previewPdf = $this->pdfService->generatePreview($signingRequest);
-        $signingRequest->addMediaFromString($previewPdf)
-            ->usingFileName('preview-document.pdf')
-            ->toMediaCollection('preview_document');
 
         $signingRequest->logEvent('created', 'admin', $admin->id);
 

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 import { useForm } from '@inertiajs/react';
 import { CheckIcon } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 interface Skill {
     id: number;
@@ -18,6 +18,7 @@ interface Skill {
 
 interface Props {
     skills: Skill[];
+    recaptchaSiteKey: string | null;
 }
 
 const occupations = [
@@ -65,10 +66,30 @@ function TouchRow({ children, className }: { children: React.ReactNode; classNam
     return <div className={cn('flex min-h-[44px] items-center gap-3', className)}>{children}</div>;
 }
 
-export default function Apply({ skills }: Props) {
-    const [step, setStep] = useState(0);
+declare global {
+    interface Window {
+        grecaptcha: {
+            ready: (cb: () => void) => void;
+            execute: (siteKey: string, options: { action: string }) => Promise<string>;
+        };
+    }
+}
 
-    const { data, setData, post, processing, errors } = useForm({
+export default function Apply({ skills, recaptchaSiteKey }: Props) {
+    const [step, setStep] = useState(0);
+    const recaptchaLoaded = useRef(false);
+
+    // Load reCAPTCHA v3 script
+    useEffect(() => {
+        if (!recaptchaSiteKey || recaptchaLoaded.current) return;
+        recaptchaLoaded.current = true;
+        const script = document.createElement('script');
+        script.src = `https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`;
+        script.async = true;
+        document.head.appendChild(script);
+    }, [recaptchaSiteKey]);
+
+    const { data, setData, post, processing, errors, transform } = useForm({
         // Personal
         surname: '',
         first_name: '',
@@ -194,9 +215,20 @@ export default function Apply({ skills }: Props) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function handleSubmit(e: FormEvent) {
+    async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!validateStep(step)) return;
+
+        let recaptchaToken = '';
+        if (recaptchaSiteKey && window.grecaptcha) {
+            try {
+                recaptchaToken = await window.grecaptcha.execute(recaptchaSiteKey, { action: 'employment_application' });
+            } catch {
+                // If reCAPTCHA fails client-side, still submit — server will reject if required
+            }
+        }
+
+        transform((d) => ({ ...d, recaptcha_token: recaptchaToken }));
         post(route('employment-applications.store'));
     }
 
@@ -876,6 +908,9 @@ export default function Apply({ skills }: Props) {
                             </button>
                         )}
                     </div>
+                    {errors.recaptcha_token && (
+                        <p className="mt-2 text-center text-sm text-red-600">{errors.recaptcha_token}</p>
+                    )}
                 </form>
 
                 {/* Privacy Notice */}

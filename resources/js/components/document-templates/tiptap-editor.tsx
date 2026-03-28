@@ -157,7 +157,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
         },
         editorProps: {
             attributes: {
-                class: 'max-w-none min-h-[842px] px-[60px] py-[40px] focus:outline-none a4-editor',
+                class: 'max-w-none px-7 py-6 focus:outline-none digital-editor',
             },
         },
     });
@@ -590,13 +590,13 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                 </div>
             </div>
 
-            {/* Editor Content — A4-page preview */}
+            {/* Editor Content — digital agreement preview */}
             <div className="bg-muted/40 overflow-auto p-6" style={{ maxHeight: '70vh' }}>
                 <div
-                    className="mx-auto shadow-md"
+                    className="mx-auto rounded-xl border border-border/60 shadow-sm"
                     style={{
-                        width: '210mm',
-                        maxWidth: '100%',
+                        maxWidth: '720px',
+                        width: '100%',
                         background: 'white',
                         transform: `scale(${zoom})`,
                         transformOrigin: 'top center',
@@ -606,59 +606,77 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                 </div>
             </div>
 
-            {/* Styles matching PDF output for accurate WYSIWYG preview */}
+            {/* Styles matching digital signing page for accurate WYSIWYG preview */}
             <style>{`
-                .ProseMirror.a4-editor {
-                    font-family: sans-serif;
-                    font-size: 11px;
-                    line-height: 1.4;
-                    color: #333;
-                    min-height: 842px;
+                .ProseMirror.digital-editor {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.7;
+                    color: #374151;
+                    min-height: 300px;
                     background: white;
                 }
                 .ProseMirror h1 {
-                    font-size: 18px;
+                    font-size: 20px;
                     font-weight: 700;
-                    margin: 8px 0 4px;
-                    line-height: 1.2;
-                }
-                .ProseMirror h2 {
-                    font-size: 14px;
-                    font-weight: 600;
-                    margin: 6px 0 3px;
-                    line-height: 1.25;
-                }
-                .ProseMirror h3 {
-                    font-size: 12px;
-                    font-weight: 600;
-                    margin: 4px 0 2px;
+                    color: #0f172a;
+                    margin: 24px 0 8px;
+                    padding-bottom: 6px;
+                    border-bottom: 2px solid #e2e8f0;
                     line-height: 1.3;
                 }
+                .ProseMirror h1:first-child {
+                    margin-top: 0;
+                }
+                .ProseMirror h2 {
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    margin: 20px 0 6px;
+                    line-height: 1.3;
+                }
+                .ProseMirror h3 {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #334155;
+                    margin: 16px 0 4px;
+                    line-height: 1.4;
+                }
                 .ProseMirror p {
-                    margin: 2px 0;
+                    margin: 4px 0 8px;
                 }
                 .ProseMirror ul,
                 .ProseMirror ol {
-                    padding-left: 20px;
+                    padding-left: 24px;
+                    margin: 6px 0 12px;
+                }
+                .ProseMirror li {
+                    margin: 2px 0;
                 }
                 .ProseMirror table {
                     border-collapse: collapse;
                     width: 100%;
-                    table-layout: fixed;
+                    margin: 12px 0;
                 }
                 .ProseMirror th,
                 .ProseMirror td {
-                    border: 1px solid #999;
-                    padding: 2px 4px;
-                    font-size: 10px;
-                    line-height: 1.3;
+                    border: 1px solid #e2e8f0;
+                    padding: 8px 12px;
+                    font-size: 13px;
+                    line-height: 1.5;
                     word-wrap: break-word;
                     overflow: hidden;
                     min-width: 40px;
+                    color: #374151;
                 }
                 .ProseMirror th {
-                    background-color: #e5e7eb;
+                    background-color: #f1f5f9;
                     font-weight: 600;
+                    color: #334155;
+                    text-align: left;
+                }
+                .ProseMirror tr:nth-child(even) td {
+                    background: #f8fafc;
                 }
                 .ProseMirror .selectedCell {
                     background-color: #dbeafe;
@@ -672,6 +690,18 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     right: -1px;
                     top: 0;
                     bottom: 0;
+                }
+                .ProseMirror strong {
+                    font-weight: 600;
+                    color: #1e293b;
+                }
+                .ProseMirror blockquote {
+                    border-left: 3px solid #2563eb;
+                    padding: 8px 16px;
+                    margin: 12px 0;
+                    background: #eff6ff;
+                    border-radius: 0 8px 8px 0;
+                    color: #1e40af;
                 }
                 /* Signature box placeholder preview */
                 .ProseMirror .signature-box-preview {

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Http;
 
 class StoreEmploymentApplicationRequest extends FormRequest
 {
@@ -13,7 +14,14 @@ class StoreEmploymentApplicationRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        $rules = [];
+
+        // Only require reCAPTCHA when keys are configured
+        if (config('services.recaptcha.secret_key')) {
+            $rules['recaptcha_token'] = ['required', 'string'];
+        }
+
+        return array_merge($rules, [
             // Personal Details
             'surname' => ['required', 'string', 'max:255'],
             'first_name' => ['required', 'string', 'max:255'],
@@ -72,7 +80,35 @@ class StoreEmploymentApplicationRequest extends FormRequest
             'acceptance_email' => ['required', 'email', 'max:255'],
             'acceptance_date' => ['required', 'date'],
             'declaration_accepted' => ['required', 'accepted'],
-        ];
+        ]);
+    }
+
+    public function withValidator($validator): void
+    {
+        $secretKey = config('services.recaptcha.secret_key');
+        if (! $secretKey) {
+            return;
+        }
+
+        $validator->after(function ($validator) use ($secretKey) {
+            $token = $this->input('recaptcha_token');
+            if (! $token) {
+                return; // Already caught by 'required' rule
+            }
+
+            $response = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => $secretKey,
+                'response' => $token,
+                'remoteip' => $this->ip(),
+            ]);
+
+            $result = $response->json();
+            $threshold = config('services.recaptcha.threshold', 0.5);
+
+            if (! ($result['success'] ?? false) || ($result['score'] ?? 0) < $threshold) {
+                $validator->errors()->add('recaptcha_token', 'reCAPTCHA verification failed. Please try again.');
+            }
+        });
     }
 
     public function messages(): array

@@ -1,11 +1,11 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { router } from '@inertiajs/react';
-import { Loader2, Mail, Tablet, RotateCcw, Trash2 } from 'lucide-react';
+import { ClipboardList, FileText, Loader2, Mail, RotateCcw, Tablet, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
 
@@ -16,10 +16,18 @@ interface DocumentTemplate {
     body_html: string | null;
 }
 
+interface FormTemplateOption {
+    id: number;
+    name: string;
+    description: string | null;
+    fields_count: number;
+}
+
 interface SendForSigningModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     templates: DocumentTemplate[];
+    formTemplates?: FormTemplateOption[];
     recipientName?: string;
     recipientEmail?: string;
     recipientAddress?: string;
@@ -34,6 +42,7 @@ export default function SendForSigningModal({
     open,
     onOpenChange,
     templates,
+    formTemplates = [],
     recipientName = '',
     recipientEmail = '',
     recipientAddress = '',
@@ -43,7 +52,8 @@ export default function SendForSigningModal({
     signableId,
     onSuccess,
 }: SendForSigningModalProps) {
-    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
+    const [selectedFormTemplateIds, setSelectedFormTemplateIds] = useState<number[]>([]);
     const [deliveryMethod, setDeliveryMethod] = useState<string>('email');
     const [name, setName] = useState(recipientName);
     const [email, setEmail] = useState(recipientEmail);
@@ -54,9 +64,32 @@ export default function SendForSigningModal({
     const senderCanvasRef = useRef<HTMLCanvasElement>(null);
     const senderSignaturePadRef = useRef<SignaturePad | null>(null);
 
-    const selectedTemplate = templates.find((t) => String(t.id) === selectedTemplateId);
-    const templatePlaceholders = selectedTemplate?.placeholders ?? [];
-    const requiresSenderSignature = selectedTemplate?.body_html?.includes('{{sender_signature}}') ?? false;
+    const selectedTemplates = templates.filter((t) => selectedTemplateIds.includes(t.id));
+
+    // Merge unique placeholders from all selected templates
+    const mergedPlaceholders = (() => {
+        const seen = new Set<string>();
+        const result: { key: string; label: string; type?: string; required?: boolean }[] = [];
+        for (const t of selectedTemplates) {
+            for (const p of t.placeholders ?? []) {
+                if (!seen.has(p.key)) {
+                    seen.add(p.key);
+                    result.push(p);
+                }
+            }
+        }
+        return result;
+    })();
+
+    const requiresSenderSignature = selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}'));
+
+    const toggleTemplate = (id: number) => {
+        setSelectedTemplateIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
+
+    const toggleFormTemplate = (id: number) => {
+        setSelectedFormTemplateIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
 
     // Initialize/destroy SignaturePad when sender signature is required
     useEffect(() => {
@@ -91,11 +124,6 @@ export default function SendForSigningModal({
         }
     }, []);
 
-    const handleTemplateChange = (value: string) => {
-        setSelectedTemplateId(value);
-        setCustomFields({});
-    };
-
     const validateFieldValue = (value: string, type: string): string | null => {
         if (!value) return null;
         switch (type) {
@@ -120,7 +148,7 @@ export default function SendForSigningModal({
 
     const handleSubmit = () => {
         const newErrors: Record<string, string> = {};
-        if (!selectedTemplateId) newErrors.template = 'Please select a template.';
+        if (selectedTemplateIds.length === 0 && selectedFormTemplateIds.length === 0) newErrors.templates = 'Please select at least one document or form.';
         if (!name.trim()) newErrors.name = 'Recipient name is required.';
         if (deliveryMethod === 'email' && !email.trim()) newErrors.email = 'Email is required for email delivery.';
         if (requiresSenderSignature) {
@@ -129,7 +157,7 @@ export default function SendForSigningModal({
         }
 
         // Validate required and typed custom fields
-        for (const p of templatePlaceholders) {
+        for (const p of mergedPlaceholders) {
             const val = customFields[p.key]?.trim() ?? '';
             if (p.required && !val) {
                 newErrors[`cf_${p.key}`] = `${p.label} is required.`;
@@ -149,43 +177,51 @@ export default function SendForSigningModal({
         setProcessing(true);
         setErrors({});
 
-        const senderSignatureData = requiresSenderSignature && senderSignaturePadRef.current
-            ? senderSignaturePadRef.current.toDataURL('image/png')
-            : null;
+        const senderSignatureData =
+            requiresSenderSignature && senderSignaturePadRef.current ? senderSignaturePadRef.current.toDataURL('image/png') : null;
 
-        router.post(
-            route('signing-requests.store'),
-            {
-                document_template_id: selectedTemplateId,
-                delivery_method: deliveryMethod,
-                recipient_name: name,
-                recipient_email: deliveryMethod === 'email' ? email : null,
-                custom_fields: { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition },
-                sender_signature: senderSignatureData,
-                sender_full_name: requiresSenderSignature ? senderFullName : null,
-                signable_type: signableType ?? null,
-                signable_id: signableId ?? null,
+        const isBatch = selectedTemplateIds.length > 1 || selectedFormTemplateIds.length > 0;
+        const url = isBatch ? route('signing-requests.store-batch') : route('signing-requests.store');
+
+        const payload: Record<string, any> = {
+            delivery_method: deliveryMethod,
+            recipient_name: name,
+            recipient_email: deliveryMethod === 'email' ? email : null,
+            custom_fields: { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition },
+            sender_signature: senderSignatureData,
+            sender_full_name: requiresSenderSignature ? senderFullName : null,
+            signable_type: signableType ?? null,
+            signable_id: signableId ?? null,
+        };
+
+        if (isBatch) {
+            payload.document_template_ids = selectedTemplateIds;
+            if (selectedFormTemplateIds.length > 0) {
+                payload.form_template_ids = selectedFormTemplateIds;
+            }
+        } else {
+            payload.document_template_id = String(selectedTemplateIds[0]);
+        }
+
+        router.post(url, payload, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                setProcessing(false);
+                onOpenChange(false);
+
+                // For in-person, open the signing URL in a new tab
+                const signingUrl = (page.props as any)?.flash?.signing_url;
+                if (deliveryMethod === 'in_person' && signingUrl) {
+                    window.open(signingUrl, '_blank');
+                }
+
+                onSuccess?.();
             },
-            {
-                preserveScroll: true,
-                onSuccess: (page) => {
-                    setProcessing(false);
-                    onOpenChange(false);
-
-                    // For in-person, open the signing URL in a new tab
-                    const signingUrl = (page.props as any)?.flash?.signing_url;
-                    if (deliveryMethod === 'in_person' && signingUrl) {
-                        window.open(signingUrl, '_blank');
-                    }
-
-                    onSuccess?.();
-                },
-                onError: (errs) => {
-                    setProcessing(false);
-                    setErrors(errs);
-                },
+            onError: (errs) => {
+                setProcessing(false);
+                setErrors(errs);
             },
-        );
+        });
     };
 
     // Reset state when modal opens
@@ -193,7 +229,8 @@ export default function SendForSigningModal({
         if (isOpen) {
             setName(recipientName);
             setEmail(recipientEmail);
-            setSelectedTemplateId('');
+            setSelectedTemplateIds([]);
+            setSelectedFormTemplateIds([]);
             setDeliveryMethod('email');
             setCustomFields({});
             setErrors({});
@@ -212,28 +249,60 @@ export default function SendForSigningModal({
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Send Document for Signing</DialogTitle>
-                    <DialogDescription>Choose a template and delivery method to send a document for electronic signature.</DialogDescription>
+                    <DialogTitle>Send Documents for Signing</DialogTitle>
+                    <DialogDescription>Select documents, fill in details, and choose a delivery method.</DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">
-                    {/* Template Selection */}
+                    {/* Template Selection — Checkboxes */}
                     <div className="space-y-2">
-                        <Label>Document Template</Label>
-                        <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a template..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {templates.map((t) => (
-                                    <SelectItem key={t.id} value={String(t.id)}>
-                                        {t.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.template && <p className="text-sm text-destructive">{errors.template}</p>}
+                        <Label>Documents to Send</Label>
+                        <div className="space-y-1.5 rounded-lg border p-3">
+                            {templates.map((t) => (
+                                <label
+                                    key={t.id}
+                                    className={`flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-muted/50 ${selectedTemplateIds.includes(t.id) ? 'bg-primary/5' : ''}`}
+                                >
+                                    <Checkbox
+                                        checked={selectedTemplateIds.includes(t.id)}
+                                        onCheckedChange={() => toggleTemplate(t.id)}
+                                    />
+                                    <FileText className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium">{t.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                        {errors.templates && <p className="text-sm text-destructive">{errors.templates}</p>}
+                        {selectedTemplateIds.length > 1 && (
+                            <p className="text-xs text-muted-foreground">{selectedTemplateIds.length} documents selected — each will be sent as a separate signing request</p>
+                        )}
                     </div>
+
+                    {/* Form Templates Selection */}
+                    {formTemplates.length > 0 && (
+                        <div className="space-y-2">
+                            <Label>Forms to Send</Label>
+                            <div className="space-y-1.5 rounded-lg border p-3">
+                                {formTemplates.map((ft) => (
+                                    <label
+                                        key={ft.id}
+                                        className={`flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors hover:bg-muted/50 ${selectedFormTemplateIds.includes(ft.id) ? 'bg-primary/5' : ''}`}
+                                    >
+                                        <Checkbox
+                                            checked={selectedFormTemplateIds.includes(ft.id)}
+                                            onCheckedChange={() => toggleFormTemplate(ft.id)}
+                                        />
+                                        <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-sm font-medium">{ft.name}</span>
+                                            {ft.description && <p className="truncate text-xs text-muted-foreground">{ft.description}</p>}
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{ft.fields_count} fields</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Recipient Details */}
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -249,18 +318,19 @@ export default function SendForSigningModal({
                         </div>
                     </div>
 
-                    {/* Custom Fields (from template placeholders) */}
-                    {templatePlaceholders.length > 0 && (
+                    {/* Custom Fields (merged from all selected template placeholders) */}
+                    {mergedPlaceholders.length > 0 && (
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
-                                {templatePlaceholders.map((p) => {
-                                    const inputType = p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text';
+                                {mergedPlaceholders.map((p) => {
+                                    const inputType =
+                                        p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text';
                                     return (
                                         <div key={p.key} className="space-y-1">
                                             <Label htmlFor={`cf-${p.key}`} className="text-xs">
                                                 {p.label}
-                                                {p.required && <span className="text-destructive ml-0.5">*</span>}
+                                                {p.required && <span className="ml-0.5 text-destructive">*</span>}
                                             </Label>
                                             <Input
                                                 id={`cf-${p.key}`}
@@ -277,12 +347,12 @@ export default function SendForSigningModal({
                         </div>
                     )}
 
-                    {/* Sender Signature (shown when template has {{sender_signature}}) */}
+                    {/* Sender Signature (shown when any selected template has {{sender_signature}}) */}
                     {requiresSenderSignature && (
                         <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
                             <Label className="text-sm font-medium">Your Signature (Company)</Label>
                             <p className="text-xs text-muted-foreground">
-                                This template requires a company signature. Please sign below before sending.
+                                One or more selected documents require a company signature. Please sign below before sending.
                             </p>
                             <div className="space-y-2">
                                 <Label htmlFor="sender-full-name" className="text-xs">
@@ -310,11 +380,7 @@ export default function SendForSigningModal({
                                         </Button>
                                     </div>
                                 </div>
-                                <canvas
-                                    ref={senderCanvasRef}
-                                    className="h-32 w-full rounded-md border bg-white"
-                                    style={{ touchAction: 'none' }}
-                                />
+                                <canvas ref={senderCanvasRef} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
                                 {errors.sender_signature && <p className="text-sm text-destructive">{errors.sender_signature}</p>}
                             </div>
                         </div>
@@ -354,7 +420,16 @@ export default function SendForSigningModal({
                     </Button>
                     <Button onClick={handleSubmit} disabled={processing}>
                         {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {deliveryMethod === 'email' ? 'Send Email' : 'Open for Signing'}
+                        {deliveryMethod === 'email'
+                            ? (() => {
+                                const totalCount = selectedTemplateIds.length + selectedFormTemplateIds.length;
+                                if (totalCount <= 1) return 'Send Email';
+                                const parts: string[] = [];
+                                if (selectedTemplateIds.length > 0) parts.push(`${selectedTemplateIds.length} Doc${selectedTemplateIds.length > 1 ? 's' : ''}`);
+                                if (selectedFormTemplateIds.length > 0) parts.push(`${selectedFormTemplateIds.length} Form${selectedFormTemplateIds.length > 1 ? 's' : ''}`);
+                                return `Send ${parts.join(' + ')}`;
+                            })()
+                            : 'Open for Signing'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -27,6 +27,7 @@ class EmploymentApplicationController extends Controller
     {
         return Inertia::render('employment-applications/apply', [
             'skills' => Skill::active()->orderBy('name')->get(['id', 'name']),
+            'recaptchaSiteKey' => config('services.recaptcha.site_key'),
         ]);
     }
 
@@ -297,15 +298,32 @@ class EmploymentApplicationController extends Controller
             ->latest()
             ->get();
 
-        // Load latest signing request
-        $signingRequest = $employmentApplication->latestSigningRequest;
-        $signingRequest?->load(['documentTemplate:id,name', 'sentBy:id,name']);
+        // Load all active (non-cancelled) signing requests
+        $signingRequests = $employmentApplication->signingRequests()
+            ->whereNotIn('status', ['cancelled'])
+            ->with(['documentTemplate:id,name', 'sentBy:id,name'])
+            ->latest()
+            ->get();
 
         // Load active document templates for the signing modal
         $documentTemplates = \App\Models\DocumentTemplate::active()
             ->category('employment')
             ->orderBy('name')
             ->get(['id', 'name', 'placeholders', 'body_html']);
+
+        // Load active form templates for the send modal
+        $formTemplates = \App\Models\FormTemplate::active()
+            ->forModel(EmploymentApplication::class)
+            ->withCount('fields')
+            ->orderBy('name')
+            ->get(['id', 'name', 'description']);
+
+        // Load active (non-cancelled) form requests
+        $formRequests = $employmentApplication->formRequests()
+            ->whereNotIn('status', ['cancelled'])
+            ->with(['formTemplate:id,name', 'sentBy:id,name'])
+            ->latest()
+            ->get();
 
         // Load locations for onboarding modal (grouped by company)
         $companyCodeService = new GetCompanyCodeService;
@@ -324,27 +342,52 @@ class EmploymentApplicationController extends Controller
             'duplicates' => $duplicates,
             'statuses' => EmploymentApplication::STATUSES,
             'onboardingLocations' => $onboardingLocations,
-            'signingRequest' => $signingRequest ? [
-                'id' => $signingRequest->id,
-                'status' => $signingRequest->status,
-                'delivery_method' => $signingRequest->delivery_method,
-                'recipient_name' => $signingRequest->recipient_name,
-                'recipient_email' => $signingRequest->recipient_email,
-                'signed_at' => $signingRequest->signed_at?->toISOString(),
-                'opened_at' => $signingRequest->opened_at?->toISOString(),
-                'viewed_at' => $signingRequest->viewed_at?->toISOString(),
-                'expires_at' => $signingRequest->expires_at->toISOString(),
-                'signer_full_name' => $signingRequest->signer_full_name,
-                'document_template' => $signingRequest->documentTemplate ? [
-                    'id' => $signingRequest->documentTemplate->id,
-                    'name' => $signingRequest->documentTemplate->name,
+            'signingRequests' => $signingRequests->map(fn ($sr) => [
+                'id' => $sr->id,
+                'status' => $sr->status,
+                'delivery_method' => $sr->delivery_method,
+                'recipient_name' => $sr->recipient_name,
+                'recipient_email' => $sr->recipient_email,
+                'signed_at' => $sr->signed_at?->toISOString(),
+                'opened_at' => $sr->opened_at?->toISOString(),
+                'viewed_at' => $sr->viewed_at?->toISOString(),
+                'expires_at' => $sr->expires_at->toISOString(),
+                'signer_full_name' => $sr->signer_full_name,
+                'document_template' => $sr->documentTemplate ? [
+                    'id' => $sr->documentTemplate->id,
+                    'name' => $sr->documentTemplate->name,
                 ] : null,
-                'sent_by' => $signingRequest->sentBy ? [
-                    'id' => $signingRequest->sentBy->id,
-                    'name' => $signingRequest->sentBy->name,
+                'sent_by' => $sr->sentBy ? [
+                    'id' => $sr->sentBy->id,
+                    'name' => $sr->sentBy->name,
                 ] : null,
-            ] : null,
+            ])->values(),
             'documentTemplates' => $documentTemplates,
+            'formTemplates' => $formTemplates->map(fn ($ft) => [
+                'id' => $ft->id,
+                'name' => $ft->name,
+                'description' => $ft->description,
+                'fields_count' => $ft->fields_count,
+            ])->values(),
+            'formRequests' => $formRequests->map(fn ($fr) => [
+                'id' => $fr->id,
+                'status' => $fr->status,
+                'delivery_method' => $fr->delivery_method,
+                'recipient_name' => $fr->recipient_name,
+                'recipient_email' => $fr->recipient_email,
+                'submitted_at' => $fr->submitted_at?->toISOString(),
+                'opened_at' => $fr->opened_at?->toISOString(),
+                'expires_at' => $fr->expires_at?->toISOString(),
+                'responses' => $fr->responses,
+                'form_template' => $fr->formTemplate ? [
+                    'id' => $fr->formTemplate->id,
+                    'name' => $fr->formTemplate->name,
+                ] : null,
+                'sent_by' => $fr->sentBy ? [
+                    'id' => $fr->sentBy->id,
+                    'name' => $fr->sentBy->name,
+                ] : null,
+            ])->values(),
         ]);
     }
 
@@ -402,8 +445,12 @@ class EmploymentApplicationController extends Controller
             return back()->withErrors(['status' => 'Use the Send to Payroll action instead.']);
         }
 
-        // Gate: cannot move to "approved" if required checklist items are incomplete
+        // Gate: only users with 'approve' permission can move to "approved"
         if ($newStatus === EmploymentApplication::STATUS_APPROVED) {
+            if (! $request->user()->can('employment-applications.approve')) {
+                return back()->withErrors(['status' => 'You do not have permission to approve applications.']);
+            }
+
             $incomplete = $employmentApplication->incompleteRequiredChecklistItemsCount();
             if ($incomplete > 0) {
                 return back()->withErrors(['status' => "Cannot approve: {$incomplete} required checklist item(s) still incomplete."]);

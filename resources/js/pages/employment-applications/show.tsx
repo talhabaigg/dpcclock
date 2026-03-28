@@ -228,6 +228,27 @@ interface SigningRequestData {
     sent_by: { id: number; name: string } | null;
 }
 
+interface FormRequestData {
+    id: number;
+    status: string;
+    delivery_method: string;
+    recipient_name: string;
+    recipient_email: string | null;
+    submitted_at: string | null;
+    opened_at: string | null;
+    expires_at: string | null;
+    responses: Record<string, unknown> | null;
+    form_template: { id: number; name: string } | null;
+    sent_by: { id: number; name: string } | null;
+}
+
+interface FormTemplateOption {
+    id: number;
+    name: string;
+    description: string | null;
+    fields_count: number;
+}
+
 interface DocumentTemplateOption {
     id: number;
     name: string;
@@ -249,8 +270,10 @@ interface PageProps {
     availableTemplates: TemplateOption[];
     duplicates: Duplicate[];
     auth: { permissions?: string[]; isAdmin?: boolean };
-    signingRequest: SigningRequestData | null;
+    signingRequests: SigningRequestData[];
     documentTemplates: DocumentTemplateOption[];
+    formTemplates: FormTemplateOption[];
+    formRequests: FormRequestData[];
     onboardingLocations: Record<string, OnboardingLocation[]>;
 }
 
@@ -336,6 +359,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
     const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
     const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
+    const formSubmittedMeta = comment.metadata?.type === 'form_submitted' ? comment.metadata as { type: string; form_request_id: number; form_name: string; responses: Record<string, string> } : undefined;
     const onboardedMeta = comment.metadata?.type === 'onboarded' ? comment.metadata as { type: string; eh_employee_id: number; location_name: string; company_code: string } : undefined;
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
 
@@ -376,6 +400,36 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                         <FileSignature className="h-3.5 w-3.5" />
                         View Signed Document
                     </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (isSystem && formSubmittedMeta) {
+        return (
+            <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100">
+                    <Clipboard className="h-4 w-4 text-purple-600" />
+                </div>
+                <div className="min-w-0 flex-1 pt-1">
+                    <p className="text-sm">
+                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
+                        <span className="text-muted-foreground"> {comment.body}</span>
+                    </p>
+                    <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
+                    {formSubmittedMeta.responses && (
+                        <div className="mt-2 rounded-md border bg-purple-50/50 p-3 dark:bg-purple-950/20">
+                            <p className="mb-1.5 text-xs font-medium text-purple-700 dark:text-purple-300">Responses</p>
+                            <div className="space-y-1">
+                                {Object.entries(formSubmittedMeta.responses).map(([label, value]) => (
+                                    <div key={label} className="flex gap-2 text-xs">
+                                        <span className="font-medium text-muted-foreground shrink-0">{label}:</span>
+                                        <span className="text-foreground">{Array.isArray(value) ? value.join(', ') : String(value || '—')}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -1778,11 +1832,13 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequest, documentTemplates, onboardingLocations }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
+    const canView = auth.isAdmin || permissions.includes('employment-applications.view');
     const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
+    const canApprove = auth.isAdmin || permissions.includes('employment-applications.approve');
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
     const [showSigningModal, setShowSigningModal] = useState(false);
@@ -2020,7 +2076,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                             </div>
 
                             {/* Comment Input */}
-                            {canScreen && (
+                            {canView && (
                                 <div className="mt-auto border-t p-3">
                                     {attachments.length > 0 && (
                                         <div className="mb-2 flex flex-wrap gap-2">
@@ -2138,97 +2194,106 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 {/* Status Controls */}
                                 {canScreen && (
                                     <div className="mb-4 space-y-2">
-                                        <Select value={app.status} onValueChange={handleStatusChange}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Change status..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {SELECTABLE_STATUSES.map((s) => (
-                                                    <SelectItem key={s} value={s}>
-                                                        {STATUS_LABELS[s]}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        {SYSTEM_STATUSES.includes(app.status) ? (
+                                            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                                                <StatusBadge status={app.status} />
+                                                <span className="text-xs">(system)</span>
+                                            </div>
+                                        ) : (
+                                            <Select value={app.status} onValueChange={handleStatusChange}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Change status..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {SELECTABLE_STATUSES.filter((s) => s !== 'approved' || canApprove).map((s) => (
+                                                        <SelectItem key={s} value={s}>
+                                                            {STATUS_LABELS[s]}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
                                         {pageErrors.status && (
                                             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{pageErrors.status}</p>
                                         )}
 
                                         {/* Action Buttons — contextual based on current status */}
                                         <div className="flex gap-2">
-                                            {app.status === 'approved' && (
+                                            {['approved', 'contract_sent', 'contract_signed'].includes(app.status) && (
                                                 <Button size="sm" variant="outline" className="flex-1" onClick={() => setShowSigningModal(true)}>
                                                     <Send className="mr-1.5 h-3.5 w-3.5" />
-                                                    Send Contract
+                                                    Send Docs
                                                 </Button>
                                             )}
                                             {['contract_signed', 'onboarded'].includes(app.status) && (
                                                 <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
                                                     <User className="mr-1.5 h-3.5 w-3.5" />
-                                                    Send to Payroll
-                                                </Button>
-                                            )}
-                                            {!['declined', 'contract_signed', 'onboarded'].includes(app.status) && (
-                                                <Button size="sm" variant="secondary" className="flex-1" onClick={() => setShowDeclineDialog(true)}>
-                                                    <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                                                    Decline
+                                                    Payroll
                                                 </Button>
                                             )}
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Signing Request Status - hide when signed (shown as comment instead) */}
-                                {signingRequest && signingRequest.status !== 'signed' && (
+                                {/* Pending Signing Requests — only show unsigned docs */}
+                                {signingRequests.filter((sr) => sr.status !== 'signed').length > 0 && (
                                     <div className="mb-4 rounded-lg border bg-background p-3">
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <span className="text-xs font-medium text-muted-foreground">Contract Signing</span>
-                                            <Badge variant={signingRequest.status === 'signed' ? 'default' : 'secondary'} className="text-xs">
-                                                {signingRequest.status}
-                                            </Badge>
+                                        <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Documents</span>
+                                        <div className="space-y-2">
+                                            {signingRequests.filter((sr) => sr.status !== 'signed').map((sr) => (
+                                                <div key={sr.id} className="rounded-md border p-2.5">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="truncate text-sm font-medium">{sr.document_template?.name ?? 'Document'}</p>
+                                                        <Badge variant="secondary" className="shrink-0 text-xs">{sr.status}</Badge>
+                                                    </div>
+                                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                                        {sr.delivery_method === 'email' ? 'Via email' : 'In-person'}
+                                                        {sr.sent_by && ` by ${sr.sent_by.name}`}
+                                                    </p>
+                                                    {canScreen && (
+                                                        <div className="mt-1.5 flex gap-1.5">
+                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('signing-requests.resend', sr.id), {}, { preserveScroll: true })}>
+                                                                Resend
+                                                            </Button>
+                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('signing-requests.cancel', sr.id), {}, { preserveScroll: true })}>
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                        {signingRequest.document_template && (
-                                            <p className="text-sm font-medium">{signingRequest.document_template.name}</p>
-                                        )}
-                                        <p className="text-xs text-muted-foreground">
-                                            {signingRequest.delivery_method === 'email' ? 'Sent via email' : 'In-person signing'}
-                                            {signingRequest.sent_by && ` by ${signingRequest.sent_by.name}`}
-                                        </p>
-                                        {signingRequest.signed_at && (
-                                            <p className="mt-1 text-xs text-green-600">
-                                                Signed {new Date(signingRequest.signed_at).toLocaleDateString('en-AU')} by {signingRequest.signer_full_name}
-                                            </p>
-                                        )}
-                                        {signingRequest.status === 'signed' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="mt-2 w-full text-xs"
-                                                onClick={() => window.open(route('signing-requests.download', signingRequest.id), '_blank')}
-                                            >
-                                                Download Signed PDF
-                                            </Button>
-                                        )}
-                                        {canScreen && signingRequest.status !== 'signed' && signingRequest.status !== 'cancelled' && (
-                                            <div className="mt-2 flex gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1 text-xs"
-                                                    onClick={() => router.post(route('signing-requests.resend', signingRequest.id), {}, { preserveScroll: true })}
-                                                >
-                                                    Resend
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1 text-xs text-destructive"
-                                                    onClick={() => router.post(route('signing-requests.cancel', signingRequest.id), {}, { preserveScroll: true })}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                            </div>
-                                        )}
+                                    </div>
+                                )}
+
+                                {/* Pending Form Requests — only show unsubmitted forms */}
+                                {formRequests.filter((fr) => fr.status !== 'submitted').length > 0 && (
+                                    <div className="mb-4 rounded-lg border bg-background p-3">
+                                        <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Forms</span>
+                                        <div className="space-y-2">
+                                            {formRequests.filter((fr) => fr.status !== 'submitted').map((fr) => (
+                                                <div key={fr.id} className="rounded-md border p-2.5">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
+                                                        <Badge variant="secondary" className="shrink-0 text-xs">{fr.status}</Badge>
+                                                    </div>
+                                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                                        {fr.delivery_method === 'email' ? 'Via email' : 'In-person'}
+                                                        {fr.sent_by && ` by ${fr.sent_by.name}`}
+                                                    </p>
+                                                    {canScreen && (
+                                                        <div className="mt-1.5 flex gap-1.5">
+                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
+                                                                Resend
+                                                            </Button>
+                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
@@ -2311,6 +2376,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     View Full Submission
                                     <ChevronRight className="ml-auto h-3.5 w-3.5" />
                                 </Link>
+
+                                {canScreen && app.status !== 'declined' && app.status !== 'onboarded' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDeclineDialog(true)}
+                                        className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
+                                    >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                        Decline Application
+                                    </button>
+                                )}
                         </div>
                     </div>
                 </Card>
@@ -2395,6 +2471,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 open={showSigningModal}
                 onOpenChange={setShowSigningModal}
                 templates={documentTemplates ?? []}
+                formTemplates={formTemplates ?? []}
                 recipientName={`${app.first_name} ${app.surname}`}
                 recipientEmail={app.email}
                 recipientAddress={app.suburb}

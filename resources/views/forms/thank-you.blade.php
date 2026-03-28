@@ -3,30 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Signed</title>
+    <title>Form Submitted</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 48px; text-align: center; max-width: 500px; width: 100%; margin: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; color: #1e293b; line-height: 1.6; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { max-width: 480px; margin: 20px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 40px 32px; text-align: center; }
         .icon { width: 64px; height: 64px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
         .icon svg { width: 32px; height: 32px; color: #16a34a; }
-        h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
-        p { font-size: 15px; color: #64748b; line-height: 1.6; }
-        .name { font-weight: 600; color: #1e293b; }
+        h1 { font-size: 22px; font-weight: 600; color: #0f172a; margin-bottom: 8px; }
+        p { font-size: 15px; color: #64748b; }
+        .logo { max-height: 36px; margin-bottom: 24px; }
     </style>
 </head>
 <body>
     <div class="card">
+        <img src="{{ asset('logo.png') }}" alt="DPC" class="logo">
         <div class="icon">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
         </div>
         <h1>All Done!</h1>
-        <p>
-            Thank you, <span class="name">{{ $signingRequest->signer_full_name ?? $signingRequest->recipient_name }}</span>.
-            Everything has been completed and recorded successfully.
-        </p>
+        <p>Thank you, {{ $formRequest->recipient_name }}. Everything has been completed and recorded successfully.</p>
     </div>
 </body>
 </html>
