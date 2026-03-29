@@ -56,6 +56,7 @@ use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\WipReportController;
+use App\Http\Controllers\WorkerScreeningController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\DocumentTemplateController;
@@ -181,6 +182,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');
         Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
         Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
+    });
+
+    // ============================================
+    // WORKER SCREENING
+    // ============================================
+    Route::middleware('permission:worker-screening.search')->group(function () {
+        Route::get('/worker-screening/search', [WorkerScreeningController::class, 'search'])->name('worker-screening.search');
+    });
+    Route::middleware('permission:worker-screening.manage')->group(function () {
+        Route::get('/worker-screening', [WorkerScreeningController::class, 'index'])->name('worker-screening.index');
+        Route::post('/worker-screening', [WorkerScreeningController::class, 'store'])->name('worker-screening.store');
+        Route::put('/worker-screening/{workerScreening}', [WorkerScreeningController::class, 'update'])->name('worker-screening.update');
+        Route::post('/worker-screening/{workerScreening}/remove', [WorkerScreeningController::class, 'remove'])->name('worker-screening.remove');
     });
 
     // ============================================

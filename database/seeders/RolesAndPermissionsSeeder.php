@@ -257,6 +257,14 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // WORKER SCREENING
+        // ============================================
+        'Worker Screening' => [
+            'worker-screening.search' => 'Search worker screening records',
+            'worker-screening.manage' => 'Add, edit, and remove worker screening entries',
+        ],
+
+        // ============================================
         // AI FEATURES
         // ============================================
         'AI' => [
@@ -388,6 +396,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'employment-applications.screen',
             // Document Templates
             'document-templates.manage',
+            // Worker Screening
+            'worker-screening.search',
+            'worker-screening.manage',
         ],
 
         'manager' => [
@@ -414,6 +425,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.export',
             // Materials (view material list only)
             'materials.view',
+            // Worker Screening (search only)
+            'worker-screening.search',
         ],
 
         'kiosk' => [

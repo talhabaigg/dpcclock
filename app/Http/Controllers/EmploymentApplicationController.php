@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmploymentApplication;
 use App\Models\Location;
 use App\Models\Skill;
+use App\Models\WorkerScreening;
 use App\Services\EmploymentHeroService;
 use App\Services\GetCompanyCodeService;
 use Illuminate\Http\RedirectResponse;
@@ -334,8 +335,17 @@ class EmploymentApplicationController extends Controller
             ->get()
             ->groupBy(fn ($loc) => $companyCodeService->getCompanyCode($loc->eh_parent_id) ?? 'Other');
 
+        $screeningAlert = WorkerScreening::checkWorker([
+            'first_name' => $employmentApplication->first_name,
+            'surname' => $employmentApplication->surname,
+            'phone' => $employmentApplication->phone,
+            'email' => $employmentApplication->email,
+            'date_of_birth' => $employmentApplication->date_of_birth,
+        ]) !== null;
+
         return Inertia::render('employment-applications/show', [
             'application' => $employmentApplication,
+            'screeningAlert' => $screeningAlert,
             'comments' => $comments,
             'checklists' => $checklists,
             'availableTemplates' => $availableTemplates,

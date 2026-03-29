@@ -275,6 +275,7 @@ interface PageProps {
     formTemplates: FormTemplateOption[];
     formRequests: FormRequestData[];
     onboardingLocations: Record<string, OnboardingLocation[]>;
+    screeningAlert?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1832,7 +1833,7 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, screeningAlert }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
@@ -1990,6 +1991,16 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     {STATUS_LABELS[d.status] ?? d.status} ({formatDate(d.created_at)})
                                 </Link>
                             ))}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {screeningAlert && (permissions.includes('worker-screening.search') || auth.isAdmin) && (
+                    <Alert className="border-red-500/50 bg-red-50/50 dark:bg-red-950/20">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="text-red-700 dark:text-red-400">Worker Alert</AlertTitle>
+                        <AlertDescription className="text-red-600 dark:text-red-300">
+                            Worker alert on file — contact office before proceeding.
                         </AlertDescription>
                     </Alert>
                 )}

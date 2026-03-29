@@ -27,7 +27,6 @@ import {
     House,
     Hourglass,
     LayoutDashboard,
-    LayoutGrid,
     Layers,
     ListChecks,
     Monitor,
@@ -35,6 +34,7 @@ import {
     PiggyBank,
     RefreshCcw,
     ShieldAlert,
+    ShieldCheck,
     ShoppingCart,
     SlidersHorizontal,
     Store,
@@ -88,6 +88,12 @@ const mainNavItems: NavItem[] = [
         href: '/employment-applications',
         icon: FileText,
         permission: 'employment-applications.view',
+    },
+    {
+        title: 'Worker Check',
+        href: '/worker-screening/search',
+        icon: ShieldCheck,
+        permission: 'worker-screening.search',
     },
     {
         title: 'Kiosks',
@@ -203,6 +209,12 @@ const documents = [
                 url: '/update-pricing',
                 icon: Tags,
                 permission: 'materials.edit',
+            },
+            {
+                name: 'Worker Screening',
+                url: '/worker-screening',
+                icon: ShieldAlert,
+                permission: 'worker-screening.manage',
             },
             {
                 name: 'Worktypes',
