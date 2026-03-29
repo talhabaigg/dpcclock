@@ -675,7 +675,7 @@ export default function ProductionAnalysis({
                     No DPC data available. Upload a CSV from the DPC Data tab.
                 </div>
             ) : (
-                <ScrollArea className="min-h-0 flex-1 rounded-md border">
+                <ScrollArea className="min-h-0 rounded-md border">
                     <table className="w-full caption-bottom text-sm">
                         <TableHeader className="sticky top-0 z-10 bg-background">
                             <TableRow>

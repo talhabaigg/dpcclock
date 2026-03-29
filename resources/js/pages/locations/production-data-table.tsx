@@ -229,7 +229,7 @@ export function ProductionDataTable<TData, TValue>({ columns, data, groupBy, onG
 
             {/* Table */}
             <ScrollArea className="min-h-0 flex-1 rounded-md border">
-                <table className="w-full caption-bottom text-sm">
+                <table className="w-full caption-bottom text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <TableHeader className="sticky top-0 z-10 bg-background">
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
@@ -342,7 +342,7 @@ export function ProductionDataTable<TData, TValue>({ columns, data, groupBy, onG
                             </TableRow>
                         )}
                     </TableBody>
-                    <TableFooter className="sticky bottom-0 bg-muted">
+                    <TableFooter className="sticky bottom-0 z-10 bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
                         <TableRow className="font-semibold">
                             {table.getVisibleLeafColumns().map((col, idx) => {
                                 const key = col.id;
