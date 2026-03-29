@@ -1875,7 +1875,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const currentUserId = currentUser?.id;
     const currentUserName = currentUser?.name ?? '';
 
-    const declineForm = useForm({ reason: '' });
+    const declineForm = useForm({ reason: '', add_to_screening: false });
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employment Applications', href: '/employment-applications' },
@@ -2421,14 +2421,26 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                             Are you sure you want to decline {app.first_name} {app.surname}'s application?
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-2">
-                        <Label htmlFor="decline_reason">Reason (optional)</Label>
-                        <Textarea
-                            id="decline_reason"
-                            value={declineForm.data.reason}
-                            onChange={(e) => declineForm.setData('reason', e.target.value)}
-                            placeholder="Enter reason for declining..."
-                        />
+                    <div className="grid gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="decline_reason">Reason (optional)</Label>
+                            <Textarea
+                                id="decline_reason"
+                                value={declineForm.data.reason}
+                                onChange={(e) => declineForm.setData('reason', e.target.value)}
+                                placeholder="Enter reason for declining..."
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                id="add_to_screening"
+                                checked={declineForm.data.add_to_screening}
+                                onCheckedChange={(checked) => declineForm.setData('add_to_screening', !!checked)}
+                            />
+                            <Label htmlFor="add_to_screening" className="text-sm font-normal">
+                                Add to alert list for future worker screening
+                            </Label>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowDeclineDialog(false)}>Cancel</Button>

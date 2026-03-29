@@ -492,6 +492,7 @@ class EmploymentApplicationController extends Controller
     {
         $request->validate([
             'reason' => ['nullable', 'string', 'max:2000'],
+            'add_to_screening' => ['nullable', 'boolean'],
         ]);
 
         $oldStatus = $employmentApplication->status;
@@ -508,6 +509,29 @@ class EmploymentApplicationController extends Controller
             $body,
             ['status_change' => ['from' => $oldStatus, 'to' => 'declined']],
         );
+
+        if ($request->boolean('add_to_screening')) {
+            $existing = WorkerScreening::checkWorker([
+                'phone' => $employmentApplication->phone,
+                'email' => $employmentApplication->email,
+                'first_name' => $employmentApplication->first_name,
+                'surname' => $employmentApplication->surname,
+                'date_of_birth' => $employmentApplication->date_of_birth,
+            ]);
+
+            if (! $existing) {
+                WorkerScreening::create([
+                    'first_name' => $employmentApplication->first_name,
+                    'surname' => $employmentApplication->surname,
+                    'phone' => $employmentApplication->phone,
+                    'email' => $employmentApplication->email,
+                    'date_of_birth' => $employmentApplication->date_of_birth,
+                    'reason' => $request->reason ?: "Declined from employment application #{$employmentApplication->id}",
+                    'added_by' => $request->user()->id,
+                    'status' => 'active',
+                ]);
+            }
+        }
 
         return back();
     }
