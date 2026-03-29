@@ -1,6 +1,6 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -13,13 +13,12 @@ type OtpForm = {
     remember: boolean;
 };
 
-interface LoginProps {
-    user: number;
+interface OtpProps {
     status?: string;
-    canResetPassword: boolean;
 }
 
-export default function Login({ status }: LoginProps) {
+export default function Otp({ status }: OtpProps) {
+    const [resending, setResending] = useState(false);
     const { data, setData, post, processing, errors, reset } = useForm<Required<OtpForm>>({
         otp: '',
         remember: false,
@@ -32,12 +31,19 @@ export default function Login({ status }: LoginProps) {
         });
     };
 
+    const resendOtp = () => {
+        setResending(true);
+        router.post(route('otp.resend'), {}, {
+            onFinish: () => setResending(false),
+        });
+    };
+
     return (
         <AuthLayout
             title="Enter One-Time-Password"
             description="A 6-digit OTP has been sent to your email. Please enter it below to verify your account."
         >
-            <Head title="OPT verification" />
+            <Head title="OTP verification" />
 
             <form className="-mt-5 flex flex-col justify-between" onSubmit={submit}>
                 <div className="grid gap-4">
@@ -69,13 +75,25 @@ export default function Login({ status }: LoginProps) {
                             onClick={() => setData('remember', !data.remember)}
                             tabIndex={3}
                         />
-                        <Label htmlFor="remember">Do not ask again for 24 hours</Label>
+                        <Label htmlFor="remember">Trust this device for 30 days</Label>
                     </div>
 
                     <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
                         {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                         Verify
                     </Button>
+
+                    <div className="text-center">
+                        <Button
+                            type="button"
+                            variant="link"
+                            className="text-muted-foreground text-sm"
+                            onClick={resendOtp}
+                            disabled={resending}
+                        >
+                            {resending ? 'Sending...' : "Didn't receive the code? Resend"}
+                        </Button>
+                    </div>
                 </div>
             </form>
 

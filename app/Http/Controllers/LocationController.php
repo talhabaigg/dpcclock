@@ -1066,7 +1066,7 @@ class LocationController extends Controller
             $class = $jobClassMap[$jobKey];
             // Jobs that support forceFullSync parameter
             $supportsForce = in_array($jobKey, [
-                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices',
+                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders',
             ]);
 
             if ($supportsForce) {

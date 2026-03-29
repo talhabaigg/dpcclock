@@ -24,9 +24,11 @@ import {
     Heading1,
     Heading2,
     Heading3,
+    Indent,
     Italic,
     List,
     ListOrdered,
+    Outdent,
     PenLine,
     Plus,
     Redo,
@@ -134,6 +136,83 @@ const SignatureBoxDecoration = Extension.create({
     },
 });
 
+const INDENT_STEP = 24; // px per indent level
+const MAX_INDENT = 6;
+
+const IndentExtension = Extension.create({
+    name: 'indent',
+    addGlobalAttributes() {
+        return [
+            {
+                types: ['paragraph', 'heading'],
+                attributes: {
+                    indent: {
+                        default: 0,
+                        parseHTML: (element) => parseInt(element.getAttribute('data-indent') || '0', 10),
+                        renderHTML: (attributes) => {
+                            if (!attributes.indent) return {};
+                            return {
+                                'data-indent': attributes.indent,
+                                style: `margin-left: ${attributes.indent * INDENT_STEP}px`,
+                            };
+                        },
+                    },
+                },
+            },
+        ];
+    },
+    addCommands() {
+        return {
+            increaseIndent: () => ({ tr, state, dispatch }) => {
+                const { from, to } = state.selection;
+                let changed = false;
+                state.doc.nodesBetween(from, to, (node, pos) => {
+                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                        const current = node.attrs.indent || 0;
+                        if (current < MAX_INDENT) {
+                            tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current + 1 });
+                            changed = true;
+                        }
+                    }
+                });
+                if (changed && dispatch) dispatch(tr);
+                return changed;
+            },
+            decreaseIndent: () => ({ tr, state, dispatch }) => {
+                const { from, to } = state.selection;
+                let changed = false;
+                state.doc.nodesBetween(from, to, (node, pos) => {
+                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                        const current = node.attrs.indent || 0;
+                        if (current > 0) {
+                            tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current - 1 });
+                            changed = true;
+                        }
+                    }
+                });
+                if (changed && dispatch) dispatch(tr);
+                return changed;
+            },
+        };
+    },
+    addKeyboardShortcuts() {
+        return {
+            Tab: ({ editor }) => {
+                if (editor.isActive('listItem')) {
+                    return editor.chain().sinkListItem('listItem').run();
+                }
+                return (editor.commands as any).increaseIndent();
+            },
+            'Shift-Tab': ({ editor }) => {
+                if (editor.isActive('listItem')) {
+                    return editor.chain().liftListItem('listItem').run();
+                }
+                return (editor.commands as any).decreaseIndent();
+            },
+        };
+    },
+});
+
 export default function TiptapEditor({ content, onChange, placeholders = [] }: TiptapEditorProps) {
     // Merge any custom placeholders passed from the create/edit form
     const allGroups = placeholders.length > 0
@@ -145,11 +224,12 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
             StarterKit,
             Underline,
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
-            Table.configure({ resizable: true }),
+            Table.configure({ resizable: true, lastColumnResizable: false }),
             TableRow,
             TableHeader,
             TableCell,
             SignatureBoxDecoration,
+            IndentExtension,
         ],
         content: content ? JSON.parse(content) : undefined,
         onUpdate: ({ editor }) => {
@@ -351,6 +431,32 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
                 >
                     <ListOrdered className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                    size="sm"
+                    pressed={false}
+                    onPressedChange={() => {
+                        if (editor.isActive('listItem')) {
+                            editor.chain().focus().sinkListItem('listItem').run();
+                        } else {
+                            (editor.commands as any).increaseIndent();
+                        }
+                    }}
+                >
+                    <Indent className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                    size="sm"
+                    pressed={false}
+                    onPressedChange={() => {
+                        if (editor.isActive('listItem')) {
+                            editor.chain().focus().liftListItem('listItem').run();
+                        } else {
+                            (editor.commands as any).decreaseIndent();
+                        }
+                    }}
+                >
+                    <Outdent className="h-4 w-4" />
                 </Toggle>
 
                 <Separator orientation="vertical" className="mx-1 h-6" />
@@ -593,7 +699,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
             {/* Editor Content — digital agreement preview */}
             <div className="bg-muted/40 overflow-auto p-6" style={{ maxHeight: '70vh' }}>
                 <div
-                    className="mx-auto rounded-xl border border-border/60 shadow-sm"
+                    className="mx-auto rounded-xl border border-border/60 shadow-sm overflow-hidden"
                     style={{
                         maxWidth: '720px',
                         width: '100%',
@@ -645,51 +751,86 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                 .ProseMirror p {
                     margin: 4px 0 8px;
                 }
-                .ProseMirror ul,
+                .ProseMirror ul {
+                    padding-left: 24px;
+                    margin: 6px 0 12px;
+                    list-style-type: disc;
+                }
                 .ProseMirror ol {
                     padding-left: 24px;
                     margin: 6px 0 12px;
+                    list-style-type: decimal;
                 }
                 .ProseMirror li {
                     margin: 2px 0;
                 }
                 .ProseMirror table {
-                    border-collapse: collapse;
                     width: 100%;
-                    margin: 12px 0;
-                }
-                .ProseMirror th,
-                .ProseMirror td {
-                    border: 1px solid #e2e8f0;
-                    padding: 8px 12px;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    margin: 16px 0;
                     font-size: 13px;
-                    line-height: 1.5;
-                    word-wrap: break-word;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
                     overflow: hidden;
-                    min-width: 40px;
-                    color: #374151;
                 }
                 .ProseMirror th {
-                    background-color: #f1f5f9;
+                    background: #f1f5f9;
                     font-weight: 600;
-                    color: #334155;
                     text-align: left;
+                    padding: 1px 6px;
+                    border-bottom: 1px solid #e2e8f0;
+                    border-right: 1px solid #e2e8f0;
+                    color: #334155;
                 }
-                .ProseMirror tr:nth-child(even) td {
-                    background: #f8fafc;
+                .ProseMirror th:last-child {
+                    border-right: none;
+                }
+                .ProseMirror td {
+                    padding: 1px 6px;
+                    border-bottom: 1px solid #e2e8f0;
+                    border-right: 1px solid #e2e8f0;
+                    color: #374151;
+                    position: relative;
+                }
+                .ProseMirror td:last-child {
+                    border-right: none;
+                }
+                .ProseMirror tr:last-child td {
+                    border-bottom: none;
+                }
+
+                .ProseMirror th p,
+                .ProseMirror td p {
+                    margin: 0;
                 }
                 .ProseMirror .selectedCell {
-                    background-color: #dbeafe;
+                    background-color: #dbeafe !important;
                     border-color: #3b82f6;
                 }
                 .ProseMirror .column-resize-handle {
                     background-color: #3b82f6;
-                    width: 2px;
-                    pointer-events: none;
+                    width: 4px;
                     position: absolute;
-                    right: -1px;
+                    right: -2px;
                     top: 0;
                     bottom: 0;
+                    cursor: col-resize;
+                    z-index: 10;
+                }
+                .ProseMirror.resize-cursor {
+                    cursor: col-resize;
+                }
+                /* Grip affordance — show resize hint on cell border hover */
+                .ProseMirror td:hover::after,
+                .ProseMirror th:hover::after {
+                    content: '';
+                    position: absolute;
+                    right: -3px;
+                    top: 0;
+                    bottom: 0;
+                    width: 6px;
+                    cursor: col-resize;
                 }
                 .ProseMirror strong {
                     font-weight: 600;
@@ -703,42 +844,28 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     border-radius: 0 8px 8px 0;
                     color: #1e40af;
                 }
-                /* Signature box placeholder preview */
+                /* Signature box placeholder preview — matches signing page */
                 .ProseMirror .signature-box-preview {
                     display: inline-block;
-                    width: 300px;
-                    border: 1px solid #ccc;
-                    margin: 20px 0;
-                    padding: 10px;
+                    width: 100%;
+                    max-width: 100%;
+                    box-sizing: border-box;
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 8px;
+                    padding: 24px;
+                    margin: 12px 0;
+                    text-align: center;
                     font-size: 0;
                     line-height: 0;
                     color: transparent;
-                    position: relative;
-                    vertical-align: top;
-                }
-                .ProseMirror .signature-box-preview::before {
-                    content: '';
-                    display: block;
-                    width: 280px;
-                    height: 60px;
-                    background: repeating-linear-gradient(
-                        45deg,
-                        transparent,
-                        transparent 8px,
-                        #f1f5f9 8px,
-                        #f1f5f9 9px
-                    );
-                    border: 1px dashed #94a3b8;
-                    border-radius: 4px;
-                    margin-bottom: 8px;
+                    background: #f8fafc;
                 }
                 .ProseMirror .signature-box-preview::after {
                     content: attr(data-label) ' will appear here';
                     display: block;
-                    font-size: 12px;
+                    font-size: 13px;
                     line-height: 1.4;
-                    color: #555;
-                    font-weight: 600;
+                    color: #94a3b8;
                     font-style: italic;
                 }
             `}</style>

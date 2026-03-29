@@ -39,7 +39,11 @@ Route::middleware('guest')->group(function () {
     Route::get('otp', [AuthenticatedSessionController::class, 'showOtpForm'])
         ->name('otp.show');
     Route::post('otp', [AuthenticatedSessionController::class, 'verifyOtp'])
+        ->middleware('throttle:5,1')
         ->name('otp.verify');
+    Route::post('otp/resend', [AuthenticatedSessionController::class, 'resendOtp'])
+        ->middleware('throttle:3,1')
+        ->name('otp.resend');
 });
 
 Route::middleware('auth')->group(function () {

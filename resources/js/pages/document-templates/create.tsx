@@ -2,6 +2,7 @@ import TiptapEditor from '@/components/document-templates/tiptap-editor';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -20,17 +21,24 @@ const CATEGORIES = ['employment', 'safety', 'subcontractor', 'general'];
 
 const PLACEHOLDER_TYPES = [
     { value: 'text', label: 'Text' },
+    { value: 'textarea', label: 'Long Text' },
     { value: 'date', label: 'Date' },
     { value: 'number', label: 'Number' },
     { value: 'email', label: 'Email' },
     { value: 'phone', label: 'Phone' },
+    { value: 'dropdown', label: 'Dropdown' },
+    { value: 'radio', label: 'Radio' },
+    { value: 'checkbox', label: 'Checkbox' },
 ];
+
+const TYPES_WITH_OPTIONS = ['dropdown', 'radio'];
 
 interface PlaceholderItem {
     key: string;
     label: string;
     type: string;
     required: boolean;
+    options: string[];
 }
 
 export default function CreateDocumentTemplate() {
@@ -45,15 +53,20 @@ export default function CreateDocumentTemplate() {
     });
 
     const addPlaceholder = () => {
-        const updated = [...placeholders, { key: '', label: '', type: 'text', required: false }];
+        const updated = [...placeholders, { key: '', label: '', type: 'text', required: false, options: [] }];
         setPlaceholders(updated);
         setData('placeholders', updated);
     };
 
-    const updatePlaceholder = (index: number, field: keyof PlaceholderItem, value: string | boolean) => {
+    const updatePlaceholder = (index: number, field: keyof PlaceholderItem, value: string | boolean | string[]) => {
         const updated = [...placeholders];
         if (field === 'key') {
             updated[index][field] = (value as string).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        } else if (field === 'type') {
+            updated[index].type = value as string;
+            if (!TYPES_WITH_OPTIONS.includes(value as string)) {
+                updated[index].options = [];
+            }
         } else {
             (updated[index] as any)[field] = value;
         }
@@ -219,6 +232,18 @@ export default function CreateDocumentTemplate() {
                                                         Required
                                                     </label>
                                                 </div>
+                                                {TYPES_WITH_OPTIONS.includes(p.type) && (
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[11px] text-muted-foreground">Options (one per line)</Label>
+                                                        <Textarea
+                                                            value={(p.options ?? []).join('\n')}
+                                                            onChange={(e) => updatePlaceholder(i, 'options', e.target.value.split('\n'))}
+                                                            placeholder={'Option 1\nOption 2\nOption 3'}
+                                                            rows={3}
+                                                            className="text-xs"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>

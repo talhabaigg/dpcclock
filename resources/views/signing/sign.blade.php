@@ -35,13 +35,20 @@
         .agreement-body h2 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 20px 0 6px; }
         .agreement-body h3 { font-size: 14px; font-weight: 600; color: #334155; margin: 16px 0 4px; }
         .agreement-body p { font-size: 14px; line-height: 1.7; color: #374151; margin: 4px 0 8px; }
-        .agreement-body ul, .agreement-body ol { padding-left: 24px; margin: 6px 0 12px; }
+        .agreement-body ul { padding-left: 24px; margin: 6px 0 12px; list-style-type: disc; }
+        .agreement-body ol { padding-left: 24px; margin: 6px 0 12px; list-style-type: decimal; }
         .agreement-body li { font-size: 14px; line-height: 1.6; color: #374151; margin: 2px 0; }
-        .agreement-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-        .agreement-body th { background: #f1f5f9; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid #e2e8f0; color: #334155; }
-        .agreement-body td { padding: 8px 12px; border: 1px solid #e2e8f0; color: #374151; }
-        .agreement-body tr:nth-child(even) td { background: #f8fafc; }
+        .agreement-body table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 16px 0; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .agreement-body th { background: #f1f5f9; font-weight: 600; text-align: left; padding: 1px 6px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #334155; }
+        .agreement-body th:last-child { border-right: none; }
+        .agreement-body td { padding: 1px 6px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #374151; }
+        .agreement-body td:last-child { border-right: none; }
+        .agreement-body tr:last-child td { border-bottom: none; }
         .agreement-body strong { font-weight: 600; color: #1e293b; }
+        .agreement-body .signature-placeholder { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; color: #94a3b8; margin: 20px 0; font-style: italic; font-size: 13px; background: #f8fafc; }
+        .agreement-body .signature-box { margin: 20px 0; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+        .agreement-body .signature-box img { max-width: 300px; max-height: 100px; }
+        .agreement-body .signature-meta { margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.5; }
         .agreement-body blockquote { border-left: 3px solid #2563eb; padding: 8px 16px; margin: 12px 0; background: #eff6ff; border-radius: 0 8px 8px 0; font-size: 14px; color: #1e40af; }
         .agreement-body img { max-width: 300px; max-height: 100px; }
 

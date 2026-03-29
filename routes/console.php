@@ -68,8 +68,15 @@ Schedule::job(LoadJobVendorCommitments::class)
 // Employment Hero Timesheet Sync - Daily
 Schedule::call(function () {
     $tz = 'Australia/Brisbane';
-    $weekEnding = Carbon::now($tz)->endOfWeek(Carbon::FRIDAY)->format('d-m-Y');
-    dispatch(new LoadTimesheetsFromEH($weekEnding));
+    $now = Carbon::now($tz);
+    if ($now->isFriday()) {
+        $weekEnding = $now->copy();
+    } elseif ($now->isWeekend()) {
+        $weekEnding = $now->copy()->previous(Carbon::FRIDAY);
+    } else {
+        $weekEnding = $now->copy()->endOfWeek(Carbon::FRIDAY);
+    }
+    dispatch(new LoadTimesheetsFromEH($weekEnding->format('d-m-Y')));
 })
     ->name('load-timesheets-from-eh')
     ->dailyAt('05:00')

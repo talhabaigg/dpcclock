@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { router } from '@inertiajs/react';
 import { ClipboardList, FileText, Loader2, Mail, RotateCcw, Tablet, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,7 +14,7 @@ import SignaturePad from 'signature_pad';
 interface DocumentTemplate {
     id: number;
     name: string;
-    placeholders: { key: string; label: string; type?: string; required?: boolean }[] | null;
+    placeholders: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
     body_html: string | null;
 }
 
@@ -324,21 +326,64 @@ export default function SendForSigningModal({
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
                                 {mergedPlaceholders.map((p) => {
-                                    const inputType =
-                                        p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text';
+                                    const fieldValue = customFields[p.key] ?? '';
+                                    const setField = (v: string) => setCustomFields((prev) => ({ ...prev, [p.key]: v }));
+                                    const options = (p.options ?? []).filter((o) => o.trim() !== '');
+
                                     return (
-                                        <div key={p.key} className="space-y-1">
+                                        <div key={p.key} className={`space-y-1${p.type === 'textarea' ? ' sm:col-span-2' : ''}`}>
                                             <Label htmlFor={`cf-${p.key}`} className="text-xs">
                                                 {p.label}
                                                 {p.required && <span className="ml-0.5 text-destructive">*</span>}
                                             </Label>
-                                            <Input
-                                                id={`cf-${p.key}`}
-                                                type={inputType}
-                                                value={customFields[p.key] ?? ''}
-                                                onChange={(e) => setCustomFields((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                                                placeholder={p.type === 'date' ? '' : p.label}
-                                            />
+
+                                            {p.type === 'dropdown' && options.length > 0 ? (
+                                                <Select value={fieldValue} onValueChange={setField}>
+                                                    <SelectTrigger id={`cf-${p.key}`}>
+                                                        <SelectValue placeholder={`Select ${p.label}`} />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {options.map((opt) => (
+                                                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : p.type === 'radio' && options.length > 0 ? (
+                                                <RadioGroup value={fieldValue} onValueChange={setField} className="flex flex-wrap gap-3 pt-1">
+                                                    {options.map((opt) => (
+                                                        <label key={opt} className="flex items-center gap-1.5 text-sm">
+                                                            <RadioGroupItem value={opt} />
+                                                            {opt}
+                                                        </label>
+                                                    ))}
+                                                </RadioGroup>
+                                            ) : p.type === 'textarea' ? (
+                                                <Textarea
+                                                    id={`cf-${p.key}`}
+                                                    value={fieldValue}
+                                                    onChange={(e) => setField(e.target.value)}
+                                                    placeholder={p.label}
+                                                    rows={3}
+                                                />
+                                            ) : p.type === 'checkbox' ? (
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <Checkbox
+                                                        id={`cf-${p.key}`}
+                                                        checked={fieldValue === 'Yes'}
+                                                        onCheckedChange={(v) => setField(v ? 'Yes' : 'No')}
+                                                    />
+                                                    <Label htmlFor={`cf-${p.key}`} className="text-sm font-normal">{p.label}</Label>
+                                                </div>
+                                            ) : (
+                                                <Input
+                                                    id={`cf-${p.key}`}
+                                                    type={p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text'}
+                                                    value={fieldValue}
+                                                    onChange={(e) => setField(e.target.value)}
+                                                    placeholder={p.type === 'date' ? '' : p.label}
+                                                />
+                                            )}
+
                                             {errors[`cf_${p.key}`] && <p className="text-xs text-destructive">{errors[`cf_${p.key}`]}</p>}
                                         </div>
                                     );

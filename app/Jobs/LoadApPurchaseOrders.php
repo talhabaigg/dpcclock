@@ -37,8 +37,17 @@ class LoadApPurchaseOrders implements ShouldQueue
     {
         $startTime = now();
         $syncLog = DataSyncLog::firstOrNew(['job_name' => self::JOB_NAME]);
+        $isIncremental = ! $this->forceFullSync && $syncLog->last_successful_sync !== null;
 
-        Log::info('LoadApPurchaseOrders: Job started');
+        // Always load last 30 days to catch backdated POs
+        $filterDate = $isIncremental
+            ? Carbon::now()->subDays(30)->toDateString()
+            : null;
+
+        Log::info('LoadApPurchaseOrders: Job started', [
+            'mode' => $isIncremental ? 'incremental (last 30 days)' : 'full',
+            'filter_from' => $filterDate,
+        ]);
 
         try {
             $baseUrl = config('premier.api.base_url').config('premier.endpoints.ap_purchase_orders');
@@ -47,13 +56,27 @@ class LoadApPurchaseOrders implements ShouldQueue
             $skip = 0;
             $totalProcessed = 0;
             $isFirstBatch = true;
+            $maxDate = $syncLog->last_filter_value;
+
+            // Build the OData filter for incremental mode — last 30 days
+            $filterParam = '';
+            if ($isIncremental) {
+                $filterParam = "\$filter=PO_Date ge datetime'".$filterDate."T00:00:00'&";
+            }
+
+            // Delete overlap records before fetching (incremental mode)
+            if ($isIncremental) {
+                $deleted = ApPurchaseOrder::where('po_date', '>=', $filterDate)->delete();
+                Log::info('LoadApPurchaseOrders: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+            }
 
             do {
-                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
+                $url = $baseUrl.'?'.$filterParam.'$top='.$pageSize.'&$skip='.$skip;
 
                 Log::info('LoadApPurchaseOrders: Fetching page', [
                     'skip' => $skip,
                     'top' => $pageSize,
+                    'incremental' => $isIncremental,
                 ]);
 
                 $response = Http::timeout(config('premier.api.timeout', 300))
@@ -87,7 +110,7 @@ class LoadApPurchaseOrders implements ShouldQueue
 
                 $rowCount = count($rows);
 
-                if ($rowCount === 0 && $isFirstBatch) {
+                if ($rowCount === 0 && $isFirstBatch && ! $isIncremental) {
                     Log::warning('LoadApPurchaseOrders: ERP returned 0 rows, skipping database update');
 
                     return;
@@ -102,8 +125,8 @@ class LoadApPurchaseOrders implements ShouldQueue
                     'skip' => $skip,
                 ]);
 
-                // Delete all on first batch (full replace)
-                if ($isFirstBatch) {
+                // Delete all on first batch (full replace) only for full sync
+                if ($isFirstBatch && ! $isIncremental) {
                     ApPurchaseOrder::query()->delete();
                 }
                 $isFirstBatch = false;
@@ -114,7 +137,13 @@ class LoadApPurchaseOrders implements ShouldQueue
                 foreach ($chunks as $chunk) {
                     $data = [];
                     foreach ($chunk as $r) {
-                        $data[] = $this->mapRowToRecord($r);
+                        $record = $this->mapRowToRecord($r);
+
+                        if ($record['po_date'] && ($maxDate === null || $record['po_date'] > $maxDate)) {
+                            $maxDate = $record['po_date'];
+                        }
+
+                        $data[] = $record;
                     }
                     ApPurchaseOrder::insert($data);
                     unset($data);
@@ -130,12 +159,15 @@ class LoadApPurchaseOrders implements ShouldQueue
 
             // Update sync log
             $syncLog->last_successful_sync = now();
+            $syncLog->last_filter_value = $maxDate;
             $syncLog->records_synced = $totalProcessed;
             $syncLog->save();
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadApPurchaseOrders: Job completed successfully', [
+                'mode' => $isIncremental ? 'incremental' : 'full',
                 'records_processed' => $totalProcessed,
+                'max_date' => $maxDate,
                 'duration_seconds' => $duration,
             ]);
 

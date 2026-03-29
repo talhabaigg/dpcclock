@@ -78,9 +78,9 @@ class DocumentSigningService
 
         // Replace sender signature placeholder with rendered HTML if provided
         if ($senderSignature && str_contains($documentHtml, '{{sender_signature}}')) {
-            $senderSignatureHtml = '<div style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;">'
+            $senderSignatureHtml = '<div class="signature-box">'
                 . '<img src="' . $senderSignature . '" style="max-width: 300px; max-height: 100px;" />'
-                . '<div style="margin-top: 8px; font-size: 12px; color: #555;">'
+                . '<div class="signature-meta">'
                 . '<strong>' . e($senderFullName ?? $admin->name) . '</strong><br>'
                 . 'Signed: ' . now()->timezone('Australia/Sydney')->format('d/m/Y h:i A T')
                 . '</div></div>';

@@ -41,7 +41,10 @@ class AuthenticatedSessionController extends Controller
             // Check if this device is trusted for this user
             if (! $this->isDeviceTrusted($request, $user->id)) {
                 $user->sendOneTimePassword();
-                session(['otp_user_id' => $user->id]);
+                session([
+                    'otp_user_id' => $user->id,
+                    'otp_remember' => $request->boolean('remember'),
+                ]);
                 Auth::logout();
 
                 return redirect()->route('otp.show');
@@ -107,12 +110,35 @@ class AuthenticatedSessionController extends Controller
      */
     public function showOtpForm(Request $request): Response
     {
-        $user = session('otp_user_id');
+        if (! session('otp_user_id')) {
+            return Inertia::location(route('login'));
+        }
 
         return Inertia::render('auth/otp', [
-            'user' => $user,
             'status' => session('status'),
         ]);
+    }
+
+    /**
+     * Resend the OTP to the user's email.
+     */
+    public function resendOtp(Request $request): RedirectResponse
+    {
+        $userId = session('otp_user_id');
+
+        if (! $userId) {
+            return redirect()->route('login');
+        }
+
+        $user = User::find($userId);
+
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        $user->sendOneTimePassword();
+
+        return redirect()->route('otp.show')->with('status', 'A new OTP has been sent to your email.');
     }
 
     /**
@@ -138,11 +164,12 @@ class AuthenticatedSessionController extends Controller
         }
 
         $oneTimePassword = $request->input('otp');
-        $result = $user->attemptLoginUsingOneTimePassword($oneTimePassword, remember: false);
+        $remember = session('otp_remember', false);
+        $result = $user->attemptLoginUsingOneTimePassword($oneTimePassword, remember: $remember);
 
         if ($result->isOk()) {
             $request->session()->regenerate();
-            session()->forget('otp_user_id');
+            session()->forget(['otp_user_id', 'otp_remember']);
 
             // Add to trusted device if "remember" was checked
             if ($request->boolean('remember')) {

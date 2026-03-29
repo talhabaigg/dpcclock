@@ -262,7 +262,7 @@ class SigningRequestController extends Controller
         $displayHtml = str_replace(
             ['{{signature_box}}', '{{date_signed}}'],
             [
-                '<div style="border: 2px dashed #94a3b8; border-radius: 8px; padding: 20px; text-align: center; color: #94a3b8; margin: 16px 0; font-style: italic;">Your signature will appear here after signing below</div>',
+                '<div class="signature-placeholder">Your signature will appear here after signing below</div>',
                 '<em style="color: #94a3b8;">Will be filled upon signing</em>',
             ],
             $signingRequest->document_html

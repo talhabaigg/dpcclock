@@ -40,9 +40,9 @@ class SignedDocumentPdfService
         $html = $signingRequest->document_html;
 
         // Replace signature_box placeholders with actual signature image
-        $signatureImgHtml = '<div style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;">'
+        $signatureImgHtml = '<div class="signature-box">'
             . '<img src="' . $signatureBase64 . '" style="max-width: 300px; max-height: 100px;" />'
-            . '<div style="margin-top: 8px; font-size: 12px; color: #555;">'
+            . '<div class="signature-meta">'
             . '<strong>' . e($signingRequest->signer_full_name) . '</strong><br>'
             . 'Signed: ' . Carbon::parse($signingRequest->signed_at)->timezone('Australia/Sydney')->format('d/m/Y h:i A T')
             . '</div></div>';
@@ -251,6 +251,9 @@ class SignedDocumentPdfService
                 th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; font-size: 10px; line-height: 1.3; word-wrap: break-word; overflow: hidden; }
                 th { background-color: #e5e7eb; font-weight: 600; }
                 col, colgroup { width: auto !important; }
+                .signature-box { margin: 16px 0; padding: 10px; border: 1px solid #ccc; }
+                .signature-box img { max-width: 300px; max-height: 100px; }
+                .signature-meta { margin-top: 8px; font-size: 12px; color: #555; }
                 ul, ol { padding-left: 20px; list-style-position: outside; }
                 ol { list-style-type: decimal; }
                 ul { list-style-type: disc; }
