@@ -38,18 +38,46 @@ class POComparisonService
         ])->toArray();
 
         // Fetch Premier lines (uses cached data if available, skip API fallback for report performance)
-        $premierLines = $this->premierService->getPurchaseOrderLines(
+        $rawPremierLines = $this->premierService->getPurchaseOrderLines(
             $requisition->premier_po_id,
             forceRefresh: false,
             cacheOnly: $skipDebugCalls // When skipping debug calls (reports), also skip API fallback
         );
-        $premierLines = $this->normalizePremierLines($premierLines);
+        $premierLines = $this->normalizePremierLines($rawPremierLines);
+        $premierDataAvailable = ! empty($rawPremierLines);
 
         // Fetch invoices and invoice lines by PO number
         $poNumber = $requisition->po_number ? 'PO'.$requisition->po_number : null;
         $invoices = $poNumber ? $this->premierService->getInvoicesByPoNumber($poNumber) : [];
         $invoiceLines = $poNumber ? $this->premierService->getInvoiceLinesByPoNumber($poNumber) : [];
         $invoiceSummary = $this->summarizeInvoices($invoices);
+
+        // If Premier data is not available (not cached), skip comparison to avoid false "removed" items
+        if (! $premierDataAvailable && $skipDebugCalls) {
+            return [
+                'comparison' => [],
+                'summary' => [
+                    'unchanged_count' => 0,
+                    'modified_count' => 0,
+                    'added_count' => 0,
+                    'removed_count' => 0,
+                    'total_items' => count($localLines),
+                    'total_variance' => 0,
+                    'has_discrepancies' => false,
+                ],
+                'premier_data_available' => false,
+                'local_total' => array_sum(array_column($localLines, 'total_cost')),
+                'premier_total' => 0,
+                'invoice_total' => array_sum(array_column($invoiceLines, 'total_cost')),
+                'invoices' => $invoiceSummary,
+                'fetched_at' => now()->toIso8601String(),
+                'debug' => [
+                    'local_count' => count($localLines),
+                    'premier_count' => 0,
+                    'skipped' => 'Premier data not cached — sync required',
+                ],
+            ];
+        }
 
         // Perform matching and comparison (now includes invoice matching)
         $comparisonResult = $this->matchAndCompare($localLines, $premierLines, $invoiceLines);
@@ -138,6 +166,7 @@ class POComparisonService
         return [
             'comparison' => $comparisonResult,
             'summary' => $summary,
+            'premier_data_available' => $premierDataAvailable,
             'local_total' => array_sum(array_column($localLines, 'total_cost')),
             'premier_total' => array_sum(array_column($premierLines, 'total_cost')),
             'invoice_total' => $invoiceTotal,

@@ -170,8 +170,11 @@ class PurchasingController extends Controller
         // Apply search filter
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
+            // Strip "PO" prefix for PO number searches
+            $poSearch = preg_replace('/^PO/i', '', $search);
+            $query->where(function ($q) use ($search, $poSearch) {
                 $q->where('id', 'like', "%{$search}%")
+                    ->orWhere('po_number', 'like', "%{$poSearch}%")
                     ->orWhere('order_reference', 'like', "%{$search}%")
                     ->orWhereHas('supplier', function ($sq) use ($search) {
                         $sq->where('name', 'like', "%{$search}%");

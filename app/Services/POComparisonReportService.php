@@ -217,6 +217,12 @@ class POComparisonReportService
             try {
                 $comparison = $this->comparisonService->compare($requisition);
 
+                // Skip POs where Premier data is not cached — avoids false "removed" items
+                $premierDataAvailable = $comparison['premier_data_available'] ?? true;
+                if (! $premierDataAvailable) {
+                    continue;
+                }
+
                 $hasVariance = $comparison['summary']['has_discrepancies'] ?? false;
                 $localTotal = $comparison['local_total'] ?? 0;
                 $premierTotal = $comparison['premier_total'] ?? 0;

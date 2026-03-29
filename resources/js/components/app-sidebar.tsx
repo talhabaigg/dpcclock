@@ -24,6 +24,7 @@ import {
     Hammer,
     HardHat,
     Hash,
+    House,
     Hourglass,
     LayoutDashboard,
     LayoutGrid,
@@ -47,9 +48,9 @@ import { NavDocuments } from './nav-documents';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Home',
         href: '/dashboard',
-        icon: LayoutGrid,
+        icon: House,
         permission: 'dashboard.view',
     },
     {
@@ -220,7 +221,7 @@ const reports = [
         permission: 'reports.view',
         subItems: [
             {
-                name: 'Req Line Desc Report',
+                name: 'PO Missing Codes',
                 url: '/reports/req-line-items-desc',
                 icon: FileBarChart,
                 permission: 'reports.requisition-lines',

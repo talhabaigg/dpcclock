@@ -296,11 +296,13 @@ export default function POComparisonReport() {
                     ready_percent: event.ready_percent,
                 });
                 setLastSyncedPo(event.last_synced_po);
-                setIsSyncing(event.status === 'syncing');
 
-                if (event.status === 'completed') {
+                // Stop syncing when completed OR when 100% and no more POs to sync
+                const isDone = event.status === 'completed' || (event.ready_percent >= 100 && event.needs_sync === 0);
+                setIsSyncing(!isDone);
+
+                if (isDone) {
                     setSyncMessage('Sync completed');
-                    // Clear message after 3 seconds
                     setTimeout(() => setSyncMessage(null), 3000);
                 }
             },

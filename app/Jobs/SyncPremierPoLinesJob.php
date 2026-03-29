@@ -175,11 +175,12 @@ class SyncPremierPoLinesJob implements ShouldQueue
             }
 
             // Check if queue is empty (this was the last job)
+            // Use > 1 because the current job is still in the jobs table during execution
             $pendingJobs = DB::table('jobs')
                 ->where('payload', 'like', '%SyncPremierPoLinesJob%')
                 ->count();
 
-            $status = $pendingJobs > 0 ? 'syncing' : 'completed';
+            $status = $pendingJobs > 1 ? 'syncing' : 'completed';
 
             // Clear sync context when completed
             if ($status === 'completed') {
