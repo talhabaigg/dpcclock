@@ -95,6 +95,7 @@ class LabourForecastController extends Controller
             'locations' => $locations,
             'currentMonth' => $currentMonth->format('F Y'),
             'currentWeekEnding' => $currentWeekEnding->format('d M Y'),
+            'forecastMonth' => $currentMonth->format('Y-m'),
         ]);
     }
 
@@ -968,22 +969,17 @@ class LabourForecastController extends Controller
 
         foreach ($weekEntries as $entry) {
             $templateConfig = $entry->template;
-            if (! $templateConfig) {
-                continue;
-            }
 
             $costBreakdown = $entry->cost_breakdown_snapshot ?? [];
 
-            // Calculate actual cost for this entry
-            // If headcount > 0, multiply by headcount (normal case)
-            // If headcount = 0 but OT/leave hours exist, use weekly_cost as-is (special case)
-            $entryCost = $entry->headcount > 0
-                ? $entry->headcount * $entry->weekly_cost
-                : $entry->weekly_cost;
+            // weekly_cost already includes headcount (calculated via total_weekly_cost in LabourCostCalculator)
+            $entryCost = (float) $entry->weekly_cost;
 
             $templates[] = [
-                'id' => $templateConfig->id,
-                'label' => $templateConfig->custom_label ?: $templateConfig->payRateTemplate?->name ?? 'Unknown',
+                'id' => $templateConfig?->id ?? $entry->location_pay_rate_template_id,
+                'label' => $templateConfig
+                    ? ($templateConfig->custom_label ?: $templateConfig->payRateTemplate?->name ?? 'Unknown')
+                    : 'Deleted Template #'.$entry->location_pay_rate_template_id,
                 'headcount' => (float) $entry->headcount,
                 'overtime_hours' => (float) ($entry->overtime_hours ?? 0),
                 'leave_hours' => (float) ($entry->leave_hours ?? 0),
