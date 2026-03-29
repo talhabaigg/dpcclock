@@ -1,9 +1,10 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { usePage } from '@inertiajs/react';
-import { FolderTree } from 'lucide-react';
+import { Download, FolderTree } from 'lucide-react';
 
 type Location = LocationBase & {
     subLocations: Array<{
@@ -31,8 +32,16 @@ export default function LocationShow() {
     return (
         <LocationLayout location={location} activeTab="sublocations">
             <Card>
-                <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
+                <CardHeader className="flex flex-row items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
                     <CardTitle className="text-base">Sub-locations</CardTitle>
+                    {location.external_id && (
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={`/locations/external-id-report?job=${encodeURIComponent(location.external_id.replace(/:+$/, ''))}`}>
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Validation Report
+                            </a>
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">

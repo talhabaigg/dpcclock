@@ -267,6 +267,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.sync');
     Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
         ->middleware('permission:locations.load-job-data');
+    Route::get('/locations/external-id-report', [LocationController::class, 'externalIdValidationReport'])->name('locations.externalIdReport');
     Route::get('/data-sync', fn () => \Inertia\Inertia::render('data-sync/index'))->name('data-sync.index')
         ->middleware('permission:locations.load-job-data');
     Route::get('/locations/sync-status', [LocationController::class, 'syncStatus'])->name('locations.syncStatus')

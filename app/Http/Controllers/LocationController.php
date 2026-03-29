@@ -1264,4 +1264,122 @@ class LocationController extends Controller
 
         return response()->json($history);
     }
+
+    /**
+     * Download a CSV report of locations with external IDs that don't match the expected format.
+     *
+     * Expected formats:
+     *   Parent:  JOBNUMBER::
+     *   Sub:     JOBNUMBER::LEVEL-CODE_ACTIVITY
+     */
+    public function externalIdValidationReport(Request $request)
+    {
+        // Pattern: JOBNUMBER:: (parent) or JOBNUMBER::LEVEL-CODE_ACTIVITY (sub)
+        // JOBNUMBER = uppercase alphanumeric
+        // LEVEL = uppercase alphanumeric with underscores (e.g. LEVEL_01, GROUND, BASEMENT, VAR)
+        // CODE = digits (e.g. 001, 401, 906)
+        // ACTIVITY = required, uppercase alphanumeric with underscores (no spaces)
+        $parentPattern = '/^[A-Z0-9]+::$/';
+        $subPattern    = '/^[A-Z0-9]+::[A-Z0-9_]+-[0-9]{3}_[A-Z0-9_\/&\-]+$/';
+
+        $query = Location::whereNotNull('external_id')
+            ->where('external_id', '!=', '');
+
+        if ($request->filled('job')) {
+            $query->where('external_id', 'like', strtoupper($request->job) . '%');
+        }
+
+        $locations = $query->orderBy('external_id')->get(['id', 'name', 'external_id', 'eh_parent_id']);
+
+        $issues = [];
+
+        foreach ($locations as $loc) {
+            $extId = $loc->external_id;
+            $problems = [];
+
+            // Check case — should be all uppercase
+            if ($extId !== strtoupper($extId)) {
+                $problems[] = 'Contains lowercase characters';
+            }
+
+            // No spaces allowed anywhere
+            if (preg_match('/\s/', $extId)) {
+                $problems[] = 'Contains spaces';
+            }
+
+            // No parentheses allowed
+            if (preg_match('/[()]/', $extId)) {
+                $problems[] = 'Contains parentheses';
+            }
+
+            // Check for double prefix (e.g. MAR01::MAR::...)
+            if (preg_match('/^[A-Z0-9]+::[A-Z0-9]+::/', strtoupper($extId))) {
+                $problems[] = 'Double prefix (job number repeated)';
+            }
+
+            // Missing :: separator entirely (has content after job number but no ::)
+            if (! str_contains($extId, '::') && preg_match('/^[A-Z0-9]+[A-Z_]/', strtoupper($extId)) && strlen($extId) > 6) {
+                $problems[] = 'Missing :: separator';
+            }
+
+            // If it has :: check if it matches parent or sub pattern
+            $upper = strtoupper(trim($extId));
+            if (str_contains($extId, '::')) {
+                $isParent = preg_match($parentPattern, $upper);
+                $isSub = preg_match($subPattern, $upper);
+
+                if (! $isParent && ! $isSub) {
+                    $parts = explode('::', $upper, 2);
+                    $suffix = end($parts);
+
+                    if (! empty($suffix)) {
+                        if (! str_contains($suffix, '-')) {
+                            $problems[] = 'Missing - separator between level and code';
+                        } elseif (! str_contains($suffix, '_')) {
+                            $problems[] = 'Missing _ separator between code and activity';
+                        } elseif (preg_match('/-[0-9]{3}_$/', $suffix)) {
+                            $problems[] = 'Missing activity description after code (e.g. -001_ACTIVITY)';
+                        } else {
+                            $problems[] = 'Does not match expected format (LEVEL-CODE_ACTIVITY)';
+                        }
+                    }
+                }
+            }
+
+            // Check for missing activity even if format otherwise matches
+            if (str_contains($extId, '::') && preg_match('/-[0-9]{3}$/', $extId)) {
+                $problems[] = 'Missing activity description after code (e.g. -001_ACTIVITY)';
+            }
+
+            if (! empty($problems)) {
+                $issues[] = [
+                    'id' => $loc->id,
+                    'name' => $loc->name,
+                    'external_id' => $extId,
+                    'issues' => implode('; ', $problems),
+                ];
+            }
+        }
+
+        // Generate CSV
+        $filename = 'external_id_validation_' . ($request->job ?? 'all') . '_' . now()->format('Y-m-d') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($issues) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Location ID', 'Name', 'External ID', 'Issues']);
+
+            foreach ($issues as $row) {
+                fputcsv($file, [$row['id'], $row['name'], $row['external_id'], $row['issues']]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }
