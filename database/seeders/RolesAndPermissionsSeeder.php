@@ -222,6 +222,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.requisition-lines' => 'View requisition line reports',
             'reports.missing-sign-out' => 'View missing sign-out report',
             'reports.safety-dashboard' => 'View safety dashboard',
+            'reports.wip' => 'View WIP report',
         ],
 
         // ============================================
@@ -379,6 +380,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.requisition-lines',
             'reports.missing-sign-out',
             'reports.safety-dashboard',
+            'reports.wip',
             // System
             'queue-status.view',
             // Employment Applications

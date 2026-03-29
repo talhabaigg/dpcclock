@@ -55,6 +55,7 @@ use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
+use App\Http\Controllers\WipReportController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\DocumentTemplateController;
@@ -936,6 +937,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/missing-sign-out', [MissingSignOutReportController::class, 'index'])->name('reports.missingSignOut');
         Route::get('/reports/missing-sign-out/data', [MissingSignOutReportController::class, 'getData'])->name('reports.missingSignOut.data');
     });
+
+    // WIP Report
+    Route::get('/reports/wip', [WipReportController::class, 'index'])->name('reports.wip')
+        ->middleware('permission:reports.wip');
 
     // Safety Dashboard
     Route::middleware('permission:reports.safety-dashboard')->group(function () {
