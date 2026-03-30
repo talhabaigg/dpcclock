@@ -273,18 +273,28 @@ class CashForecastController extends Controller
         ]);
 
         $jobNumber = $validated['job_number'];
-        $sourceMonth = Carbon::createFromFormat('Y-m', $validated['source_month'])->startOfMonth();
+        $sourceMonth = Carbon::createFromFormat('!Y-m', $validated['source_month'])->startOfMonth();
         $splits = collect($validated['splits'] ?? []);
 
         $sourceAmount = $this->getCashInSourceAmount($jobNumber, $sourceMonth);
+        \Log::info('CashIn Adjustment Debug', [
+            'job_number' => $jobNumber,
+            'source_month' => $sourceMonth->format('Y-m'),
+            'sourceAmount' => $sourceAmount,
+            'sourceAmount_rounded' => $sourceAmount !== null ? round($sourceAmount, 2) : null,
+            'splits_raw' => $splits->toArray(),
+            'splits_sum' => $splits->sum('amount'),
+            'splits_sum_rounded' => round($splits->sum('amount'), 2),
+            'difference' => $sourceAmount !== null ? abs(round($splits->sum('amount'), 2) - round($sourceAmount, 2)) : null,
+        ]);
         if ($sourceAmount === null) {
             return back()->withErrors(['source_month' => 'No billed amount found for this job/month.']);
         }
 
         // Empty splits = reset/delete adjustments, skip total validation
         if ($splits->isNotEmpty()) {
-            $splitTotal = $splits->sum('amount');
-            if (abs($splitTotal - $sourceAmount) > 0.01) {
+            $splitTotal = round($splits->sum('amount'), 2);
+            if (abs($splitTotal - round($sourceAmount, 2)) > 0.01) {
                 return back()->withErrors(['splits' => 'Split total must equal the billed amount (within $0.01).']);
             }
         }
@@ -304,7 +314,7 @@ class CashForecastController extends Controller
                     return [
                         'job_number' => $jobNumber,
                         'source_month' => $sourceMonth->copy(),
-                        'receipt_month' => Carbon::createFromFormat('Y-m', $split['receipt_month'])->startOfMonth(),
+                        'receipt_month' => Carbon::createFromFormat('!Y-m', $split['receipt_month'])->startOfMonth(),
                         'amount' => (float) $split['amount'],
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -338,7 +348,7 @@ class CashForecastController extends Controller
         $jobNumber = $validated['job_number'] ?? 'ALL';
         $costItem = $validated['cost_item'];
         $vendor = $validated['vendor'] ?? null;
-        $sourceMonth = Carbon::createFromFormat('Y-m', $validated['source_month'])->startOfMonth();
+        $sourceMonth = Carbon::createFromFormat('!Y-m', $validated['source_month'])->startOfMonth();
         $splits = collect($validated['splits'] ?? []);
 
         $sourceAmount = $this->getCashOutSourceAmount($jobNumber, $costItem, $vendor, $sourceMonth);
@@ -348,8 +358,8 @@ class CashForecastController extends Controller
 
         // Empty splits = reset/delete adjustments, skip total validation
         if ($splits->isNotEmpty()) {
-            $splitTotal = $splits->sum('amount');
-            if (abs($splitTotal - $sourceAmount) > 0.01) {
+            $splitTotal = round($splits->sum('amount'), 2);
+            if (abs($splitTotal - round($sourceAmount, 2)) > 0.01) {
                 return back()->withErrors(['splits' => 'Split total must equal the source amount (within $0.01).']);
             }
         }
@@ -373,7 +383,7 @@ class CashForecastController extends Controller
                         'cost_item' => $costItem,
                         'vendor' => $vendor,
                         'source_month' => $sourceMonth->copy(),
-                        'payment_month' => Carbon::createFromFormat('Y-m', $split['payment_month'])->startOfMonth(),
+                        'payment_month' => Carbon::createFromFormat('!Y-m', $split['payment_month'])->startOfMonth(),
                         'amount' => (float) $split['amount'],
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -403,7 +413,7 @@ class CashForecastController extends Controller
         ]);
 
         $vendor = $validated['vendor'];
-        $sourceMonth = Carbon::createFromFormat('Y-m', $validated['source_month'])->startOfMonth();
+        $sourceMonth = Carbon::createFromFormat('!Y-m', $validated['source_month'])->startOfMonth();
         $splits = collect($validated['splits'] ?? []);
 
         DB::transaction(function () use ($vendor, $sourceMonth, $splits) {
@@ -421,7 +431,7 @@ class CashForecastController extends Controller
                     return [
                         'vendor' => $vendor,
                         'source_month' => $sourceMonth->copy(),
-                        'payment_month' => Carbon::createFromFormat('Y-m', $split['payment_month'])->startOfMonth(),
+                        'payment_month' => Carbon::createFromFormat('!Y-m', $split['payment_month'])->startOfMonth(),
                         'amount' => (float) $split['amount'],
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -577,9 +587,9 @@ class CashForecastController extends Controller
                 : Carbon::create($now->year - 1, 7, 1);
             $startMonth = $fyStart->copy()->startOfMonth();
         } else {
-            $startMonth = Carbon::createFromFormat('Y-m', $months[0])->startOfMonth();
+            $startMonth = Carbon::createFromFormat('!Y-m', $months[0])->startOfMonth();
         }
-        $endMonth = Carbon::createFromFormat('Y-m', end($months))->endOfMonth();
+        $endMonth = Carbon::createFromFormat('!Y-m', end($months))->endOfMonth();
 
         foreach ($generalCosts as $cost) {
             $cashflows = $cost->getCashflowsForRange($startMonth, $endMonth);
@@ -847,7 +857,7 @@ class CashForecastController extends Controller
             return null;
         }
 
-        $parsed = Carbon::createFromFormat('Y-m', $input);
+        $parsed = Carbon::createFromFormat('!Y-m', $input);
         if ($parsed && $parsed->format('Y-m') === $input) {
             return $parsed->startOfMonth();
         }
@@ -1024,7 +1034,7 @@ class CashForecastController extends Controller
                     return $rows;
                 }
 
-                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                $delayedMonth = Carbon::createFromFormat('!Y-m', $item->month)
                     ->addMonths($revenueDelayMonths)
                     ->format('Y-m');
 
@@ -1049,7 +1059,7 @@ class CashForecastController extends Controller
             // Same delay as revenue, NO GST on retention deductions
             // =================================================================
             if ($costItem === 'RET-HELD') {
-                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                $delayedMonth = Carbon::createFromFormat('!Y-m', $item->month)
                     ->addMonths($revenueDelayMonths)
                     ->format('Y-m');
 
@@ -1193,7 +1203,7 @@ class CashForecastController extends Controller
             // =================================================================
             if (in_array($costItem, $wageCodes) && isset($costItemDelaySplits[$costItem])) {
                 $rows = collect($costItemDelaySplits[$costItem])->map(function ($split) use ($item, $amount) {
-                    $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                    $delayedMonth = Carbon::createFromFormat('!Y-m', $item->month)
                         ->addMonths($split['delay'])
                         ->format('Y-m');
 
@@ -1222,7 +1232,7 @@ class CashForecastController extends Controller
             // RULE 2: Oncosts (prefixes 02, 04, 06, 08) - +1 month delay, NO GST
             // =================================================================
             if (in_array($prefix, $oncostPrefixes)) {
-                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                $delayedMonth = Carbon::createFromFormat('!Y-m', $item->month)
                     ->addMonths($oncostDelayMonths)
                     ->format('Y-m');
 
@@ -1253,7 +1263,7 @@ class CashForecastController extends Controller
 
             if ($isVendorCost || $isGlCost) {
                 $delayMonths = $vendorCostPrefix['delay_months'] ?? 1;
-                $delayedMonth = Carbon::createFromFormat('Y-m', $item->month)
+                $delayedMonth = Carbon::createFromFormat('!Y-m', $item->month)
                     ->addMonths($delayMonths)
                     ->format('Y-m');
 
@@ -1561,7 +1571,7 @@ class CashForecastController extends Controller
         // Group monthly GST into quarters
         $quarterBuckets = [];
         foreach ($monthlyGst as $month => $amounts) {
-            $date = Carbon::createFromFormat('Y-m', $month);
+            $date = Carbon::createFromFormat('!Y-m', $month);
             $key = $date->year.'-Q'.$date->quarter;
 
             if (! isset($quarterBuckets[$key])) {
@@ -1654,7 +1664,7 @@ class CashForecastController extends Controller
 
             // Use accrual date (source_month = when cost was incurred)
             $monthKey = $row->source_month ?? $row->month;
-            $date = Carbon::createFromFormat('Y-m', $monthKey);
+            $date = Carbon::createFromFormat('!Y-m', $monthKey);
             $quarterKey = $date->year.'-Q'.$date->quarter;
 
             if (! isset($quarterDetails[$quarterKey])) {
@@ -1862,7 +1872,7 @@ class CashForecastController extends Controller
         // Only include actuals BEFORE current month (current month uses forecast only)
         $actuals = ArPostedInvoice::select('job_number', 'invoice_date', 'subtotal', 'retainage', 'invoice_number', 'memo')
             ->where('invoice_date', '>=', $startMonth)
-            ->where('invoice_date', '<', Carbon::createFromFormat('Y-m', $currentMonth)->startOfMonth())
+            ->where('invoice_date', '<', Carbon::createFromFormat('!Y-m', $currentMonth)->startOfMonth())
             ->where('invoice_status', '!=', 'VOID')
             ->get()
             ->groupBy(function ($item) {
@@ -1927,7 +1937,7 @@ class CashForecastController extends Controller
 
         // Use JobCostDetail for job cost actuals (wages + oncosts + vendor costs)
         // Only include actuals BEFORE current month (current month uses forecast only)
-        $currentMonthStart = Carbon::createFromFormat('Y-m', $currentMonth)->startOfMonth();
+        $currentMonthStart = Carbon::createFromFormat('!Y-m', $currentMonth)->startOfMonth();
 
         $jobCostActuals = JobCostDetail::select('job_number', 'cost_item', 'transaction_date', 'amount', 'vendor')
             ->where('transaction_date', '>=', $startMonth)

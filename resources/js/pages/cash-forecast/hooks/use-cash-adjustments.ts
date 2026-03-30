@@ -20,9 +20,10 @@ import { addMonthsToString, roundCents } from '../utils';
 type UseCashInAdjustmentsProps = {
     cashInSources: CashInSource[];
     cashInAdjustments: CashInAdjustment[];
+    currentMonth: string;
 };
 
-export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCashInAdjustmentsProps) => {
+export const useCashInAdjustments = ({ cashInSources, cashInAdjustments, currentMonth }: UseCashInAdjustmentsProps) => {
     const [modalState, setModalState] = useState<CashInModalState>({
         open: false,
         jobNumber: null,
@@ -33,7 +34,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
     const getSourceAmount = useCallback(
         (jobNumber: string | null, sourceMonth: string | null): number => {
             if (!jobNumber || !sourceMonth) return 0;
-            return cashInSources.find((source) => source.job_number === jobNumber && source.month === sourceMonth)?.amount ?? 0;
+            return roundCents(cashInSources.find((source) => source.job_number === jobNumber && source.month === sourceMonth)?.amount ?? 0);
         },
         [cashInSources],
     );
@@ -72,7 +73,8 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
     const openModal = useCallback(
         (jobNumber: string) => {
             const sources = getSourceMonths(jobNumber);
-            const sourceMonth = sources[0] ?? null;
+            const previousMonth = addMonthsToString(currentMonth, -1);
+            const sourceMonth = sources.includes(previousMonth) ? previousMonth : sources[0] ?? null;
             setModalState({
                 open: true,
                 jobNumber,
@@ -80,7 +82,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
                 splits: getSplits(jobNumber, sourceMonth),
             });
         },
-        [getSourceMonths, getSplits],
+        [getSourceMonths, getSplits, currentMonth],
     );
 
     const closeModal = useCallback(() => {
@@ -153,24 +155,36 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
 
     const splitByTransactions = useCallback(() => {
         if (!modalState.sourceMonth || !modalState.jobNumber || transactions.length < 2) return;
+        const totalSourceAmount = getSourceAmount(modalState.jobNumber, modalState.sourceMonth);
+        const splits = transactions.map((txn) => ({
+            receipt_month: addMonthsToString(modalState.sourceMonth!, 1),
+            amount: roundCents(txn.amount),
+        }));
+        // Adjust last split so total exactly matches source amount
+        const sumWithoutLast = roundCents(splits.slice(0, -1).reduce((sum, s) => sum + s.amount, 0));
+        splits[splits.length - 1].amount = roundCents(totalSourceAmount - sumWithoutLast);
         setModalState((prev) => ({
             ...prev,
-            splits: transactions.map((txn) => ({
-                receipt_month: addMonthsToString(modalState.sourceMonth!, 1),
-                amount: txn.amount,
-            })),
+            splits,
         }));
-    }, [modalState.sourceMonth, modalState.jobNumber, transactions]);
+    }, [modalState.sourceMonth, modalState.jobNumber, transactions, getSourceAmount]);
 
     const saveAdjustments = useCallback(() => {
         if (!modalState.jobNumber || !modalState.sourceMonth) return;
+        const payload = {
+            job_number: modalState.jobNumber,
+            source_month: modalState.sourceMonth,
+            splits: modalState.splits.filter((split) => split.amount > 0),
+        };
+        console.log('[CashIn Save Debug]', {
+            modalState,
+            payload,
+            sourceAmount: getSourceAmount(modalState.jobNumber, modalState.sourceMonth),
+            splitTotal: modalState.splits.reduce((sum, s) => sum + s.amount, 0),
+        });
         router.post(
             '/cash-forecast/cash-in-adjustments',
-            {
-                job_number: modalState.jobNumber,
-                source_month: modalState.sourceMonth,
-                splits: modalState.splits.filter((split) => split.amount > 0),
-            },
+            payload,
             {
                 preserveScroll: true,
                 onSuccess: closeModal,
@@ -245,12 +259,12 @@ export const useCashOutAdjustments = ({ cashOutSources, cashOutAdjustments }: Us
             if (!jobNumber || !costItem || !sourceMonth) return 0;
             const vendorKey = vendor || 'GL';
             if (jobNumber === 'ALL') {
-                return cashOutSources
+                return roundCents(cashOutSources
                     .filter((source) => source.cost_item === costItem && source.vendor === vendorKey && source.month === sourceMonth)
-                    .reduce((sum, source) => sum + source.amount, 0);
+                    .reduce((sum, source) => sum + source.amount, 0));
             }
 
-            return (
+            return roundCents(
                 cashOutSources.find(
                     (source) =>
                         source.job_number === jobNumber &&
@@ -466,9 +480,9 @@ export const useVendorPaymentDelays = ({ cashOutSources, vendorPaymentDelays }: 
     const getSourceAmount = useCallback(
         (vendor: string | null, sourceMonth: string | null): number => {
             if (!vendor || !sourceMonth) return 0;
-            return cashOutSources
+            return roundCents(cashOutSources
                 .filter((source) => source.vendor === vendor && source.month === sourceMonth)
-                .reduce((sum, source) => sum + source.amount, 0);
+                .reduce((sum, source) => sum + source.amount, 0));
         },
         [cashOutSources],
     );

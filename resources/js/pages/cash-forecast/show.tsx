@@ -126,6 +126,7 @@ const ShowCashForecast = ({
     const cashInAdjustmentHook = useCashInAdjustments({
         cashInSources,
         cashInAdjustments,
+        currentMonth,
     });
 
     const cashOutAdjustmentHook = useCashOutAdjustments({
