@@ -13,9 +13,10 @@ use App\Jobs\LoadTimesheetsFromEH;
 use App\Models\QueueJobLog;
 use Carbon\Carbon;
 
-// Clean up queue job logs older than 24 hours
+// Clean up completed queue job logs older than 2 hours, keep failed logs for 24 hours
 Schedule::call(function () {
-    QueueJobLog::where('logged_at', '<', now()->subHours(24))->delete();
+    QueueJobLog::where('status', 'completed')->where('logged_at', '<', now()->subHours(2))->delete();
+    QueueJobLog::where('status', '!=', 'completed')->where('logged_at', '<', now()->subHours(24))->delete();
 })->hourly();
 
 Schedule::command('app:sync-timesheets')

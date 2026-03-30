@@ -11,8 +11,7 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
-use App\Models\Requisition;
-use App\Observers\RequisitionObserver;
+
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 
@@ -37,8 +36,6 @@ class AppServiceProvider extends ServiceProvider
                 'verify' => false,
             ]);
         }
-
-        Requisition::observe(RequisitionObserver::class);
 
         // Document signing events
         Event::listen(DocumentSigned::class, UpdateEmploymentApplicationOnSigned::class);

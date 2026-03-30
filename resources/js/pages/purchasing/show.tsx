@@ -14,7 +14,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertCircleIcon,
     ArrowUpDown,
-    Bot,
+
     Building,
     Building2,
     Calendar,
@@ -47,9 +47,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import AgentActivityFeed, { type AgentActivityFeedHandle } from '@/components/agent-chat/AgentActivityFeed';
-import AgentConfirmationCard from '@/components/agent-chat/AgentConfirmationCard';
-import AgentStatusBadge from '@/components/agent-chat/AgentStatusBadge';
+
 import ComparisonTab from './show-partials/ComparisonTab';
 import { SmartPricingCards } from './show-partials/SmartPricingCards';
 import { SmartPricingWizard } from '@/components/SmartPricingWizard';
@@ -75,14 +73,6 @@ export default function RequisitionShow() {
             date_required: string;
             order_reference: string;
             status: string;
-            agent_status: string | null;
-            active_agent_task: {
-                id: number;
-                type: string;
-                status: string;
-                screenshots: string[] | null;
-                context?: Record<string, any> | null;
-            } | null;
             premier_po_id: string | null;
             submitted_at: string | null;
             processed_at: string | null;
@@ -133,8 +123,6 @@ export default function RequisitionShow() {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
     const [expandedActivities, setExpandedActivities] = useState<Set<number>>(new Set());
-    const agentFeedRef = useRef<AgentActivityFeedHandle>(null);
-
     // Smart Pricing state
     const [smartPricingWizardOpen, setSmartPricingWizardOpen] = useState(false);
     const [smartPricingProblems, setSmartPricingProblems] = useState<any[]>([]);
@@ -329,23 +317,6 @@ export default function RequisitionShow() {
         }
     }, []);
 
-    // Listen for agent task updates via Echo (admin only)
-    // Step events are handled by AgentActivityFeed — only reload on status changes
-    useEffect(() => {
-        if (!auth.isAdmin || !requisition.agent_status) return;
-
-        const channel = (window as any).Echo?.private(`agent-tasks.${requisition.id}`);
-        channel?.listen('.agent.task.updated', (data: any) => {
-            if (data.requisition_id === requisition.id && !data.step) {
-                router.reload({ only: ['requisition'] });
-            }
-        });
-
-        return () => {
-            (window as any).Echo?.leaveChannel(`private-agent-tasks.${requisition.id}`);
-        };
-    }, [requisition.id, requisition.agent_status, auth.isAdmin]);
-
     // Format datetime for display
     const formatDateTime = (dateString: string | null) => {
         if (!dateString) return null;
@@ -402,7 +373,7 @@ export default function RequisitionShow() {
                                     <div className={cn('mr-1.5 h-1.5 w-1.5 rounded-full', statusConfig.bg)} />
                                     {statusConfig.text}
                                 </Badge>
-                                {auth.isAdmin && <AgentStatusBadge agentStatus={requisition.agent_status} />}
+
                             </div>
 
                             <div className="flex items-center gap-2 text-sm sm:gap-4">
@@ -475,25 +446,6 @@ export default function RequisitionShow() {
                                 )}
 
                             <div className="flex-1" />
-
-                            {/* View Agent button — shown for completed/failed agent tasks (admin only) */}
-                            {auth.isAdmin && requisition.active_agent_task &&
-                                ['completed', 'failed'].includes(requisition.agent_status || '') && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className={cn(
-                                        'h-8 gap-1.5 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm',
-                                        requisition.agent_status === 'failed'
-                                            ? 'border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400'
-                                            : 'border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400',
-                                    )}
-                                    onClick={() => agentFeedRef.current?.openSheet()}
-                                >
-                                    <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    {requisition.agent_status === 'failed' ? 'Agent Failed' : 'View Agent'}
-                                </Button>
-                            )}
 
                             {requisition.status === 'failed' && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
@@ -693,37 +645,6 @@ export default function RequisitionShow() {
                             <AlertTitle>Errors found in PO</AlertTitle>
                             <AlertDescription>{flash.error}</AlertDescription>
                         </Alert>
-                    </div>
-                )}
-
-                {/* Agent Confirmation Card (admin only) */}
-                {auth.isAdmin && requisition.agent_status === 'awaiting_confirmation' && requisition.active_agent_task && (
-                    <div className="px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-0">
-                        <AgentConfirmationCard
-                            taskId={requisition.active_agent_task.id}
-                            poNumber={'PO' + (requisition.po_number || '')}
-                            supplierName={requisition.supplier?.name || 'Unknown'}
-                            locationName={requisition.location?.name || 'Unknown'}
-                            totalCost={totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        />
-                    </div>
-                )}
-
-                {/* Agent Activity Feed — card only while sending, otherwise just provides sheet/dialogs */}
-                {auth.isAdmin && requisition.active_agent_task &&
-                    ['sending', 'completed', 'failed'].includes(requisition.agent_status || '') && (
-                    <div className={requisition.agent_status === 'sending' ? 'px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-0' : ''}>
-                        <AgentActivityFeed
-                            ref={agentFeedRef}
-                            taskId={requisition.active_agent_task.id}
-                            requisitionId={requisition.id}
-                            errorMessage={requisition.active_agent_task.context?.last_error}
-                            initialStatus={
-                                requisition.active_agent_task.status === 'completed' ? 'completed'
-                                : requisition.active_agent_task.status === 'failed' ? 'failed'
-                                : 'processing'
-                            }
-                        />
                     </div>
                 )}
 

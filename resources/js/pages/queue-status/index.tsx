@@ -215,7 +215,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     });
     const logEndRef = useRef<HTMLDivElement>(null);
 
-    const handleClear = async (action: 'clear-queue' | 'clear-failed' | 'clear-logs') => {
+    const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs') => {
         setClearing(action);
         try {
             const response = await fetch(`/queue-status/${action}`, {
@@ -228,6 +228,9 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             const data = await response.json();
             if (action === 'clear-queue') {
                 setJobs((prev) => ({ ...prev, pending: [], stats: { ...prev.stats, pending_count: 0 } }));
+            } else if (action === 'clear-completed') {
+                setCompletedJobs([]);
+                setJobs((prev) => ({ ...prev, completed: [], stats: { ...prev.stats, completed_count: 0 } }));
             } else if (action === 'clear-failed') {
                 setJobs((prev) => ({ ...prev, failed: [], stats: { ...prev.stats, failed_count: 0 } }));
             }
@@ -313,7 +316,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                     setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
                     setCompletedJobs((prev) => {
                         const filtered = prev.filter((j) => j.id !== event.job_id);
-                        return [newJob, ...filtered];
+                        return [newJob, ...filtered].slice(0, 50);
                     });
                 } else if (event.status === 'failed') {
                     setProcessingJobs((prev) => prev.filter((j) => j.id !== event.job_id));
@@ -386,6 +389,10 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                 <DropdownMenuItem onClick={() => handleClear('clear-queue')}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Clear Pending Queue
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleClear('clear-completed')}>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Clear Completed Jobs
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleClear('clear-failed')}>
                                     <XCircle className="mr-2 h-4 w-4" />

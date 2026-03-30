@@ -20,7 +20,7 @@ class Requisition extends Model
         'requested_by',
         'deliver_to',
         'status',
-        'agent_status',
+
         'is_template',
         'order_reference',
         'premier_po_id',
@@ -106,15 +106,4 @@ class Requisition extends Model
         return $this->hasMany(RequisitionNote::class);
     }
 
-    public function agentTasks()
-    {
-        return $this->hasMany(AgentTask::class);
-    }
-
-    public function activeAgentTask()
-    {
-        return $this->hasOne(AgentTask::class)
-            ->whereNotIn('status', ['cancelled'])
-            ->latest();
-    }
 }

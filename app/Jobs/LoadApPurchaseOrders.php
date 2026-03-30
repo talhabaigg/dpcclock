@@ -67,7 +67,7 @@ class LoadApPurchaseOrders implements ShouldQueue
             // Delete overlap records before fetching (incremental mode)
             if ($isIncremental) {
                 $deleted = ApPurchaseOrder::where('po_date', '>=', $filterDate)->delete();
-                Log::info('LoadApPurchaseOrders: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+                Log::info('LoadApPurchaseOrders: Deleted overlap records', ['from' => $filterDate, 'deleted' => $deleted]);
             }
 
             do {

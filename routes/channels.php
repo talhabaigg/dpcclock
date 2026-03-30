@@ -19,8 +19,3 @@ Broadcast::channel('drawing-sets.{projectId}', function () {
 Broadcast::channel('premier-sync', function () {
     return true;
 });
-
-// Private channel for agent task updates (scoped per requisition, admin only)
-Broadcast::channel('agent-tasks.{requisitionId}', function ($user, $requisitionId) {
-    return $user->hasRole('admin');
-});

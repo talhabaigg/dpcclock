@@ -40,6 +40,14 @@ class QueueStatusController extends Controller
         return response()->json(['message' => "Cleared {$count} failed jobs."]);
     }
 
+    public function clearCompleted(): JsonResponse
+    {
+        $count = QueueJobLog::where('status', 'completed')->count();
+        QueueJobLog::where('status', 'completed')->delete();
+
+        return response()->json(['message' => "Cleared {$count} completed job logs."]);
+    }
+
     public function clearLogs(): JsonResponse
     {
         $logFile = storage_path('logs/laravel.log');
@@ -120,8 +128,8 @@ class QueueStatusController extends Controller
                 ->toArray();
         }
 
-        // Get the latest status per job_id from logs (last 24h)
-        $cutoff = now()->subHours(24);
+        // Get the latest status per job_id from logs (last 2h, capped at 100)
+        $cutoff = now()->subHours(2);
 
         $latestLogIds = QueueJobLog::select(DB::raw('MAX(id) as id'))
             ->where('logged_at', '>=', $cutoff)
@@ -130,6 +138,7 @@ class QueueStatusController extends Controller
 
         $loggedJobs = QueueJobLog::whereIn('id', $latestLogIds)
             ->orderBy('logged_at', 'desc')
+            ->limit(200)
             ->get();
 
         $processing = [];

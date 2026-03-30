@@ -79,6 +79,18 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
     const [step, setStep] = useState(0);
     const recaptchaLoaded = useRef(false);
 
+    // Force light mode on public-facing form
+    useEffect(() => {
+        document.documentElement.classList.remove('dark');
+        return () => {
+            // Restore theme on unmount (in case of SPA navigation)
+            const saved = localStorage.getItem('appearance') as string | null;
+            if (saved === 'dark' || ((!saved || saved === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        };
+    }, []);
+
     // Load reCAPTCHA v3 script
     useEffect(() => {
         if (!recaptchaSiteKey || recaptchaLoaded.current) return;
