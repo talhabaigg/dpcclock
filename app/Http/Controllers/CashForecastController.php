@@ -281,9 +281,12 @@ class CashForecastController extends Controller
             return back()->withErrors(['source_month' => 'No billed amount found for this job/month.']);
         }
 
-        $splitTotal = $splits->sum('amount');
-        if (abs($splitTotal - $sourceAmount) > 0.01) {
-            return back()->withErrors(['splits' => 'Split total must equal the billed amount (within $0.01).']);
+        // Empty splits = reset/delete adjustments, skip total validation
+        if ($splits->isNotEmpty()) {
+            $splitTotal = $splits->sum('amount');
+            if (abs($splitTotal - $sourceAmount) > 0.01) {
+                return back()->withErrors(['splits' => 'Split total must equal the billed amount (within $0.01).']);
+            }
         }
 
         DB::transaction(function () use ($jobNumber, $sourceMonth, $splits) {
@@ -343,9 +346,12 @@ class CashForecastController extends Controller
             return back()->withErrors(['source_month' => 'No source amount found for this job/cost item/month.']);
         }
 
-        $splitTotal = $splits->sum('amount');
-        if (abs($splitTotal - $sourceAmount) > 0.01) {
-            return back()->withErrors(['splits' => 'Split total must equal the source amount (within $0.01).']);
+        // Empty splits = reset/delete adjustments, skip total validation
+        if ($splits->isNotEmpty()) {
+            $splitTotal = $splits->sum('amount');
+            if (abs($splitTotal - $sourceAmount) > 0.01) {
+                return back()->withErrors(['splits' => 'Split total must equal the source amount (within $0.01).']);
+            }
         }
 
         DB::transaction(function () use ($jobNumber, $costItem, $vendor, $sourceMonth, $splits) {

@@ -53,7 +53,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
             if (!sourceAmount) return [];
             return [
                 {
-                    receipt_month: addMonthsToString(sourceMonth, 2),
+                    receipt_month: addMonthsToString(sourceMonth, 1),
                     amount: sourceAmount,
                 },
             ];
@@ -110,7 +110,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
         if (!modalState.sourceMonth) return;
         setModalState((prev) => ({
             ...prev,
-            splits: [...prev.splits, { receipt_month: addMonthsToString(modalState.sourceMonth!, 2), amount: 0 }],
+            splits: [...prev.splits, { receipt_month: addMonthsToString(modalState.sourceMonth!, 1), amount: 0 }],
         }));
     }, [modalState.sourceMonth]);
 
@@ -156,7 +156,7 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments }: UseCa
         setModalState((prev) => ({
             ...prev,
             splits: transactions.map((txn) => ({
-                receipt_month: addMonthsToString(modalState.sourceMonth!, 2),
+                receipt_month: addMonthsToString(modalState.sourceMonth!, 1),
                 amount: txn.amount,
             })),
         }));
