@@ -459,6 +459,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             // Limit events to only those needed for tooltips and legend interaction
             events: ['mousemove', 'mouseout', 'click'],
             plugins: {
+                datalabels: { display: false },
                 legend: {
                     display: true,
                     position: 'top' as const,
@@ -584,6 +585,7 @@ export function AccrualSummaryChart({ data, viewMode, showCost, showRevenue, sho
             // Limit events to only those needed for tooltips and legend interaction
             events: ['mousemove', 'mouseout', 'click'],
             plugins: {
+                datalabels: { display: false },
                 legend: {
                     display: true,
                     position: 'top' as const,
