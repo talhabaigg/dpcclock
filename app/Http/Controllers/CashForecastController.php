@@ -1047,6 +1047,11 @@ class CashForecastController extends Controller
                     ->addMonths($revenueDelayMonths)
                     ->format('Y-m');
 
+                // GST applies to retention: (Subtotal - Retention) * 1.1 means retention
+                // deductions must also carry GST so the net cash-in GST is correct.
+                $retentionAmount = (float) $item->forecast_amount;
+                $grossRetention = $retentionAmount * (1 + $revenueGstRate);
+
                 return [
                     (object) [
                         'month' => $delayedMonth,
@@ -1054,10 +1059,10 @@ class CashForecastController extends Controller
                         'cost_item' => 'RET-HELD',
                         'job_number' => $item->job_number,
                         'vendor' => null,
-                        'forecast_amount' => (float) $item->forecast_amount,
-                        'gst_rate' => 0, // No GST on retention
+                        'forecast_amount' => $grossRetention,
+                        'gst_rate' => $revenueGstRate,
                         'source' => $item->source ?? null,
-                        'rule' => 'Retention +'.$revenueDelayMonths.'m delay (no GST)',
+                        'rule' => 'Retention +'.$revenueDelayMonths.'m delay (+'.($revenueGstRate * 100).'% GST)',
                     ],
                 ];
             }
@@ -1536,8 +1541,8 @@ class CashForecastController extends Controller
                 $carry[$monthKey] = ['collected' => 0.0, 'paid' => 0.0];
             }
 
-            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode) {
-                // GST collected from revenue
+            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode || $row->cost_item === 'RET-HELD') {
+                // GST collected from revenue (retention reduces collected GST)
                 $carry[$monthKey]['collected'] += $gstAmount;
             } else {
                 // GST paid on costs
@@ -1676,7 +1681,7 @@ class CashForecastController extends Controller
                 'source' => $row->source ?? 'forecast',
             ];
 
-            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode) {
+            if (($row->flow_type ?? null) === 'cash_in' || $row->cost_item === $cashInCode || $row->cost_item === 'RET-HELD') {
                 $quarterDetails[$quarterKey]['collected']['total'] += $gstAmount;
                 $quarterDetails[$quarterKey]['collected']['transactions'][] = $transaction;
             } else {

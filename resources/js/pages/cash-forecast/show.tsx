@@ -303,18 +303,22 @@ const ShowCashForecast = ({
         const dateStr = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
         const fmtDollar = (v: number) => `${v < 0 ? '-$' : '$'}${formatAmount(Math.abs(v))}`;
 
-        // Capture chart SVGs from the DOM, inlining computed colors
+        // Capture chart SVGs from the DOM, inlining computed colors and text styles
+        // Capture SVG from a container, inlining computed styles for print
         const captureSvg = (containerId: string): string => {
             const container = document.getElementById(containerId);
             if (!container) return '';
             const svg = container.querySelector('.recharts-surface') as SVGElement | null;
             if (!svg) return '';
             const clone = svg.cloneNode(true) as SVGElement;
-            clone.setAttribute('width', '100%');
-            clone.setAttribute('height', '200');
-            clone.style.maxWidth = '100%';
 
-            // Resolve computed fill/stroke on every element so CSS vars aren't needed
+            // Use the actual rendered dimensions — charts are pre-rendered at print size
+            const w = svg.getAttribute('width') || svg.getBoundingClientRect().width.toString();
+            const h = svg.getAttribute('height') || svg.getBoundingClientRect().height.toString();
+            clone.setAttribute('width', w);
+            clone.setAttribute('height', h);
+
+            // Resolve computed fill/stroke/text styles so CSS vars aren't needed in print
             const origElements = svg.querySelectorAll('*');
             const cloneElements = clone.querySelectorAll('*');
             origElements.forEach((orig, i) => {
@@ -329,14 +333,20 @@ const ShowCashForecast = ({
                 if (stroke && stroke !== 'none' && stroke !== 'rgb(0, 0, 0)') {
                     el.setAttribute('stroke', stroke);
                 }
+                if (el.tagName === 'text' || el.tagName === 'tspan') {
+                    el.setAttribute('fill', cs.fill || '#333');
+                    el.setAttribute('font-size', cs.fontSize || '11px');
+                    el.setAttribute('font-family', "'Segoe UI', Arial, sans-serif");
+                }
             });
 
             return clone.outerHTML;
         };
 
-        const barChartSvg = captureSvg('chart-bar');
-        const cumulativeChartSvg = captureSvg('chart-cumulative');
-        const waterfallChartSvg = captureSvg('chart-waterfall');
+        // Capture from print-sized hidden charts
+        const barChartSvg = captureSvg('chart-bar-print') || captureSvg('chart-bar');
+        const cumulativeChartSvg = captureSvg('chart-cumulative-print') || captureSvg('chart-cumulative');
+        const waterfallChartSvg = captureSvg('chart-waterfall-print') || captureSvg('chart-waterfall');
 
         // Build month header cells
         const monthHeaders = months
@@ -491,17 +501,20 @@ const ShowCashForecast = ({
                         .summary-item .value.positive { color: #166534; }
                         .summary-item .value.negative { color: #991b1b; }
 
-                        /* Charts */
+                        /* Charts — cashflow full width, cumulative + waterfall side-by-side */
                         .charts-grid {
                             display: grid;
-                            grid-template-columns: repeat(3, 1fr);
-                            gap: 16px;
-                            margin-bottom: 25px;
+                            grid-template-columns: 1fr 1fr;
+                            gap: 14px;
+                            margin-bottom: 20px;
+                        }
+                        .charts-grid .chart-box:first-child {
+                            grid-column: 1 / -1;
                         }
                         .chart-box {
-                            border: 1px solid #e5e7eb;
+                            border: 1px solid #d1d5db;
                             border-radius: 6px;
-                            padding: 10px;
+                            padding: 10px 12px;
                             background: #fafbfc;
                             overflow: hidden;
                         }
@@ -509,15 +522,15 @@ const ShowCashForecast = ({
                             display: block;
                             width: 100% !important;
                             height: auto !important;
-                            max-height: 200px;
+                            max-height: 240px;
                         }
                         .chart-title {
-                            font-size: 9px;
+                            font-size: 10px;
                             font-weight: 700;
                             text-transform: uppercase;
                             letter-spacing: 0.3px;
                             color: #1a3a5c;
-                            margin-bottom: 6px;
+                            margin-bottom: 8px;
                         }
                         .no-chart {
                             font-size: 10px;
@@ -525,6 +538,26 @@ const ShowCashForecast = ({
                             text-align: center;
                             padding: 40px 0;
                         }
+                        .chart-legend {
+                            display: flex;
+                            justify-content: center;
+                            gap: 14px;
+                            margin-top: 6px;
+                            font-size: 9px;
+                            color: #555;
+                        }
+                        .chart-legend-item {
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        }
+                        .chart-legend-swatch {
+                            display: inline-block;
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 2px;
+                        }
+                        /* data labels rendered on bars via LabelList */
 
                         /* Data table */
                         .data-table {
@@ -593,6 +626,18 @@ const ShowCashForecast = ({
                             body {
                                 padding: 15px 25px;
                             }
+                            .charts-grid {
+                                break-inside: avoid;
+                            }
+                            .chart-box {
+                                break-inside: avoid;
+                            }
+                            .page-break-before {
+                                break-before: page;
+                            }
+                            .page-footer {
+                                margin-top: 0;
+                            }
                         }
                     </style>
                 </head>
@@ -637,22 +682,6 @@ const ShowCashForecast = ({
                             </div>
                         </div>
 
-                        <h2>Charts</h2>
-                        <div class="charts-grid">
-                            <div class="chart-box">
-                                <div class="chart-title">Monthly Cash Flow</div>
-                                ${barChartSvg || '<p class="no-chart">Chart not available</p>'}
-                            </div>
-                            <div class="chart-box">
-                                <div class="chart-title">Cumulative Cash Position</div>
-                                ${cumulativeChartSvg || '<p class="no-chart">Chart not available</p>'}
-                            </div>
-                            <div class="chart-box">
-                                <div class="chart-title">Cash Waterfall</div>
-                                ${waterfallChartSvg || '<p class="no-chart">Chart not available</p>'}
-                            </div>
-                        </div>
-
                         <h2>Detailed Monthly Breakdown</h2>
                         <table class="data-table">
                             <thead>
@@ -685,6 +714,35 @@ const ShowCashForecast = ({
                                 </tr>
                             </tbody>
                         </table>
+
+                        <div class="page-break-before">
+                     
+                        <div class="charts-grid">
+                            <div class="chart-box">
+                                <div class="chart-title">Monthly Cash Flow</div>
+                                ${barChartSvg || '<p class="no-chart">Chart not available</p>'}
+                                <div class="chart-legend">
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#5b9bd5;"></span>Cash In</span>
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#d4a054;"></span>Cash Out</span>
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#5a9a6e;"></span>Net (+)</span>
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#c06060;"></span>Net (-)</span>
+                                </div>
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">Cumulative Cash Position</div>
+                                ${cumulativeChartSvg || '<p class="no-chart">Chart not available</p>'}
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">Cash Waterfall</div>
+                                ${waterfallChartSvg || '<p class="no-chart">Chart not available</p>'}
+                                <div class="chart-legend">
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#5a9a6e;"></span>Increase</span>
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#c06060;"></span>Decrease</span>
+                                    <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:#6b7280;"></span>Total</span>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
 
                             </td></tr>
                         </tbody>
@@ -1173,6 +1231,19 @@ const ShowCashForecast = ({
                 breakdownRows={breakdownRows}
                 costCodeDescriptions={costCodeDescriptions}
             />
+
+            {/* Hidden charts rendered at print dimensions for accurate capture */}
+            <div style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }} aria-hidden>
+                <div id="chart-bar-print" style={{ width: 920, height: 205 }}>
+                    <CashFlowBarChart data={chartData} height={205} />
+                </div>
+                <div id="chart-cumulative-print" style={{ width: 440, height: 205 }}>
+                    <CumulativeLineChart data={cumulativeData} height={205} startingBalance={startingBalance} />
+                </div>
+                <div id="chart-waterfall-print" style={{ width: 440, height: 205 }}>
+                    <WaterfallChart data={waterfallData} height={205} />
+                </div>
+            </div>
         </AppLayout>
     );
 };

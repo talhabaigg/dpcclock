@@ -7,7 +7,7 @@ import {
     ChartTooltipContent,
 } from '@/components/ui/chart';
 import { useMemo } from 'react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts';
 import type { ChartDataPoint, CumulativeDataPoint, WaterfallDataPoint } from '../types';
 import { formatCompactAmount } from '../utils';
 
@@ -44,7 +44,7 @@ export const CashFlowBarChart = ({ data, height = 260, showLabels = true }: BarC
         >
             <BarChart data={data} barCategoryGap="18%">
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} hide={!showLabels} tick={{ fontSize: 11 }} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} hide={!showLabels} tick={{ fontSize: 11 }} interval={2} />
                 <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} width={45} tick={{ fontSize: 11 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
@@ -83,8 +83,8 @@ export const CumulativeLineChart = ({ data, height = 260, startingBalance = 0 }:
         >
             <AreaChart data={adjustedData}>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} width={45} tick={{ fontSize: 11 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <defs>
                     <linearGradient id="cumulativeFill" x1="0" y1="0" x2="0" y2="1">
@@ -109,6 +109,7 @@ const waterfallConfig = {
 type WaterfallChartProps = {
     data: WaterfallDataPoint[];
     height?: number | string;
+    showDataLabels?: boolean;
 };
 
 type WaterfallRow = {
@@ -144,7 +145,7 @@ const WaterfallTooltip = ({ active, payload }: { active?: boolean; payload?: Arr
     );
 };
 
-export const WaterfallChart = ({ data, height = 260 }: WaterfallChartProps) => {
+export const WaterfallChart = ({ data, height = 260, showDataLabels = false }: WaterfallChartProps) => {
     const transformedData = useMemo<WaterfallRow[]>(() => {
         const cumulative = data.reduce<number[]>((acc, item, idx) => {
             acc.push((idx === 0 ? 0 : acc[idx - 1]) + item.value);
@@ -183,8 +184,8 @@ export const WaterfallChart = ({ data, height = 260 }: WaterfallChartProps) => {
             >
                 <BarChart data={transformedData}>
                     <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactAmount} width={45} tick={{ fontSize: 11 }} />
                     <ChartTooltip content={<WaterfallTooltip />} />
                     <Bar dataKey="base" stackId="waterfall" fill="transparent" radius={0} isAnimationActive={false} />
                     <Bar dataKey="value" stackId="waterfall" radius={4}>
@@ -200,6 +201,7 @@ export const WaterfallChart = ({ data, height = 260 }: WaterfallChartProps) => {
                                 }
                             />
                         ))}
+                        {showDataLabels && <LabelList dataKey="rawValue" position="top" formatter={formatCompactAmount} style={{ fontSize: 8, fill: '#333' }} />}
                     </Bar>
                 </BarChart>
             </ChartContainer>
