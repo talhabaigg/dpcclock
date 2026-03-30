@@ -1084,7 +1084,7 @@ const ShowJobForecastPage = ({
             forecast += Number(activeRow[fieldName] ?? 0) || 0;
         }
 
-        return budget - actuals - forecast;
+        return Math.round(budget - actuals - forecast);
     }, [chartCtx, activeRow, displayMonths, forecastMonths, currentMonth, useActualsForCurrentMonth]);
 
     // ===========================
