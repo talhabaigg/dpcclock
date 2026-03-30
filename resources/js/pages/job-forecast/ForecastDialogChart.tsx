@@ -306,6 +306,7 @@ export function ForecastDialogChart({ data, editable, onEdit, budget, viewMode }
             },
             plugins: {
                 legend: { display: false },
+                datalabels: { display: false },
                 tooltip: {
                     enabled: true,
                     backgroundColor: COLORS.tooltipBg,

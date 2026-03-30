@@ -1063,6 +1063,30 @@ const ShowJobForecastPage = ({
         return Number(activeRow[budgetField]) || undefined;
     }, [chartCtx, activeRow]);
 
+    // Compute remaining amount for the active row (mirrors AG Grid valueGetter)
+    const activeRemaining = useMemo(() => {
+        if (!chartCtx.open || !activeRow) return undefined;
+        const budgetField = chartCtx.grid === 'cost' ? 'budget' : 'contract_sum_to_date';
+        const budget = Number(activeRow[budgetField] ?? 0) || 0;
+
+        let actuals = 0;
+        for (const dm of displayMonths) {
+            if (!useActualsForCurrentMonth && dm === currentMonth) continue;
+            actuals += Number(activeRow[dm] ?? 0) || 0;
+        }
+
+        let forecast = 0;
+        for (const fm of forecastMonths) {
+            if (useActualsForCurrentMonth && fm === currentMonth) continue;
+            const forecastField = `forecast_${fm}`;
+            const forecastVal = activeRow[forecastField];
+            const fieldName = forecastVal !== undefined && forecastVal !== null ? forecastField : fm;
+            forecast += Number(activeRow[fieldName] ?? 0) || 0;
+        }
+
+        return budget - actuals - forecast;
+    }, [chartCtx, activeRow, displayMonths, forecastMonths, currentMonth, useActualsForCurrentMonth]);
+
     // ===========================
     // Accrual Summary Data
     // ===========================
@@ -1126,11 +1150,19 @@ const ShowJobForecastPage = ({
                                     <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Forecast Trend</p>
                                 </div>
                             </div>
-                            <div className="flex-shrink-0 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
-                                <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
-                                    {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
-                                </p>
-                                <p className="text-[10px] font-medium tracking-wide text-indigo-500 uppercase dark:text-indigo-400">Budget</p>
+                            <div className="flex flex-shrink-0 gap-2">
+                                <div className="rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
+                                        {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium tracking-wide text-indigo-500 uppercase dark:text-indigo-400">Budget</p>
+                                </div>
+                                <div className="rounded-lg border border-emerald-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-emerald-800 dark:bg-slate-800/80">
+                                    <p className={`text-sm font-bold sm:text-base ${activeRemaining !== undefined && activeRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                                        {activeRemaining !== undefined ? `$${activeRemaining.toLocaleString()}` : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-medium tracking-wide text-emerald-500 uppercase dark:text-emerald-400">Remaining</p>
+                                </div>
                             </div>
                         </div>
                     </div>
