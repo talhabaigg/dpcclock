@@ -142,4 +142,9 @@ class Location extends Model
     {
         return $this->hasMany(IncidentReport::class);
     }
+
+    public function projectTasks()
+    {
+        return $this->hasMany(ProjectTask::class);
+    }
 }

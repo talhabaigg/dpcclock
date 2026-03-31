@@ -82,6 +82,7 @@ class LocationController extends Controller
             'price_list' => $location->materialItems()->count(),
             'favourites' => $location->favouriteMaterials()->count(),
             'production_data' => $location->productionUploads()->count(),
+            'tasks' => $location->projectTasks()->count(),
         ];
 
         return $location;
@@ -144,6 +145,26 @@ class LocationController extends Controller
 
         return Inertia::render('locations/favourites', [
             'location' => $location,
+        ]);
+    }
+
+    /**
+     * Display the schedule / Gantt tab.
+     */
+    public function schedule(Location $location)
+    {
+        $this->getLocationWithCounts($location);
+
+        $tasks = $location->projectTasks()
+            ->orderBy('sort_order')
+            ->get();
+
+        $links = \App\Models\ProjectTaskLink::where('location_id', $location->id)->get();
+
+        return Inertia::render('locations/schedule', [
+            'location' => $location,
+            'tasks' => $tasks,
+            'links' => $links,
         ]);
     }
 

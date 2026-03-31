@@ -36,6 +36,7 @@ use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PendingPurchaseOrderController;
 use App\Http\Controllers\ProductionUploadController;
+use App\Http\Controllers\ProjectTaskController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
@@ -314,6 +315,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/production-data/upload', [ProductionUploadController::class, 'upload'])->name('locations.production-data.upload');
         Route::get('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'show'])->name('locations.production-data.show');
         Route::delete('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'destroy'])->name('locations.production-data.destroy');
+
+        // Schedule / Gantt
+        Route::get('/locations/{location}/schedule', [LocationController::class, 'schedule'])->name('locations.schedule');
+        Route::post('/locations/{location}/tasks', [ProjectTaskController::class, 'store'])->name('project-tasks.store');
+        Route::post('/locations/{location}/tasks/reorder', [ProjectTaskController::class, 'reorder'])->name('project-tasks.reorder');
+        Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');
+        Route::patch('/tasks/{task}/dates', [ProjectTaskController::class, 'updateDates'])->name('project-tasks.update-dates');
+        Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
+
+        // Task dependency links
+        Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');
+        Route::patch('/task-links/{link}', [ProjectTaskController::class, 'updateLink'])->name('task-links.update');
+        Route::delete('/task-links/{link}', [ProjectTaskController::class, 'destroyLink'])->name('task-links.destroy');
     });
     Route::post('/locations', [LocationController::class, 'store'])->name('locations.store')
         ->middleware('permission:locations.create');

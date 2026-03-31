@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
+    CalendarDays,
     ChartColumnIncreasing,
     CirclePlus,
     ClockAlert,
@@ -30,7 +31,7 @@ import {
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites' | 'production-data';
+export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites' | 'production-data' | 'schedule';
 
 const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey: string }[] = [
     { key: 'sublocations', label: 'Sub-locations', icon: FolderTree, countKey: 'sublocations' },
@@ -38,6 +39,7 @@ const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey
     { key: 'price-list', label: 'Price List', icon: DollarSign, countKey: 'price_list' },
     { key: 'favourites', label: 'Favorites', icon: Heart, countKey: 'favourites' },
     { key: 'production-data', label: 'DPC Data', icon: ChartColumnIncreasing, countKey: 'production_data' },
+    { key: 'schedule', label: 'Schedule', icon: CalendarDays, countKey: 'tasks' },
 ];
 
 export type LocationBase = {
@@ -59,6 +61,7 @@ export type LocationBase = {
         price_list: number;
         favourites: number;
         production_data: number;
+        tasks: number;
     };
 };
 
