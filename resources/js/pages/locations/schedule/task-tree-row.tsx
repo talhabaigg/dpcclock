@@ -47,8 +47,13 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
         >
             {/* Expand / collapse toggle */}
             <button
-                className={cn('mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded', node.hasChildren ? 'hover:bg-muted' : 'invisible')}
-                onClick={() => node.hasChildren && onToggle(node.id)}
+                className={cn('mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded', node.hasChildren ? 'hover:bg-muted cursor-pointer' : 'invisible')}
+                onPointerDown={(e) => {
+                    if (!node.hasChildren) return;
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onToggle(node.id);
+                }}
             >
                 {node.hasChildren &&
                     (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
@@ -84,7 +89,7 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
             )}
 
             {/* Actions */}
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100">
                         <EllipsisVertical className="h-3.5 w-3.5" />
