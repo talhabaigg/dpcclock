@@ -1,15 +1,13 @@
 import { cn } from '@/lib/utils';
-import { format, getMonth, getWeek, isWeekend, startOfMonth, startOfWeek } from 'date-fns';
-import type { ZoomLevel } from './types';
+import { format, getMonth, isWeekend } from 'date-fns';
 import { ROW_HEIGHT } from './types';
 
 interface GanttHeaderProps {
     days: Date[];
     dayWidth: number;
-    zoom: ZoomLevel;
 }
 
-export default function GanttHeader({ days, dayWidth, zoom }: GanttHeaderProps) {
+export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
     // Build month groups
     const monthGroups: { label: string; startIdx: number; count: number }[] = [];
     let currentMonth = -1;

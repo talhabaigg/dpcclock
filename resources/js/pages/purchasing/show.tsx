@@ -45,7 +45,7 @@ import {
     User,
     UserCheck,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import ComparisonTab from './show-partials/ComparisonTab';

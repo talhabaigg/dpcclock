@@ -1,5 +1,5 @@
 import { addDays, differenceInCalendarDays, format, isWeekend, min, max, parseISO, startOfDay } from 'date-fns';
-import type { LinkType, ProjectTask, TaskLink, TaskNode } from './types';
+import type { ProjectTask, TaskLink, TaskNode } from './types';
 
 // ── Working Days ──
 

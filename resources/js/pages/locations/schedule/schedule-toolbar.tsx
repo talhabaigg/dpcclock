@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, CalendarDays, ChevronsDownUp, ChevronsUpDown, GitCompareArrows, Link2, Maximize2, Plus, Route } from 'lucide-react';
+import { AlertTriangle, Bookmark, CalendarDays, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, FolderOpen, GitCompareArrows, Link2, Maximize2, Plus, Route, Trash2 } from 'lucide-react';
 import type { FilterMode, TaskNode, ZoomLevel } from './types';
 
 interface ScheduleToolbarProps {
@@ -21,6 +21,10 @@ interface ScheduleToolbarProps {
     filterTaskId: number | null;
     onFilterTaskChange: (taskId: number | null) => void;
     rootTasks: TaskNode[];
+    onDownloadTemplate: () => void;
+    onSetBaseline: () => void;
+    onClearAll: () => void;
+    importButton?: React.ReactNode;
 }
 
 const VIEW_OPTIONS: { key: ZoomLevel; label: string }[] = [
@@ -46,12 +50,16 @@ export default function ScheduleToolbar({
     filterTaskId,
     onFilterTaskChange,
     rootTasks,
+    onDownloadTemplate,
+    onSetBaseline,
+    onClearAll,
+    importButton,
 }: ScheduleToolbarProps) {
-    // Flatten all tasks for the task filter dropdown
-    const allFilterOptions: { id: number; name: string; depth: number }[] = [];
+    // Flatten all tasks for the task filter dropdown with hierarchy info
+    const allFilterOptions: { id: number; name: string; depth: number; hasChildren: boolean }[] = [];
     function collectTasks(nodes: TaskNode[], depth: number) {
         for (const n of nodes) {
-            allFilterOptions.push({ id: n.id, name: n.name, depth });
+            allFilterOptions.push({ id: n.id, name: n.name, depth, hasChildren: n.hasChildren });
             collectTasks(n.childNodes, depth + 1);
         }
     }
@@ -62,6 +70,13 @@ export default function ScheduleToolbar({
             <Button size="sm" onClick={onAddTask}>
                 <Plus className="mr-1 h-4 w-4" />
                 Add Task
+            </Button>
+
+            {importButton}
+
+            <Button size="sm" variant="outline" onClick={onDownloadTemplate} title="Download import template">
+                <Download className="mr-1 h-4 w-4" />
+                Template
             </Button>
 
             <Button
@@ -82,6 +97,16 @@ export default function ScheduleToolbar({
                 className="h-8 w-8"
             >
                 <GitCompareArrows className="h-4 w-4" />
+            </Button>
+
+            <Button
+                size="sm"
+                variant="outline"
+                onClick={onSetBaseline}
+                title="Set current dates as baseline for all tasks"
+            >
+                <Bookmark className="mr-1 h-4 w-4" />
+                Set Baseline
             </Button>
 
             <div className="mx-1 h-5 w-px bg-border" />
@@ -149,18 +174,38 @@ export default function ScheduleToolbar({
                 value={filterTaskId?.toString() ?? '__all__'}
                 onValueChange={(v) => onFilterTaskChange(v === '__all__' ? null : Number(v))}
             >
-                <SelectTrigger className="h-8 w-[180px] text-xs">
+                <SelectTrigger className="h-8 w-[200px] text-xs">
                     <SelectValue placeholder="Filter by task..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                     <SelectItem value="__all__" className="text-xs">All Tasks</SelectItem>
                     {allFilterOptions.map((opt) => (
                         <SelectItem key={opt.id} value={opt.id.toString()} className="text-xs">
-                            {'─'.repeat(opt.depth)} {opt.name}
+                            <span className="flex items-center" style={{ paddingLeft: opt.depth * 12 }}>
+                                {opt.hasChildren ? (
+                                    <FolderOpen className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
+                                ) : (
+                                    <ChevronRight className="mr-1 h-3 w-3 shrink-0 text-muted-foreground/50" />
+                                )}
+                                <span className="truncate">{opt.name}</span>
+                            </span>
                         </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
+
+            <div className="mx-1 h-5 w-px bg-border" />
+
+            <Button
+                size="sm"
+                variant="outline"
+                onClick={onClearAll}
+                title="Delete all tasks and links"
+                className="text-destructive hover:bg-destructive/10"
+            >
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
+                Clear All
+            </Button>
         </div>
     );
 }

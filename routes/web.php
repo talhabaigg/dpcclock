@@ -323,6 +323,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');
         Route::patch('/tasks/{task}/dates', [ProjectTaskController::class, 'updateDates'])->name('project-tasks.update-dates');
         Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
+        Route::delete('/locations/{location}/tasks', [ProjectTaskController::class, 'destroyAll'])->name('project-tasks.destroy-all');
+
+        // Task import + baseline
+        Route::post('/locations/{location}/tasks/import', [ProjectTaskController::class, 'import'])->name('project-tasks.import');
+        Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
+        Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
 
         // Task dependency links
         Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');

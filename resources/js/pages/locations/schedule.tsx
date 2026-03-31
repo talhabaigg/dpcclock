@@ -1,9 +1,12 @@
 import { api } from '@/lib/api';
-import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
-import { usePage } from '@inertiajs/react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import AppLayout from '@/layouts/app-layout';
+import { type LocationBase } from '@/layouts/location-layout';
+import { type BreadcrumbItem } from '@/types';
+import { Head, usePage } from '@inertiajs/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import CsvImporterDialog from '@/components/csv-importer';
 import AddTaskDialog from './schedule/add-task-dialog';
 import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
@@ -11,7 +14,8 @@ import ScheduleToolbar from './schedule/schedule-toolbar';
 import TaskTreePanel from './schedule/task-tree-panel';
 import type { FilterMode, LinkType, ProjectTask, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
 import { ZOOM_CONFIGS } from './schedule/types';
-import { buildTree, flattenVisible, generateDayColumns, getAutoFitScroll, getDateRange, getScrollOffsetForDate, propagateLinks } from './schedule/utils';
+import { buildTree, dateToX, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks } from './schedule/utils';
+import { differenceInCalendarDays } from 'date-fns';
 
 type Location = LocationBase & {};
 
@@ -43,8 +47,28 @@ export default function Schedule() {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [filterTaskId, setFilterTaskId] = useState<number | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const ganttScrollRef = useRef<HTMLDivElement>(null);
+    const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
+    const treeScrollRef = useRef<HTMLDivElement>(null);
+
+    // Sync vertical scroll: gantt → tree
+    const handleGanttVerticalScroll = useCallback((scrollTop: number) => {
+        if (treeScrollRef.current) {
+            treeScrollRef.current.scrollTop = scrollTop;
+        }
+    }, []);
+
+    // Sync vertical scroll: tree → gantt (via DOM event listener)
+    useEffect(() => {
+        const el = treeScrollRef.current;
+        if (!el) return;
+        const handler = () => {
+            ganttScrollRef.current?.setScrollTop(el.scrollTop);
+        };
+        el.addEventListener('scroll', handler);
+        return () => el.removeEventListener('scroll', handler);
+    }, []);
 
     const dayWidth = ZOOM_CONFIGS[zoom].dayWidth;
     const paddingDays = ZOOM_CONFIGS[zoom].paddingDays;
@@ -139,10 +163,33 @@ export default function Schedule() {
 
     const autoFit = useCallback(() => {
         if (!ganttScrollRef.current) return;
-        const result = getAutoFitScroll(tasks, rangeStart, dayWidth);
-        if (result) {
-            ganttScrollRef.current.scrollTo({ left: result.scrollLeft, behavior: 'smooth' });
+        const bounds = getTaskDateBounds(tasks);
+        if (!bounds) return;
+
+        const viewportWidth = ganttScrollRef.current.clientWidth;
+        const totalDays = differenceInCalendarDays(bounds.end, bounds.start) + 14; // padding
+
+        // Pick the best zoom level to fit
+        const zoomOptions: ZoomLevel[] = ['week', 'month', 'quarter'];
+        let bestZoom: ZoomLevel = 'quarter';
+        for (const z of zoomOptions) {
+            const dw = ZOOM_CONFIGS[z].dayWidth;
+            if (totalDays * dw <= viewportWidth * 1.2) {
+                bestZoom = z;
+                break;
+            }
         }
+        setZoom(bestZoom);
+
+        // Scroll to task start after zoom change renders (need a tick)
+        requestAnimationFrame(() => {
+            if (!ganttScrollRef.current) return;
+            const newDayWidth = ZOOM_CONFIGS[bestZoom].dayWidth;
+            const newPadding = ZOOM_CONFIGS[bestZoom].paddingDays;
+            const newRange = getDateRange(tasks, newPadding);
+            const startX = dateToX(bounds.start, newRange.start, newDayWidth);
+            ganttScrollRef.current.scrollTo({ left: Math.max(0, startX - 20), behavior: 'smooth' });
+        });
     }, [tasks, rangeStart, dayWidth]);
 
     // ── Task CRUD ──
@@ -329,9 +376,71 @@ export default function Schedule() {
         }
     }, [visibleTasks]);
 
+    // ── Import ──
+
+    const handleSetBaseline = useCallback(async () => {
+        try {
+            const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(
+                `/locations/${location.id}/tasks/set-baseline`,
+            );
+            setTasks(result.tasks);
+            toast.success('Baseline set for all tasks');
+        } catch {
+            toast.error('Failed to set baseline');
+        }
+    }, [location.id]);
+
+    const handleClearAll = useCallback(async () => {
+        if (!confirm('Delete ALL tasks and links for this location? This cannot be undone.')) return;
+        setLoading(true);
+        try {
+            await api.delete(`/locations/${location.id}/tasks`);
+            setTasks([]);
+            setLinks([]);
+            toast.success('All tasks cleared');
+        } catch {
+            toast.error('Failed to clear tasks');
+        } finally {
+            setLoading(false);
+        }
+    }, [location.id]);
+
+    const handleImport = useCallback(async (rows: Record<string, string>[]) => {
+        setLoading(true);
+        try {
+            const result = await api.post<{ success: boolean; count: number; links_count: number; tasks: ProjectTask[]; links: TaskLink[] }>(
+                `/locations/${location.id}/tasks/import`,
+                { tasks: rows },
+            );
+            setTasks(result.tasks);
+            setLinks(result.links);
+            toast.success(`Imported ${result.count} tasks, ${result.links_count} links`);
+        } catch {
+            toast.error('Failed to import tasks');
+        } finally {
+            setLoading(false);
+        }
+    }, [location.id]);
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Locations', href: '/locations' },
+        { title: location.name, href: `/locations/${location.id}` },
+        { title: 'Schedule', href: `/locations/${location.id}/schedule` },
+    ];
+
     return (
-        <LocationLayout location={location} activeTab="schedule">
-            <div className="bg-card flex h-[calc(100vh-220px)] flex-col rounded-lg border">
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={`Schedule - ${location.name}`} />
+
+            <div className="relative flex h-[calc(100vh-65px)] flex-col">
+                {loading && (
+                    <div className="bg-background/60 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+                        <div className="flex items-center gap-3 rounded-lg bg-card px-6 py-4 shadow-lg border">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            <span className="text-sm font-medium">Processing...</span>
+                        </div>
+                    </div>
+                )}
                 <ScheduleToolbar
                     zoom={zoom}
                     onZoomChange={setZoom}
@@ -349,10 +458,31 @@ export default function Schedule() {
                     filterTaskId={filterTaskId}
                     onFilterTaskChange={setFilterTaskId}
                     rootTasks={tree}
+                    onDownloadTemplate={() => window.location.href = '/schedule-template'}
+                    onSetBaseline={handleSetBaseline}
+                    onClearAll={handleClearAll}
+                    importButton={
+                        <CsvImporterDialog
+                            requiredColumns={['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors']}
+                            onSubmit={(mappedData) => {
+                                const rows = mappedData
+                                    .filter((r) => r['WBS'] && r['Task Name'])
+                                    .map((r) => ({
+                                        wbs: r['WBS'],
+                                        name: r['Task Name'],
+                                        start_date: r['Start Date'] || null,
+                                        end_date: r['End Date'] || null,
+                                        predecessors: r['Predecessors'] || null,
+                                    }));
+                                handleImport(rows as unknown as Record<string, string>[]);
+                            }}
+                        />
+                    }
                 />
 
-                <div className="flex min-h-0 flex-1 overflow-y-auto">
+                <div className="bg-card m-4 flex min-h-0 flex-1 overflow-hidden rounded-lg border">
                     <TaskTreePanel
+                        ref={treeScrollRef}
                         visibleTasks={visibleTasks}
                         expanded={expanded}
                         onToggle={handleToggle}
@@ -370,7 +500,6 @@ export default function Schedule() {
                         days={days}
                         rangeStart={rangeStart}
                         dayWidth={dayWidth}
-                        zoom={zoom}
                         links={links}
                         onDatesChange={handleDatesChange}
                         onBarClick={handleBarClick}
@@ -378,6 +507,7 @@ export default function Schedule() {
                         onClickLink={handleClickLink}
                         linkMode={linkMode}
                         showBaseline={showBaseline}
+                        onVerticalScroll={handleGanttVerticalScroll}
                     />
                 </div>
             </div>
@@ -400,6 +530,6 @@ export default function Schedule() {
                 onDeleteLink={handleDeleteLink}
                 onUpdateLink={handleUpdateLink}
             />
-        </LocationLayout>
+        </AppLayout>
     );
 }

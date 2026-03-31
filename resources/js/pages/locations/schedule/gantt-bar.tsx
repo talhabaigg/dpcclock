@@ -4,6 +4,11 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { TaskNode } from './types';
 import { countWorkingDays, dateToX, xToDate } from './utils';
 
+/** Format a date as YYYY-MM-DD in local timezone (not UTC) */
+function fmtLocalDate(d: Date): string {
+    return format(d, 'yyyy-MM-dd');
+}
+
 const DRAG_THRESHOLD = 3;
 
 interface GanttBarProps {
@@ -29,17 +34,16 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
     const [offset, setOffset] = useState({ left: 0, width: 0 });
     const barRef = useRef<HTMLDivElement>(null);
 
-    if (!node.start_date || !node.end_date) return null;
-
-    const startDate = parseISO(node.start_date);
-    const endDate = parseISO(node.end_date);
-    const baseLeft = dateToX(startDate, rangeStart, dayWidth);
-    const baseWidth = dateToX(endDate, rangeStart, dayWidth) - baseLeft + dayWidth;
+    const hasDates = !!(node.start_date && node.end_date);
+    const startDate = hasDates ? parseISO(node.start_date!) : null;
+    const endDate = hasDates ? parseISO(node.end_date!) : null;
+    const baseLeft = hasDates ? dateToX(startDate!, rangeStart, dayWidth) : 0;
+    const baseWidth = hasDates ? dateToX(endDate!, rangeStart, dayWidth) - baseLeft + dayWidth : 0;
 
     const displayLeft = baseLeft + (dragState?.activated ? offset.left : 0);
     const displayWidth = baseWidth + (dragState?.activated ? offset.width : 0);
 
-    const workingDays = countWorkingDays(startDate, endDate);
+    const workingDays = hasDates ? countWorkingDays(startDate!, endDate!) : 0;
 
     const handlePointerDown = useCallback(
         (type: 'move' | 'resize-left' | 'resize-right', e: React.PointerEvent) => {
@@ -84,7 +88,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
 
     const handlePointerUp = useCallback(
         (e: React.PointerEvent) => {
-            if (!dragState) return;
+            if (!dragState || !startDate || !endDate) return;
             (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
             if (!dragState.activated) {
@@ -94,39 +98,34 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
                 return;
             }
 
-            const fmt = (d: Date) => d.toISOString().split('T')[0];
-
             if (dragState.type === 'resize-right') {
-                // Only end date changes — keep original start date
                 const finalRight = dragState.origLeft + dragState.origWidth + offset.width - dayWidth;
                 const newEnd = xToDate(finalRight, rangeStart, dayWidth);
                 const safeEnd = newEnd < startDate ? startDate : newEnd;
-                onDatesChange(node.id, node.start_date!, fmt(safeEnd));
+                onDatesChange(node.id, node.start_date!, fmtLocalDate(safeEnd));
             } else if (dragState.type === 'resize-left') {
-                // Only start date changes — keep original end date
                 const finalLeft = dragState.origLeft + offset.left;
                 const newStart = xToDate(finalLeft, rangeStart, dayWidth);
                 const safeStart = newStart > endDate ? endDate : newStart;
-                onDatesChange(node.id, fmt(safeStart), node.end_date!);
+                onDatesChange(node.id, fmtLocalDate(safeStart), node.end_date!);
             } else {
-                // Move — both dates shift by the same delta
                 const finalLeft = dragState.origLeft + offset.left;
                 const finalRight = finalLeft + dragState.origWidth + offset.width - dayWidth;
                 const newStart = xToDate(finalLeft, rangeStart, dayWidth);
                 const newEnd = xToDate(finalRight, rangeStart, dayWidth);
                 const finalEnd = newEnd < newStart ? newStart : newEnd;
-                onDatesChange(node.id, fmt(newStart), fmt(finalEnd));
+                onDatesChange(node.id, fmtLocalDate(newStart), fmtLocalDate(finalEnd));
             }
 
             setDragState(null);
             setOffset({ left: 0, width: 0 });
         },
-        [dragState, offset, rangeStart, dayWidth, node.id, onDatesChange, onBarClick, node],
+        [dragState, offset, rangeStart, dayWidth, node, startDate, endDate, onDatesChange, onBarClick],
     );
 
     // Compute preview dates while dragging
     const previewDates = useMemo(() => {
-        if (!dragState?.activated) return null;
+        if (!dragState?.activated || !startDate || !endDate) return null;
         const fmtDate = (d: Date) => format(d, 'dd MMM yyyy');
 
         if (dragState.type === 'resize-right') {
@@ -159,6 +158,8 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             };
         }
     }, [dragState, offset, rangeStart, dayWidth, startDate, endDate]);
+
+    if (!hasDates) return null;
 
     const isGroup = node.hasChildren;
     const isThisSource = pendingSourceId === node.id;
