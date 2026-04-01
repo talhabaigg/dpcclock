@@ -95,8 +95,24 @@ class LocationController extends Controller
     {
         $this->getLocationWithCounts($location);
 
+        // Get distinct area-cost_code combos from the latest DPC production upload
+        // These map to the external_id suffix (part after ::) on sub-locations
+        $latestUpload = $location->productionUploads()->orderByDesc('report_date')->first();
+        $dpcKeys = [];
+        if ($latestUpload) {
+            $dpcKeys = ProductionUploadLine::where('production_upload_id', $latestUpload->id)
+                ->select('area', 'cost_code')
+                ->distinct()
+                ->get()
+                ->map(fn ($row) => $row->area.'-'.$row->cost_code)
+                ->filter()
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('locations/show', [
             'location' => $location,
+            'dpcKeys' => $dpcKeys,
         ]);
     }
 
