@@ -34,8 +34,10 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
-            'placeholders.*.type' => 'nullable|string|in:text,date,number,email,phone',
+            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,email,phone,dropdown,radio,checkbox',
             'placeholders.*.required' => 'nullable|boolean',
+            'placeholders.*.options' => 'nullable|array',
+            'placeholders.*.options.*' => 'string',
         ]);
 
         $template = DocumentTemplate::create([
@@ -65,8 +67,10 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
-            'placeholders.*.type' => 'nullable|string|in:text,date,number,email,phone',
+            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,email,phone,dropdown,radio,checkbox',
             'placeholders.*.required' => 'nullable|boolean',
+            'placeholders.*.options' => 'nullable|array',
+            'placeholders.*.options.*' => 'string',
             'is_active' => 'boolean',
         ]);
 
