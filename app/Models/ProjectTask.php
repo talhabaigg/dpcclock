@@ -21,6 +21,7 @@ class ProjectTask extends Model
         'progress',
         'color',
         'is_critical',
+        'is_owned',
         'created_by',
         'updated_by',
     ];
@@ -32,6 +33,7 @@ class ProjectTask extends Model
         'end_date' => 'date:Y-m-d',
         'progress' => 'float',
         'is_critical' => 'boolean',
+        'is_owned' => 'boolean',
     ];
 
     protected static function booted(): void

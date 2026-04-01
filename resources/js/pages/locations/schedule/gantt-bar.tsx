@@ -163,7 +163,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
 
     const isGroup = node.hasChildren;
     const isThisSource = pendingSourceId === node.id;
-    const barColor = node.color;
+    const barColor = node.is_owned && !node.color ? '#22c55e' : node.color; // owned tasks default to green
     const isCritical = node.is_critical;
 
     // Group bars — not draggable, but clickable

@@ -99,7 +99,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
         }, [onVerticalScroll]);
 
         return (
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-[300px] flex-1 flex-col">
                 {/* Header — fixed, scrolls horizontally with body via shared width */}
                 <div className="overflow-hidden" ref={(el) => {
                     // Sync header horizontal scroll with body

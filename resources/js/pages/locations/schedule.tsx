@@ -12,7 +12,7 @@ import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
 import ScheduleToolbar from './schedule/schedule-toolbar';
 import TaskTreePanel from './schedule/task-tree-panel';
-import type { FilterMode, LinkType, ProjectTask, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
+import type { FilterFlag, LinkType, ProjectTask, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
 import { ZOOM_CONFIGS } from './schedule/types';
 import { buildTree, dateToX, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks } from './schedule/utils';
 import { differenceInCalendarDays } from 'date-fns';
@@ -45,12 +45,24 @@ export default function Schedule() {
     const [addParent, setAddParent] = useState<{ id: number | null; name: string | null }>({ id: null, name: null });
     const [editTask, setEditTask] = useState<TaskNode | null>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
-    const [filterMode, setFilterMode] = useState<FilterMode>('all');
+    const [activeFilters, setActiveFilters] = useState<Set<FilterFlag>>(new Set());
     const [filterTaskId, setFilterTaskId] = useState<number | null>(null);
+    const [startDateRange, setStartDateRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
+    const [endDateRange, setEndDateRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
+    const toggleFilter = useCallback((flag: FilterFlag) => {
+        setActiveFilters((prev) => {
+            const next = new Set(prev);
+            if (next.has(flag)) next.delete(flag);
+            else next.add(flag);
+            return next;
+        });
+    }, []);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
 
     const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
     const treeScrollRef = useRef<HTMLDivElement>(null);
+    const importBtnRef = useRef<HTMLDivElement>(null);
 
     // Sync vertical scroll: gantt → tree
     const handleGanttVerticalScroll = useCallback((scrollTop: number) => {
@@ -78,7 +90,28 @@ export default function Schedule() {
 
     // Apply filters
     const filteredTasks = useMemo(() => {
-        let result = flattenVisible(tree, expanded);
+        const allVisible = flattenVisible(tree, expanded);
+
+        // Build parent lookup from tasks array
+        const parentMap = new Map<number, number | null>();
+        for (const t of tasks) {
+            parentMap.set(t.id, t.parent_id);
+        }
+
+        // Helper: collect all ancestor IDs for a set of task IDs
+        function getAncestorIds(ids: Set<number>): Set<number> {
+            const ancestors = new Set<number>();
+            for (const id of ids) {
+                let pid = parentMap.get(id);
+                while (pid) {
+                    ancestors.add(pid);
+                    pid = parentMap.get(pid);
+                }
+            }
+            return ancestors;
+        }
+
+        let result = allVisible;
 
         // Filter by specific task (show it + all descendants)
         if (filterTaskId !== null) {
@@ -89,7 +122,6 @@ export default function Schedule() {
                     collectIds(n.childNodes);
                 }
             }
-            // Find the target node in the full tree
             function findNode(nodes: TaskNode[]): TaskNode | null {
                 for (const n of nodes) {
                     if (n.id === filterTaskId) return n;
@@ -105,25 +137,76 @@ export default function Schedule() {
             }
         }
 
-        // Filter delayed tasks
-        if (filterMode === 'delayed') {
-            result = result.filter((t) => {
-                if (!t.start_date || !t.baseline_start) {
-                    if (!t.end_date || !t.baseline_finish) return false;
-                }
-                const startDelayed = t.start_date && t.baseline_start && t.start_date > t.baseline_start;
-                const endDelayed = t.end_date && t.baseline_finish && t.end_date > t.baseline_finish;
-                return startDelayed || endDelayed;
-            });
-        }
+        // Apply filters — all active flags are AND-ed together
+        const hasFlags = activeFilters.size > 0;
+        const hasSearch = !!searchQuery.trim();
+        const hasStartFilter = !!(startDateRange.from || startDateRange.to);
+        const hasEndFilter = !!(endDateRange.from || endDateRange.to);
+        const needsFiltering = hasFlags || hasSearch || hasStartFilter || hasEndFilter;
 
-        // Filter critical path
-        if (filterMode === 'critical') {
-            result = result.filter((t) => t.is_critical);
+        if (needsFiltering) {
+            const matchedIds = new Set<number>();
+
+            for (const t of result) {
+                let matches = true;
+
+                if (activeFilters.has('delayed')) {
+                    const startDelayed = t.start_date && t.baseline_start && t.start_date > t.baseline_start;
+                    const endDelayed = t.end_date && t.baseline_finish && t.end_date > t.baseline_finish;
+                    if (!startDelayed && !endDelayed) matches = false;
+                }
+                if (activeFilters.has('critical') && !t.is_critical) matches = false;
+                if (activeFilters.has('ours') && !t.is_owned) matches = false;
+                if (hasStartFilter && t.start_date) {
+                    if (startDateRange.from && t.start_date < startDateRange.from) matches = false;
+                    if (startDateRange.to && t.start_date > startDateRange.to) matches = false;
+                } else if (hasStartFilter && !t.start_date) {
+                    matches = false;
+                }
+                if (hasEndFilter && t.end_date) {
+                    if (endDateRange.from && t.end_date < endDateRange.from) matches = false;
+                    if (endDateRange.to && t.end_date > endDateRange.to) matches = false;
+                } else if (hasEndFilter && !t.end_date) {
+                    matches = false;
+                }
+                if (hasSearch) {
+                    const q = searchQuery.trim().toLowerCase();
+                    if (!t.name.toLowerCase().includes(q)) matches = false;
+                }
+
+                if (matches) matchedIds.add(t.id);
+            }
+
+            if (matchedIds.size > 0) {
+                const ancestors = getAncestorIds(matchedIds);
+                const childrenMap = new Map<number, number[]>();
+                for (const t of tasks) {
+                    if (t.parent_id) {
+                        const siblings = childrenMap.get(t.parent_id) ?? [];
+                        siblings.push(t.id);
+                        childrenMap.set(t.parent_id, siblings);
+                    }
+                }
+                const descendants = new Set<number>();
+                function collectDescendants(id: number) {
+                    const children = childrenMap.get(id);
+                    if (!children) return;
+                    for (const childId of children) {
+                        descendants.add(childId);
+                        collectDescendants(childId);
+                    }
+                }
+                for (const id of matchedIds) collectDescendants(id);
+
+                const keepIds = new Set([...matchedIds, ...ancestors, ...descendants]);
+                result = result.filter((t) => keepIds.has(t.id));
+            } else {
+                result = [];
+            }
         }
 
         return result;
-    }, [tree, expanded, filterMode, filterTaskId]);
+    }, [tree, expanded, tasks, activeFilters, filterTaskId, searchQuery, startDateRange, endDateRange]);
 
     const visibleTasks = filteredTasks;
 
@@ -195,7 +278,7 @@ export default function Schedule() {
     // ── Task CRUD ──
 
     const handleAddTask = useCallback(
-        async (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null }) => {
+        async (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null; color?: string | null; is_critical?: boolean }) => {
             try {
                 const task = await api.post<ProjectTask>(`/locations/${location.id}/tasks`, data);
                 setTasks((prev) => [...prev, task]);
@@ -376,6 +459,27 @@ export default function Schedule() {
         }
     }, [visibleTasks]);
 
+    // ── Bulk ownership ──
+
+    const handleBulkMarkOwned = useCallback(async (owned: boolean) => {
+        const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
+        if (taskIds.length === 0) return;
+
+        setLoading(true);
+        try {
+            const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(
+                `/locations/${location.id}/tasks/bulk-ownership`,
+                { task_ids: taskIds, is_owned: owned },
+            );
+            setTasks(result.tasks);
+            toast.success(`${owned ? 'Marked' : 'Unmarked'} ${taskIds.length} tasks`);
+        } catch {
+            toast.error('Failed to update tasks');
+        } finally {
+            setLoading(false);
+        }
+    }, [location.id, visibleTasks]);
+
     // ── Import ──
 
     const handleSetBaseline = useCallback(async () => {
@@ -453,15 +557,24 @@ export default function Schedule() {
                     onToggleLinkMode={() => setLinkMode((v) => !v)}
                     showBaseline={showBaseline}
                     onToggleBaseline={() => setShowBaseline((v) => !v)}
-                    filterMode={filterMode}
-                    onFilterModeChange={setFilterMode}
-                    filterTaskId={filterTaskId}
-                    onFilterTaskChange={setFilterTaskId}
-                    rootTasks={tree}
+                    activeFilters={activeFilters}
+                    onToggleFilter={toggleFilter}
+                    filterTaskName={filterTaskId ? (tasks.find((t) => t.id === filterTaskId)?.name ?? null) : null}
+                    onClearTaskFilter={() => setFilterTaskId(null)}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                     onDownloadTemplate={() => window.location.href = '/schedule-template'}
                     onSetBaseline={handleSetBaseline}
                     onClearAll={handleClearAll}
-                    importButton={
+                    onBulkMarkOwned={() => handleBulkMarkOwned(true)}
+                    onBulkUnmarkOwned={() => handleBulkMarkOwned(false)}
+                    hasFilteredTasks={visibleTasks.length > 0}
+                    onImport={() => importBtnRef.current?.querySelector('button')?.click()}
+                    startDateRange={startDateRange}
+                    onClearStartDateRange={() => setStartDateRange({ from: null, to: null })}
+                    endDateRange={endDateRange}
+                    onClearEndDateRange={() => setEndDateRange({ from: null, to: null })}
+                    importButton={<div ref={importBtnRef}>
                         <CsvImporterDialog
                             requiredColumns={['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors']}
                             onSubmit={(mappedData) => {
@@ -477,10 +590,10 @@ export default function Schedule() {
                                 handleImport(rows as unknown as Record<string, string>[]);
                             }}
                         />
-                    }
+                    </div>}
                 />
 
-                <div className="bg-card m-4 flex min-h-0 flex-1 overflow-hidden rounded-lg border">
+                <div className="bg-card m-2 flex min-h-0 flex-1 overflow-auto rounded-lg border md:m-4">
                     <TaskTreePanel
                         ref={treeScrollRef}
                         visibleTasks={visibleTasks}
@@ -489,7 +602,16 @@ export default function Schedule() {
                         onAddChild={(parentId, parentName) => openAddDialog(parentId, parentName)}
                         onDelete={handleDelete}
                         onRename={handleRename}
+                        onDatesChange={handleDatesChange}
+                        onAddTask={() => openAddDialog()}
                         showBaseline={showBaseline}
+                        filterTaskId={filterTaskId}
+                        onFilterTaskChange={setFilterTaskId}
+                        rootTasks={tree}
+                        startDateRange={startDateRange}
+                        onStartDateRangeChange={setStartDateRange}
+                        endDateRange={endDateRange}
+                        onEndDateRangeChange={setEndDateRange}
                     />
 
                     <div className="bg-border w-px" />

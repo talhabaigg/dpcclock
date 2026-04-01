@@ -19,6 +19,8 @@ class ProjectTaskController extends Controller
             'baseline_finish' => 'nullable|date|after_or_equal:baseline_start',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'color' => 'nullable|string|max:7',
+            'is_critical' => 'sometimes|boolean',
         ]);
 
         $maxSort = $location->projectTasks()
@@ -45,6 +47,7 @@ class ProjectTaskController extends Controller
             'progress' => 'sometimes|numeric|min:0|max:100',
             'color' => 'sometimes|nullable|string|max:7',
             'is_critical' => 'sometimes|boolean',
+            'is_owned' => 'sometimes|boolean',
         ]);
 
         $task->update($validated);
@@ -251,6 +254,26 @@ class ProjectTaskController extends Controller
     {
         if (!$value) return false;
         return in_array(strtolower(trim($value)), ['y', 'yes', '1', 'true'], true);
+    }
+
+    // ── Bulk ownership toggle ──
+
+    public function bulkOwnership(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'task_ids' => 'required|array',
+            'task_ids.*' => 'integer|exists:project_tasks,id',
+            'is_owned' => 'required|boolean',
+        ]);
+
+        $location->projectTasks()
+            ->whereIn('id', $validated['task_ids'])
+            ->update(['is_owned' => $validated['is_owned']]);
+
+        return response()->json([
+            'success' => true,
+            'tasks' => $location->projectTasks()->orderBy('sort_order')->get(),
+        ]);
     }
 
     // ── Set Baseline ──

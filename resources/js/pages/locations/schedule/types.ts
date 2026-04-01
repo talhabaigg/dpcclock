@@ -11,11 +11,12 @@ export interface ProjectTask {
     progress: number;
     color: string | null;
     is_critical: boolean;
+    is_owned: boolean;
     created_at: string;
     updated_at: string;
 }
 
-export type FilterMode = 'all' | 'delayed' | 'critical';
+export type FilterFlag = 'delayed' | 'critical' | 'ours';
 
 export const PRESET_COLORS = [
     '#3b82f6', // blue

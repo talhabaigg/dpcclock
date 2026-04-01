@@ -325,8 +325,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
         Route::delete('/locations/{location}/tasks', [ProjectTaskController::class, 'destroyAll'])->name('project-tasks.destroy-all');
 
-        // Task import + baseline
+        // Task import + baseline + bulk
         Route::post('/locations/{location}/tasks/import', [ProjectTaskController::class, 'import'])->name('project-tasks.import');
+        Route::post('/locations/{location}/tasks/bulk-ownership', [ProjectTaskController::class, 'bulkOwnership'])->name('project-tasks.bulk-ownership');
         Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
         Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
 
