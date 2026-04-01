@@ -15,8 +15,10 @@ import { type BreadcrumbItem } from '@/types';
 import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Head, router } from '@inertiajs/react';
 import {
+    AlertCircle,
     AlignLeft,
     Calendar,
     ChevronDown,
@@ -309,15 +311,21 @@ function SortableFieldCard({
 
                                 {/* Label */}
                                 <div>
-                                    <Label className="mb-1 text-xs text-muted-foreground">
-                                        {isDisplay ? (field.type === 'heading' ? 'Heading Text' : 'Paragraph Text') : 'Label'}
-                                    </Label>
+                                    <div className="mb-1 flex items-center justify-between">
+                                        <Label className="text-xs text-muted-foreground">
+                                            {isDisplay ? (field.type === 'heading' ? 'Heading Text' : 'Paragraph Text') : 'Label'}
+                                        </Label>
+                                        <span className={`text-[10px] tabular-nums ${field.label.length > 1000 ? 'text-red-500' : 'text-muted-foreground/60'}`}>
+                                            {field.label.length}/1000
+                                        </span>
+                                    </div>
                                     {field.type === 'paragraph' ? (
                                         <Textarea
                                             value={field.label}
                                             onChange={(e) => onUpdate(index, { label: e.target.value })}
                                             placeholder="Enter informational text..."
                                             className="min-h-[36px] resize-y text-sm"
+                                            maxLength={1000}
                                             rows={2}
                                         />
                                     ) : (
@@ -326,6 +334,7 @@ function SortableFieldCard({
                                             onChange={(e) => onUpdate(index, { label: e.target.value })}
                                             placeholder={field.type === 'heading' ? 'Section title' : 'Field label'}
                                             className="min-h-[36px] resize-y text-sm"
+                                            maxLength={1000}
                                             rows={1}
                                         />
                                     )}
@@ -693,6 +702,20 @@ export default function FormTemplateForm({ template }: PageProps) {
                         </Button>
                     </div>
                 </div>
+
+                {/* ── Error Alert ── */}
+                {Object.keys(errors).length > 0 && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                            <ul className="list-disc pl-4 text-sm">
+                                {Object.entries(errors).map(([key, message]) => (
+                                    <li key={key}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 {/* ── Two-Column Layout: Fields Left, Preview Right ── */}
                 <div className="grid gap-6 lg:grid-cols-2">
