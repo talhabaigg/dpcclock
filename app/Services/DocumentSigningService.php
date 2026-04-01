@@ -42,6 +42,15 @@ class DocumentSigningService
                 });
         }
 
+        // Format date-type custom fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (Australian)
+        foreach ($template->placeholders ?? [] as $placeholder) {
+            $key = $placeholder['key'];
+            $type = $placeholder['type'] ?? 'text';
+            if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
+                $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
+            }
+        }
+
         // Build placeholder values — auto-resolve applicant fields if signable is an employment application
         $placeholderValues = array_merge($customFields, [
             'recipient_name' => $recipientName,

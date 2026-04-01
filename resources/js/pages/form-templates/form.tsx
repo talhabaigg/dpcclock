@@ -460,7 +460,7 @@ function FieldPreview({ field }: { field: FieldItem }) {
             <div>
                 <p className="mb-1.5 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
                 <div className="space-y-1">
-                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).slice(0, 4).map((opt, i) => (
+                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).map((opt, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                             <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
                             <span className="text-xs text-muted-foreground">{opt || `Option ${i + 1}`}</span>
@@ -475,7 +475,7 @@ function FieldPreview({ field }: { field: FieldItem }) {
             <div>
                 <p className="mb-1.5 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
                 <div className="space-y-1">
-                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).slice(0, 4).map((opt, i) => (
+                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).map((opt, i) => (
                         <div key={i} className="flex items-center gap-1.5">
                             <div className="h-3.5 w-3.5 rounded-sm border-2 border-muted-foreground/30" />
                             <span className="text-xs text-muted-foreground">{opt || `Option ${i + 1}`}</span>
@@ -662,7 +662,7 @@ export default function FormTemplateForm({ template }: PageProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isEditing ? `Edit — ${template.name}` : 'New Form Template'} />
 
-            <div className="mx-auto max-w-4xl p-4 lg:p-6">
+            <div className="mx-auto max-w-4xl overflow-hidden p-4 lg:p-6">
                 {/* ── Page Header ── */}
                 <div className="mb-6 flex items-center justify-between">
                     <div>
@@ -697,7 +697,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                 {/* ── Two-Column Layout: Fields Left, Preview Right ── */}
                 <div className="grid gap-6 lg:grid-cols-2">
                     {/* ── Left Column: Settings + Field Builder (single card) ── */}
-                    <div>
+                    <div className="min-w-0">
                         <Card className="shadow-sm py-2 gap-2">
                             <CardContent className="p-3">
                                 {/* Collapsible Form Settings */}
@@ -864,7 +864,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                     </div>
 
                     {/* ── Right Column: Live Preview ── */}
-                    <div className="hidden lg:block">
+                    <div className="hidden min-w-0 lg:block">
                         <div className="sticky top-6">
                             <Card className="shadow-sm py-2 gap-2">
                                 <CardContent className="p-3">

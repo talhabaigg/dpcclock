@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { router } from '@inertiajs/react';
 import { ClipboardList, FileText, Loader2, Mail, RotateCcw, Tablet, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -249,12 +250,13 @@ export default function SendForSigningModal({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
+            <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-lg p-0">
+                <DialogHeader className="px-6 pt-6">
                     <DialogTitle>Send Documents for Signing</DialogTitle>
                     <DialogDescription>Select documents, fill in details, and choose a delivery method.</DialogDescription>
                 </DialogHeader>
 
+                <ScrollArea className="max-h-[calc(85vh-10rem)] px-6">
                 <div className="space-y-4 py-2">
                     {/* Template Selection — Checkboxes */}
                     <div className="space-y-2">
@@ -458,8 +460,9 @@ export default function SendForSigningModal({
                         </RadioGroup>
                     </div>
                 </div>
+                </ScrollArea>
 
-                <DialogFooter>
+                <DialogFooter className="px-6 pb-6">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
                         Cancel
                     </Button>
