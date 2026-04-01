@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -121,6 +121,8 @@ interface SortableFieldCardProps {
     field: FieldItem;
     index: number;
     totalFields: number;
+    isOpen: boolean;
+    onToggle: (index: number) => void;
     onUpdate: (index: number, updates: Partial<FieldItem>) => void;
     onRemove: (index: number) => void;
     onDuplicate: (index: number) => void;
@@ -133,6 +135,8 @@ function SortableFieldCard({
     field,
     index,
     totalFields,
+    isOpen,
+    onToggle,
     onUpdate,
     onRemove,
     onDuplicate,
@@ -140,7 +144,6 @@ function SortableFieldCard({
     onUpdateOption,
     onRemoveOption,
 }: SortableFieldCardProps) {
-    const [isOpen, setIsOpen] = useState(true);
     const sortId = fieldSortId(index);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortId });
 
@@ -165,56 +168,53 @@ function SortableFieldCard({
                     : 'border-border/60 bg-background shadow-sm hover:shadow-md hover:border-border'
             } ${isDisplay ? 'border-dashed' : ''}`}
         >
-            <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+            <Collapsible open={isOpen} onOpenChange={() => onToggle(index)}>
                 {/* ── Card Header ── */}
-                <div className="flex items-center gap-2 px-3 py-2.5">
-                    {/* Drag handle */}
-                    <button
-                        type="button"
-                        className="cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
-                        aria-label="Drag to reorder"
-                        {...attributes}
-                        {...listeners}
-                    >
-                        <GripVertical className="h-4 w-4" />
-                    </button>
+                <div className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                        {/* Drag handle */}
+                        <button
+                            type="button"
+                            className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+                            aria-label="Drag to reorder"
+                            {...attributes}
+                            {...listeners}
+                        >
+                            <GripVertical className="h-4 w-4" />
+                        </button>
 
-                    {/* Field number */}
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
-                        {index + 1}
-                    </span>
-
-                    {/* Type icon with colored background */}
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${meta.bg}`}>
-                        <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
-                    </span>
-
-                    {/* Field label or placeholder */}
-                    <div className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                            {field.label || <span className="italic text-muted-foreground/60">Untitled field</span>}
+                        {/* Field number */}
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+                            {index + 1}
                         </span>
-                    </div>
 
-                    {/* Badges */}
-                    <div className="hidden items-center gap-1.5 sm:flex">
-                        <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0">
-                            {fieldTypeLabel}
-                        </Badge>
-                        {field.is_required && (
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-red-500/90 hover:bg-red-500">
-                                Required
-                            </Badge>
-                        )}
-                        {isDisplay && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                Display
-                            </Badge>
-                        )}
-                    </div>
+                        {/* Type icon with colored background */}
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${meta.bg}`}>
+                            <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
+                        </span>
 
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-0.5">
+                        {/* Badges */}
+                        <div className="hidden items-center gap-1.5 sm:flex">
+                            <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 whitespace-nowrap">
+                                {fieldTypeLabel}
+                            </Badge>
+                            {field.is_required && (
+                                <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-red-500/90 hover:bg-red-500 whitespace-nowrap">
+                                    Required
+                                </Badge>
+                            )}
+                            {isDisplay && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
+                                    Display
+                                </Badge>
+                            )}
+                        </div>
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Action buttons */}
+                        <div className="flex shrink-0 items-center gap-0.5">
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <button
@@ -254,16 +254,22 @@ function SortableFieldCard({
                                 {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                             </button>
                         </CollapsibleTrigger>
+                        </div>
                     </div>
+
+                    {/* Field label */}
+                    <p className="mt-1.5 text-sm font-medium leading-snug">
+                        {field.label || <span className="italic text-muted-foreground/60">Untitled field</span>}
+                    </p>
                 </div>
 
                 {/* ── Collapsible Content ── */}
                 <CollapsibleContent>
                     <div className="border-t px-3 pb-3 pt-3">
                         <div className="space-y-3">
-                            {/* Row 1: Type selector + Label */}
-                            <div className="flex gap-2">
-                                <div className="w-40 shrink-0">
+                            {/* Type */}
+                            <div className="grid gap-3">
+                                <div>
                                     <Label className="mb-1 text-xs text-muted-foreground">Type</Label>
                                     <Select value={field.type} onValueChange={(v) => onUpdate(index, { type: v })}>
                                         <SelectTrigger className="h-9">
@@ -301,7 +307,8 @@ function SortableFieldCard({
                                     </Select>
                                 </div>
 
-                                <div className="flex-1">
+                                {/* Label */}
+                                <div>
                                     <Label className="mb-1 text-xs text-muted-foreground">
                                         {isDisplay ? (field.type === 'heading' ? 'Heading Text' : 'Paragraph Text') : 'Label'}
                                     </Label>
@@ -314,31 +321,32 @@ function SortableFieldCard({
                                             rows={2}
                                         />
                                     ) : (
-                                        <Input
+                                        <Textarea
                                             value={field.label}
                                             onChange={(e) => onUpdate(index, { label: e.target.value })}
                                             placeholder={field.type === 'heading' ? 'Section title' : 'Field label'}
-                                            className="h-9"
+                                            className="min-h-[36px] resize-y text-sm"
+                                            rows={1}
                                         />
                                     )}
                                 </div>
-                            </div>
 
-                            {/* Row 2: Placeholder + Help text (input types only) */}
-                            {!isDisplay && (
-                                <div className="flex gap-2">
-                                    {!hasOptions && (
-                                        <div className="flex-1">
-                                            <Label className="mb-1 text-xs text-muted-foreground">Placeholder</Label>
-                                            <Input
-                                                value={field.placeholder}
-                                                onChange={(e) => onUpdate(index, { placeholder: e.target.value })}
-                                                placeholder="Placeholder text (optional)"
-                                                className="h-9 text-sm"
-                                            />
-                                        </div>
-                                    )}
-                                    <div className="flex-1">
+                                {/* Placeholder (input types only, not for option-based) */}
+                                {!isDisplay && !hasOptions && (
+                                    <div>
+                                        <Label className="mb-1 text-xs text-muted-foreground">Placeholder</Label>
+                                        <Input
+                                            value={field.placeholder}
+                                            onChange={(e) => onUpdate(index, { placeholder: e.target.value })}
+                                            placeholder="Placeholder text (optional)"
+                                            className="h-9 text-sm"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Help Text (input types only) */}
+                                {!isDisplay && (
+                                    <div>
                                         <Label className="mb-1 text-xs text-muted-foreground">Help Text</Label>
                                         <Input
                                             value={field.help_text}
@@ -347,8 +355,8 @@ function SortableFieldCard({
                                             className="h-9 text-sm"
                                         />
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
                             {/* Options editor (for select/radio/checkbox) */}
                             {hasOptions && (
@@ -501,9 +509,26 @@ export default function FormTemplateForm({ template }: PageProps) {
         template?.model_type === 'App\\Models\\EmploymentApplication' ? 'employment_application' : '',
     );
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
-    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [] })) : [emptyField()]);
+    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '' })) : [emptyField()]);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [openFields, setOpenFields] = useState<Record<number, boolean>>(() => {
+        const init: Record<number, boolean> = {};
+        (template?.fields?.length ? template.fields : [emptyField()]).forEach((_, i) => { init[i] = true; });
+        return init;
+    });
+
+    function toggleField(index: number) {
+        setOpenFields((prev) => ({ ...prev, [index]: !prev[index] }));
+    }
+
+    function expandAll() {
+        setOpenFields(Object.fromEntries(fields.map((_, i) => [i, true])));
+    }
+
+    function collapseAll() {
+        setOpenFields(Object.fromEntries(fields.map((_, i) => [i, false])));
+    }
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Form Templates', href: '/form-templates' },
@@ -614,9 +639,9 @@ export default function FormTemplateForm({ template }: PageProps) {
                 label: f.label.trim(),
                 type: f.type,
                 is_required: f.is_required,
-                options: TYPES_WITH_OPTIONS.includes(f.type) ? f.options.filter((o) => o.trim()) : null,
-                placeholder: f.placeholder.trim() || null,
-                help_text: f.help_text.trim() || null,
+                options: TYPES_WITH_OPTIONS.includes(f.type) ? (f.options ?? []).filter((o) => o?.trim()) : null,
+                placeholder: (f.placeholder ?? '').trim() || null,
+                help_text: (f.help_text ?? '').trim() || null,
             })),
         };
 
@@ -633,15 +658,11 @@ export default function FormTemplateForm({ template }: PageProps) {
         }
     }
 
-    // ── Field counts for the sidebar summary ──
-    const inputFieldCount = fields.filter((f) => !DISPLAY_ONLY_TYPES.includes(f.type)).length;
-    const requiredFieldCount = fields.filter((f) => f.is_required).length;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isEditing ? `Edit — ${template.name}` : 'New Form Template'} />
 
-            <div className="mx-auto max-w-7xl p-4 lg:p-6">
+            <div className="mx-auto max-w-4xl p-4 lg:p-6">
                 {/* ── Page Header ── */}
                 <div className="mb-6 flex items-center justify-between">
                     <div>
@@ -674,7 +695,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                 </div>
 
                 {/* ── Two-Column Layout: Fields Left, Preview Right ── */}
-                <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+                <div className="grid gap-6 lg:grid-cols-2">
                     {/* ── Left Column: Settings + Field Builder (single card) ── */}
                     <div>
                         <Card className="shadow-sm py-2 gap-2">
@@ -782,6 +803,17 @@ export default function FormTemplateForm({ template }: PageProps) {
                                     <p className="mb-3 text-sm text-red-500">{errors.fields}</p>
                                 )}
 
+                                {/* Collapse/Expand All */}
+                                <div className="mb-3 flex items-center gap-2 text-xs">
+                                    <button type="button" onClick={expandAll} className="text-muted-foreground hover:text-foreground transition-colors">
+                                        Expand all
+                                    </button>
+                                    <span className="text-muted-foreground/40">|</span>
+                                    <button type="button" onClick={collapseAll} className="text-muted-foreground hover:text-foreground transition-colors">
+                                        Collapse all
+                                    </button>
+                                </div>
+
                                 {/* ── Sortable Field List ── */}
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                     <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
@@ -792,6 +824,8 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     field={field}
                                                     index={index}
                                                     totalFields={fields.length}
+                                                    isOpen={openFields[index] ?? true}
+                                                    onToggle={toggleField}
                                                     onUpdate={updateField}
                                                     onRemove={removeField}
                                                     onDuplicate={duplicateField}
