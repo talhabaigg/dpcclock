@@ -36,7 +36,7 @@ class UpdateEmploymentApplicationOnFormSubmitted
                 continue;
             }
             $displayValue = is_array($value) ? implode(', ', $value) : $value;
-            $responseSummary[$field->label] = $displayValue;
+            $responseSummary[] = ['label' => $field->label, 'value' => $displayValue];
         }
 
         // Prevent duplicate comments

@@ -239,7 +239,11 @@ class SigningRequestController extends Controller
             abort(404, 'Signed document not found.');
         }
 
-        return response()->download($media->getPath(), 'signed-document.pdf');
+        return response()->streamDownload(function () use ($media) {
+            echo $media->stream()->read($media->size);
+        }, 'signed-document.pdf', [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     // ─── Public actions (token-based, no auth) ───────────────

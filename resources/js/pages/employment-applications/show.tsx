@@ -422,12 +422,20 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                         <div className="mt-2 rounded-md border bg-purple-50/50 p-3 dark:bg-purple-950/20">
                             <p className="mb-1.5 text-xs font-medium text-purple-700 dark:text-purple-300">Responses</p>
                             <div className="space-y-1">
-                                {Object.entries(formSubmittedMeta.responses).map(([label, value]) => (
-                                    <div key={label} className="text-xs">
-                                        <span className="font-medium text-muted-foreground">{label}:</span>{' '}
-                                        <span className="text-foreground break-words">{Array.isArray(value) ? value.join(', ') : String(value || '—')}</span>
-                                    </div>
-                                ))}
+                                {(Array.isArray(formSubmittedMeta.responses)
+                                    ? formSubmittedMeta.responses.map((item: { label: string; value: string }, idx: number) => (
+                                          <div key={idx} className="text-xs">
+                                              <span className="font-medium text-muted-foreground">{item.label}:</span>{' '}
+                                              <span className="text-foreground break-words">{String(item.value || '—')}</span>
+                                          </div>
+                                      ))
+                                    : Object.entries(formSubmittedMeta.responses).map(([label, value]) => (
+                                          <div key={label} className="text-xs">
+                                              <span className="font-medium text-muted-foreground">{label}:</span>{' '}
+                                              <span className="text-foreground break-words">{Array.isArray(value) ? value.join(', ') : String(value || '—')}</span>
+                                          </div>
+                                      ))
+                                )}
                             </div>
                         </div>
                     )}

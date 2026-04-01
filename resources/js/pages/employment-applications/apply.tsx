@@ -240,7 +240,33 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
             }
         }
 
-        transform((d) => ({ ...d, recaptcha_token: recaptchaToken }));
+        transform((d) => {
+            const transformed: Record<string, unknown> = { ...d, recaptcha_token: recaptchaToken };
+
+            // Convert "yes"/"no" radio values to real booleans for Laravel's boolean rule
+            const booleanRadioFields = [
+                'aboriginal_or_tsi', 'trade_qualified', 'work_safely_at_heights',
+                'workplace_impairment_training', 'asbestos_awareness_training',
+                'crystalline_silica_course', 'gender_equity_training', 'workcover_claim',
+            ];
+            for (const field of booleanRadioFields) {
+                if (transformed[field] === 'yes') transformed[field] = true;
+                else if (transformed[field] === 'no') transformed[field] = false;
+                else if (transformed[field] === '') transformed[field] = null;
+            }
+
+            // Clean apprentice_year — "none" or empty should be null
+            if (transformed.apprentice_year === '' || transformed.apprentice_year === 'none') {
+                transformed.apprentice_year = null;
+            }
+
+            // Strip empty optional references (3rd & 4th) so they don't fail required sub-field validation
+            transformed.references = (d.references as Reference[]).filter(
+                (ref, i) => i < 2 || ref.company_name.trim() !== '' || ref.contact_person.trim() !== '',
+            );
+
+            return transformed;
+        });
         post(route('employment-applications.store'));
     }
 
@@ -282,6 +308,18 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                 </div>
 
                 <form onSubmit={handleSubmit}>
+                    {/* Server-side validation errors that may be on other steps */}
+                    {Object.keys(errors).length > 0 && (
+                        <div className="mb-6 rounded border border-red-200 bg-red-50 p-4">
+                            <p className="text-sm font-medium text-red-800">Please fix the following errors:</p>
+                            <ul className="mt-2 list-inside list-disc text-sm text-red-700">
+                                {Object.entries(errors).map(([key, message]) => (
+                                    <li key={key}>{message}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     {/* Step 1: Personal Details */}
                     {step === 0 && (
                         <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
