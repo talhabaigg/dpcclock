@@ -91,7 +91,7 @@ class DocumentSigningService
                 . '<img src="' . $senderSignature . '" style="max-width: 300px; max-height: 100px;" />'
                 . '<div class="signature-meta">'
                 . '<strong>' . e($senderFullName ?? $admin->name) . '</strong><br>'
-                . 'Signed: ' . now()->timezone('Australia/Sydney')->format('d/m/Y h:i A T')
+                . 'Signed: ' . now()->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
                 . '</div></div>';
             $documentHtml = str_replace('{{sender_signature}}', $senderSignatureHtml, $documentHtml);
         }

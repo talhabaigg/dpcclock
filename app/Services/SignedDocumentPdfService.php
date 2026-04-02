@@ -41,7 +41,7 @@ class SignedDocumentPdfService
             . '<img src="' . $signatureBase64 . '" style="max-width: 300px; max-height: 100px;" />'
             . '<div class="signature-meta">'
             . '<strong>' . e($signingRequest->signer_full_name) . '</strong><br>'
-            . 'Signed: ' . Carbon::parse($signingRequest->signed_at)->timezone('Australia/Sydney')->format('d/m/Y h:i A T')
+            . 'Signed: ' . Carbon::parse($signingRequest->signed_at)->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
             . '</div></div>';
 
         $html = str_replace('{{signature_box}}', $signatureImgHtml, $html);
@@ -52,7 +52,7 @@ class SignedDocumentPdfService
         // Replace date_signed placeholder
         $html = str_replace(
             '{{date_signed}}',
-            Carbon::parse($signingRequest->signed_at)->timezone('Australia/Sydney')->format('d/m/Y'),
+            Carbon::parse($signingRequest->signed_at)->timezone('Australia/Brisbane')->format('d/m/Y'),
             $html
         );
 
@@ -111,10 +111,19 @@ class SignedDocumentPdfService
         </div>
         FOOTER;
 
-        return Browsershot::html($html)
-            ->setNodeBinary('/usr/bin/node')
-            ->setNpmBinary('/usr/bin/npm')
-            ->setChromePath(env('BROWSERSHOT_CHROME_PATH', '/usr/bin/google-chrome-stable'))
+        $browsershot = Browsershot::html($html);
+
+        if ($nodeBinary = env('BROWSERSHOT_NODE_BINARY')) {
+            $browsershot->setNodeBinary($nodeBinary);
+        }
+        if ($npmBinary = env('BROWSERSHOT_NPM_BINARY')) {
+            $browsershot->setNpmBinary($npmBinary);
+        }
+        if ($chromePath = env('BROWSERSHOT_CHROME_PATH')) {
+            $browsershot->setChromePath($chromePath);
+        }
+
+        return $browsershot
             ->noSandbox()
             ->format('A4')
             ->margins(35, 19, 20, 19, 'mm')
@@ -183,7 +192,7 @@ class SignedDocumentPdfService
 
     private function buildCertificateHtml(SigningRequest $signingRequest): string
     {
-        $signedAt = Carbon::parse($signingRequest->signed_at)->timezone('Australia/Sydney');
+        $signedAt = Carbon::parse($signingRequest->signed_at)->timezone('Australia/Brisbane');
 
         $senderRow = '';
         if ($signingRequest->sender_full_name) {
@@ -243,8 +252,11 @@ class SignedDocumentPdfService
         @$dom->loadHTML('<meta charset="utf-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
         $xpath = new \DOMXPath($dom);
-        // Only select headings that are NOT inside a table
-        $headings = $xpath->query('//h1[not(ancestor::table)] | //h2[not(ancestor::table)] | //h3[not(ancestor::table)]');
+        // Select headings and bold-only paragraphs (acting as section titles) that are NOT inside a table
+        $headings = $xpath->query(
+            '//h1[not(ancestor::table)] | //h2[not(ancestor::table)] | //h3[not(ancestor::table)]'
+            . ' | //p[not(ancestor::table) and count(child::*)=1 and child::strong and normalize-space(.)!=""]'
+        );
 
         foreach ($headings as $heading) {
             // Check if a page-break div immediately precedes this heading
@@ -266,7 +278,7 @@ class SignedDocumentPdfService
 
             // Only wrap with block-level content siblings
             $tag = strtolower($sibling->tagName);
-            if (! in_array($tag, ['p', 'ul', 'ol', 'div'])) {
+            if (! in_array($tag, ['p', 'ul', 'ol', 'div', 'table'])) {
                 continue;
             }
 
@@ -330,7 +342,7 @@ class SignedDocumentPdfService
                 col, colgroup { width: auto !important; }
 
                 /* Signature */
-                .signature-box { margin: 20px 0; padding: 16px; border: 1px solid #d1d5db; border-radius: 4px; background: #fafafa; }
+                .signature-box { margin: 20px 0; padding: 16px; page-break-inside: avoid; }
                 .signature-box img { max-width: 300px; max-height: 100px; }
                 .signature-meta { margin-top: 10px; font-size: 11px; color: #4b5563; }
 
@@ -348,7 +360,7 @@ class SignedDocumentPdfService
 
                 /* Print control */
                 h1, h2, h3 { page-break-after: avoid; }
-                table, ul, ol, blockquote, p { page-break-inside: avoid; }
+                blockquote, p, li { page-break-inside: avoid; }
                 .page-break { page-break-after: always; border: none; margin: 0; padding: 0; height: 0; }
             </style>
         </head>
