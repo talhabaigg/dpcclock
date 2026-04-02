@@ -116,7 +116,6 @@ class SignedDocumentPdfService
             ->setNpmBinary('/usr/bin/npm')
             ->setChromePath(env('BROWSERSHOT_CHROME_PATH', '/usr/bin/google-chrome-stable'))
             ->noSandbox()
-            ->addChromiumArguments(['--disable-crash-reporter'])
             ->format('A4')
             ->margins(35, 19, 20, 19, 'mm')
             ->showBackground()
