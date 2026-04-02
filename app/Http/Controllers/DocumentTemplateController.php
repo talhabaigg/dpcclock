@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DocumentTemplate;
+use App\Services\SignedDocumentPdfService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -89,5 +90,16 @@ class DocumentTemplateController extends Controller
 
         return redirect()->route('document-templates.index')
             ->with('success', 'Template deleted successfully.');
+    }
+
+    public function previewPdf(DocumentTemplate $documentTemplate, SignedDocumentPdfService $pdfService)
+    {
+        $pdfContent = $pdfService->generateTemplatePreview($documentTemplate->body_html);
+        $filename = str()->slug($documentTemplate->name) . '-preview.pdf';
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 }

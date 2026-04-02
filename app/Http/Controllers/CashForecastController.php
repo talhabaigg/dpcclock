@@ -993,10 +993,11 @@ class CashForecastController extends Controller
                 $adjustmentKey = $item->job_number.'|'.$item->month;
                 $adjustments = $cashInAdjustments[$adjustmentKey] ?? null;
 
-                // For actuals, use the actual GST from the invoice; for forecasts, calculate it
-                $hasActualGst = isset($item->actual_gst) && ($item->source ?? null) === 'actual';
-                $actualGst = $hasActualGst ? (float) $item->actual_gst : 0;
-                $grossAmount = $hasActualGst ? ($amount + $actualGst) : ($amount * (1 + $revenueGstRate));
+                // Always calculate GST at the configured rate (10%) for consistency.
+                // Using actual GST from invoices causes a mismatch with retention GST
+                // (which is always calculated at 10%), breaking the identity:
+                // Net Cash In = (Subtotal − Retention) × 1.1
+                $grossAmount = $amount * (1 + $revenueGstRate);
 
                 if (! empty($adjustments)) {
                     // Adjustments are stored against the aggregated job+month total,
@@ -1010,10 +1011,10 @@ class CashForecastController extends Controller
                     // Use pre-aggregated totals across all invoice rows for this key
                     $totals = $cashInTotals[$adjustmentKey] ?? ['amount' => $amount, 'gst' => 0, 'source' => null];
                     $totalSourceAmount = $totals['amount'];
-                    $isActualSource = $totals['source'] === 'actual';
-                    $totalGst = $isActualSource && $totals['gst'] > 0 ? $totals['gst'] : ($totalSourceAmount * $revenueGstRate);
+                    // Always use calculated GST at configured rate for consistency with retention GST
+                    $totalGst = $totalSourceAmount * $revenueGstRate;
 
-                    $rows = collect($adjustments)->map(function ($adjustment) use ($item, $revenueGstRate, $isActualSource, $totalGst, $totalSourceAmount) {
+                    $rows = collect($adjustments)->map(function ($adjustment) use ($item, $revenueGstRate, $totalGst, $totalSourceAmount) {
                         $adjAmount = (float) $adjustment['amount'];
                         $adjGst = $totalSourceAmount > 0 ? ($totalGst * $adjAmount / $totalSourceAmount) : ($adjAmount * $revenueGstRate);
 
@@ -1025,7 +1026,7 @@ class CashForecastController extends Controller
                             'vendor' => $item->vendor ?? null,
                             'forecast_amount' => $adjAmount + $adjGst,
                             'gst_rate' => $revenueGstRate,
-                            'actual_gst_amount' => $isActualSource ? $adjGst : null,
+                            'actual_gst_amount' => null,
                             'source' => $item->source ?? null,
                             'rule' => 'Cash-in adjustment (manual)',
                         ];
@@ -1047,7 +1048,7 @@ class CashForecastController extends Controller
                         'vendor' => $item->vendor ?? null,
                         'forecast_amount' => $grossAmount,
                         'gst_rate' => $revenueGstRate,
-                        'actual_gst_amount' => $hasActualGst ? $actualGst : null,
+                        'actual_gst_amount' => null,
                         'source' => $item->source ?? null,
                         'rule' => "Revenue +".$revenueDelayMonths."m delay (+".($revenueGstRate * 100)."% GST)",
                     ],

@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { FileText, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Download, FileText, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface DocumentTemplate {
@@ -150,6 +150,15 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
                                                             <Pencil className="mr-2 h-3.5 w-3.5" />
                                                             Edit
                                                         </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            window.open(route('document-templates.preview-pdf', template.id), '_blank');
+                                                        }}
+                                                    >
+                                                        <Download className="mr-2 h-3.5 w-3.5" />
+                                                        Download PDF
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem

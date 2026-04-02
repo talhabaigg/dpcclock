@@ -208,6 +208,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/document-templates/{documentTemplate}/edit', [DocumentTemplateController::class, 'edit'])->name('document-templates.edit');
         Route::put('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'update'])->name('document-templates.update');
         Route::delete('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'destroy'])->name('document-templates.destroy');
+        Route::get('/document-templates/{documentTemplate}/preview-pdf', [DocumentTemplateController::class, 'previewPdf'])->name('document-templates.preview-pdf');
     });
 
     // Form Templates CRUD

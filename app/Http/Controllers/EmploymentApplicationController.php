@@ -266,7 +266,7 @@ class EmploymentApplicationController extends Controller
                     'attachments' => $comment->getMedia('attachments')->map(fn ($m) => [
                         'id' => $m->id,
                         'name' => $m->file_name,
-                        'url' => $m->getUrl(),
+                        'url' => $this->mediaUrl($m),
                         'size' => $m->size,
                         'mime_type' => $m->mime_type,
                     ]),
@@ -280,7 +280,7 @@ class EmploymentApplicationController extends Controller
                             'attachments' => $reply->getMedia('attachments')->map(fn ($m) => [
                                 'id' => $m->id,
                                 'name' => $m->file_name,
-                                'url' => $m->getUrl(),
+                                'url' => $this->mediaUrl($m),
                                 'size' => $m->size,
                                 'mime_type' => $m->mime_type,
                             ]),
@@ -637,6 +637,15 @@ class EmploymentApplicationController extends Controller
             return back()->with('success', 'Onboarding invite sent to '.$employmentApplication->email);
         } catch (\RuntimeException $e) {
             return back()->withErrors(['onboard' => 'Failed to send to payroll. Please try again or contact support.']);
+        }
+    }
+
+    private function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media): string
+    {
+        try {
+            return $media->getTemporaryUrl(now()->addMinutes(30));
+        } catch (\RuntimeException) {
+            return $media->getUrl();
         }
     }
 }

@@ -37,6 +37,13 @@
         .agreement-body p { font-size: 14px; line-height: 1.7; color: #374151; margin: 4px 0 8px; }
         .agreement-body ul { padding-left: 24px; margin: 6px 0 12px; list-style-type: disc; }
         .agreement-body ol { padding-left: 24px; margin: 6px 0 12px; list-style-type: decimal; }
+        .agreement-body ol[data-list-style="legal"] { padding-left: 0; list-style-type: none; counter-reset: legal; }
+        .agreement-body ol[data-list-style="legal"] > li { counter-increment: legal; position: relative; padding-left: 36px; }
+        .agreement-body ol[data-list-style="legal"] > li::before { content: counters(legal, ".") "."; font-weight: 500; position: absolute; left: 0; }
+        .agreement-body ol[data-list-style="legal"] ol:not([data-list-style]) { padding-left: 0; margin: 4px 0; list-style-type: none; counter-reset: legal; }
+        .agreement-body ol[data-list-style="legal"] ol:not([data-list-style]) > li { counter-increment: legal; position: relative; padding-left: 36px; }
+        .agreement-body ol[data-list-style="legal"] ol:not([data-list-style]) > li::before { content: counters(legal, ".") "."; font-weight: 500; position: absolute; left: 0; }
+        .agreement-body ol[data-list-style="alpha"] { list-style-type: lower-alpha; }
         .agreement-body li { font-size: 14px; line-height: 1.6; color: #374151; margin: 2px 0; }
         .agreement-body table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 16px 0; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
         .agreement-body th { background: #f1f5f9; font-weight: 600; text-align: left; padding: 1px 6px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #334155; }

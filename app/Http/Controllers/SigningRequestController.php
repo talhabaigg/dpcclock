@@ -240,7 +240,11 @@ class SigningRequestController extends Controller
         }
 
         return response()->streamDownload(function () use ($media) {
-            echo $media->stream()->read($media->size);
+            $stream = $media->stream();
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }, 'signed-document.pdf', [
             'Content-Type' => 'application/pdf',
         ]);
@@ -315,8 +319,15 @@ class SigningRequestController extends Controller
             abort(404, 'Preview document not found.');
         }
 
-        return response()->file($media->getPath(), [
+        return response()->streamDownload(function () use ($media) {
+            $stream = $media->stream();
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 'preview-document.pdf', [
             'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline',
             'Cache-Control' => 'no-store',
         ]);
     }

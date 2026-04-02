@@ -28,6 +28,7 @@
         "predis/predis": "^3.3",
         "setasign/fpdi": "^2.6",
         "smalot/pdfparser": "^2.12",
+        "spatie/browsershot": "^5.2",
         "spatie/laravel-activitylog": "^4.10",
         "spatie/laravel-medialibrary": "^11.0",
         "spatie/laravel-one-time-passwords": "^1.0",

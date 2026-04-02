@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\SigningRequest;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Spatie\Browsershot\Browsershot;
 
 class SignedDocumentPdfService
 {
@@ -21,18 +21,15 @@ class SignedDocumentPdfService
         $html = str_replace('{{sender_signature}}', '', $html);
         $html = str_replace('{{date_signed}}', '<em style="color: #94a3b8;">Date will appear upon signing</em>', $html);
 
-        // Strip problematic table styles
-        $html = preg_replace('/(<(?:table|td|th|col|colgroup|tr)\b[^>]*?)\s*style="[^"]*"/', '$1', $html);
-        $html = preg_replace('/<colgroup>.*?<\/colgroup>/s', '', $html);
+        return $this->buildPdf($html);
+    }
 
-        $html = $this->keepHeadingsWithContent($html);
-        $html = $this->wrapInDocument($html, '');
-
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper('a4', 'portrait')
-            ->setOption(['margin_top' => 25, 'margin_right' => 19, 'margin_bottom' => 25, 'margin_left' => 19]);
-
-        return $pdf->output();
+    /**
+     * Generate a preview PDF from a document template's raw HTML (placeholders left as-is).
+     */
+    public function generateTemplatePreview(string $bodyHtml): string
+    {
+        return $this->buildPdf($bodyHtml);
     }
 
     public function generate(SigningRequest $signingRequest, string $signatureBase64, ?string $initialsBase64 = null): string
@@ -70,11 +67,7 @@ class SignedDocumentPdfService
         $certificate = $this->buildCertificateHtml($signingRequest);
         $html = $this->wrapInDocument($html, $certificate);
 
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper('a4', 'portrait')
-            ->setOption(['margin_top' => 25, 'margin_right' => 19, 'margin_bottom' => 25, 'margin_left' => 19]);
-
-        $pdfOutput = $pdf->output();
+        $pdfOutput = $this->renderWithBrowsershot($html);
 
         // Stamp initials on every page if provided
         if ($initialsBase64) {
@@ -82,6 +75,54 @@ class SignedDocumentPdfService
         }
 
         return $pdfOutput;
+    }
+
+    private function buildPdf(string $html): string
+    {
+        // Strip problematic table styles
+        $html = preg_replace('/(<(?:table|td|th|col|colgroup|tr)\b[^>]*?)\s*style="[^"]*"/', '$1', $html);
+        $html = preg_replace('/<colgroup>.*?<\/colgroup>/s', '', $html);
+
+        $html = $this->keepHeadingsWithContent($html);
+        $html = $this->wrapInDocument($html, '');
+
+        return $this->renderWithBrowsershot($html);
+    }
+
+    private function renderWithBrowsershot(string $html): string
+    {
+        $logoBase64 = $this->getLogoBase64();
+
+        $headerHtml = <<<HEADER
+        <div style="width: 100%; text-align: center; padding: 8px 20px 6px; border-bottom: 1px solid #d1d5db;">
+            <img src="{$logoBase64}" style="max-height: 50px;" />
+        </div>
+        HEADER;
+
+        $footerHtml = <<<FOOTER
+        <div style="width: 100%; display: flex; align-items: center; font-size: 9px; color: #999; padding: 6px 20px 4px; border-top: 1px solid #d1d5db;">
+            <div style="flex: 1;"></div>
+            <div style="flex: 1; text-align: center; font-weight: 600; letter-spacing: 0.5px;">PRIVATE AND CONFIDENTIAL</div>
+            <div style="flex: 1; text-align: right;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+        </div>
+        FOOTER;
+
+        return Browsershot::html($html)
+            ->format('A4')
+            ->margins(35, 19, 20, 19, 'mm')
+            ->showBackground()
+            ->showBrowserHeaderAndFooter()
+            ->headerHtml($headerHtml)
+            ->footerHtml($footerHtml)
+            ->pdf();
+    }
+
+    private function getLogoBase64(): string
+    {
+        $logoPath = public_path('SWCPE_Logo.PNG');
+        $logoData = base64_encode(file_get_contents($logoPath));
+
+        return 'data:image/png;base64,' . $logoData;
     }
 
     /**
@@ -182,7 +223,7 @@ class SignedDocumentPdfService
 
     /**
      * Wrap each heading + its following content block in a div with page-break-inside: avoid,
-     * so DomPDF keeps headings together with their content instead of orphaning them.
+     * so the PDF renderer keeps headings together with their content instead of orphaning them.
      * Only processes top-level headings (not those inside table cells).
      */
     private function keepHeadingsWithContent(string $html): string
@@ -195,6 +236,13 @@ class SignedDocumentPdfService
         $headings = $xpath->query('//h1[not(ancestor::table)] | //h2[not(ancestor::table)] | //h3[not(ancestor::table)]');
 
         foreach ($headings as $heading) {
+            // Check if a page-break div immediately precedes this heading
+            $prev = $heading->previousSibling;
+            while ($prev && $prev->nodeType === XML_TEXT_NODE && trim($prev->textContent) === '') {
+                $prev = $prev->previousSibling;
+            }
+            $hasPageBreakBefore = $prev instanceof \DOMElement && $prev->hasAttribute('data-page-break');
+
             $sibling = $heading->nextSibling;
             // Skip whitespace text nodes
             while ($sibling && $sibling->nodeType === XML_TEXT_NODE && trim($sibling->textContent) === '') {
@@ -211,12 +259,24 @@ class SignedDocumentPdfService
                 continue;
             }
 
-            $wrapper = $dom->createElement('div');
-            $wrapper->setAttribute('style', 'page-break-inside: avoid;');
+            if ($hasPageBreakBefore) {
+                $wrapper = $dom->createElement('div');
+                $wrapper->setAttribute('style', 'page-break-before: always; page-break-inside: avoid;');
 
-            $heading->parentNode->insertBefore($wrapper, $heading);
-            $wrapper->appendChild($heading);
-            $wrapper->appendChild($sibling);
+                // Remove the page-break div — the wrapper's style handles it now
+                $prev->parentNode->removeChild($prev);
+
+                $heading->parentNode->insertBefore($wrapper, $heading);
+                $wrapper->appendChild($heading);
+                $wrapper->appendChild($sibling);
+            } else {
+                $wrapper = $dom->createElement('div');
+                $wrapper->setAttribute('style', 'page-break-inside: avoid;');
+
+                $heading->parentNode->insertBefore($wrapper, $heading);
+                $wrapper->appendChild($heading);
+                $wrapper->appendChild($sibling);
+            }
         }
 
         $body = $dom->getElementsByTagName('body')->item(0);
@@ -234,8 +294,6 @@ class SignedDocumentPdfService
 
     private function wrapInDocument(string $bodyHtml, string $certificateHtml): string
     {
-        $logoPath = public_path('logo.png');
-
         return <<<HTML
         <!DOCTYPE html>
         <html>
@@ -254,18 +312,22 @@ class SignedDocumentPdfService
                 .signature-box { margin: 16px 0; padding: 10px; border: 1px solid #ccc; }
                 .signature-box img { max-width: 300px; max-height: 100px; }
                 .signature-meta { margin-top: 8px; font-size: 12px; color: #555; }
-                ul, ol { padding-left: 20px; list-style-position: outside; }
-                ol { list-style-type: decimal; }
-                ul { list-style-type: disc; }
+                ul { padding-left: 20px; list-style-position: outside; list-style-type: disc; }
+                ol { padding-left: 20px; list-style-position: outside; list-style-type: decimal; }
+                ol[data-list-style="legal"] { padding-left: 0; list-style-type: none; counter-reset: legal; }
+                ol[data-list-style="legal"] > li { counter-increment: legal; position: relative; padding-left: 30px; }
+                ol[data-list-style="legal"] > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
+                ol[data-list-style="legal"] ol:not([data-list-style]) { padding-left: 0; margin: 2px 0; list-style-type: none; counter-reset: legal; }
+                ol[data-list-style="legal"] ol:not([data-list-style]) > li { counter-increment: legal; position: relative; padding-left: 30px; }
+                ol[data-list-style="legal"] ol:not([data-list-style]) > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
+                ol[data-list-style="alpha"] { list-style-type: lower-alpha; }
                 li { margin: 1px 0; }
                 h1, h2, h3 { page-break-after: avoid; }
                 table, ul, ol, blockquote, p { page-break-inside: avoid; }
+                .page-break { page-break-after: always; border: none; margin: 0; padding: 0; height: 0; }
             </style>
         </head>
         <body>
-            <div style="text-align: center; margin-bottom: 20px;">
-                <img src="{$logoPath}" style="max-height: 50px;" alt="DPC">
-            </div>
             {$bodyHtml}
             {$certificateHtml}
         </body>

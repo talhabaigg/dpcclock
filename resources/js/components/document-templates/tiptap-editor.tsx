@@ -2,7 +2,8 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
-import { Extension } from '@tiptap/core';
+import { Extension, Node, mergeAttributes } from '@tiptap/core';
+import { OrderedList } from '@tiptap/extension-ordered-list';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -28,6 +29,7 @@ import {
     Italic,
     List,
     ListOrdered,
+    Minus,
     Outdent,
     PenLine,
     Plus,
@@ -213,6 +215,42 @@ const IndentExtension = Extension.create({
     },
 });
 
+const CustomOrderedList = OrderedList.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            listStyle: {
+                default: null,
+                parseHTML: (element: HTMLElement) => element.getAttribute('data-list-style') || null,
+                renderHTML: (attributes: Record<string, unknown>) => {
+                    if (!attributes.listStyle) return {};
+                    return { 'data-list-style': attributes.listStyle };
+                },
+            },
+        };
+    },
+});
+
+const PageBreak = Node.create({
+    name: 'pageBreak',
+    group: 'block',
+    atom: true,
+    parseHTML() {
+        return [{ tag: 'div[data-page-break]' }];
+    },
+    renderHTML({ HTMLAttributes }) {
+        return ['div', mergeAttributes(HTMLAttributes, { 'data-page-break': '', class: 'page-break' })];
+    },
+    addCommands() {
+        return {
+            setPageBreak:
+                () =>
+                ({ chain }) =>
+                    chain().insertContent({ type: this.name }).run(),
+        };
+    },
+});
+
 export default function TiptapEditor({ content, onChange, placeholders = [] }: TiptapEditorProps) {
     // Merge any custom placeholders passed from the create/edit form
     const allGroups = placeholders.length > 0
@@ -221,7 +259,8 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
 
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({ orderedList: false }),
+            CustomOrderedList,
             Underline,
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
             Table.configure({ resizable: true, lastColumnResizable: false }),
@@ -230,6 +269,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
             TableCell,
             SignatureBoxDecoration,
             IndentExtension,
+            PageBreak,
         ],
         content: content ? JSON.parse(content) : undefined,
         onUpdate: ({ editor }) => {
@@ -425,13 +465,56 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                 >
                     <List className="h-4 w-4" />
                 </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('orderedList')}
-                    onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
-                >
-                    <ListOrdered className="h-4 w-4" />
-                </Toggle>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Toggle size="sm" pressed={editor.isActive('orderedList')}>
+                            <ListOrdered className="h-4 w-4" />
+                            <ChevronDown className="ml-0.5 h-3 w-3" />
+                        </Toggle>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-[140px]">
+                        {([null, 'legal', 'alpha'] as const).map((style) => {
+                            const labels = { null: 'Numbered', legal: 'Legal', alpha: 'Letter' } as Record<string, string>;
+                            const previews = { null: '1. 2.', legal: '1.1.', alpha: 'a. b.' } as Record<string, string>;
+                            const key = String(style);
+                            return (
+                                <DropdownMenuItem
+                                    key={key}
+                                    onClick={() => {
+                                        if (editor.isActive('orderedList')) {
+                                            const { $from } = editor.state.selection;
+                                            for (let d = $from.depth; d > 0; d--) {
+                                                const node = $from.node(d);
+                                                if (node.type.name === 'orderedList') {
+                                                    const pos = $from.before(d);
+                                                    editor.chain().focus().command(({ tr }) => {
+                                                        tr.setNodeMarkup(pos, undefined, { ...node.attrs, listStyle: style });
+                                                        return true;
+                                                    }).run();
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        editor.chain().focus().toggleOrderedList().command(({ tr, state }) => {
+                                            const { $from } = state.selection;
+                                            for (let d = $from.depth; d > 0; d--) {
+                                                const node = $from.node(d);
+                                                if (node.type.name === 'orderedList') {
+                                                    tr.setNodeMarkup($from.before(d), undefined, { ...node.attrs, listStyle: style });
+                                                    return true;
+                                                }
+                                            }
+                                            return true;
+                                        }).run();
+                                    }}
+                                >
+                                    <span className="mr-2 text-xs text-muted-foreground w-8">{previews[key]}</span>
+                                    {labels[key]}
+                                </DropdownMenuItem>
+                            );
+                        })}
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 <Toggle
                     size="sm"
                     pressed={false}
@@ -660,6 +743,20 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     </DropdownMenuContent>
                 </DropdownMenu>
 
+                <Separator orientation="vertical" className="mx-1 h-6" />
+
+                {/* Page Break */}
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 px-2 text-xs"
+                    type="button"
+                    onClick={() => (editor.commands as any).setPageBreak()}
+                >
+                    <Minus className="h-4 w-4" />
+                    Page Break
+                </Button>
+
                 {/* Spacer */}
                 <div className="flex-1" />
 
@@ -761,6 +858,44 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     margin: 6px 0 12px;
                     list-style-type: decimal;
                 }
+                /* Legal numbering: 1. / 1.1. / 1.2. */
+                .ProseMirror ol[data-list-style="legal"] {
+                    padding-left: 0;
+                    list-style-type: none;
+                    counter-reset: legal;
+                }
+                .ProseMirror ol[data-list-style="legal"] > li {
+                    counter-increment: legal;
+                    position: relative;
+                    padding-left: 36px;
+                }
+                .ProseMirror ol[data-list-style="legal"] > li::before {
+                    content: counters(legal, ".") ".";
+                    font-weight: 500;
+                    position: absolute;
+                    left: 0;
+                }
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) {
+                    padding-left: 0;
+                    margin: 4px 0;
+                    list-style-type: none;
+                    counter-reset: legal;
+                }
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) > li {
+                    counter-increment: legal;
+                    position: relative;
+                    padding-left: 36px;
+                }
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) > li::before {
+                    content: counters(legal, ".") ".";
+                    font-weight: 500;
+                    position: absolute;
+                    left: 0;
+                }
+                /* Letter numbering: a. b. c. */
+                .ProseMirror ol[data-list-style="alpha"] {
+                    list-style-type: lower-alpha;
+                }
                 .ProseMirror li {
                     margin: 2px 0;
                 }
@@ -845,6 +980,28 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
                     color: #1e40af;
                 }
                 /* Signature box placeholder preview — matches signing page */
+                .ProseMirror .page-break {
+                    position: relative;
+                    border: none;
+                    border-top: 2px dashed #94a3b8;
+                    margin: 24px 0;
+                    padding: 0;
+                    height: 0;
+                    cursor: default;
+                }
+                .ProseMirror .page-break::after {
+                    content: 'Page Break';
+                    position: absolute;
+                    top: -10px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: white;
+                    padding: 0 12px;
+                    font-size: 11px;
+                    color: #94a3b8;
+                    font-style: italic;
+                    letter-spacing: 0.5px;
+                }
                 .ProseMirror .signature-box-preview {
                     display: inline-block;
                     width: 100%;
