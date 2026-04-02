@@ -94,20 +94,28 @@ class SignedDocumentPdfService
         $logoBase64 = $this->getLogoBase64();
 
         $headerHtml = <<<HEADER
-        <div style="width: 100%; text-align: center; padding: 8px 20px 6px; border-bottom: 1px solid #d1d5db;">
-            <img src="{$logoBase64}" style="max-height: 50px;" />
+        <div style="width: 100%; padding: 10px 19mm 8px;">
+            <div style="text-align: center; padding-bottom: 8px; border-bottom: 2px solid #1e3a5f;">
+                <img src="{$logoBase64}" style="max-height: 48px;" />
+            </div>
         </div>
         HEADER;
 
         $footerHtml = <<<FOOTER
-        <div style="width: 100%; display: flex; align-items: center; font-size: 9px; color: #999; padding: 6px 20px 4px; border-top: 1px solid #d1d5db;">
-            <div style="flex: 1;"></div>
-            <div style="flex: 1; text-align: center; font-weight: 600; letter-spacing: 0.5px;">PRIVATE AND CONFIDENTIAL</div>
-            <div style="flex: 1; text-align: right;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+        <div style="width: 100%; padding: 0 19mm 6px;">
+            <div style="display: flex; align-items: center; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 8px; color: #6b7280; padding-top: 8px; border-top: 2px solid #1e3a5f;">
+                <div style="flex: 1;"></div>
+                <div style="flex: 1; text-align: center; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #1e3a5f;">Private &amp; Confidential</div>
+                <div style="flex: 1; text-align: right;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+            </div>
         </div>
         FOOTER;
 
         return Browsershot::html($html)
+            ->setNodeBinary('/usr/bin/node')
+            ->setNpmBinary('/usr/bin/npm')
+            ->setChromePath(env('BROWSERSHOT_CHROME_PATH', '/usr/bin/google-chrome-stable'))
+            ->noSandbox()
             ->format('A4')
             ->margins(35, 19, 20, 19, 'mm')
             ->showBackground()
@@ -181,40 +189,43 @@ class SignedDocumentPdfService
         if ($signingRequest->sender_full_name) {
             $senderRow = <<<SENDER
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; width: 200px;">Sender (Company Signatory)</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{$signingRequest->sender_full_name}</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-weight: 600; width: 200px; color: #374151; background: #f9fafb;">Sender (Company Signatory)</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a;">{$signingRequest->sender_full_name}</td>
                 </tr>
             SENDER;
         }
 
         return <<<HTML
-        <div style="page-break-before: always; padding: 40px; font-family: sans-serif;">
-            <h2 style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px;">Certificate of Signing</h2>
-            <table style="width: 100%; margin-top: 20px; font-size: 13px; border-collapse: collapse;">
+        <div style="page-break-before: always; padding: 40px 0; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+            <div style="text-align: center; margin-bottom: 28px;">
+                <div style="display: inline-block; background: #1e3a5f; color: #fff; padding: 4px 18px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px;">Certificate of Signing</div>
+                <h2 style="font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 10px 0 0;">Electronic Signature Verification</h2>
+            </div>
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 4px;">
                 {$senderRow}
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; width: 200px;">Signer Name</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{$signingRequest->signer_full_name}</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-weight: 600; width: 200px; color: #374151; background: #f9fafb;">Signer Name</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a;">{$signingRequest->signer_full_name}</td>
                 </tr>
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Signing Date & Time</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{$signedAt->format('d/m/Y h:i:s A T')}</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151; background: #f9fafb;">Signing Date &amp; Time</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a;">{$signedAt->format('d/m/Y h:i:s A T')}</td>
                 </tr>
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">IP Address</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{$signingRequest->signer_ip_address}</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151; background: #f9fafb;">IP Address</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a;">{$signingRequest->signer_ip_address}</td>
                 </tr>
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Delivery Method</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{$signingRequest->delivery_method}</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151; background: #f9fafb;">Delivery Method</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e5e7eb; color: #1a1a1a;">{$signingRequest->delivery_method}</td>
                 </tr>
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Document Hash (SHA-256)</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-family: monospace; font-size: 11px;">{$signingRequest->document_hash}</td>
+                    <td style="padding: 10px 14px; font-weight: 600; color: #374151; background: #f9fafb;">Document Hash (SHA-256)</td>
+                    <td style="padding: 10px 14px; font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 10px; color: #4b5563; word-break: break-all;">{$signingRequest->document_hash}</td>
                 </tr>
             </table>
-            <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 4px; font-size: 11px; color: #666;">
-                This document was electronically signed in accordance with the Electronic Transactions Act 1999 (Cth).
+            <div style="margin-top: 24px; padding: 14px 16px; background: #f0f4f8; border-left: 3px solid #1e3a5f; border-radius: 2px; font-size: 10px; color: #4b5563; line-height: 1.5;">
+                This document was electronically signed in accordance with the <em>Electronic Transactions Act 1999</em> (Cth).
                 The electronic signature is intended to authenticate this document and has the same force and effect as a manual signature.
             </div>
         </div>
@@ -300,20 +311,32 @@ class SignedDocumentPdfService
         <head>
             <meta charset="utf-8">
             <style>
-                body { font-family: sans-serif; font-size: 11px; line-height: 1.4; color: #333; }
-                h1 { font-size: 18px; margin: 8px 0 4px; }
-                h2 { font-size: 14px; margin: 6px 0 3px; }
-                h3 { font-size: 12px; margin: 4px 0 2px; }
-                p { margin: 2px 0; }
+                body {
+                    font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #1a1a1a;
+                }
+                h1 { font-size: 20px; font-weight: 700; margin: 14px 0 6px; color: #111; }
+                h2 { font-size: 16px; font-weight: 600; margin: 12px 0 4px; color: #111; }
+                h3 { font-size: 13px; font-weight: 600; margin: 10px 0 3px; color: #222; }
+                p { margin: 4px 0; }
+
+                /* Tables */
                 table { border-collapse: collapse; width: 100% !important; table-layout: fixed !important; max-width: 100% !important; }
-                th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; font-size: 10px; line-height: 1.3; word-wrap: break-word; overflow: hidden; }
-                th { background-color: #e5e7eb; font-weight: 600; }
+                th, td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: left; font-size: 11px; line-height: 1.4; word-wrap: break-word; overflow: hidden; }
+                th { background-color: #1e3a5f; color: #fff; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+                tr:nth-child(even) td { background-color: #f8fafc; }
                 col, colgroup { width: auto !important; }
-                .signature-box { margin: 16px 0; padding: 10px; border: 1px solid #ccc; }
+
+                /* Signature */
+                .signature-box { margin: 20px 0; padding: 16px; border: 1px solid #d1d5db; border-radius: 4px; background: #fafafa; }
                 .signature-box img { max-width: 300px; max-height: 100px; }
-                .signature-meta { margin-top: 8px; font-size: 12px; color: #555; }
-                ul { padding-left: 20px; list-style-position: outside; list-style-type: disc; }
-                ol { padding-left: 20px; list-style-position: outside; list-style-type: decimal; }
+                .signature-meta { margin-top: 10px; font-size: 11px; color: #4b5563; }
+
+                /* Lists */
+                ul { padding-left: 22px; list-style-position: outside; list-style-type: disc; }
+                ol { padding-left: 22px; list-style-position: outside; list-style-type: decimal; }
                 ol[data-list-style="legal"] { padding-left: 0; list-style-type: none; counter-reset: legal; }
                 ol[data-list-style="legal"] > li { counter-increment: legal; position: relative; padding-left: 30px; }
                 ol[data-list-style="legal"] > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
@@ -321,7 +344,9 @@ class SignedDocumentPdfService
                 ol[data-list-style="legal"] ol:not([data-list-style]) > li { counter-increment: legal; position: relative; padding-left: 30px; }
                 ol[data-list-style="legal"] ol:not([data-list-style]) > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
                 ol[data-list-style="alpha"] { list-style-type: lower-alpha; }
-                li { margin: 1px 0; }
+                li { margin: 2px 0; }
+
+                /* Print control */
                 h1, h2, h3 { page-break-after: avoid; }
                 table, ul, ol, blockquote, p { page-break-inside: avoid; }
                 .page-break { page-break-after: always; border: none; margin: 0; padding: 0; height: 0; }
