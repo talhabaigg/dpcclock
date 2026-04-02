@@ -1298,7 +1298,7 @@ function ReferenceCheckDialog({
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+            <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
                 <DialogHeader className="px-6 pt-5 pb-4 border-b">
                     {selectedRef ? (
                         <button
