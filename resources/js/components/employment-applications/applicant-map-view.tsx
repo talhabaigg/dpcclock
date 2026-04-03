@@ -2,7 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/leaflet.markercluster.js';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
-import { MapPin, Navigation, Plane, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin, Navigation, Plane, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Badge } from '@/components/ui/badge';
@@ -562,6 +562,7 @@ export default function ApplicantMapView({ applications }: Props) {
     const [activeLineId, setActiveLineId] = useState<number | null>(null);
     const [drivingInfo, setDrivingInfo] = useState<{ id: number; info: DrivingInfo } | null>(null);
     const [drivingLoading, setDrivingLoading] = useState<number | null>(null);
+    const [listCollapsed, setListCollapsed] = useState(false);
 
     const listRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -779,9 +780,11 @@ export default function ApplicantMapView({ applications }: Props) {
     }, []);
 
     return (
-        <div className="flex h-full min-h-0 overflow-hidden rounded-lg border">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border md:flex-row">
             {/* Left panel */}
-            <div className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r lg:w-[360px]">
+            <div className={`flex shrink-0 flex-col overflow-hidden border-b md:border-b-0 md:border-r md:w-[320px] lg:w-[360px] ${
+                listCollapsed ? 'h-auto' : 'h-[45vh] md:h-auto'
+            }`}>
                 {/* Address input */}
                 <div className="border-b px-3 py-2.5">
                     <div className="relative">
@@ -825,17 +828,27 @@ export default function ApplicantMapView({ applications }: Props) {
                     </div>
                 </div>
 
-                {/* Count */}
-                <div className="border-b px-3 py-1.5">
+                {/* Count + collapse toggle */}
+                <div className="flex items-center justify-between border-b px-3 py-1.5">
                     <p className="text-muted-foreground text-xs">
                         {mappable.length} applicant{mappable.length !== 1 ? 's' : ''} on map
                         {unmappable.length > 0 && ` · ${unmappable.length} without coordinates`}
                     </p>
+                    <button
+                        onClick={() => setListCollapsed(!listCollapsed)}
+                        className="text-muted-foreground hover:text-foreground md:hidden flex items-center gap-1 text-xs"
+                    >
+                        {listCollapsed ? (
+                            <><span>Show list</span><ChevronDown className="h-3.5 w-3.5" /></>
+                        ) : (
+                            <><span>Hide list</span><ChevronUp className="h-3.5 w-3.5" /></>
+                        )}
+                    </button>
                 </div>
 
                 {/* Applicant list */}
-                <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollContainerRef}>
-                    <div className="flex flex-col gap-0.5 p-1.5">
+                <div className={`min-h-0 flex-1 overflow-y-auto ${listCollapsed ? 'hidden md:block' : ''}`} ref={scrollContainerRef}>
+                    <div className="flex flex-col divide-y">
                         {sortedMappable.map((app) => (
                             <ApplicantCard
                                 key={app.id}
@@ -854,11 +867,11 @@ export default function ApplicantMapView({ applications }: Props) {
                         ))}
                         {unmappable.length > 0 && (
                             <>
-                                <div className="text-muted-foreground px-2 pt-3 pb-1 text-xs font-medium">
+                                <div className="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">
                                     Not on map ({unmappable.length})
                                 </div>
                                 {unmappable.map((app) => (
-                                    <div key={app.id} className="rounded-md border border-dashed p-2.5 opacity-60">
+                                    <div key={app.id} className="border-b border-dashed p-3 opacity-60 last:border-b-0">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0 flex-1">
                                                 <Link href={`/employment-applications/${app.id}`} className="text-sm font-medium hover:underline">
@@ -877,7 +890,7 @@ export default function ApplicantMapView({ applications }: Props) {
             </div>
 
             {/* Right panel: map */}
-            <div className="relative min-w-0 flex-1">
+            <div className="relative min-h-[300px] min-w-0 flex-1">
                 {mappable.length === 0 ? (
                     <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3">
                         <MapPin className="h-12 w-12 opacity-30" />
@@ -950,8 +963,8 @@ const ApplicantCard = memo(function ApplicantCard({
     return (
         <div
             ref={onRef}
-            className={`cursor-pointer rounded-md border p-2.5 transition-colors ${
-                isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'
+            className={`cursor-pointer px-3 py-2.5 transition-colors ${
+                isSelected ? 'bg-primary/5' : 'hover:bg-muted/40'
             }`}
             onClick={onClick}
         >
