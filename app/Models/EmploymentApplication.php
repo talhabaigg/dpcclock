@@ -77,6 +77,9 @@ class EmploymentApplication extends Model
         'declined_at',
         'declined_by',
         'declined_reason',
+        'latitude',
+        'longitude',
+        'geocoded_at',
     ];
 
     protected function casts(): array
@@ -98,6 +101,9 @@ class EmploymentApplication extends Model
             'declaration_accepted' => 'boolean',
             'acceptance_date' => 'date',
             'declined_at' => 'datetime',
+            'geocoded_at' => 'datetime',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
         ];
     }
 

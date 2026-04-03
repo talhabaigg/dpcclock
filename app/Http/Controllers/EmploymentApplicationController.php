@@ -2,7 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\EmploymentApplicationTemplateExport;
 use App\Http\Requests\StoreEmploymentApplicationRequest;
+use App\Imports\EmploymentApplicationImport;
+use App\Imports\LegacyEmploymentApplicationImport;
+use App\Jobs\GeocodeEmploymentApplication;
 use App\Models\ChecklistTemplate;
 use App\Models\Employee;
 use App\Models\EmploymentApplication;
@@ -18,6 +22,7 @@ use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
 
 class EmploymentApplicationController extends Controller
 {
@@ -105,6 +110,8 @@ class EmploymentApplicationController extends Controller
             return $application;
         });
 
+        GeocodeEmploymentApplication::dispatch($application->id);
+
         return redirect()->route('employment-applications.thank-you');
     }
 
@@ -124,7 +131,7 @@ class EmploymentApplicationController extends Controller
         $query = EmploymentApplication::query()
             ->select([
                 'id', 'first_name', 'surname', 'email', 'phone', 'occupation',
-                'occupation_other', 'suburb', 'status', 'created_at',
+                'occupation_other', 'suburb', 'latitude', 'longitude', 'status', 'created_at',
             ]);
 
         // Filter by status
@@ -185,7 +192,7 @@ class EmploymentApplicationController extends Controller
 
         $view = $request->input('view', 'list');
 
-        if ($view === 'kanban') {
+        if ($view === 'kanban' || $view === 'map') {
             $applications = ['data' => $query->latest()->get()];
         } else {
             $applications = $query->latest()->paginate(25)->withQueryString();
@@ -204,6 +211,7 @@ class EmploymentApplicationController extends Controller
             'statuses' => EmploymentApplication::STATUSES,
             'occupations' => $occupations,
             'view' => $view,
+            'isLocal' => app()->environment('local', 'testing'),
         ]);
     }
 
@@ -212,7 +220,7 @@ class EmploymentApplicationController extends Controller
      */
     public function show(EmploymentApplication $employmentApplication): Response
     {
-        $employmentApplication->load(['references.referenceCheck.completedByUser', 'skills', 'declinedByUser']);
+        $employmentApplication->load(['references.referenceCheck.completedByUser', 'skills', 'declinedByUser', 'employees:id,name,eh_employee_id']);
 
         $employmentApplication->load(['checklists.items.completedByUser']);
 
@@ -638,6 +646,117 @@ class EmploymentApplicationController extends Controller
         } catch (\RuntimeException $e) {
             return back()->withErrors(['onboard' => 'Failed to send to payroll. Please try again or contact support.']);
         }
+    }
+
+    /**
+     * Download the import template.
+     */
+    public function importTemplate()
+    {
+        return Excel::download(new EmploymentApplicationTemplateExport, 'employment-applications-import-template.xlsx');
+    }
+
+    /**
+     * Import applications from an uploaded Excel file.
+     */
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240',
+        ]);
+
+        $import = new EmploymentApplicationImport;
+        Excel::import($import, $request->file('file'));
+
+        $message = "Imported {$import->importedCount} application(s).";
+        if ($import->skippedCount > 0) {
+            $message .= " Skipped {$import->skippedCount}.";
+        }
+        if (! empty($import->errors)) {
+            $message .= ' Errors: ' . implode('; ', array_slice($import->errors, 0, 5));
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Import legacy applications from the old website export format.
+     */
+    public function importLegacy(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240',
+        ]);
+
+        $import = new LegacyEmploymentApplicationImport;
+        Excel::import($import, $request->file('file'));
+
+        $message = "Imported {$import->importedCount} legacy application(s).";
+        if ($import->skippedCount > 0) {
+            $message .= " Skipped {$import->skippedCount}.";
+        }
+        if (! empty($import->errors)) {
+            $message .= ' Errors: ' . implode('; ', array_slice($import->errors, 0, 5));
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function findOnboarded(): \Illuminate\Http\JsonResponse
+    {
+        $employees = Employee::select('id', 'email', 'name', 'eh_employee_id')->get()
+            ->keyBy(fn ($e) => strtolower($e->email));
+
+        // Get already-linked application IDs via pivot table
+        $linkedAppIds = DB::table('employment_application_employee')->pluck('employment_application_id')->toArray();
+
+        $matches = EmploymentApplication::select('id', 'first_name', 'surname', 'email', 'status')
+            ->whereIn(DB::raw('LOWER(email)'), $employees->keys())
+            ->get()
+            ->map(fn ($app) => [
+                'application_id' => $app->id,
+                'applicant_name' => $app->first_name . ' ' . $app->surname,
+                'status' => $app->status,
+                'employee_id' => $employees[strtolower($app->email)]->id,
+                'employee_name' => $employees[strtolower($app->email)]->name,
+                'eh_employee_id' => $employees[strtolower($app->email)]->eh_employee_id,
+                'already_linked' => in_array($app->id, $linkedAppIds),
+            ]);
+
+        return response()->json(['matches' => $matches]);
+    }
+
+    public function linkToEmployee(Request $request, EmploymentApplication $employmentApplication): \Illuminate\Http\JsonResponse
+    {
+        $request->validate(['employee_id' => 'required|exists:employees,id']);
+
+        if (! $employmentApplication->employees()->where('employee_id', $request->employee_id)->exists()) {
+            $employmentApplication->employees()->attach($request->employee_id, [
+                'linked_at' => now(),
+            ]);
+        }
+
+        $employmentApplication->update(['status' => 'onboarded']);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function unlinkEmployee(Request $request, EmploymentApplication $employmentApplication): \Illuminate\Http\JsonResponse
+    {
+        $request->validate(['employee_id' => 'required|exists:employees,id']);
+
+        $employmentApplication->employees()->detach($request->employee_id);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function dropAll(): RedirectResponse
+    {
+        abort_unless(app()->environment('local', 'testing'), 403);
+
+        EmploymentApplication::query()->delete();
+
+        return back()->with('success', 'All employment applications have been deleted.');
     }
 
     private function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media): string

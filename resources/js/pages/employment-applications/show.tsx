@@ -49,10 +49,13 @@ import {
     User,
     Wrench,
     FileSignature,
+    UserCheck,
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+
+const ApplicantMiniMap = lazy(() => import('@/components/employment-applications/applicant-mini-map'));
 
 interface Skill {
     id: number;
@@ -154,6 +157,8 @@ interface Application {
     first_name: string;
     surname: string;
     suburb: string;
+    latitude: number | null;
+    longitude: number | null;
     email: string;
     phone: string;
     date_of_birth: string;
@@ -191,6 +196,7 @@ interface Application {
     declined_reason: string | null;
     declined_by_user: UserModel | null;
     created_at: string;
+    employees: { id: number; name: string; eh_employee_id: string | null }[];
     skills: Skill[];
     references: Reference[];
 }
@@ -1866,6 +1872,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [submitting, setSubmitting] = useState(false);
     const [inputFocused, setInputFocused] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [alertMessage, setAlertMessage] = useState<{ type: 'error'; text: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(undefined);
 
     // Comment edit/delete state
@@ -1921,6 +1928,10 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             onSuccess: () => {
                 setCommentBody('');
                 setAttachments([]);
+            },
+            onError: (errors) => {
+                const msg = Object.values(errors).flat().join(', ');
+                setAlertMessage({ type: 'error', text: msg || 'Failed to post comment.' });
             },
             onFinish: () => setSubmitting(false),
         });
@@ -1987,6 +1998,18 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             <Head title={`${app.first_name} ${app.surname} — Application`} />
 
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
+                {alertMessage && (
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription className="flex items-center justify-between">
+                            {alertMessage.text}
+                            <button onClick={() => setAlertMessage(null)} className="ml-4 shrink-0">
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Banners */}
                 {duplicates.length > 0 && (
                     <Alert className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
@@ -2316,13 +2339,27 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </div>
                                 )}
 
+                                {app.employees.length > 0 && (
+                                    <>
+                                        <Separator className="mb-2" />
+                                        {app.employees.map((emp) => (
+                                            <SidebarAttribute key={emp.id} icon={UserCheck} label="Linked Employee">
+                                                <span className="text-primary font-medium">{emp.name}</span>
+                                                {emp.eh_employee_id && <span className="text-muted-foreground text-xs ml-1">(EH: {emp.eh_employee_id})</span>}
+                                            </SidebarAttribute>
+                                        ))}
+                                    </>
+                                )}
+
                                 <Separator className="mb-2" />
 
                                 {/* Personal Details */}
                                 <div className="divide-y">
-                                    <SidebarAttribute icon={MapPin} label="Suburb">
-                                        {app.suburb}
-                                    </SidebarAttribute>
+                                    {!(app.latitude && app.longitude) && (
+                                        <SidebarAttribute icon={MapPin} label="Suburb">
+                                            {app.suburb}
+                                        </SidebarAttribute>
+                                    )}
 
                                     <SidebarAttribute icon={Mail} label="Email">
                                         <a href={`mailto:${app.email}`} className="text-primary hover:underline">{app.email}</a>
@@ -2346,9 +2383,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         </SidebarAttribute>
                                     )}
 
-                                    <SidebarAttribute icon={User} label="Aboriginal / TSI">
-                                        {app.aboriginal_or_tsi === null ? '—' : app.aboriginal_or_tsi ? 'Yes' : 'No'}
-                                    </SidebarAttribute>
                                 </div>
 
                                 <Separator className="my-2" />
@@ -2405,6 +2439,24 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         <XCircle className="h-3.5 w-3.5" />
                                         Decline Application
                                     </button>
+                                )}
+
+                                {/* Mini map */}
+                                {app.latitude && app.longitude && (
+                                    <div className="mt-3">
+                                        <p className="text-muted-foreground mb-1.5 flex items-center gap-1 text-xs font-medium">
+                                            <MapPin className="h-3 w-3" />
+                                            {app.suburb}
+                                        </p>
+                                        <Suspense fallback={<div className="bg-muted h-[180px] w-full animate-pulse rounded-lg" />}>
+                                            <ApplicantMiniMap
+                                                latitude={Number(app.latitude)}
+                                                longitude={Number(app.longitude)}
+                                                name={`${app.first_name} ${app.surname}`}
+                                                suburb={app.suburb}
+                                            />
+                                        </Suspense>
+                                    </div>
                                 )}
                         </div>
                     </div>

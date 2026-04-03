@@ -167,8 +167,74 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // EMPLOYMENT APPLICATIONS
     // ============================================
+    // Geocoding routes for map view — rate limited, requires employment-applications.view
+    Route::middleware(['permission:employment-applications.view', 'throttle:60,1'])->group(function () {
+
+    Route::get('/geocode/suggest', function (\Illuminate\Http\Request $request) {
+        $request->validate(['input' => 'required|string|max:255']);
+        $apiKey = config('services.google.geocoding_key');
+        if (! $apiKey) {
+            return response()->json(['predictions' => []]);
+        }
+
+        $response = \Illuminate\Support\Facades\Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
+            'input' => $request->input('input'),
+            'key' => $apiKey,
+            'components' => 'country:au',
+            'types' => 'geocode',
+        ]);
+
+        $predictions = collect($response->json('predictions', []))->map(fn ($p) => [
+            'place_id' => $p['place_id'],
+            'description' => $p['description'],
+        ])->take(5);
+
+        return response()->json(['predictions' => $predictions]);
+    })->name('geocode.suggest');
+
+    // Geocode a place_id or address for map view
+    Route::get('/geocode', function (\Illuminate\Http\Request $request) {
+        $request->validate(['place_id' => 'nullable|string', 'address' => 'nullable|string|max:255']);
+        $apiKey = config('services.google.geocoding_key');
+        if (! $apiKey) {
+            return response()->json(['error' => 'Not configured'], 500);
+        }
+
+        $params = ['key' => $apiKey];
+        if ($request->filled('place_id')) {
+            $params['place_id'] = $request->place_id;
+        } elseif ($request->filled('address')) {
+            $params['address'] = $request->address . ', Australia';
+            $params['region'] = 'au';
+        } else {
+            return response()->json(['error' => 'Missing place_id or address'], 422);
+        }
+
+        $response = \Illuminate\Support\Facades\Http::get('https://maps.googleapis.com/maps/api/geocode/json', $params);
+        $data = $response->json();
+
+        if (($data['status'] ?? '') !== 'OK' || empty($data['results'])) {
+            return response()->json(['error' => 'Not found'], 404);
+        }
+
+        $result = $data['results'][0];
+
+        return response()->json([
+            'latitude' => $result['geometry']['location']['lat'],
+            'longitude' => $result['geometry']['location']['lng'],
+            'formatted_address' => $result['formatted_address'] ?? $request->address,
+        ]);
+    })->name('geocode');
+
+    }); // end geocoding routes
+
     Route::middleware('permission:employment-applications.view')->group(function () {
         Route::get('/employment-applications', [EmploymentApplicationController::class, 'index'])->name('employment-applications.index');
+        Route::get('/employment-applications/import-template', [EmploymentApplicationController::class, 'importTemplate'])->name('employment-applications.import-template');
+        Route::post('/employment-applications/import', [EmploymentApplicationController::class, 'import'])->name('employment-applications.import');
+        Route::post('/employment-applications/import-legacy', [EmploymentApplicationController::class, 'importLegacy'])->name('employment-applications.import-legacy');
+        Route::get('/employment-applications/find-onboarded', [EmploymentApplicationController::class, 'findOnboarded'])->name('employment-applications.find-onboarded');
+        Route::delete('/employment-applications/drop-all', [EmploymentApplicationController::class, 'dropAll'])->name('employment-applications.drop-all');
         Route::get('/employment-applications/{employmentApplication}', [EmploymentApplicationController::class, 'show'])->name('employment-applications.show');
         Route::get('/employment-applications/{employmentApplication}/submission', [EmploymentApplicationController::class, 'submission'])->name('employment-applications.submission');
         Route::get('/employment-applications/{employmentApplication}/submission/pdf', [EmploymentApplicationController::class, 'submissionPdf'])->name('employment-applications.submission.pdf');
@@ -178,6 +244,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employment-applications/{employmentApplication}/decline', [EmploymentApplicationController::class, 'decline'])->name('employment-applications.decline');
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
         Route::post('/employment-applications/{employmentApplication}/onboard', [EmploymentApplicationController::class, 'onboard'])->name('employment-applications.onboard');
+        Route::post('/employment-applications/{employmentApplication}/link-employee', [EmploymentApplicationController::class, 'linkToEmployee'])->name('employment-applications.link-employee');
+        Route::delete('/employment-applications/{employmentApplication}/unlink-employee', [EmploymentApplicationController::class, 'unlinkEmployee'])->name('employment-applications.unlink-employee');
 
         // Reference Checks
         Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');

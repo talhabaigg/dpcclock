@@ -77,6 +77,10 @@ return [
         'notification_url' => env('POWER_AUTOMATE_NOTIFICATION_URL'),
     ],
 
+    'google' => [
+        'geocoding_key' => env('GOOGLE_GEOCODING_API_KEY'),
+    ],
+
     'recaptcha' => [
         'site_key' => env('RECAPTCHA_SITE_KEY'),
         'secret_key' => env('RECAPTCHA_SECRET_KEY'),

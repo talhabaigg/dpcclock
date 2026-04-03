@@ -9,9 +9,13 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, Columns3, FileText, Filter, GripVertical, LayoutList, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, CircleCheck, Columns3, Download, FileText, Filter, GripVertical, LayoutList, Loader2, MapPin, Search, Trash2, Upload, UserCheck, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+const ApplicantMapView = lazy(() => import('@/components/employment-applications/applicant-map-view'));
 
 interface EmploymentApplication {
     id: number;
@@ -22,6 +26,8 @@ interface EmploymentApplication {
     occupation: string;
     occupation_other: string | null;
     suburb: string;
+    latitude: number | null;
+    longitude: number | null;
     status: string;
     created_at: string;
     duplicate_count: number;
@@ -47,7 +53,8 @@ interface PageProps {
     filters: Filters;
     statuses: string[];
     occupations: string[];
-    view: 'list' | 'kanban';
+    view: 'list' | 'kanban' | 'map';
+    isLocal?: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employment Applications', href: '/employment-applications' }];
@@ -95,7 +102,9 @@ function formatDate(dateString: string) {
 }
 
 function occupationLabel(app: EmploymentApplication) {
-    if (app.occupation === 'other' && app.occupation_other) return app.occupation_other;
+    if (app.occupation === 'other' && app.occupation_other) {
+        return app.occupation_other.length > 40 ? app.occupation_other.slice(0, 40) + '…' : app.occupation_other;
+    }
     return app.occupation.charAt(0).toUpperCase() + app.occupation.slice(1);
 }
 
@@ -237,14 +246,38 @@ function KanbanView({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationsIndex({ applications, filters, occupations, statuses, view }: PageProps) {
+export default function EmploymentApplicationsIndex({ applications, filters, occupations, statuses, view, isLocal }: PageProps) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [suburb, setSuburb] = useState(filters.suburb ?? '');
     const [showFilters, setShowFilters] = useState(() => {
         return !!(filters.status || filters.occupation || filters.suburb || filters.date_from || filters.date_to || filters.duplicates_only || filters.apprentice || filters.apprentice_year);
     });
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [showLegacyImportDialog, setShowLegacyImportDialog] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [legacyImportFile, setLegacyImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [showDropAllDialog, setShowDropAllDialog] = useState(false);
+    const [dropping, setDropping] = useState(false);
+    const [showOnboardedDialog, setShowOnboardedDialog] = useState(false);
+    const [onboardedMatches, setOnboardedMatches] = useState<{ application_id: number; applicant_name: string; status: string; employee_id: number; employee_name: string; already_linked: boolean }[]>([]);
+    const [loadingOnboarded, setLoadingOnboarded] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suburbTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+    const { flash, errors } = usePage<{ flash: { success?: string; error?: string }; errors: Record<string, string> }>().props;
+    const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    useEffect(() => {
+        if (flash?.error) setAlertMessage({ type: 'error', text: flash.error });
+        else if (flash?.success) setAlertMessage({ type: 'success', text: flash.success });
+    }, [flash?.success, flash?.error]);
+
+    useEffect(() => {
+        const msgs = Object.values(errors ?? {});
+        if (msgs.length > 0) setAlertMessage({ type: 'error', text: msgs.join(', ') });
+    }, [errors]);
 
     // Local state for optimistic kanban updates
     const [localApplications, setLocalApplications] = useState(applications.data);
@@ -289,7 +322,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
     }, [view]);
 
     const toggleView = useCallback(
-        (newView: 'list' | 'kanban') => {
+        (newView: 'list' | 'kanban' | 'map') => {
             router.get('/employment-applications', buildQuery({ view: newView }), { preserveState: true, preserveScroll: true });
         },
         [buildQuery],
@@ -309,6 +342,47 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
         );
     }, [localApplications]);
 
+    const handleImport = useCallback(() => {
+        if (!importFile) return;
+        setImporting(true);
+        router.post('/employment-applications/import', { file: importFile }, {
+            forceFormData: true,
+            onFinish: () => {
+                setImporting(false);
+                setShowImportDialog(false);
+                setImportFile(null);
+            },
+        });
+    }, [importFile]);
+
+    const handleLegacyImport = useCallback(() => {
+        if (!legacyImportFile) return;
+        setImporting(true);
+        router.post('/employment-applications/import-legacy', { file: legacyImportFile }, {
+            forceFormData: true,
+            onFinish: () => {
+                setImporting(false);
+                setShowLegacyImportDialog(false);
+                setLegacyImportFile(null);
+            },
+        });
+    }, [legacyImportFile]);
+
+    const handleFindOnboarded = useCallback(async () => {
+        setLoadingOnboarded(true);
+        setShowOnboardedDialog(true);
+        try {
+            const res = await fetch('/employment-applications/find-onboarded');
+            const data = await res.json();
+            setOnboardedMatches(data.matches ?? []);
+        } catch {
+            setAlertMessage({ type: 'error', text: 'Failed to check onboarded applications.' });
+            setShowOnboardedDialog(false);
+        } finally {
+            setLoadingOnboarded(false);
+        }
+    }, []);
+
     useEffect(() => {
         clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => {
@@ -321,7 +395,22 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employment Applications" />
 
-            <div className={`flex flex-col p-3 sm:p-4 ${view === 'kanban' ? 'h-[calc(100dvh-4rem)] overflow-hidden gap-3' : 'gap-4'}`}>
+            <div className={`flex flex-col p-3 sm:p-4 ${view === 'kanban' || view === 'map' ? 'h-[calc(100dvh-4rem)] overflow-hidden gap-3' : 'gap-4'}`}>
+                {alertMessage && (
+                    <Alert
+                        variant={alertMessage.type === 'error' ? 'destructive' : 'default'}
+                        className={alertMessage.type === 'success' ? 'border-green-500/50 bg-green-50/50 text-green-800 dark:bg-green-950/20 dark:text-green-300' : ''}
+                    >
+                        {alertMessage.type === 'error' ? <AlertTriangle className="h-4 w-4" /> : <CircleCheck className="h-4 w-4" />}
+                        <AlertDescription className="flex items-center justify-between">
+                            {alertMessage.text}
+                            <button onClick={() => setAlertMessage(null)} className="ml-4 shrink-0">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Search + Filter Toggle + View Toggle */}
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <div className="relative w-full sm:max-w-xs">
@@ -350,14 +439,43 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                         </Button>
                     )}
 
-                    {/* View toggle */}
-                    <div className="ml-auto flex items-center gap-0.5 rounded-md border p-0.5">
-                        <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('list')} title="List view">
-                            <LayoutList size={14} />
+                    {/* Import + View toggle */}
+                    <div className="ml-auto flex items-center gap-2">
+                        <a href="/employment-applications/import-template" title="Download import template">
+                            <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2">
+                                <Download size={14} />
+                                <span className="hidden sm:inline">Template</span>
+                            </Button>
+                        </a>
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={handleFindOnboarded} title="Find applications already onboarded as employees">
+                            <UserCheck size={14} />
+                            <span className="hidden sm:inline">Find Onboarded</span>
                         </Button>
-                        <Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('kanban')} title="Kanban view">
-                            <Columns3 size={14} />
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowImportDialog(true)} title="Import from Excel">
+                            <Upload size={14} />
+                            <span className="hidden sm:inline">Import</span>
                         </Button>
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowLegacyImportDialog(true)} title="Import legacy applications from website export">
+                            <Upload size={14} />
+                            <span className="hidden sm:inline">Import Legacy</span>
+                        </Button>
+                        {isLocal && (
+                            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowDropAllDialog(true)} title="Delete all applications (local only)">
+                                <Trash2 size={14} />
+                                <span className="hidden sm:inline">Drop All</span>
+                            </Button>
+                        )}
+                        <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+                            <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('list')} title="List view">
+                                <LayoutList size={14} />
+                            </Button>
+                            <Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('kanban')} title="Kanban view">
+                                <Columns3 size={14} />
+                            </Button>
+                            <Button variant={view === 'map' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('map')} title="Map view">
+                                <MapPin size={14} />
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -492,6 +610,15 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                     </div>
                 )}
 
+                {/* Map view */}
+                {view === 'map' && (
+                    <div className="min-h-0 flex-1">
+                        <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+                            <ApplicantMapView applications={localApplications} />
+                        </Suspense>
+                    </div>
+                )}
+
                 {/* List view */}
                 {view === 'list' && (
                     <>
@@ -590,6 +717,205 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                     </>
                 )}
             </div>
+
+            {/* Import Dialog */}
+            <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Import Employment Applications</DialogTitle>
+                        <DialogDescription>
+                            Upload an Excel file (.xlsx) to import applications.{' '}
+                            <a href="/employment-applications/import-template" className="text-primary underline">
+                                Download the template
+                            </a>{' '}
+                            to see the required format.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                            className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleImport} disabled={!importFile || importing}>
+                            {importing ? 'Importing...' : 'Import'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Legacy Import Dialog */}
+            <Dialog open={showLegacyImportDialog} onOpenChange={setShowLegacyImportDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Import Legacy Applications</DialogTitle>
+                        <DialogDescription>
+                            Upload the exported Excel file (.xlsx) from the old website to import existing applications.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <input
+                            type="file"
+                            accept=".xlsx,.xls"
+                            onChange={(e) => setLegacyImportFile(e.target.files?.[0] ?? null)}
+                            className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowLegacyImportDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleLegacyImport} disabled={!legacyImportFile || importing}>
+                            {importing ? 'Importing...' : 'Import Legacy Applications'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Drop All Confirmation Dialog */}
+            {isLocal && (
+                <Dialog open={showDropAllDialog} onOpenChange={setShowDropAllDialog}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete All Applications</DialogTitle>
+                            <DialogDescription>
+                                This will permanently delete all employment applications. This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowDropAllDialog(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                disabled={dropping}
+                                onClick={() => {
+                                    setDropping(true);
+                                    router.delete('/employment-applications/drop-all', {
+                                        onFinish: () => {
+                                            setDropping(false);
+                                            setShowDropAllDialog(false);
+                                        },
+                                    });
+                                }}
+                            >
+                                {dropping ? 'Deleting...' : 'Delete All'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+            {/* Find Onboarded Dialog */}
+            <Dialog open={showOnboardedDialog} onOpenChange={setShowOnboardedDialog}>
+                <DialogContent className="max-h-[80vh] min-w-full overflow-hidden flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>Onboarded Applications</DialogTitle>
+                        <DialogDescription>
+                            Applications matching existing employees by email.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {loadingOnboarded ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                    ) : onboardedMatches.length === 0 ? (
+                        <p className="text-muted-foreground py-8 text-center text-sm">No matching applications found.</p>
+                    ) : (
+                        <div className="overflow-y-auto -mx-6 px-6">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Applicant</TableHead>
+                                        <TableHead>Employee</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {onboardedMatches.map((match) => (
+                                        <TableRow key={match.application_id}>
+                                            <TableCell>{match.applicant_name}</TableCell>
+                                            <TableCell>{match.employee_name}</TableCell>
+                                            <TableCell>
+                                                <StatusBadge status={match.status} />
+                                            </TableCell>
+                                            <TableCell className="text-right space-x-2">
+                                                <Link href={`/employment-applications/${match.application_id}`}>
+                                                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs">View</Button>
+                                                </Link>
+                                                {match.already_linked ? (
+                                                    <Badge variant="secondary" className="text-xs"><CircleCheck className="mr-1 h-3 w-3" />Linked</Badge>
+                                                ) : (
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="h-7 px-2 text-xs"
+                                                        onClick={async () => {
+                                                            const res = await fetch(`/employment-applications/${match.application_id}/link-employee`, {
+                                                                method: 'POST',
+                                                                headers: {
+                                                                    'Content-Type': 'application/json',
+                                                                    'Accept': 'application/json',
+                                                                    'X-Requested-With': 'XMLHttpRequest',
+                                                                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                                                                },
+                                                                body: JSON.stringify({ employee_id: match.employee_id }),
+                                                            });
+                                                            if (res.ok) {
+                                                                setOnboardedMatches((prev) => prev.map((m) => m.application_id === match.application_id ? { ...m, already_linked: true, status: 'onboarded' } : m));
+                                                            }
+                                                        }}
+                                                    >
+                                                        Link
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            <p className="text-muted-foreground py-2 text-center text-xs">
+                                {onboardedMatches.length} match(es) — {onboardedMatches.filter((m) => m.already_linked).length} linked
+                            </p>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2">
+                        {!loadingOnboarded && onboardedMatches.some((m) => !m.already_linked) && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={async () => {
+                                    const unlinked = onboardedMatches.filter((m) => !m.already_linked);
+                                    const headers: Record<string, string> = {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json',
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+                                    };
+                                    const results = await Promise.allSettled(unlinked.map((m) =>
+                                        fetch(`/employment-applications/${m.application_id}/link-employee`, {
+                                            method: 'POST',
+                                            headers,
+                                            body: JSON.stringify({ employee_id: m.employee_id }),
+                                        }).then((r) => { if (!r.ok) throw new Error(r.statusText); return m.application_id; })
+                                    ));
+                                    const linkedIds = results.filter((r) => r.status === 'fulfilled').map((r) => (r as PromiseFulfilledResult<number>).value);
+                                    setOnboardedMatches((prev) => prev.map((m) => linkedIds.includes(m.application_id) ? { ...m, already_linked: true, status: 'onboarded' } : m));
+                                }}
+                            >
+                                Link All ({onboardedMatches.filter((m) => !m.already_linked).length})
+                            </Button>
+                        )}
+                        <Button variant="outline" onClick={() => { setShowOnboardedDialog(false); router.reload(); }}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
