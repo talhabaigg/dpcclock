@@ -17,6 +17,7 @@ use App\Services\EmploymentHeroService;
 use App\Services\GetCompanyCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -64,6 +65,10 @@ class EmploymentApplicationController extends Controller
 
             $data['declaration_accepted'] = true;
 
+            if (! empty($data['latitude']) && ! empty($data['longitude'])) {
+                $data['geocoded_at'] = now();
+            }
+
             $application = EmploymentApplication::create($data);
 
             // References
@@ -110,7 +115,9 @@ class EmploymentApplicationController extends Controller
             return $application;
         });
 
-        GeocodeEmploymentApplication::dispatch($application->id);
+        if (! $application->latitude) {
+            GeocodeEmploymentApplication::dispatch($application->id);
+        }
 
         return redirect()->route('employment-applications.thank-you');
     }
@@ -661,6 +668,8 @@ class EmploymentApplicationController extends Controller
      */
     public function import(Request $request): RedirectResponse
     {
+        set_time_limit(300);
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
@@ -684,6 +693,8 @@ class EmploymentApplicationController extends Controller
      */
     public function importLegacy(Request $request): RedirectResponse
     {
+        set_time_limit(300);
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
@@ -757,6 +768,86 @@ class EmploymentApplicationController extends Controller
         EmploymentApplication::query()->delete();
 
         return back()->with('success', 'All employment applications have been deleted.');
+    }
+
+    /**
+     * Proxy for Google Places autocomplete suggestions.
+     */
+    public function addressSuggestions(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate(['input' => 'required|string|min:3|max:255']);
+
+        $apiKey = config('services.google.geocoding_key');
+        if (! $apiKey) {
+            return response()->json(['suggestions' => []]);
+        }
+
+        $response = Http::withHeaders([
+            'X-Goog-Api-Key' => $apiKey,
+        ])->post('https://places.googleapis.com/v1/places:autocomplete', [
+            'input' => $request->input('input'),
+            'includedRegionCodes' => ['au'],
+            'includedPrimaryTypes' => ['street_address', 'subpremise', 'premise'],
+        ]);
+
+        if (! $response->successful()) {
+            return response()->json(['suggestions' => []]);
+        }
+
+        $suggestions = collect($response->json('suggestions', []))
+            ->filter(fn ($s) => isset($s['placePrediction']))
+            ->map(fn ($s) => [
+                'placeId' => $s['placePrediction']['placeId'],
+                'description' => $s['placePrediction']['text']['text'],
+            ])
+            ->values();
+
+        return response()->json(['suggestions' => $suggestions]);
+    }
+
+    /**
+     * Proxy for Google Places place details.
+     */
+    public function placeDetails(string $placeId): \Illuminate\Http\JsonResponse
+    {
+        $apiKey = config('services.google.geocoding_key');
+        if (! $apiKey) {
+            return response()->json(['error' => 'Not configured'], 500);
+        }
+
+        $response = Http::withHeaders([
+            'X-Goog-Api-Key' => $apiKey,
+            'X-Goog-FieldMask' => 'formattedAddress,addressComponents,location',
+        ])->get("https://places.googleapis.com/v1/places/{$placeId}");
+
+        if (! $response->successful()) {
+            return response()->json(['error' => 'Failed to fetch place details'], $response->status());
+        }
+
+        $place = $response->json();
+        $components = $place['addressComponents'] ?? [];
+
+        $parts = [
+            'address' => $place['formattedAddress'] ?? '',
+            'suburb' => '',
+            'state' => '',
+            'postcode' => '',
+            'latitude' => $place['location']['latitude'] ?? null,
+            'longitude' => $place['location']['longitude'] ?? null,
+        ];
+
+        foreach ($components as $c) {
+            $types = $c['types'] ?? [];
+            if (in_array('locality', $types)) {
+                $parts['suburb'] = $c['longText'] ?? '';
+            } elseif (in_array('administrative_area_level_1', $types)) {
+                $parts['state'] = $c['shortText'] ?? '';
+            } elseif (in_array('postal_code', $types)) {
+                $parts['postcode'] = $c['longText'] ?? '';
+            }
+        }
+
+        return response()->json($parts);
     }
 
     private function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media): string

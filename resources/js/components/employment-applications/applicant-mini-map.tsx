@@ -64,7 +64,7 @@ export default function ApplicantMiniMap({ latitude, longitude, name, suburb }: 
         <div
             ref={containerRef}
             className="h-[180px] w-full overflow-hidden rounded-lg border"
-            style={{ cursor: 'default' }}
+            style={{ cursor: 'pointer' }}
         />
     );
 }

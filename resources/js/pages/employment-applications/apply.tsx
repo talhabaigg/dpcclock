@@ -1,3 +1,4 @@
+import AddressAutocomplete from '@/components/address-autocomplete';
 import InputError from '@/components/input-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -105,7 +106,12 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
         // Personal
         surname: '',
         first_name: '',
+        address: '',
         suburb: '',
+        state: '',
+        postcode: '',
+        latitude: null as number | null,
+        longitude: null as number | null,
         email: '',
         phone: '',
         date_of_birth: '',
@@ -170,7 +176,7 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
         if (currentStep === 0) {
             if (!data.surname.trim()) newErrors.surname = 'Surname is required';
             if (!data.first_name.trim()) newErrors.first_name = 'First name is required';
-            if (!data.suburb.trim()) newErrors.suburb = 'Suburb is required';
+            if (!data.suburb.trim()) newErrors.suburb = 'Address is required — please select from the suggestions';
             if (!data.email.trim()) newErrors.email = 'Email is required';
             if (!data.phone.trim()) newErrors.phone = 'Phone is required';
             if (!data.date_of_birth) newErrors.date_of_birth = 'Date of birth is required';
@@ -344,11 +350,57 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                                 </div>
 
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="suburb" className="text-sm font-medium text-gray-700">
-                                        Suburb <span className="text-red-500">*</span>
+                                    <Label htmlFor="address" className="text-sm font-medium text-gray-700">
+                                        Address <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input id="suburb" className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm" value={data.suburb} onChange={(e) => setData('suburb', e.target.value)} />
+                                    <AddressAutocomplete
+                                        id="address"
+                                        value={data.address}
+                                        onChange={(val) => setData('address', val)}
+                                        onSelect={(parts) => {
+                                            setData({
+                                                ...data,
+                                                address: parts.address,
+                                                suburb: parts.suburb,
+                                                state: parts.state,
+                                                postcode: parts.postcode,
+                                                latitude: parts.latitude,
+                                                longitude: parts.longitude,
+                                            });
+                                        }}
+                                        className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
+                                    />
                                     <InputError message={allErrors.suburb} />
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="suburb" className="text-sm font-medium text-gray-700">Suburb</Label>
+                                        <Input
+                                            id="suburb"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
+                                            value={data.suburb}
+                                            onChange={(e) => setData('suburb', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="state" className="text-sm font-medium text-gray-700">State</Label>
+                                        <Input
+                                            id="state"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
+                                            value={data.state}
+                                            onChange={(e) => setData('state', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="postcode" className="text-sm font-medium text-gray-700">Postcode</Label>
+                                        <Input
+                                            id="postcode"
+                                            className="h-11 border-gray-300 text-base focus:border-[#2e6da4] focus:ring-[#2e6da4] sm:h-10 sm:text-sm"
+                                            value={data.postcode}
+                                            onChange={(e) => setData('postcode', e.target.value)}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

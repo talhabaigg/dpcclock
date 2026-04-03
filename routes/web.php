@@ -80,6 +80,10 @@ Route::middleware('throttle:30,1')->group(function () {
     Route::post('/work-with-us', [EmploymentApplicationController::class, 'store'])->name('employment-applications.store')->middleware('throttle:5,1');
     Route::get('/work-with-us/thank-you', [EmploymentApplicationController::class, 'thankYou'])->name('employment-applications.thank-you');
 });
+Route::middleware('throttle:120,1')->group(function () {
+    Route::get('/work-with-us/address-suggestions', [EmploymentApplicationController::class, 'addressSuggestions'])->name('employment-applications.address-suggestions');
+    Route::get('/work-with-us/place-details/{placeId}', [EmploymentApplicationController::class, 'placeDetails'])->name('employment-applications.place-details');
+});
 
 // Document Signing — public routes (token-based, no auth)
 Route::middleware('throttle:30,1')->group(function () {

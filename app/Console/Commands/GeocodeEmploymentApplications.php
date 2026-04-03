@@ -37,15 +37,19 @@ class GeocodeEmploymentApplications extends Command
 
         $query->chunkById(50, function ($applications) use ($geocoding, $bar, &$success, &$failed) {
             foreach ($applications as $application) {
-                $result = $geocoding->geocode($application->suburb);
+                $addressToGeocode = $application->address ?: $application->suburb;
+                $result = $geocoding->geocode($addressToGeocode);
 
-                $application->update([
-                    'latitude' => $result['latitude'] ?? null,
-                    'longitude' => $result['longitude'] ?? null,
-                    'geocoded_at' => now(),
-                ]);
-
-                $result ? $success++ : $failed++;
+                if ($result) {
+                    $application->update([
+                        'latitude' => $result['latitude'],
+                        'longitude' => $result['longitude'],
+                        'geocoded_at' => now(),
+                    ]);
+                    $success++;
+                } else {
+                    $failed++;
+                }
                 $bar->advance();
 
                 usleep(100_000); // 100ms delay between API calls

@@ -26,16 +26,20 @@ class GeocodeEmploymentApplication implements ShouldQueue
     {
         $application = EmploymentApplication::find($this->applicationId);
 
-        if (! $application || ! $application->suburb) {
+        if (! $application || (! $application->suburb && ! $application->address)) {
             return;
         }
 
-        $result = $geocoding->geocode($application->suburb);
+        // Use full address if available, fall back to suburb
+        $addressToGeocode = $application->address ?: $application->suburb;
+        $result = $geocoding->geocode($addressToGeocode);
 
-        $application->update([
-            'latitude' => $result['latitude'] ?? null,
-            'longitude' => $result['longitude'] ?? null,
-            'geocoded_at' => now(),
-        ]);
+        if ($result) {
+            $application->update([
+                'latitude' => $result['latitude'],
+                'longitude' => $result['longitude'],
+                'geocoded_at' => now(),
+            ]);
+        }
     }
 }

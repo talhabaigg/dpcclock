@@ -157,6 +157,9 @@ interface Application {
     first_name: string;
     surname: string;
     suburb: string;
+    address: string | null;
+    state: string | null;
+    postcode: string | null;
     latitude: number | null;
     longitude: number | null;
     email: string;
@@ -2443,10 +2446,15 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 {/* Mini map */}
                                 {app.latitude && app.longitude && (
-                                    <div className="mt-3">
+                                    <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(app.address || app.suburb || `${app.latitude},${app.longitude}`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-3 block cursor-pointer"
+                                    >
                                         <p className="text-muted-foreground mb-1.5 flex items-center gap-1 text-xs font-medium">
                                             <MapPin className="h-3 w-3" />
-                                            {app.suburb}
+                                            {app.address || app.suburb}
                                         </p>
                                         <Suspense fallback={<div className="bg-muted h-[180px] w-full animate-pulse rounded-lg" />}>
                                             <ApplicantMiniMap
@@ -2456,7 +2464,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 suburb={app.suburb}
                                             />
                                         </Suspense>
-                                    </div>
+                                    </a>
                                 )}
                         </div>
                     </div>
