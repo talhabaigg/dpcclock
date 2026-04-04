@@ -1,67 +1,49 @@
 import { useEffect, useRef, useState } from 'react';
 
-declare global {
-    interface Window {
-        cv: any;
-    }
-}
-
 let loadPromise: Promise<any> | null = null;
+let cachedCv: any = null;
 
 function loadOpenCv(): Promise<any> {
+    if (cachedCv) return Promise.resolve(cachedCv);
     if (loadPromise) return loadPromise;
 
-    // Already loaded
-    if (window.cv && window.cv.Mat) {
-        loadPromise = Promise.resolve(window.cv);
-        return loadPromise;
-    }
+    loadPromise = import('@techstark/opencv-js').then((module) => {
+        const cv = module.default || module.cv || module;
 
-    loadPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://docs.opencv.org/4.9.0/opencv.js';
-        script.async = true;
+        // The module may need WASM initialization
+        if (cv.Mat) {
+            cachedCv = cv;
+            return cv;
+        }
 
-        script.onload = () => {
-            const checkReady = () => {
-                if (window.cv && window.cv.Mat) {
-                    resolve(window.cv);
-                } else if (window.cv && typeof window.cv.then === 'function') {
-                    window.cv.then((cv: any) => {
-                        window.cv = cv;
-                        resolve(cv);
-                    });
-                } else {
-                    // OpenCV uses onRuntimeInitialized callback
-                    const originalOnReady = window.cv?.onRuntimeInitialized;
-                    if (window.cv) {
-                        window.cv.onRuntimeInitialized = () => {
-                            originalOnReady?.();
-                            resolve(window.cv);
-                        };
-                    } else {
-                        reject(new Error('OpenCV failed to initialize'));
-                    }
-                }
-            };
-            // Give it a tick for the global to populate
-            setTimeout(checkReady, 100);
-        };
+        // Wait for onRuntimeInitialized
+        return new Promise<any>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('OpenCV WASM init timed out'));
+            }, 30000);
 
-        script.onerror = () => {
-            loadPromise = null;
-            reject(new Error('Failed to load OpenCV.js'));
-        };
-
-        document.head.appendChild(script);
+            if (typeof cv.then === 'function') {
+                cv.then((readyCv: any) => {
+                    clearTimeout(timeout);
+                    cachedCv = readyCv;
+                    resolve(readyCv);
+                });
+            } else {
+                cv.onRuntimeInitialized = () => {
+                    clearTimeout(timeout);
+                    cachedCv = cv;
+                    resolve(cv);
+                };
+            }
+        });
     });
 
     return loadPromise;
 }
 
 export function useOpenCv() {
-    const [cv, setCv] = useState<any>(window.cv?.Mat ? window.cv : null);
-    const [loading, setLoading] = useState(!cv);
+    const [cv, setCv] = useState<any>(cachedCv);
+    const [loading, setLoading] = useState(!cachedCv);
     const [error, setError] = useState<string | null>(null);
     const mounted = useRef(true);
 

@@ -19,6 +19,40 @@ function buildHeaders(includeContentType = true): HeadersInit {
     return headers;
 }
 
+/**
+ * Refresh the CSRF token by hitting Sanctum's csrf-cookie endpoint.
+ * This updates the XSRF-TOKEN cookie and also refreshes the meta tag
+ * so both getCsrfToken() and getXsrfToken() return valid values.
+ */
+let refreshPromise: Promise<void> | null = null;
+
+async function refreshCsrfToken(): Promise<void> {
+    if (refreshPromise) return refreshPromise;
+
+    refreshPromise = fetch('/sanctum/csrf-cookie', {
+        method: 'GET',
+        credentials: 'same-origin',
+    }).then(async () => {
+        // Also refresh the meta tag by fetching the current page headers
+        const freshToken = getXsrfToken();
+        const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+        if (meta && freshToken) {
+            meta.content = freshToken;
+        }
+    }).finally(() => {
+        refreshPromise = null;
+    });
+
+    return refreshPromise;
+}
+
+// Proactively refresh CSRF token when PWA returns to foreground
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        refreshCsrfToken();
+    }
+});
+
 export class ApiError extends Error {
     constructor(
         message: string,
@@ -38,6 +72,23 @@ async function handleResponse<T>(response: Response): Promise<T> {
     return response.json();
 }
 
+async function requestWithCsrfRetry(url: string, init: RequestInit): Promise<Response> {
+    const response = await fetch(url, init);
+    if (response.status === 419) {
+        await refreshCsrfToken();
+        // Rebuild headers with fresh tokens
+        const retryInit = { ...init };
+        if (retryInit.headers) {
+            const headers = { ...(retryInit.headers as Record<string, string>) };
+            headers['X-CSRF-TOKEN'] = getCsrfToken();
+            headers['X-XSRF-TOKEN'] = getXsrfToken();
+            retryInit.headers = headers;
+        }
+        return fetch(url, retryInit);
+    }
+    return response;
+}
+
 export const api = {
     get: <T = unknown>(url: string): Promise<T> =>
         fetch(url, {
@@ -47,16 +98,16 @@ export const api = {
 
     post: <T = unknown>(url: string, body?: unknown): Promise<T> => {
         const isFormData = body instanceof FormData;
-        return fetch(url, {
+        return requestWithCsrfRetry(url, {
             method: 'POST',
-            headers: isFormData ? { 'X-CSRF-TOKEN': getCsrfToken(), 'X-XSRF-TOKEN': getXsrfToken() } : buildHeaders(),
+            headers: isFormData ? { 'X-CSRF-TOKEN': getCsrfToken(), 'X-XSRF-TOKEN': getXsrfToken(), Accept: 'application/json' } : buildHeaders(),
             credentials: 'same-origin',
             body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
         }).then((r) => handleResponse<T>(r));
     },
 
     put: <T = unknown>(url: string, body: unknown): Promise<T> =>
-        fetch(url, {
+        requestWithCsrfRetry(url, {
             method: 'PUT',
             headers: buildHeaders(),
             credentials: 'same-origin',
@@ -64,7 +115,7 @@ export const api = {
         }).then((r) => handleResponse<T>(r)),
 
     patch: <T = unknown>(url: string, body: unknown): Promise<T> =>
-        fetch(url, {
+        requestWithCsrfRetry(url, {
             method: 'PATCH',
             headers: buildHeaders(),
             credentials: 'same-origin',
@@ -72,7 +123,7 @@ export const api = {
         }).then((r) => handleResponse<T>(r)),
 
     delete: <T = unknown>(url: string): Promise<T> =>
-        fetch(url, {
+        requestWithCsrfRetry(url, {
             method: 'DELETE',
             headers: buildHeaders(),
             credentials: 'same-origin',

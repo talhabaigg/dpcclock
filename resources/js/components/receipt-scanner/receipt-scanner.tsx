@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Camera, FlashlightOff, Flashlight, Loader2, RotateCcw, Check, X, ImageOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type Point } from './perspective-transform';
 import { perspectiveTransform } from './perspective-transform';
 import { useDocumentDetection } from './use-document-detection';
 import { useOpenCv } from './use-opencv';
