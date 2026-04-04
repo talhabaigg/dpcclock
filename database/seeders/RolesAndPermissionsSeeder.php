@@ -277,7 +277,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Credit Card Receipts' => [
             'receipts.view' => 'Upload and view own credit card receipts',
-            'receipts.view-all' => 'View all users credit card receipts and export',
+            'receipts.manage' => 'Manage all receipts: view, edit, delete all users receipts and export',
         ],
     ];
 
@@ -409,7 +409,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'worker-screening.manage',
             // Credit Card Receipts
             'receipts.view',
-            'receipts.view-all',
+            'receipts.manage',
         ],
 
         'manager' => [

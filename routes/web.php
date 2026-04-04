@@ -864,13 +864,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // CREDIT CARD RECEIPTS
     // ============================================
-    Route::get('/credit-card-receipts/export', [CreditCardReceiptController::class, 'export'])->name('credit-card-receipts.export')
-        ->middleware('permission:receipts.view-all');
+    // My Receipts — own receipts, upload, edit own, no delete/export
     Route::middleware('permission:receipts.view')->group(function () {
-        Route::get('/credit-card-receipts', [CreditCardReceiptController::class, 'index'])->name('credit-card-receipts.index');
-        Route::post('/credit-card-receipts', [CreditCardReceiptController::class, 'store'])->name('credit-card-receipts.store');
-        Route::put('/credit-card-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('credit-card-receipts.update');
-        Route::delete('/credit-card-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'destroy'])->name('credit-card-receipts.destroy');
+        Route::get('/my-receipts', [CreditCardReceiptController::class, 'index'])->name('my-receipts.index');
+        Route::post('/my-receipts', [CreditCardReceiptController::class, 'store'])->name('my-receipts.store');
+        Route::put('/my-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('my-receipts.update');
+    });
+
+    // Manage Receipts — all users, full CRUD, export
+    Route::middleware('permission:receipts.manage')->group(function () {
+        Route::get('/manage-receipts', [CreditCardReceiptController::class, 'manage'])->name('manage-receipts.index');
+        Route::get('/manage-receipts/export', [CreditCardReceiptController::class, 'export'])->name('manage-receipts.export');
+        Route::put('/manage-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('manage-receipts.update');
+        Route::post('/manage-receipts/{creditCardReceipt}/reconcile', [CreditCardReceiptController::class, 'reconcile'])->name('manage-receipts.reconcile');
+        Route::delete('/manage-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'destroy'])->name('manage-receipts.destroy');
     });
 
     // ============================================

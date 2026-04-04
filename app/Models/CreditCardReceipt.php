@@ -38,6 +38,7 @@ class CreditCardReceipt extends Model implements HasMedia
         'category',
         'description',
         'extraction_status',
+        'is_reconciled',
         'raw_extraction',
     ];
 
@@ -45,6 +46,7 @@ class CreditCardReceipt extends Model implements HasMedia
         'total_amount' => 'decimal:2',
         'gst_amount' => 'decimal:2',
         'transaction_date' => 'date',
+        'is_reconciled' => 'boolean',
         'raw_extraction' => 'array',
     ];
 
@@ -56,5 +58,6 @@ class CreditCardReceipt extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('receipts');
+        $this->addMediaCollection('processed_receipts')->singleFile();
     }
 }

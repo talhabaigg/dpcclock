@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\CreditCardReceipt;
 use App\Services\ReceiptExtractionService;
+use App\Services\ReceiptImageProcessorService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,7 +26,7 @@ class ExtractReceiptData implements ShouldQueue
         private readonly int $receiptId
     ) {}
 
-    public function handle(ReceiptExtractionService $service): void
+    public function handle(ReceiptExtractionService $service, ReceiptImageProcessorService $imageProcessor): void
     {
         $receipt = CreditCardReceipt::find($this->receiptId);
 
@@ -35,10 +36,18 @@ class ExtractReceiptData implements ShouldQueue
             return;
         }
 
+        // Process image first (non-blocking — failure doesn't affect extraction)
+        $imageProcessor->process($receipt);
+
         $result = $service->extract($receipt);
 
         if ($result['success']) {
             $data = $result['data'];
+
+            $category = $data['category'] ?? null;
+            if ($category && ! in_array($category, CreditCardReceipt::CATEGORIES)) {
+                $category = 'other';
+            }
 
             $receipt->update([
                 'merchant_name' => $data['merchant_name'] ?? $receipt->merchant_name,
@@ -46,6 +55,7 @@ class ExtractReceiptData implements ShouldQueue
                 'gst_amount' => $data['gst_amount'] ?? $receipt->gst_amount,
                 'currency' => $data['currency'] ?? $receipt->currency,
                 'transaction_date' => $data['transaction_date'] ?? $receipt->transaction_date,
+                'category' => $category ?? $receipt->category,
                 'extraction_status' => CreditCardReceipt::STATUS_COMPLETED,
                 'raw_extraction' => $result['raw'],
             ]);

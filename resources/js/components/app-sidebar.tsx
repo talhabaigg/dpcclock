@@ -41,6 +41,7 @@ import {
     TableProperties,
     Tags,
     Receipt,
+    ReceiptText,
     UserX,
     UsersRound,
 } from 'lucide-react';
@@ -115,10 +116,16 @@ const mainNavItems: NavItem[] = [
         permission: 'variations.view',
     },
     {
-        title: 'Credit Card Receipts',
-        href: '/credit-card-receipts',
+        title: 'My Receipts',
+        href: '/my-receipts',
         icon: Receipt,
         permission: 'receipts.view',
+    },
+    {
+        title: 'Manage Receipts',
+        href: '/manage-receipts',
+        icon: ReceiptText,
+        permission: 'receipts.manage',
     },
 ];
 

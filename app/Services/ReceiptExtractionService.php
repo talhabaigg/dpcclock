@@ -14,7 +14,7 @@ class ReceiptExtractionService
     private const MODEL = 'gpt-4o-mini';
 
     private const PROMPT = <<<'PROMPT'
-Analyze this receipt/invoice and extract ALL of the following 5 fields. You MUST include every field in your response. Return ONLY valid JSON with no markdown formatting or explanation.
+Analyze this receipt/invoice and extract ALL of the following 6 fields. You MUST include every field in your response. Return ONLY valid JSON with no markdown formatting or explanation.
 
 IMPORTANT: If the invoice shows amounts in multiple currencies (e.g. USD charges with an AUD converted total), extract ALL amounts in the SAME single currency. The total_amount, gst_amount, and currency must all be consistent with each other.
 
@@ -23,7 +23,8 @@ IMPORTANT: If the invoice shows amounts in multiple currencies (e.g. USD charges
   "total_amount": "number - the final total amount charged. If multiple currencies shown, use the amount matching the currency field below",
   "gst_amount": "number or null - tax/GST amount in the same currency as total_amount",
   "currency": "string - REQUIRED - the 3-letter currency code. If the invoice shows charges in USD but a converted AUD total, use USD and the USD amount. Use the currency of the original charges, not the local conversion",
-  "transaction_date": "string or null - the date in YYYY-MM-DD format if visible"
+  "transaction_date": "string or null - the date in YYYY-MM-DD format if visible",
+  "category": "string - REQUIRED - classify the purchase into exactly one of: fuel, materials, meals, travel, tools, office, other. Use 'fuel' for petrol/gas stations, 'materials' for building/construction supplies, 'meals' for restaurants/cafes/food, 'travel' for flights/hotels/accommodation/transport, 'tools' for equipment/hardware, 'office' for stationery/printing/office supplies, 'other' for anything else"
 }
 PROMPT;
 
