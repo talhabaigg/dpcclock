@@ -7,20 +7,38 @@ function loadOpenCv(): Promise<any> {
     if (cachedCv) return Promise.resolve(cachedCv);
     if (loadPromise) return loadPromise;
 
-    loadPromise = import('@techstark/opencv-js').then((module) => {
-        const cv = module.default || module.cv || module;
+    loadPromise = new Promise<any>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            loadPromise = null;
+            reject(new Error('OpenCV load timed out'));
+        }, 30000);
 
-        // The module may need WASM initialization
-        if (cv.Mat) {
-            cachedCv = cv;
-            return cv;
+        if ((window as any).cv?.Mat) {
+            clearTimeout(timeout);
+            cachedCv = (window as any).cv;
+            resolve(cachedCv);
+            return;
         }
 
-        // Wait for onRuntimeInitialized
-        return new Promise<any>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('OpenCV WASM init timed out'));
-            }, 30000);
+        const script = document.createElement('script');
+        script.src = '/vendor/opencv.js';
+        script.async = true;
+
+        script.onload = () => {
+            const cv = (window as any).cv;
+            if (!cv) {
+                clearTimeout(timeout);
+                loadPromise = null;
+                reject(new Error('OpenCV script loaded but cv not found on window'));
+                return;
+            }
+
+            if (cv.Mat) {
+                clearTimeout(timeout);
+                cachedCv = cv;
+                resolve(cv);
+                return;
+            }
 
             if (typeof cv.then === 'function') {
                 cv.then((readyCv: any) => {
@@ -35,7 +53,15 @@ function loadOpenCv(): Promise<any> {
                     resolve(cv);
                 };
             }
-        });
+        };
+
+        script.onerror = () => {
+            clearTimeout(timeout);
+            loadPromise = null;
+            reject(new Error('Failed to load OpenCV'));
+        };
+
+        document.head.appendChild(script);
     });
 
     return loadPromise;
