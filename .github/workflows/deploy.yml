@@ -54,8 +54,6 @@ jobs:
 
             # Install and build frontend assets
             npm ci --legacy-peer-deps
-            mkdir -p public/vendor
-            cp node_modules/@techstark/opencv-js/dist/opencv.js public/vendor/opencv.js
             npm run build
 
             # ---- PHASE 2: Fast steps only (brief downtime) ----
