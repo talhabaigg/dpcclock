@@ -25,32 +25,59 @@ function loadOpenCv(): Promise<any> {
         script.async = true;
 
         script.onload = () => {
-            const cv = (window as any).cv;
-            if (!cv) {
+            const cvFactory = (window as any).cv;
+            if (!cvFactory) {
                 clearTimeout(timeout);
                 loadPromise = null;
                 reject(new Error('OpenCV script loaded but cv not found on window'));
                 return;
             }
 
-            if (cv.Mat) {
+            // If already initialized (has Mat), use directly
+            if (cvFactory.Mat) {
                 clearTimeout(timeout);
-                cachedCv = cv;
-                resolve(cv);
+                cachedCv = cvFactory;
+                resolve(cvFactory);
                 return;
             }
 
-            if (typeof cv.then === 'function') {
-                cv.then((readyCv: any) => {
+            // @techstark/opencv-js sets window.cv to a factory function
+            // that must be called to initialize the WASM module
+            if (typeof cvFactory === 'function') {
+                const cvInstance = cvFactory();
+                if (cvInstance && typeof cvInstance.then === 'function') {
+                    cvInstance.then((readyCv: any) => {
+                        clearTimeout(timeout);
+                        cachedCv = readyCv;
+                        (window as any).cv = readyCv;
+                        resolve(readyCv);
+                    });
+                } else if (cvInstance && cvInstance.Mat) {
+                    clearTimeout(timeout);
+                    cachedCv = cvInstance;
+                    resolve(cvInstance);
+                } else {
+                    cvInstance.onRuntimeInitialized = () => {
+                        clearTimeout(timeout);
+                        cachedCv = cvInstance;
+                        resolve(cvInstance);
+                    };
+                }
+                return;
+            }
+
+            // Fallback: cv is an object with .then (promise-like)
+            if (typeof cvFactory.then === 'function') {
+                cvFactory.then((readyCv: any) => {
                     clearTimeout(timeout);
                     cachedCv = readyCv;
                     resolve(readyCv);
                 });
             } else {
-                cv.onRuntimeInitialized = () => {
+                cvFactory.onRuntimeInitialized = () => {
                     clearTimeout(timeout);
-                    cachedCv = cv;
-                    resolve(cv);
+                    cachedCv = cvFactory;
+                    resolve(cvFactory);
                 };
             }
         };
