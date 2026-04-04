@@ -1,9 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { Camera, FlashlightOff, Flashlight, Loader2, RotateCcw, Check, X, ImageOff } from 'lucide-react';
+import { Camera, FlashlightOff, Flashlight, RotateCcw, Check, X, ImageOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { perspectiveTransform } from './perspective-transform';
-import { useDocumentDetection } from './use-document-detection';
-import { useOpenCv } from './use-opencv';
 
 type ScannerState = 'scanning' | 'reviewing';
 
@@ -14,19 +11,14 @@ interface ReceiptScannerProps {
 }
 
 export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScannerProps) {
-    const { cv, loading: cvLoading, error: cvError } = useOpenCv();
     const videoRef = useRef<HTMLVideoElement>(null);
-    const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const [state, setState] = useState<ScannerState>('scanning');
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [torchOn, setTorchOn] = useState(false);
     const [torchSupported, setTorchSupported] = useState(false);
-    const [capturedCanvas, setCapturedCanvas] = useState<HTMLCanvasElement | null>(null);
     const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
-    const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
-
-    const { corners, confidence } = useDocumentDetection(videoRef, cv, open && state === 'scanning');
+    const capturedCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     // Start camera
     useEffect(() => {
@@ -75,91 +67,6 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
         };
     }, [open]);
 
-    // Track video dimensions
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        const handleResize = () => {
-            if (video.videoWidth && video.videoHeight) {
-                setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
-            }
-        };
-
-        video.addEventListener('loadedmetadata', handleResize);
-        video.addEventListener('resize', handleResize);
-        return () => {
-            video.removeEventListener('loadedmetadata', handleResize);
-            video.removeEventListener('resize', handleResize);
-        };
-    }, []);
-
-    // Draw overlay
-    useEffect(() => {
-        if (state !== 'scanning') return;
-
-        const canvas = overlayCanvasRef.current;
-        const video = videoRef.current;
-        if (!canvas || !video) return;
-
-        let animFrame: number;
-        const draw = () => {
-            // Match canvas to video element's display size
-            const rect = video.getBoundingClientRect();
-            if (canvas.width !== rect.width || canvas.height !== rect.height) {
-                canvas.width = rect.width;
-                canvas.height = rect.height;
-            }
-
-            const ctx = canvas.getContext('2d')!;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (corners && videoDimensions.width > 0) {
-                // Scale corners from video coordinates to display coordinates
-                const scaleX = rect.width / videoDimensions.width;
-                const scaleY = rect.height / videoDimensions.height;
-
-                const scaledCorners = corners.map((p) => ({
-                    x: p.x * scaleX,
-                    y: p.y * scaleY,
-                }));
-
-                ctx.beginPath();
-                ctx.moveTo(scaledCorners[0].x, scaledCorners[0].y);
-                for (let i = 1; i < scaledCorners.length; i++) {
-                    ctx.lineTo(scaledCorners[i].x, scaledCorners[i].y);
-                }
-                ctx.closePath();
-
-                // Fill with semi-transparent overlay outside the document
-                ctx.fillStyle = confidence === 'high'
-                    ? 'rgba(34, 197, 94, 0.08)'
-                    : 'rgba(250, 204, 21, 0.08)';
-                ctx.fill();
-
-                ctx.strokeStyle = confidence === 'high' ? '#22c55e' : '#facc15';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-
-                // Draw corner dots
-                for (const point of scaledCorners) {
-                    ctx.beginPath();
-                    ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
-                    ctx.fillStyle = confidence === 'high' ? '#22c55e' : '#facc15';
-                    ctx.fill();
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-            }
-
-            animFrame = requestAnimationFrame(draw);
-        };
-
-        animFrame = requestAnimationFrame(draw);
-        return () => cancelAnimationFrame(animFrame);
-    }, [state, corners, confidence, videoDimensions]);
-
     // Toggle torch
     const toggleTorch = useCallback(async () => {
         const track = streamRef.current?.getVideoTracks()[0];
@@ -178,33 +85,23 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
         const video = videoRef.current;
         if (!video || video.readyState < 2) return;
 
-        // Draw raw frame to a canvas
-        const rawCanvas = document.createElement('canvas');
-        rawCanvas.width = video.videoWidth;
-        rawCanvas.height = video.videoHeight;
-        const ctx = rawCanvas.getContext('2d')!;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d')!;
         ctx.drawImage(video, 0, 0);
 
-        let resultCanvas: HTMLCanvasElement;
-
-        if (corners && cv) {
-            // Apply perspective transform
-            resultCanvas = perspectiveTransform(cv, rawCanvas, corners);
-        } else {
-            // No detection — use raw frame
-            resultCanvas = rawCanvas;
-        }
-
-        setCapturedCanvas(resultCanvas);
-        setCapturedPreviewUrl(resultCanvas.toDataURL('image/jpeg', 0.92));
+        capturedCanvasRef.current = canvas;
+        setCapturedPreviewUrl(canvas.toDataURL('image/jpeg', 0.92));
         setState('reviewing');
-    }, [corners, cv]);
+    }, []);
 
     // Submit captured image
     const handleUsePhoto = useCallback(() => {
-        if (!capturedCanvas) return;
+        const canvas = capturedCanvasRef.current;
+        if (!canvas) return;
 
-        capturedCanvas.toBlob(
+        canvas.toBlob(
             (blob) => {
                 if (!blob) return;
                 const file = new File([blob], `receipt-scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -213,11 +110,11 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
             'image/jpeg',
             0.92,
         );
-    }, [capturedCanvas, onCapture]);
+    }, [onCapture]);
 
     // Retake
     const handleRetake = useCallback(() => {
-        setCapturedCanvas(null);
+        capturedCanvasRef.current = null;
         if (capturedPreviewUrl) {
             URL.revokeObjectURL(capturedPreviewUrl);
             setCapturedPreviewUrl(null);
@@ -294,16 +191,8 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
                 <Button variant="ghost" size="icon" onClick={handleClose} className="text-white hover:bg-white/10">
                     <X className="h-5 w-5" />
                 </Button>
-                <span className="text-sm text-white/80">
-                    {cvLoading
-                        ? 'Loading scanner...'
-                        : cvError
-                          ? 'Scanner ready (no border detection)'
-                          : confidence === 'high'
-                            ? 'Receipt detected — tap to capture'
-                            : 'Align receipt within frame'}
-                </span>
-                <div className="w-10" /> {/* Spacer for centering */}
+                <span className="text-sm text-white/80">Align receipt and tap to capture</span>
+                <div className="w-10" />
             </div>
 
             {/* Camera view */}
@@ -315,20 +204,6 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
                     muted
                     className="h-full w-full object-cover"
                 />
-                <canvas
-                    ref={overlayCanvasRef}
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                />
-
-                {/* OpenCV loading spinner overlay */}
-                {cvLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <div className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Preparing border detection...
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Bottom controls */}
@@ -353,21 +228,9 @@ export default function ReceiptScanner({ open, onClose, onCapture }: ReceiptScan
                     className="group relative flex h-[72px] w-[72px] items-center justify-center rounded-full"
                     aria-label="Capture receipt"
                 >
-                    {/* Outer ring */}
-                    <span
-                        className={`absolute inset-0 rounded-full border-4 transition-colors ${
-                            confidence === 'high' ? 'border-green-500' : 'border-white/60'
-                        }`}
-                    />
-                    {/* Inner button */}
-                    <span
-                        className={`h-[58px] w-[58px] rounded-full transition-colors group-active:scale-90 ${
-                            confidence === 'high' ? 'bg-green-500' : 'bg-white'
-                        }`}
-                    >
-                        <Camera className={`m-auto mt-[17px] h-6 w-6 ${
-                            confidence === 'high' ? 'text-white' : 'text-gray-700'
-                        }`} />
+                    <span className="absolute inset-0 rounded-full border-4 border-white/60" />
+                    <span className="h-[58px] w-[58px] rounded-full bg-white transition-transform group-active:scale-90">
+                        <Camera className="m-auto mt-[17px] h-6 w-6 text-gray-700" />
                     </span>
                 </button>
 
