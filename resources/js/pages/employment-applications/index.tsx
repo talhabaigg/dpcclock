@@ -101,6 +101,10 @@ function formatDate(dateString: string) {
     });
 }
 
+function appNumber(id: number) {
+    return `APP-${String(id).padStart(4, '0')}`;
+}
+
 function occupationLabel(app: EmploymentApplication) {
     if (app.occupation === 'other' && app.occupation_other) {
         return app.occupation_other.length > 40 ? app.occupation_other.slice(0, 40) + '…' : app.occupation_other;
@@ -119,6 +123,7 @@ function CardContent({ app }: { app: EmploymentApplication }) {
                 </span>
                 {app.duplicate_count > 0 && <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />}
             </div>
+            <p className="text-muted-foreground text-xs font-mono">{appNumber(app.id)}</p>
             <p className="text-muted-foreground truncate text-xs">{occupationLabel(app)}</p>
             {app.suburb && <p className="text-muted-foreground truncate text-xs">{app.suburb}</p>}
             <p className="text-muted-foreground mt-0.5 text-xs">{formatDate(app.created_at)}</p>
@@ -636,6 +641,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
                                                     <p className="font-medium">
+                                                        <span className="text-muted-foreground mr-2 font-mono text-xs">{appNumber(app.id)}</span>
                                                         {app.first_name} {app.surname}
                                                     </p>
                                                     <p className="text-muted-foreground text-xs">{app.email}</p>
@@ -661,6 +667,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
+                                        <TableHead className="px-3">App #</TableHead>
                                         <TableHead className="px-3">Name</TableHead>
                                         <TableHead className="px-3">Email</TableHead>
                                         <TableHead className="px-3">Phone</TableHead>
@@ -673,7 +680,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                 <TableBody>
                                     {!applications.data.length ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-32 text-center">
+                                            <TableCell colSpan={8} className="h-32 text-center">
                                                 <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                     <FileText className="h-8 w-8 opacity-40" />
                                                     <p>No applications found</p>
@@ -683,6 +690,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                     ) : (
                                         applications.data.map((app) => (
                                             <TableRow key={app.id} className="group cursor-pointer" onClick={() => router.get(`/employment-applications/${app.id}`)}>
+                                                <TableCell className="text-muted-foreground px-3 font-mono text-sm">{appNumber(app.id)}</TableCell>
                                                 <TableCell className="px-3">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="font-medium">

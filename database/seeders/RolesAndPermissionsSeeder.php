@@ -271,6 +271,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'ai.chat' => 'Access AI chat features',
             'ai.voice' => 'Access AI voice call features',
         ],
+
+        // ============================================
+        // CREDIT CARD RECEIPTS
+        // ============================================
+        'Credit Card Receipts' => [
+            'receipts.view' => 'Upload and view own credit card receipts',
+            'receipts.view-all' => 'View all users credit card receipts and export',
+        ],
     ];
 
     /**
@@ -399,6 +407,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // Worker Screening
             'worker-screening.search',
             'worker-screening.manage',
+            // Credit Card Receipts
+            'receipts.view',
+            'receipts.view-all',
         ],
 
         'manager' => [
@@ -427,6 +438,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'materials.view',
             // Worker Screening (search only)
             'worker-screening.search',
+            // Credit Card Receipts (own only)
+            'receipts.view',
         ],
 
         'kiosk' => [

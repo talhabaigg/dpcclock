@@ -8,6 +8,7 @@ use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CommentController;
+use App\Http\Controllers\CreditCardReceiptController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
@@ -859,6 +860,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('/variations/{variation}/client-quote', [VariationController::class, 'clientQuote'])->name('variations.client-quote')
         ->middleware('permission:variations.view');
+
+    // ============================================
+    // CREDIT CARD RECEIPTS
+    // ============================================
+    Route::get('/credit-card-receipts/export', [CreditCardReceiptController::class, 'export'])->name('credit-card-receipts.export')
+        ->middleware('permission:receipts.view-all');
+    Route::middleware('permission:receipts.view')->group(function () {
+        Route::get('/credit-card-receipts', [CreditCardReceiptController::class, 'index'])->name('credit-card-receipts.index');
+        Route::post('/credit-card-receipts', [CreditCardReceiptController::class, 'store'])->name('credit-card-receipts.store');
+        Route::put('/credit-card-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('credit-card-receipts.update');
+        Route::delete('/credit-card-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'destroy'])->name('credit-card-receipts.destroy');
+    });
 
     // ============================================
     // DRAWINGS
