@@ -1055,6 +1055,7 @@ class LocationController extends Controller
             'ap_posted_invoice_lines' => ['label' => 'AP Posted Invoice Lines', 'class' => \App\Jobs\LoadApPostedInvoiceLines::class],
             'job_vendor_commitments' => ['label' => 'Job Vendor Commitments', 'class' => \App\Jobs\LoadJobVendorCommitments::class],
             'ap_purchase_orders' => ['label' => 'AP Purchase Orders', 'class' => \App\Jobs\LoadApPurchaseOrders::class],
+            'variations' => ['label' => 'Variations (Change Orders)', 'class' => null],
         ];
 
         $syncLogs = \App\Models\DataSyncLog::all()->keyBy('job_name');
@@ -1081,7 +1082,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
-            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,variations',
             'force_full' => 'boolean',
         ]);
 
@@ -1101,6 +1102,12 @@ class LocationController extends Controller
 
         $dispatched = [];
         foreach ($validated['jobs'] as $jobKey) {
+            if ($jobKey === 'variations') {
+                \Artisan::call('premier:sync-variations');
+                $dispatched[] = $jobKey;
+                continue;
+            }
+
             $class = $jobClassMap[$jobKey];
             // Jobs that support forceFullSync parameter
             $supportsForce = in_array($jobKey, [

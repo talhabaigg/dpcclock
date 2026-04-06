@@ -866,6 +866,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/variations/{variation}/edit', [VariationController::class, 'edit'])->name('variations.edit');
         Route::post('/variations/{variation}/update', [VariationController::class, 'update'])->name('variations.update');
     });
+    Route::get('/variations/sync-all', [VariationController::class, 'syncAllVariationsFromPremier'])->name('variations.sync-all')
+        ->middleware('permission:variations.sync');
     Route::get('/variations/{id}', [VariationController::class, 'destroy'])->name('variations.destroy')
         ->middleware('permission:variations.delete');
     Route::get('/locations/{location}/variations/sync', [VariationController::class, 'loadVariationsFromPremier'])->name('variations.sync')

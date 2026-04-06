@@ -454,7 +454,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                     <ChevronDown size={14} />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="z-[10000]">
                                 <DropdownMenuItem asChild>
                                     <a href="/employment-applications/import-template">
                                         <Download size={14} />

@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Models\DataSyncLog;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -67,10 +68,16 @@ class LoadVariationsFromPremierJob implements ShouldQueue
             $variationService = new VariationService;
             $response = $variationService->getChangeOrders($this->location, $companyId, $token);
 
-            if (! $response->ok()) {
-                throw new \RuntimeException(
-                    'Failed to fetch variations from Premier: '.json_encode($response->json())
-                );
+            $premierCode = $response->json('Code');
+
+            if (! $response->ok() || $premierCode === 404) {
+                Log::info('LoadVariationsFromPremierJob: Skipping - job not found in Premier', [
+                    'location_id' => $this->location->id,
+                    'external_id' => $this->location->external_id,
+                    'premier_message' => $response->json('Message'),
+                ]);
+
+                return;
             }
 
             $data = $response->json('Data');
@@ -133,6 +140,11 @@ class LoadVariationsFromPremierJob implements ShouldQueue
 
                 $variationsProcessed++;
             }
+
+            DataSyncLog::updateOrCreate(
+                ['job_name' => 'variations'],
+                ['last_successful_sync' => now(), 'records_synced' => $variationsProcessed]
+            );
 
             $duration = now()->diffInSeconds($startTime);
             Log::info('LoadVariationsFromPremierJob: Completed successfully', [

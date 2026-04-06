@@ -66,6 +66,11 @@ Schedule::job(LoadJobVendorCommitments::class)
     ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
     ->withoutOverlapping();
 
+// Premier Variation Sync - Daily
+Schedule::command('premier:sync-variations')
+    ->dailyAt('05:30')
+    ->withoutOverlapping();
+
 // Employment Hero Timesheet Sync - Daily
 Schedule::call(function () {
     $tz = 'Australia/Brisbane';

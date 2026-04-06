@@ -479,6 +479,7 @@ export default function VariationIndex() {
     const [searchInput, setSearchInput] = useState(filters.search || '');
     const [viewMode, setViewMode] = useState(() => localStorage.getItem('variationViewMode') ?? 'table');
     const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+    const syncUrl = isLocationScoped ? `/locations/${location.id}/variations/sync` : '/variations/sync-all';
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleViewModeChange = (value: string) => {
@@ -540,7 +541,7 @@ export default function VariationIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isLocationScoped ? `${location.name} - Variations` : 'Variations'} />
-            {isLocationScoped && <LoadingDialog open={syncDialogOpen} setOpen={setSyncDialogOpen} />}
+            <LoadingDialog open={syncDialogOpen} setOpen={setSyncDialogOpen} />
 
             <div className="@container flex min-w-0 flex-col gap-4 p-4">
                 {/* ── Summary Cards (location-scoped only) ─────────────── */}
@@ -578,14 +579,12 @@ export default function VariationIndex() {
                             <p className="text-muted-foreground text-sm">Manage and track change orders</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            {isLocationScoped && (
-                                <Link href={`/locations/${location.id}/variations/sync`} onClick={() => setSyncDialogOpen(true)}>
-                                    <Button variant="outline" className="gap-2">
-                                        <RefreshCcw className="h-4 w-4" />
-                                        Sync
-                                    </Button>
-                                </Link>
-                            )}
+                            <Link href={syncUrl} onClick={() => setSyncDialogOpen(true)}>
+                                <Button variant="outline" className="gap-2">
+                                    <RefreshCcw className="h-4 w-4" />
+                                    {isLocationScoped ? 'Sync' : 'Sync All'}
+                                </Button>
+                            </Link>
                             <Link href={isLocationScoped ? `/variations/create?location_id=${location.id}` : '/variations/create'}>
                                 <Button className="gap-2">
                                     <CirclePlus className="h-4 w-4" />

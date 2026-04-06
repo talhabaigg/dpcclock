@@ -33,6 +33,13 @@ class VariationController extends Controller
         return redirect()->back()->with('success', 'Variation sync job has been queued. Changes will appear shortly.');
     }
 
+    public function syncAllVariationsFromPremier()
+    {
+        \Artisan::call('premier:sync-variations');
+
+        return redirect()->back()->with('success', 'Variation sync queued for all jobs. Changes will appear shortly.');
+    }
+
     public function index(Request $request, ?Location $location = null)
     {
         $user = auth()->user();
