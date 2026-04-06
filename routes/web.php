@@ -341,6 +341,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:employees.view')->group(function () {
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
     });
     Route::middleware('permission:employees.sync')->group(function () {
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');

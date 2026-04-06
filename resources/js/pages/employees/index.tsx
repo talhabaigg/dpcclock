@@ -74,7 +74,7 @@ export default function EmployeesList() {
                 accessorKey: 'name',
                 header: ({ column }) => <SortHeader label="Employee" column={column} />,
                 cell: ({ row }) => (
-                    <div className="flex items-center gap-2">
+                    <Link href={`/employees/${row.original.id}`} className="flex items-center gap-2">
                         <UserInfo
                             user={{
                                 ...row.original,
@@ -84,7 +84,7 @@ export default function EmployeesList() {
                                 phone: '',
                             }}
                         />
-                    </div>
+                    </Link>
                 ),
             },
             {

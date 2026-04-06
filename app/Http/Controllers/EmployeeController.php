@@ -21,6 +21,34 @@ class EmployeeController extends Controller
         ]);
     }
 
+    public function show(Employee $employee)
+    {
+        $employee->load(['worktypes', 'kiosks.location', 'incidentReports.location', 'clocks' => function ($query) {
+            $query->select('id', 'eh_employee_id', 'clock_in')->latest('clock_in')->limit(10);
+        }]);
+
+        // Get unique locations/projects with their kiosk IDs
+        $projects = $employee->kiosks
+            ->filter(fn ($kiosk) => $kiosk->location)
+            ->map(fn ($kiosk) => [
+                'id' => $kiosk->location->id,
+                'name' => $kiosk->location->name,
+                'external_id' => $kiosk->location->external_id,
+                'kiosk_id' => $kiosk->id,
+            ])
+            ->unique('id')
+            ->values();
+
+        // Current week ending (Friday)
+        $weekEnding = now()->endOfWeek(\Carbon\Carbon::FRIDAY)->format('d-m-Y');
+
+        return Inertia::render('employees/show', [
+            'employee' => $employee,
+            'projects' => $projects,
+            'weekEnding' => $weekEnding,
+        ]);
+    }
+
     public function sync()
     {
         $apiKey = config('services.employment_hero.api_key');
