@@ -20,6 +20,76 @@ class EmploymentHeroService
         $this->businessId = config('services.employment_hero.business_id');
     }
 
+    /**
+     * Get all business locations from Employment Hero.
+     */
+    public function getLocations(): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->get("{$this->baseUrl}/business/{$this->businessId}/location");
+
+        if ($response->failed()) {
+            Log::error('Failed to get locations from Employment Hero', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get locations: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Get the current unstructured employee data from Employment Hero.
+     */
+    public function getEmployee(string $employeeId): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->get("{$this->baseUrl}/business/{$this->businessId}/employee/unstructured/{$employeeId}");
+
+        if ($response->failed()) {
+            Log::error('Failed to get employee from Employment Hero', [
+                'employeeId' => $employeeId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get employee: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Update employee locations via the unstructured employee PUT endpoint.
+     * The locations field is a pipe-separated string of location names.
+     */
+    public function updateEmployeeLocations(string $employeeId, string $locations): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+            'Content-Type' => 'application/json',
+        ])->put("{$this->baseUrl}/business/{$this->businessId}/employee/unstructured/{$employeeId}", [
+            'locations' => $locations,
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Failed to update employee locations', [
+                'employeeId' => $employeeId,
+                'locations' => $locations,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to update employee locations: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
     public function initiateSelfServiceOnboarding(array $data): array
     {
         $response = Http::withHeaders([

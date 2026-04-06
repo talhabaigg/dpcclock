@@ -12,7 +12,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CircleCheck, Columns3, Download, FileText, Filter, GripVertical, LayoutList, Loader2, MapPin, Search, Trash2, Upload, UserCheck, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertTriangle, ChevronDown, CircleCheck, Columns3, Download, FileText, Filter, GripVertical, LayoutList, Loader2, MapPin, Search, Trash2, Upload, UserCheck, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const ApplicantMapView = lazy(() => import('@/components/employment-applications/applicant-map-view'));
@@ -446,24 +447,34 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
 
                     {/* Import + View toggle */}
                     <div className="ml-auto flex items-center gap-2">
-                        <a href="/employment-applications/import-template" title="Download import template">
-                            <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2">
-                                <Download size={14} />
-                                <span className="hidden sm:inline">Template</span>
-                            </Button>
-                        </a>
-                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={handleFindOnboarded} title="Find applications already onboarded as employees">
-                            <UserCheck size={14} />
-                            <span className="hidden sm:inline">Find Onboarded</span>
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowImportDialog(true)} title="Import from Excel">
-                            <Upload size={14} />
-                            <span className="hidden sm:inline">Import</span>
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowLegacyImportDialog(true)} title="Import legacy applications from website export">
-                            <Upload size={14} />
-                            <span className="hidden sm:inline">Import Legacy</span>
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2">
+                                    Actions
+                                    <ChevronDown size={14} />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <a href="/employment-applications/import-template">
+                                        <Download size={14} />
+                                        Download Template
+                                    </a>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleFindOnboarded}>
+                                    <UserCheck size={14} />
+                                    Find Onboarded
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowImportDialog(true)}>
+                                    <Upload size={14} />
+                                    Import
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowLegacyImportDialog(true)}>
+                                    <Upload size={14} />
+                                    Import Legacy
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         {isLocal && (
                             <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowDropAllDialog(true)} title="Delete all applications (local only)">
                                 <Trash2 size={14} />

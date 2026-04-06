@@ -919,6 +919,7 @@ class LocationController extends Controller
                     ['eh_location_id' => $loc['id']],
                     [
                         'name' => $loc['name'] ?? null,
+                        'fully_qualified_name' => $loc['fullyQualifiedName'] ?? null,
                         'eh_parent_id' => $loc['parentId'] ?? null,
                         'external_id' => $loc['externalId'] ?? null,
                         'state' => $loc['state'] ?? null,

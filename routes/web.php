@@ -67,6 +67,9 @@ use App\Http\Controllers\ReferenceCheckController;
 use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
+use App\Http\Controllers\EmployeeFileTypeController;
+use App\Http\Controllers\EmployeeFileController;
+use App\Http\Controllers\FileComplianceDashboardController;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -347,7 +350,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');
         Route::get('/employee/{employeeId}/worktypes/sync', [EmployeeController::class, 'syncSingleEmployeeWorktype'])->name('employee.worktypes.sync');
         Route::get('/employees/kiosks/update', [EmployeeController::class, 'updateKioskEmployees'])->name('employees.kiosks.update');
+        Route::get('/employees/{employee}/locations', [EmployeeController::class, 'getLocations'])->name('employees.locations');
+        Route::put('/employees/{employee}/locations', [EmployeeController::class, 'updateLocations'])->name('employees.locations.update');
     });
+
+    // ============================================
+    // EMPLOYEE FILES & COMPLIANCE
+    // ============================================
+    Route::resource('employee-file-types', EmployeeFileTypeController::class)->except(['show', 'create', 'edit']);
+
+    Route::prefix('employees/{employee}/files')->group(function () {
+        Route::get('/', [EmployeeFileController::class, 'index'])->name('employees.files.index');
+        Route::post('/', [EmployeeFileController::class, 'store'])->name('employees.files.store');
+        Route::put('{employeeFile}', [EmployeeFileController::class, 'update'])->name('employees.files.update');
+        Route::delete('{employeeFile}', [EmployeeFileController::class, 'destroy'])->name('employees.files.destroy');
+        Route::get('{employeeFile}/download/{collection}', [EmployeeFileController::class, 'download'])->name('employees.files.download');
+    });
+
+    Route::get('compliance/files', [FileComplianceDashboardController::class, 'index'])->name('compliance.files');
 
     // ============================================
     // LOCATION MANAGEMENT

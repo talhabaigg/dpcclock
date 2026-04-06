@@ -12,6 +12,7 @@ class Location extends Model
     protected $fillable = [
         'watermelon_id',
         'name',
+        'fully_qualified_name',
         'eh_location_id',
         'eh_parent_id',
         'external_id',

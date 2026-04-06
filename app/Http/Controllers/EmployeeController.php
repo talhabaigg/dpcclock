@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SyncKioskEmployees;
 use App\Models\Employee;
+use App\Models\Location;
 use App\Models\Worktype;
+use App\Services\EmploymentHeroService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -46,6 +49,75 @@ class EmployeeController extends Controller
             'employee' => $employee,
             'projects' => $projects,
             'weekEnding' => $weekEnding,
+        ]);
+    }
+
+    /**
+     * Get current employee locations and all available EH locations.
+     */
+    public function getLocations(Employee $employee, EmploymentHeroService $ehService)
+    {
+        $data = $ehService->getEmployee($employee->eh_employee_id);
+
+        // Use local DB locations with fully qualified names (populated during location sync)
+        $allLocations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+            ->open()
+            ->whereNotNull('fully_qualified_name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'fully_qualified_name', 'external_id'])
+            ->map(fn ($loc) => [
+                'id' => $loc->id,
+                'name' => $loc->fully_qualified_name,
+                'externalId' => $loc->external_id,
+            ]);
+
+        return response()->json([
+            'locations' => $data['locations'] ?? '',
+            'allEhLocations' => $allLocations,
+        ]);
+    }
+
+    /**
+     * Update employee locations via Employment Hero API.
+     */
+    public function updateLocations(Employee $employee, Request $request, EmploymentHeroService $ehService)
+    {
+        $request->validate([
+            'locations' => 'required|string',
+        ]);
+
+        $result = $ehService->updateEmployeeLocations(
+            $employee->eh_employee_id,
+            $request->input('locations')
+        );
+
+        // Sync local kiosk assignments from the selected location names
+        $selectedNames = collect(explode('|', $request->input('locations')))->map(fn ($n) => trim($n))->filter();
+
+        $locationIds = Location::whereIn('fully_qualified_name', $selectedNames)
+            ->pluck('eh_location_id')
+            ->toArray();
+
+        $kioskIds = \App\Models\Kiosk::whereIn('eh_location_id', $locationIds)
+            ->pluck('eh_kiosk_id')
+            ->toArray();
+
+        // Preserve existing pivot data for kiosks that remain
+        $currentKiosks = $employee->kiosks()->withPivot(['zone', 'top_up'])->get()->keyBy('eh_kiosk_id');
+        $syncData = [];
+        foreach ($kioskIds as $kioskId) {
+            if ($currentKiosks->has($kioskId)) {
+                $pivot = $currentKiosks[$kioskId]->pivot;
+                $syncData[$kioskId] = ['zone' => $pivot->zone, 'top_up' => $pivot->top_up];
+            } else {
+                $syncData[$kioskId] = ['zone' => 'default', 'top_up' => false];
+            }
+        }
+        $employee->kiosks()->sync($syncData);
+
+        return response()->json([
+            'message' => 'Employee locations updated successfully.',
+            'locations' => $result['locations'] ?? $request->input('locations'),
         ]);
     }
 

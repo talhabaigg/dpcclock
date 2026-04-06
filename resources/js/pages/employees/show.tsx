@@ -1,13 +1,17 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertTriangle, Clock, LinkIcon, FolderOpen } from 'lucide-react';
-import { useMemo } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
+import { AlertTriangle, Check, Clock, FolderOpen, LinkIcon, Loader2, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
     id: number;
@@ -72,17 +76,6 @@ function formatDate(dateStr: string | null): string {
     });
 }
 
-function formatDateTime(dateStr: string | null): string {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleString('en-AU', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="py-3">
@@ -105,7 +98,6 @@ export default function EmployeeShow() {
     ];
 
     const employmentTypeLabel = emp.employment_type?.replace(/([A-Z])/g, ' $1').trim();
-    const worktypeLabel = emp.worktypes?.map((wt) => wt.name).join(', ');
 
     // Derive unique week-ending dates (Fridays) from recent clocks, excluding current week
     const recentWeekEndings = useMemo(() => {
@@ -115,7 +107,6 @@ export default function EmployeeShow() {
         return emp.clocks
             .map((clock) => {
                 const d = new Date(clock.clock_in);
-                // Find the Friday of that week
                 const day = d.getDay();
                 const diff = (5 - day + 7) % 7;
                 const friday = new Date(d);
@@ -131,6 +122,117 @@ export default function EmployeeShow() {
                 return true;
             });
     }, [emp.clocks, weekEnding]);
+
+    // Location management state
+    const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+    const [selectedLocationNames, setSelectedLocationNames] = useState<Set<string>>(new Set());
+    const [ehLocations, setEhLocations] = useState<{ id: number; name: string; externalId: string | null }[]>([]);
+    const [loadingLocations, setLoadingLocations] = useState(false);
+    const [savingLocations, setSavingLocations] = useState(false);
+    const [locationError, setLocationError] = useState<string | null>(null);
+    const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredLocations = useMemo(() => {
+        if (!searchQuery) return ehLocations;
+        const q = searchQuery.toLowerCase();
+        return ehLocations.filter(
+            (loc) => loc.name.toLowerCase().includes(q) || loc.externalId?.toLowerCase().includes(q),
+        );
+    }, [ehLocations, searchQuery]);
+
+    const openLocationDialog = useCallback(async () => {
+        setLocationDialogOpen(true);
+        setLoadingLocations(true);
+        setLocationError(null);
+        setLocationSuccess(null);
+        setSearchQuery('');
+
+        try {
+            const response = await fetch(`/employees/${emp.id}/locations`, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch current locations');
+
+            const data = await response.json();
+
+            // Set available EH locations
+            setEhLocations(data.allEhLocations || []);
+
+            // Parse pipe-separated location names (these are the exact EH names)
+            const locationString: string = data.locations || '';
+            const names = locationString
+                .split('|')
+                .map((n: string) => n.trim())
+                .filter(Boolean);
+            setSelectedLocationNames(new Set(names));
+        } catch (err: any) {
+            setLocationError(err.message || 'Failed to load current locations');
+        } finally {
+            setLoadingLocations(false);
+        }
+    }, [emp.id]);
+
+    const toggleLocation = useCallback((locationName: string) => {
+        setSelectedLocationNames((prev) => {
+            const next = new Set(prev);
+            if (next.has(locationName)) {
+                next.delete(locationName);
+            } else {
+                next.add(locationName);
+            }
+            return next;
+        });
+    }, []);
+
+    const saveLocations = useCallback(async () => {
+        setSavingLocations(true);
+        setLocationError(null);
+        setLocationSuccess(null);
+
+        try {
+            const locationsString = Array.from(selectedLocationNames).join('|');
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const response = await fetch(`/employees/${emp.id}/locations`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ locations: locationsString }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || 'Failed to update locations');
+            }
+
+            setLocationSuccess('Locations updated successfully');
+            setTimeout(() => {
+                setLocationDialogOpen(false);
+                router.reload();
+            }, 1500);
+        } catch (err: any) {
+            setLocationError(err.message || 'Failed to update locations');
+        } finally {
+            setSavingLocations(false);
+        }
+    }, [emp.id, selectedLocationNames]);
+
+    // Clear success message on dialog close
+    useEffect(() => {
+        if (!locationDialogOpen) {
+            setLocationSuccess(null);
+            setLocationError(null);
+        }
+    }, [locationDialogOpen]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -231,13 +333,22 @@ export default function EmployeeShow() {
 
                     {/* RIGHT COLUMN */}
                     <div className="flex flex-col gap-4">
+                        {/* Licences, tickets & training */}
+                        <EmployeeFilesCard employeeId={emp.id} />
+
                         {/* Projects Card */}
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                    <FolderOpen className="h-4 w-4" />
-                                    Projects
-                                </CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <FolderOpen className="h-4 w-4" />
+                                        Projects
+                                    </CardTitle>
+                                    <Button variant="outline" size="sm" className="gap-1.5" onClick={openLocationDialog}>
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit Locations
+                                    </Button>
+                                </div>
                             </CardHeader>
                             <CardContent className="pt-0">
                                 <Separator className="mb-4" />
@@ -308,6 +419,91 @@ export default function EmployeeShow() {
                     </div>
                 </div>
             </div>
+
+            {/* Edit Locations Dialog */}
+            <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+                <DialogContent className="max-h-[80vh] sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Edit Location Access</DialogTitle>
+                        <DialogDescription>
+                            Select which locations {emp.display_name} should have access to.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {locationError && (
+                        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
+                            {locationError}
+                        </div>
+                    )}
+
+                    {locationSuccess && (
+                        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
+                            <Check className="h-4 w-4" />
+                            {locationSuccess}
+                        </div>
+                    )}
+
+                    {loadingLocations ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+                            <span className="text-muted-foreground ml-2 text-sm">Loading current locations...</span>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search locations..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                                />
+                            </div>
+                            <div className="max-h-[40vh] overflow-y-auto">
+                                <div className="flex flex-col gap-1">
+                                    {filteredLocations.map((loc) => (
+                                        <label
+                                            key={loc.id}
+                                            className="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors"
+                                        >
+                                            <Checkbox
+                                                checked={selectedLocationNames.has(loc.name)}
+                                                onCheckedChange={() => toggleLocation(loc.name)}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium truncate">{loc.name}</p>
+                                                {loc.externalId && (
+                                                    <p className="text-muted-foreground text-xs truncate">{loc.externalId}</p>
+                                                )}
+                                            </div>
+                                        </label>
+                                    ))}
+                                    {filteredLocations.length === 0 && (
+                                        <p className="text-muted-foreground py-4 text-center text-sm">No locations found</p>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <DialogFooter>
+                        <div className="flex items-center justify-between w-full">
+                            <span className="text-muted-foreground text-xs">
+                                {selectedLocationNames.size} location{selectedLocationNames.size !== 1 ? 's' : ''} selected
+                            </span>
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => setLocationDialogOpen(false)} disabled={savingLocations}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={saveLocations} disabled={savingLocations || loadingLocations}>
+                                    {savingLocations && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Save Changes
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
