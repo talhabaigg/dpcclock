@@ -70,6 +70,8 @@ use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\EmployeeFileTypeController;
 use App\Http\Controllers\EmployeeFileController;
 use App\Http\Controllers\FileComplianceDashboardController;
+use App\Http\Controllers\LocationSdsController;
+use App\Http\Controllers\SafetyDataSheetController;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -353,6 +355,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/{employee}/locations', [EmployeeController::class, 'getLocations'])->name('employees.locations');
         Route::put('/employees/{employee}/locations', [EmployeeController::class, 'updateLocations'])->name('employees.locations.update');
     });
+
+    // ============================================
+    // SAFETY DATA SHEETS (SDS)
+    // ============================================
+    Route::get('/sds', [SafetyDataSheetController::class, 'index'])->name('sds.index');
+    Route::post('/sds', [SafetyDataSheetController::class, 'store'])->name('sds.store');
+    Route::put('/sds/{sd}', [SafetyDataSheetController::class, 'update'])->name('sds.update');
+    Route::delete('/sds/{sd}', [SafetyDataSheetController::class, 'destroy'])->name('sds.destroy');
+    Route::get('/sds/{sd}/download', [SafetyDataSheetController::class, 'download'])->name('sds.download');
+    Route::get('/sds/{sd}/files/{mediaId}', [SafetyDataSheetController::class, 'downloadOtherFile'])->name('sds.download-file');
+
+    // Location SDS Register
+    Route::get('/locations/{location}/sds', [LocationSdsController::class, 'index'])->name('locations.sds.index');
+    Route::post('/locations/{location}/sds/sync', [LocationSdsController::class, 'sync'])->name('locations.sds.sync');
+    Route::get('/locations/{location}/sds/download', [LocationSdsController::class, 'downloadMergedPdf'])->name('locations.sds.download');
 
     // ============================================
     // EMPLOYEE FILES & COMPLIANCE

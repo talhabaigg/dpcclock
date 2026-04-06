@@ -19,6 +19,8 @@ import {
     FileBarChart,
     FileSpreadsheet,
     FileText,
+    FlaskConical,
+    FolderOpen,
     FolderTree,
     GitCompare,
     Hammer,
@@ -96,6 +98,11 @@ const mainNavItems: NavItem[] = [
         href: '/worker-screening/search',
         icon: ShieldCheck,
         permission: 'worker-screening.search',
+    },
+    {
+        title: 'SDS Register',
+        href: '/sds',
+        icon: FlaskConical,
     },
     {
         title: 'Kiosks',
@@ -291,6 +298,11 @@ const configuration = [
                 url: '/checklist-templates',
                 icon: ListChecks,
                 permission: 'checklists.manage-templates',
+            },
+            {
+                name: 'Employee File Types',
+                url: '/employee-file-types',
+                icon: FolderOpen,
             },
         ],
     },

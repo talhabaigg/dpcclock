@@ -17,9 +17,11 @@ import {
     ClockAlert,
     Code2,
     DollarSign,
+    Download,
     EllipsisVertical,
     ExternalLink,
     FileImage,
+    FlaskConical,
     FolderTree,
     Hash,
     Heart,
@@ -223,6 +225,19 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                             <RotateCcw className="h-4 w-4" />
                                             Load Job Cost
                                         </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                        <Link href={`/locations/${location.id}/sds`} className="gap-2">
+                                            <FlaskConical className="h-4 w-4" />
+                                            SDS Register
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <a href={`/locations/${location.id}/sds/download`} className="gap-2">
+                                            <Download className="h-4 w-4" />
+                                            Download SDS PDF
+                                        </a>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="gap-2" onSelect={() => setOpenDialog(true)}>
