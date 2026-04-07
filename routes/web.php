@@ -286,6 +286,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/document-templates/{documentTemplate}/edit', [DocumentTemplateController::class, 'edit'])->name('document-templates.edit');
         Route::put('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'update'])->name('document-templates.update');
         Route::delete('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'destroy'])->name('document-templates.destroy');
+        Route::post('/document-templates/{documentTemplate}/duplicate', [DocumentTemplateController::class, 'duplicate'])->name('document-templates.duplicate');
         Route::get('/document-templates/{documentTemplate}/preview-pdf', [DocumentTemplateController::class, 'previewPdf'])->name('document-templates.preview-pdf');
     });
 
@@ -442,6 +443,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/tasks/bulk-ownership', [ProjectTaskController::class, 'bulkOwnership'])->name('project-tasks.bulk-ownership');
         Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
         Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
+        Route::get('/locations/{location}/tasks/export-ms-project', [ProjectTaskController::class, 'exportMsProject'])->name('project-tasks.export-ms-project');
+        Route::get('/locations/{location}/tasks/export-debug', [ProjectTaskController::class, 'exportMsProjectDebug']);
 
         // Task dependency links
         Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');

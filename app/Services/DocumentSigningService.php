@@ -80,6 +80,7 @@ class DocumentSigningService
             'sender_name' => $admin->name ?? '',
             'sender_email' => $admin->email ?? '',
             'sender_phone' => $admin->phone ?? '',
+            'sender_position' => $admin->position ?? '',
             'sender_role' => $admin->roles->first()?->name ?? '',
         ]);
 

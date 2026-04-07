@@ -44,6 +44,7 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'position' => 'nullable|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
             'roles' => 'required|string|exists:roles,id',
             'disable_kiosk_notifications' => 'boolean',
@@ -52,6 +53,7 @@ class UserController extends Controller
         // Update basic info
         $user->update([
             'name' => $request->input('name'),
+            'position' => $request->input('position'),
             'email' => $request->input('email'),
             'disable_kiosk_notifications' => $request->boolean('disable_kiosk_notifications'),
         ]);

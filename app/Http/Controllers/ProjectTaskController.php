@@ -203,6 +203,258 @@ class ProjectTaskController extends Controller
         ]);
     }
 
+    // ── Export to MS Project XML ──
+
+    public function exportMsProjectDebug(Location $location)
+    {
+        $tasks = $location->projectTasks()->orderBy('sort_order')->take(5)->get();
+        $debug = $tasks->map(fn ($t) => [
+            'id' => $t->id,
+            'name' => $t->name,
+            'start_date_accessor' => $t->start_date,
+            'end_date_accessor' => $t->end_date,
+            'start_date_attribute' => $t->getAttributes()['start_date'] ?? 'MISSING',
+            'end_date_attribute' => $t->getAttributes()['end_date'] ?? 'MISSING',
+            'all_attributes' => $t->getAttributes(),
+        ]);
+        return response()->json($debug);
+    }
+
+    public function exportMsProject(Location $location)
+    {
+        $tasks = $location->projectTasks()->orderBy('sort_order')->get();
+        $links = ProjectTaskLink::where('location_id', $location->id)->get();
+
+        // Build WBS numbering: parent_id → ordered children
+        $childrenMap = [];
+        $roots = [];
+        foreach ($tasks as $task) {
+            if ($task->parent_id) {
+                $childrenMap[$task->parent_id][] = $task;
+            } else {
+                $roots[] = $task;
+            }
+        }
+
+        // Assign UID, OutlineLevel, OutlineNumber (WBS) via DFS
+        $flatTasks = [];
+        $uidMap = []; // task_id → UID
+        $uid = 1;
+
+        $walk = function ($nodes, $level, $parentWbs) use (&$walk, &$flatTasks, &$uidMap, &$uid, &$childrenMap) {
+            $seq = 1;
+            foreach ($nodes as $task) {
+                $wbs = $parentWbs ? "{$parentWbs}.{$seq}" : (string) $seq;
+                $hasChildren = !empty($childrenMap[$task->id]);
+
+                $uidMap[$task->id] = $uid;
+                $flatTasks[] = [
+                    'uid' => $uid,
+                    'task' => $task,
+                    'outline_level' => $level,
+                    'wbs' => $wbs,
+                    'summary' => $hasChildren,
+                ];
+                $uid++;
+
+                if ($hasChildren) {
+                    $walk($childrenMap[$task->id], $level + 1, $wbs);
+                }
+                $seq++;
+            }
+        };
+        $walk($roots, 1, '');
+
+        // Map link type to MS Project predecessor type
+        // MS Project: 0 = FF, 1 = FS, 2 = SF, 3 = SS
+        $linkTypeMap = ['FF' => 0, 'FS' => 1, 'SF' => 2, 'SS' => 3];
+
+        // Group links by target_id (predecessors belong to the successor task)
+        $predsByTarget = [];
+        foreach ($links as $link) {
+            $predsByTarget[$link->target_id][] = $link;
+        }
+
+        $now = Carbon::now()->format('Y-m-d\T08:00:00');
+
+        // Find earliest start and latest finish for project dates
+        $projectStart = null;
+        $projectFinish = null;
+        foreach ($tasks as $t) {
+            if ($t->start_date) {
+                if (!$projectStart || $t->start_date->lt($projectStart)) $projectStart = $t->start_date->copy();
+            }
+            if ($t->end_date) {
+                if (!$projectFinish || $t->end_date->gt($projectFinish)) $projectFinish = $t->end_date->copy();
+            }
+        }
+
+        // Build XML using DOMDocument for proper namespace handling
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->formatOutput = true;
+
+        $project = $dom->createElement('Project');
+        $project->setAttribute('xmlns', 'http://schemas.microsoft.com/project');
+        $dom->appendChild($project);
+
+        $addEl = function (\DOMElement $parent, string $tag, ?string $value = null) use ($dom) {
+            $el = $dom->createElement($tag);
+            if ($value !== null) {
+                $el->appendChild($dom->createTextNode($value));
+            }
+            $parent->appendChild($el);
+            return $el;
+        };
+
+        $addEl($project, 'SaveVersion', '14'); // MS Project 2010+ format
+        $addEl($project, 'Name', $location->name);
+        $addEl($project, 'Title', $location->name);
+        $addEl($project, 'ScheduleFromStart', '1');
+        $addEl($project, 'StartDate', $projectStart ? $projectStart->format('Y-m-d\T08:00:00') : $now);
+        $addEl($project, 'FinishDate', $projectFinish ? $projectFinish->format('Y-m-d\T17:00:00') : $now);
+        $addEl($project, 'CalendarUID', '1');
+        $addEl($project, 'MinutesPerDay', '480');
+        $addEl($project, 'MinutesPerWeek', '2400');
+        $addEl($project, 'DaysPerMonth', '20');
+        $addEl($project, 'DefaultStartTime', '08:00:00');
+        $addEl($project, 'DefaultFinishTime', '17:00:00');
+
+        // Calendar — standard 5-day work week
+        $calendars = $addEl($project, 'Calendars');
+        $calendar = $addEl($calendars, 'Calendar');
+        $addEl($calendar, 'UID', '1');
+        $addEl($calendar, 'Name', 'Standard');
+        $addEl($calendar, 'IsBaseCalendar', '1');
+        $weekDays = $addEl($calendar, 'WeekDays');
+
+        foreach ([1 => false, 2 => true, 3 => true, 4 => true, 5 => true, 6 => true, 7 => false] as $day => $working) {
+            $wd = $addEl($weekDays, 'WeekDay');
+            $addEl($wd, 'DayType', (string) $day);
+            $addEl($wd, 'DayWorking', $working ? '1' : '0');
+            if ($working) {
+                $wts = $addEl($wd, 'WorkingTimes');
+                $wt1 = $addEl($wts, 'WorkingTime');
+                $addEl($wt1, 'FromTime', '08:00:00');
+                $addEl($wt1, 'ToTime', '12:00:00');
+                $wt2 = $addEl($wts, 'WorkingTime');
+                $addEl($wt2, 'FromTime', '13:00:00');
+                $addEl($wt2, 'ToTime', '17:00:00');
+            }
+        }
+
+        // Tasks
+        $tasksEl = $addEl($project, 'Tasks');
+
+        // Task 0 — project summary (required by MS Project)
+        $t0 = $addEl($tasksEl, 'Task');
+        $addEl($t0, 'UID', '0');
+        $addEl($t0, 'ID', '0');
+        $addEl($t0, 'Name', $location->name);
+        $addEl($t0, 'Type', '1');
+        $addEl($t0, 'IsNull', '0');
+        $addEl($t0, 'CreateDate', $now);
+        $addEl($t0, 'WBS', '0');
+        $addEl($t0, 'OutlineNumber', '0');
+        $addEl($t0, 'OutlineLevel', '0');
+        $addEl($t0, 'Summary', '1');
+        $addEl($t0, 'Critical', '0');
+        $addEl($t0, 'Milestone', '0');
+        $addEl($t0, 'FixedCostAccrual', '3');
+        $addEl($t0, 'ConstraintType', '0');
+        $addEl($t0, 'CalendarUID', '-1');
+
+        $id = 1;
+        foreach ($flatTasks as $entry) {
+            $task = $entry['task'];
+            $te = $addEl($tasksEl, 'Task');
+
+            // Use raw attribute strings to avoid timezone shifts from Carbon cast
+            $rawStart = $task->getAttributes()['start_date'] ?? null;
+            $rawEnd = $task->getAttributes()['end_date'] ?? null;
+            $startStr = $rawStart ? $rawStart . 'T08:00:00' : $now;
+            $finishStr = $rawEnd ? $rawEnd . 'T17:00:00' : $now;
+
+            // Duration
+            $durationStr = 'PT0H0M0S';
+            if ($rawStart && $rawEnd) {
+                $days = max(1, Carbon::parse($rawStart)->diffInDays(Carbon::parse($rawEnd)));
+                $hours = $days * 8;
+                $durationStr = "PT{$hours}H0M0S";
+            }
+
+            // ── Elements in strict MS Project XML schema order ──
+            $addEl($te, 'UID', (string) $entry['uid']);
+            $addEl($te, 'ID', (string) $id);
+            $addEl($te, 'Name', $task->name);
+            $addEl($te, 'Type', '1');
+            $addEl($te, 'IsNull', '0');
+            $addEl($te, 'CreateDate', $now);
+            $addEl($te, 'WBS', $entry['wbs']);
+            $addEl($te, 'OutlineNumber', $entry['wbs']);
+            $addEl($te, 'OutlineLevel', (string) $entry['outline_level']);
+            $addEl($te, 'Start', $startStr);
+            $addEl($te, 'Finish', $finishStr);
+            $addEl($te, 'Duration', $durationStr);
+            $addEl($te, 'DurationFormat', '7');
+            $addEl($te, 'Milestone', '0');
+            $addEl($te, 'Summary', $entry['summary'] ? '1' : '0');
+            $addEl($te, 'Critical', $task->is_critical ? '1' : '0');
+            $addEl($te, 'PercentComplete', (string) (int) ($task->progress ?? 0));
+            $addEl($te, 'FixedCostAccrual', '3');
+            $addEl($te, 'ConstraintType', '0');
+            $addEl($te, 'CalendarUID', '-1');
+
+            // Baseline
+            $rawBaseStart = $task->getAttributes()['baseline_start'] ?? null;
+            $rawBaseFinish = $task->getAttributes()['baseline_finish'] ?? null;
+            if ($rawBaseStart || $rawBaseFinish) {
+                $bl = $addEl($te, 'Baseline');
+                $addEl($bl, 'Number', '0');
+                if ($rawBaseStart) {
+                    $addEl($bl, 'Start', $rawBaseStart . 'T08:00:00');
+                }
+                if ($rawBaseFinish) {
+                    $addEl($bl, 'Finish', $rawBaseFinish . 'T17:00:00');
+                }
+                if ($rawBaseStart && $rawBaseFinish) {
+                    $bDays = max(1, Carbon::parse($rawBaseStart)->diffInDays(Carbon::parse($rawBaseFinish)));
+                    $addEl($bl, 'Duration', 'PT' . ($bDays * 8) . 'H0M0S');
+                    $addEl($bl, 'DurationFormat', '7');
+                }
+            }
+
+            // Predecessor links (must come after Baseline per schema)
+            if (!empty($predsByTarget[$task->id])) {
+                foreach ($predsByTarget[$task->id] as $link) {
+                    if (isset($uidMap[$link->source_id])) {
+                        $pl = $addEl($te, 'PredecessorLink');
+                        $addEl($pl, 'PredecessorUID', (string) $uidMap[$link->source_id]);
+                        $addEl($pl, 'Type', (string) ($linkTypeMap[$link->type] ?? 1));
+                        $addEl($pl, 'CrossProject', '0');
+                        $addEl($pl, 'LinkLag', '0');
+                        $addEl($pl, 'LagFormat', '7');
+                    }
+                }
+            }
+
+            // Manual scheduling fields (must come at the end per schema)
+            $addEl($te, 'IsManual', '1');
+            $addEl($te, 'ManualStart', $startStr);
+            $addEl($te, 'ManualFinish', $finishStr);
+            $addEl($te, 'ManualDuration', $durationStr);
+
+            $id++;
+        }
+
+        $content = $dom->saveXML();
+        $filename = str_replace(' ', '_', $location->name) . '_schedule.xml';
+
+        return response($content, 200, [
+            'Content-Type' => 'application/xml',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
     public function downloadTemplate()
     {
         $headers = ['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors'];

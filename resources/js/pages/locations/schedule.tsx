@@ -564,6 +564,7 @@ export default function Schedule() {
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     onDownloadTemplate={() => window.location.href = '/schedule-template'}
+                    onExportMsProject={() => window.location.href = `/locations/${location.id}/tasks/export-ms-project`}
                     onSetBaseline={handleSetBaseline}
                     onClearAll={handleClearAll}
                     onBulkMarkOwned={() => handleBulkMarkOwned(true)}

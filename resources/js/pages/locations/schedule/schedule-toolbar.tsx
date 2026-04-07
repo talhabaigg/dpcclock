@@ -32,6 +32,7 @@ interface ScheduleToolbarProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
     onDownloadTemplate: () => void;
+    onExportMsProject: () => void;
     onSetBaseline: () => void;
     onClearAll: () => void;
     onBulkMarkOwned: () => void;
@@ -70,6 +71,7 @@ export default function ScheduleToolbar({
     searchQuery,
     onSearchChange,
     onDownloadTemplate,
+    onExportMsProject,
     onSetBaseline,
     onClearAll,
     onBulkMarkOwned,
@@ -96,6 +98,10 @@ export default function ScheduleToolbar({
                             </MenubarItem>
                             <MenubarItem onClick={onDownloadTemplate}>
                                 Download Template
+                            </MenubarItem>
+                            <MenubarSeparator />
+                            <MenubarItem onClick={onExportMsProject}>
+                                Export to MS Project
                             </MenubarItem>
                         </MenubarContent>
                     </MenubarMenu>

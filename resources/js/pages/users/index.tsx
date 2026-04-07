@@ -33,6 +33,7 @@ type Permission = {
 type User = {
     id: number;
     name: string;
+    position: string | null;
     email: string;
     created_at: string;
     disabled_at: string | null;
@@ -182,6 +183,9 @@ export default function UsersIndex() {
                                         </Button>
                                     </Link>
                                 </div>
+                                {user.position && (
+                                    <p className="text-muted-foreground mt-1 text-xs">{user.position}</p>
+                                )}
                                 <div className="mt-2 flex items-center justify-between">
                                     <Select
                                         value={user.roles[0]?.id.toString()}
@@ -218,6 +222,7 @@ export default function UsersIndex() {
                         <TableHeader>
                             <TableRow className="bg-muted/50">
                                 <TableHead className="px-3">Name</TableHead>
+                                <TableHead className="px-3">Position</TableHead>
                                 <TableHead className="px-3">Email</TableHead>
                                 <TableHead className="px-3">Role</TableHead>
                                 <TableHead className="px-3">Joined</TableHead>
@@ -227,7 +232,7 @@ export default function UsersIndex() {
                         <TableBody>
                             {filteredUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-32 text-center">
+                                    <TableCell colSpan={6} className="h-32 text-center">
                                         <div className="text-muted-foreground flex flex-col items-center gap-2">
                                             <Users className="h-8 w-8 opacity-40" />
                                             <p>No users found</p>
@@ -252,6 +257,7 @@ export default function UsersIndex() {
                                                 )}
                                             </div>
                                         </TableCell>
+                                        <TableCell className="text-muted-foreground px-3">{user.position || '—'}</TableCell>
                                         <TableCell className="px-3">{user.email}</TableCell>
                                         <TableCell className="px-3">
                                             <Select

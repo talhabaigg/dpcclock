@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { Download, FileText, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Copy, Download, FileText, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface DocumentTemplate {
@@ -159,6 +159,15 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
                                                     >
                                                         <Download className="mr-2 h-3.5 w-3.5" />
                                                         Download PDF
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            router.post(route('document-templates.duplicate', template.id));
+                                                        }}
+                                                    >
+                                                        <Copy className="mr-2 h-3.5 w-3.5" />
+                                                        Duplicate
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem

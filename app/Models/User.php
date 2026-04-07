@@ -26,6 +26,7 @@ class User extends Authenticatable implements HasPasskeys
      */
     protected $fillable = [
         'name',
+        'position',
         'email',
         'password',
         'phone',

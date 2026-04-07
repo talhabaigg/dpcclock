@@ -92,6 +92,18 @@ class DocumentTemplateController extends Controller
             ->with('success', 'Template deleted successfully.');
     }
 
+    public function duplicate(DocumentTemplate $documentTemplate)
+    {
+        $clone = $documentTemplate->replicate(['created_by', 'updated_by']);
+        $clone->name = $documentTemplate->name . ' (Copy)';
+        $clone->created_by = auth()->id();
+        $clone->updated_by = auth()->id();
+        $clone->save();
+
+        return redirect()->route('document-templates.edit', $clone)
+            ->with('success', 'Template duplicated successfully.');
+    }
+
     public function previewPdf(DocumentTemplate $documentTemplate, SignedDocumentPdfService $pdfService)
     {
         $pdfContent = $pdfService->generateTemplatePreview($documentTemplate->body_html);

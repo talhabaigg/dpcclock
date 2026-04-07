@@ -31,6 +31,7 @@ type Permission = {
 type User = {
     id: number;
     name: string;
+    position: string | null;
     email: string;
     created_at: string;
     disabled_at: string | null;
@@ -68,6 +69,7 @@ export default function UserEdit() {
 
     const { data, setData, put, processing, errors } = useForm({
         name: user.name,
+        position: user.position ?? '',
         email: user.email,
         roles: user.roles[0]?.id.toString() ?? '',
         managed_kiosks: user.managed_kiosks,
@@ -246,6 +248,25 @@ export default function UserEdit() {
                                         </p>
                                     )}
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="position">Position / Title</Label>
+                                <Input
+                                    type="text"
+                                    name="position"
+                                    id="position"
+                                    placeholder="e.g. Project Manager, Site Supervisor"
+                                    value={data.position}
+                                    onChange={(e) => setData('position', e.target.value)}
+                                    className={`h-10 sm:h-9 ${errors.position ? 'border-destructive' : ''}`}
+                                    aria-invalid={!!errors.position}
+                                    aria-describedby={errors.position ? 'position-error' : undefined}
+                                />
+                                {errors.position && (
+                                    <p id="position-error" className="text-destructive text-sm">
+                                        {errors.position}
+                                    </p>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
