@@ -173,6 +173,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.manage-managers');
     Route::post('/users/{user}/toggle-disable', [UserController::class, 'toggleDisable'])->name('users.toggle-disable')
         ->middleware('permission:users.manage-roles');
+    Route::post('/users/{user}/direct-permissions', [UserController::class, 'syncDirectPermissions'])->name('users.direct-permissions.sync')
+        ->middleware('permission:users.manage-roles');
 
     // ============================================
     // EMPLOYMENT APPLICATIONS
@@ -360,17 +362,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // SAFETY DATA SHEETS (SDS)
     // ============================================
-    Route::get('/sds', [SafetyDataSheetController::class, 'index'])->name('sds.index');
-    Route::post('/sds', [SafetyDataSheetController::class, 'store'])->name('sds.store');
-    Route::put('/sds/{sd}', [SafetyDataSheetController::class, 'update'])->name('sds.update');
-    Route::delete('/sds/{sd}', [SafetyDataSheetController::class, 'destroy'])->name('sds.destroy');
-    Route::get('/sds/{sd}/download', [SafetyDataSheetController::class, 'download'])->name('sds.download');
-    Route::get('/sds/{sd}/files/{mediaId}', [SafetyDataSheetController::class, 'downloadOtherFile'])->name('sds.download-file');
+    Route::middleware('permission:sds.view')->group(function () {
+        Route::get('/sds', [SafetyDataSheetController::class, 'index'])->name('sds.index');
+        Route::get('/sds/{sd}/download', [SafetyDataSheetController::class, 'download'])->name('sds.download');
+        Route::get('/sds/{sd}/files/{mediaId}', [SafetyDataSheetController::class, 'downloadOtherFile'])->name('sds.download-file');
+    });
+    Route::middleware('permission:sds.manage')->group(function () {
+        Route::post('/sds', [SafetyDataSheetController::class, 'store'])->name('sds.store');
+        Route::put('/sds/{sd}', [SafetyDataSheetController::class, 'update'])->name('sds.update');
+        Route::delete('/sds/{sd}', [SafetyDataSheetController::class, 'destroy'])->name('sds.destroy');
+    });
 
     // Location SDS Register
-    Route::get('/locations/{location}/sds', [LocationSdsController::class, 'index'])->name('locations.sds.index');
-    Route::post('/locations/{location}/sds/sync', [LocationSdsController::class, 'sync'])->name('locations.sds.sync');
-    Route::get('/locations/{location}/sds/download', [LocationSdsController::class, 'downloadMergedPdf'])->name('locations.sds.download');
+    Route::middleware('permission:sds.view')->group(function () {
+        Route::get('/locations/{location}/sds', [LocationSdsController::class, 'index'])->name('locations.sds.index');
+        Route::post('/locations/{location}/sds/sync', [LocationSdsController::class, 'sync'])->name('locations.sds.sync');
+        Route::get('/locations/{location}/sds/download', [LocationSdsController::class, 'downloadMergedPdf'])->name('locations.sds.download');
+    });
 
     // ============================================
     // EMPLOYEE FILES & COMPLIANCE
@@ -405,11 +413,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
         ->middleware('permission:timesheets.sync');
     Route::middleware('permission:locations.view')->group(function () {
-        Route::get('/project-dashboard', [LocationController::class, 'projectDashboard'])->name('project-dashboard');
+        Route::get('/project-dashboard', [LocationController::class, 'projectDashboard'])->name('project-dashboard')->middleware('permission:project-dashboard.view');
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
-        Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard');
-        Route::put('/locations/{location}/dashboard-settings', [LocationController::class, 'saveDashboardSettings'])->name('locations.dashboard-settings.update');
+        Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard')->middleware('permission:locations.dashboard.view');
+        Route::put('/locations/{location}/dashboard-settings', [LocationController::class, 'saveDashboardSettings'])->name('locations.dashboard-settings.update')->middleware('permission:locations.dashboard.view');
 
         // Dashboard Layouts (admin only)
         Route::middleware('role:admin')->group(function () {

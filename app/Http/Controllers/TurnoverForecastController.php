@@ -57,8 +57,8 @@ class TurnoverForecastController extends Controller
             $query->where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
         })->whereNotNull('external_id');
 
-        // Filter by kiosk access if user is not admin or backoffice
-        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
+        // Filter by kiosk access if user is not admin or office-admin
+        if (! $user->can('locations.view-all')) {
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
         }
@@ -67,9 +67,9 @@ class TurnoverForecastController extends Controller
         $jobNumbers = $locations->pluck('external_id')->toArray();
         $locationIds = $locations->pluck('id')->toArray();
 
-        // Get forecast projects - hide them if user has restricted access (not admin or backoffice)
+        // Get forecast projects - hide them if user has restricted access (not admin or office-admin)
         $forecastProjects = collect([]);
-        if ($user->hasRole('admin') || $user->hasRole('backoffice')) {
+        if ($user->can('locations.view-all')) {
             $forecastProjects = ForecastProject::with(['costItems', 'revenueItems'])->get();
         }
 

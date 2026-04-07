@@ -37,6 +37,12 @@ class LocationController extends Controller
             $query->open();
         }
 
+        // Scope to managed locations for non-admin/office-admin users
+        $user = auth()->user();
+        if (! $user->can('locations.view-all')) {
+            $query->whereIn('id', $user->managedLocationIds());
+        }
+
         $locations = $query->get();
 
         // Fetch sub-locations for each primary location
@@ -93,6 +99,11 @@ class LocationController extends Controller
      */
     public function show(Location $location)
     {
+        $user = auth()->user();
+        if (! $user->can('locations.view-all') && ! $user->managedLocationIds()->contains($location->id)) {
+            abort(403, 'You do not have access to this project.');
+        }
+
         $this->getLocationWithCounts($location);
 
         // Get distinct area-cost_code combos from the latest DPC production upload
@@ -198,7 +209,7 @@ class LocationController extends Controller
 
     /**
      * Get available locations for the job selector, scoped by user role.
-     * Admin/backoffice see all; managers only see their kiosk-assigned locations.
+     * Admin/office-admin see all; managers only see their kiosk-assigned locations.
      */
     private function getAvailableLocations()
     {
@@ -210,7 +221,7 @@ class LocationController extends Controller
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '');
 
-        if (! $user->hasRole(['admin', 'backoffice'])) {
+        if (! $user->can('locations.view-all')) {
             $query->whereIn('id', $user->managedLocationIds());
         }
 
@@ -228,9 +239,9 @@ class LocationController extends Controller
      */
     public function dashboard(Request $request, Location $location)
     {
-        // Ensure non-admin/backoffice users can only access their managed locations
+        // Ensure non-admin/office-admin users can only access their managed locations
         $user = auth()->user();
-        if (! $user->hasRole(['admin', 'backoffice']) && ! $user->managedLocationIds()->contains($location->id)) {
+        if (! $user->can('locations.view-all') && ! $user->managedLocationIds()->contains($location->id)) {
             abort(403, 'You do not have access to this project.');
         }
 

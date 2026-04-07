@@ -69,7 +69,7 @@ class WipReportController extends Controller
 
         // Scope by user role
         $user = auth()->user();
-        if (!$user->hasRole(['admin', 'backoffice'])) {
+        if (!$user->can('locations.view-all')) {
             $locationsQuery->whereIn('id', $user->managedLocationIds());
         }
 
@@ -229,7 +229,7 @@ class WipReportController extends Controller
             $query->whereIn('eh_parent_id', array_keys(self::COMPANY_MAP));
         }
 
-        if (!$user->hasRole(['admin', 'backoffice'])) {
+        if (!$user->can('locations.view-all')) {
             $query->whereIn('id', $user->managedLocationIds());
         }
 

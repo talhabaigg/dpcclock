@@ -44,12 +44,23 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Locations' => [
             'locations.view' => 'View locations',
+            'locations.view-all' => 'View all locations (across all projects)',
             'locations.create' => 'Create new locations',
             'locations.edit' => 'Edit locations',
             'locations.delete' => 'Delete locations',
             'locations.close' => 'Close and reopen projects',
             'locations.sync' => 'Sync locations from external system',
             'locations.load-job-data' => 'Load job data from Premier',
+            'project-dashboard.view' => 'View project dashboard',
+            'locations.dashboard.view' => 'View individual location dashboard',
+        ],
+
+        // ============================================
+        // SAFETY DATA SHEETS (SDS)
+        // ============================================
+        'SDS' => [
+            'sds.view' => 'View SDS register',
+            'sds.manage' => 'Create, edit, delete safety data sheets',
         ],
 
         // ============================================
@@ -57,6 +68,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Kiosks' => [
             'kiosks.view' => 'View kiosks',
+            'kiosks.view-all' => 'View all kiosks (across all locations)',
             'kiosks.edit' => 'Edit kiosk settings',
             'kiosks.manage-zones' => 'Update travel zones',
             'kiosks.toggle-active' => 'Toggle kiosk active status',
@@ -287,7 +299,7 @@ class RolesAndPermissionsSeeder extends Seeder
     protected array $rolePermissions = [
         'admin' => '*', // All permissions
 
-        'backoffice' => [
+        'office-admin' => [
             // Dashboard
             'dashboard.view',
             // Users (view only, no role management)
@@ -297,14 +309,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'employees.view',
             'employees.sync',
             'employees.manage-worktypes',
-            // Locations
+            // Locations (no close — admin/PM only)
             'locations.view',
+            'locations.view-all',
             'locations.create',
             'locations.edit',
-            'locations.close',
             'locations.sync',
             // Kiosks
             'kiosks.view',
+            'kiosks.view-all',
             'kiosks.edit',
             'kiosks.manage-zones',
             'kiosks.toggle-active',
@@ -340,11 +353,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.approve-pricing',
             'requisitions.send',
             'requisitions.export',
-            // Materials
+            // Materials (no delete — admin only)
             'materials.view',
             'materials.create',
             'materials.edit',
-            'materials.delete',
             'materials.import',
             'materials.export',
             // Suppliers
@@ -358,67 +370,31 @@ class RolesAndPermissionsSeeder extends Seeder
             'costtypes.view',
             'costtypes.import',
             'costtypes.export',
-            // Forecasting
-            'forecast.view',
-            'forecast.edit',
-            'forecast.submit',
-            'forecast.approve',
-            'forecast.reject',
-            'forecast-projects.view',
-            'forecast-projects.create',
-            'forecast-projects.edit',
-            'forecast-projects.delete',
-            'turnover-forecast.view',
-            'cash-forecast.view',
-            'cash-forecast.edit',
-            // Variations
-            'variations.view',
-            'variations.create',
-            'variations.edit',
-            'variations.delete',
-            'variations.sync',
-            'variations.send',
-            'variations.export',
-            // Drawings
-            'drawings.view',
-            'drawings.create',
-            'drawings.delete',
-            // Drawing Viewer
-            'takeoff.view',
-            'takeoff.edit',
-            'production.view',
-            'production.edit',
-            'budget.view',
-            'budget.edit',
-            'qa.view',
-            // Reports
+            // Reports (no WIP, missing sign-out, or safety dashboard)
             'reports.view',
             'reports.requisition-lines',
-            'reports.missing-sign-out',
-            'reports.safety-dashboard',
-            'reports.wip',
             // System
             'queue-status.view',
             // Employment Applications
             'employment-applications.view',
             'employment-applications.screen',
-            // Document Templates
-            'document-templates.manage',
-            // Worker Screening
+            // Worker Screening (search only — manage is compliance-sensitive)
             'worker-screening.search',
-            'worker-screening.manage',
-            // Credit Card Receipts
+            // Credit Card Receipts (own only, no manage)
             'receipts.view',
-            'receipts.manage',
         ],
 
-        'manager' => [
+        'site-supervisor' => [
             // Dashboard (scoped to their project via kiosk manager relation)
             'dashboard.view',
             // Employees (view list only)
             'employees.view',
-            // Locations (view only)
+            // Locations
             'locations.view',
+            'project-dashboard.view',
+            'locations.dashboard.view',
+            // SDS (read only)
+            'sds.view',
             // Kiosks (scoped to their assigned kiosk)
             'kiosks.view',
             'kiosks.retrieve-token',
@@ -438,8 +414,39 @@ class RolesAndPermissionsSeeder extends Seeder
             'materials.view',
             // Worker Screening (search only)
             'worker-screening.search',
+        ],
+
+        'director' => [
+            // Dashboard
+            'dashboard.view',
+            // Locations (full visibility)
+            'locations.view',
+            'locations.view-all',
+            'project-dashboard.view',
+            'locations.dashboard.view',
+            // Employees
+            'employees.view',
+            // Employment Applications
+            'employment-applications.view',
+            'employment-applications.approve',
+            // Forecasting (view + approve/reject)
+            'forecast.view',
+            'forecast.approve',
+            'forecast.reject',
+            'forecast-projects.view',
+            'turnover-forecast.view',
+            'cash-forecast.view',
+            // Budget
+            'budget.view',
+            // Reports
+            'reports.view',
+            'reports.safety-dashboard',
+            'reports.wip',
             // Credit Card Receipts (own only)
             'receipts.view',
+            // AI
+            'ai.chat',
+            'ai.voice',
         ],
 
         'kiosk' => [

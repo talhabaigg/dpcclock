@@ -46,7 +46,7 @@ class PurchasingController extends Controller
         })
             ->with('worktypes', 'header');
 
-        if ($user->hasRole('manager')) {
+        if ($user->hasRole('site-supervisor')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }
@@ -602,7 +602,7 @@ class PurchasingController extends Controller
         // dd('please use other method - temporarily disabled to fix bug');
         $requisition = Requisition::with('creator', 'lineItems', 'location')->findOrFail($id);
 
-        // If status is office_review, user must have approve-pricing permission (backoffice only)
+        // If status is office_review, user must have approve-pricing permission (office-admin only)
         if ($requisition->status === 'office_review' && ! auth()->user()->can('requisitions.approve-pricing')) {
             return redirect()->back()->with('error', 'You do not have permission to approve pricing and send from office review.');
         }
@@ -664,9 +664,9 @@ class PurchasingController extends Controller
             ->causedBy(auth()->user())
             ->log("Requisition #{$requisition->id} was sent to office for review.");
 
-        // Send notification to backoffice users
-        $backofficeUsers = User::role('backoffice')->get();
-        Notification::send($backofficeUsers, new RequisitionSentToOfficeNotification($requisition, auth()->user()));
+        // Send notification to office-admin users
+        $officeAdminUsers = User::role('office-admin')->get();
+        Notification::send($officeAdminUsers, new RequisitionSentToOfficeNotification($requisition, auth()->user()));
 
         return redirect()->back()->with('success', 'Requisition sent to office for review.');
     }

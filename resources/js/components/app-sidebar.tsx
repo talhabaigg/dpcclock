@@ -67,7 +67,7 @@ const mainNavItems: NavItem[] = [
         title: 'Project Dashboard',
         href: '/project-dashboard',
         icon: LayoutDashboard,
-        permission: 'locations.view',
+        permission: 'project-dashboard.view',
     },
     {
         title: 'Turnover Forecast',
@@ -103,6 +103,7 @@ const mainNavItems: NavItem[] = [
         title: 'SDS Register',
         href: '/sds',
         icon: FlaskConical,
+        permission: 'sds.view',
     },
     {
         title: 'Kiosks',

@@ -27,7 +27,7 @@ class JobForecastController extends Controller
 
         // Check if user has access to this location
         $user = Auth::user();
-        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
+        if (! $user->can('locations.view-all')) {
             // Get accessible location IDs based on kiosk access
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
 
@@ -143,7 +143,7 @@ class JobForecastController extends Controller
         ] : null;
 
         // Check if user is admin (can finalize)
-        $canUserFinalize = Auth::user()->hasRole('admin') || Auth::user()->hasRole('backoffice');
+        $canUserFinalize = Auth::user()->can('forecast.approve');
 
         // Get ALL cost codes with budgets from JobReportByCostItemAndCostType
         // Join with CostCodes table to get descriptions
@@ -857,7 +857,7 @@ class JobForecastController extends Controller
         }
 
         // Notify admins about the submission
-        $admins = User::role(['admin', 'backoffice'])->get();
+        $admins = User::role(['admin', 'office-admin'])->get();
         foreach ($admins as $admin) {
             $admin->notify(new JobForecastStatusNotification($jobForecast, 'submitted', $user));
         }
@@ -877,7 +877,7 @@ class JobForecastController extends Controller
         $user = Auth::user();
 
         // Only admins can finalize
-        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
+        if (! $user->can('locations.view-all')) {
             return redirect()->back()->withErrors(['error' => 'You do not have permission to finalize forecasts.']);
         }
 
@@ -926,7 +926,7 @@ class JobForecastController extends Controller
         $user = Auth::user();
 
         // Only admins can reject
-        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
+        if (! $user->can('locations.view-all')) {
             return redirect()->back()->withErrors(['error' => 'You do not have permission to reject forecasts.']);
         }
 

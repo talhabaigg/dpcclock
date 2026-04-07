@@ -117,7 +117,7 @@ export default function RequisitionShow() {
     // Check if user can process requisitions (send to Premier)
     const canProcessRequisitions = auth?.permissions?.includes('requisitions.process');
 
-    // Check if user can approve pricing and send from office review (backoffice only)
+    // Check if user can approve pricing and send from office review (office-admin only)
     const canApprovePricing = auth?.permissions?.includes('requisitions.approve-pricing');
 
     const [sortKey, setSortKey] = useState<string | null>(null);

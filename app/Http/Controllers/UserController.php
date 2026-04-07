@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Kiosk;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -29,12 +31,33 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        $user->load(['roles.permissions', 'managedKiosks']);
+        $user->load(['roles.permissions', 'managedKiosks', 'permissions']);
         $kiosks = Kiosk::select('id', 'name')->get();
+
+        // Get permissions grouped by category for the permission selector
+        $permissionsByCategory = RolesAndPermissionsSeeder::getPermissionsByCategory();
+        $groupedPermissions = [];
+        foreach ($permissionsByCategory as $category => $perms) {
+            foreach ($perms as $name => $description) {
+                $dbPermission = Permission::where('name', $name)->first();
+                if ($dbPermission) {
+                    $groupedPermissions[$category][] = [
+                        'id' => $dbPermission->id,
+                        'name' => $dbPermission->name,
+                        'description' => $description,
+                        'guard_name' => $dbPermission->guard_name,
+                        'category' => $category,
+                    ];
+                }
+            }
+        }
 
         return Inertia::render('users/edit', [
             'user' => $user,
             'permissions' => $user->getAllPermissions(),
+            'directPermissions' => $user->getDirectPermissions()->pluck('name'),
+            'groupedPermissions' => $groupedPermissions,
+            'categories' => array_keys($permissionsByCategory),
             'roles' => Role::all(),
             'kiosks' => $kiosks,
         ]);
@@ -65,6 +88,21 @@ class UserController extends Controller
         $user->syncRoles([$role->name]);
 
         return back()->with('success', 'User updated successfully.');
+    }
+
+    public function syncDirectPermissions(Request $request, User $user)
+    {
+        $request->validate([
+            'permissions' => 'array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
+
+        $user->syncPermissions($request->input('permissions', []));
+
+        // Clear permission cache
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        return back()->with('success', 'Direct permissions updated successfully.');
     }
 
     public function storeKiosk(Request $request, User $user)

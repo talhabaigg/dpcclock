@@ -240,7 +240,7 @@ public function show($id)
 {
     $requisition = Requisition::findOrFail($id);
     $user = auth()->user();
-    if (!$user->hasRole('admin') && !$user->hasRole('backoffice')) {
+    if (!$user->hasRole('admin') && !$user->hasRole('office-admin')) {
         $userLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique();
         if (!$userLocationIds->contains($requisition->location->eh_location_id)) {
             abort(403);

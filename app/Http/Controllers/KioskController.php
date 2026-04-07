@@ -39,7 +39,7 @@ class KioskController extends Controller
     {
         $openLocationIds = Location::open()->pluck('id');
 
-        if (Auth::user()->hasRole('admin')) {
+        if (Auth::user()->can('kiosks.view-all')) {
             $kiosks = Kiosk::with('location', 'employees')
                 ->whereHas('location', fn ($q) => $q->whereIn('id', $openLocationIds))
                 ->get();

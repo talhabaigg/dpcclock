@@ -57,7 +57,7 @@ class VariationController extends Controller
         }
 
         // Permission-based filtering for managers
-        if ($user->hasRole('manager')) {
+        if ($user->hasRole('site-supervisor')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationIds = Location::open()->whereIn('eh_location_id', $ehLocationIds)->pluck('id');
             $query->whereIn('location_id', $locationIds);
@@ -99,7 +99,7 @@ class VariationController extends Controller
         if ($location) {
             $filterOptionsQuery->where('location_id', $location->id);
         }
-        if ($user->hasRole('manager')) {
+        if ($user->hasRole('site-supervisor')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationIds = Location::whereIn('eh_location_id', $ehLocationIds)->pluck('id');
             $filterOptionsQuery->whereIn('location_id', $locationIds);
@@ -161,7 +161,7 @@ class VariationController extends Controller
                 ->orWhere('eh_parent_id', 1198645);
         });
 
-        if ($user->hasRole('manager')) {
+        if ($user->hasRole('site-supervisor')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }
@@ -199,7 +199,7 @@ class VariationController extends Controller
                 ->orWhere('eh_parent_id', 1249093)
                 ->orWhere('eh_parent_id', 1198645);
         });
-        if ($user->hasRole('manager')) {
+        if ($user->hasRole('site-supervisor')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }

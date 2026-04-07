@@ -14,19 +14,33 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, Ban, Loader2, Plus, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { AlertCircle, Ban, KeyRound, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type Permission = {
     id: number;
     name: string;
 };
+
+type GroupedPermission = {
+    id: number;
+    name: string;
+    description: string;
+    guard_name: string;
+    category: string;
+};
+
+type GroupedPermissions = Record<string, GroupedPermission[]>;
 
 type User = {
     id: number;
@@ -55,11 +69,14 @@ type Kiosk = {
 };
 
 export default function UserEdit() {
-    const { user, roles, flash, kiosks } = usePage<{
+    const { user, roles, flash, kiosks, directPermissions, groupedPermissions, categories } = usePage<{
         user: User;
         roles: Role[];
         flash: { success: string; error: string };
         kiosks: Kiosk[];
+        directPermissions: string[];
+        groupedPermissions: GroupedPermissions;
+        categories: string[];
     }>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -94,6 +111,61 @@ export default function UserEdit() {
     // Disable account dialog
     const [disableDialog, setDisableDialog] = useState(false);
     const [togglingDisable, setTogglingDisable] = useState(false);
+
+    // Direct permissions
+    const [permSheetOpen, setPermSheetOpen] = useState(false);
+    const [selectedPerms, setSelectedPerms] = useState<string[]>(directPermissions ?? []);
+    const [savingPerms, setSavingPerms] = useState(false);
+    const [permSearch, setPermSearch] = useState('');
+    const [activeCategory, setActiveCategory] = useState<string>(categories?.[0] || '');
+
+    const filteredPermissions = useMemo(() => {
+        if (!permSearch.trim()) return groupedPermissions;
+        const query = permSearch.toLowerCase();
+        const filtered: GroupedPermissions = {};
+        for (const [category, perms] of Object.entries(groupedPermissions)) {
+            const matching = perms.filter(
+                (p) => p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query) || category.toLowerCase().includes(query),
+            );
+            if (matching.length > 0) filtered[category] = matching;
+        }
+        return filtered;
+    }, [permSearch, groupedPermissions]);
+
+    const visibleCategories = useMemo(() => Object.keys(filteredPermissions), [filteredPermissions]);
+    const resolvedCategory = visibleCategories.includes(activeCategory) ? activeCategory : visibleCategories[0] || '';
+    const activePerms = filteredPermissions[resolvedCategory] || [];
+
+    const getCategoryCount = (category: string) => {
+        const perms = groupedPermissions[category] || [];
+        const selected = perms.filter((p) => selectedPerms.includes(p.name)).length;
+        return { selected, total: perms.length };
+    };
+
+    const togglePermission = (permName: string) => {
+        setSelectedPerms((prev) => (prev.includes(permName) ? prev.filter((p) => p !== permName) : [...prev, permName]));
+    };
+
+    const toggleCategoryPermissions = (category: string, select: boolean) => {
+        const categoryPerms = groupedPermissions[category]?.map((p) => p.name) || [];
+        if (select) {
+            setSelectedPerms((prev) => Array.from(new Set([...prev, ...categoryPerms])));
+        } else {
+            setSelectedPerms((prev) => prev.filter((p) => !categoryPerms.includes(p)));
+        }
+    };
+
+    const handleSavePermissions = () => {
+        setSavingPerms(true);
+        router.post(route('users.direct-permissions.sync', user.id), { permissions: selectedPerms }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setPermSheetOpen(false);
+                toast.success('Direct permissions updated');
+            },
+            onFinish: () => setSavingPerms(false),
+        });
+    };
 
     // Show flash messages via toast
     useEffect(() => {
@@ -297,6 +369,32 @@ export default function UserEdit() {
                         </CardContent>
                     </Card>
 
+                    {/* Direct Permissions (edge cases) */}
+                    <Card>
+                        <CardHeader className="px-4 sm:px-6">
+                            <CardTitle className="text-base sm:text-lg">Direct Permissions</CardTitle>
+                            <CardDescription>Grant additional permissions beyond the user's role for edge cases</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-4 sm:px-6">
+                            {directPermissions.length > 0 ? (
+                                <div className="mb-4 flex flex-wrap gap-2">
+                                    {directPermissions.map((perm) => (
+                                        <Badge key={perm} variant="secondary" className="text-xs">
+                                            <KeyRound className="mr-1 h-3 w-3" />
+                                            {perm}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground mb-4 text-sm">No direct permissions assigned.</p>
+                            )}
+                            <Button type="button" variant="outline" size="sm" onClick={() => { setSelectedPerms(directPermissions ?? []); setPermSheetOpen(true); }}>
+                                <KeyRound className="mr-1.5 h-4 w-4" />
+                                Manage Permissions
+                            </Button>
+                        </CardContent>
+                    </Card>
+
                     {/* Kiosk Management */}
                     <Card>
                         <CardHeader className="px-4 sm:px-6">
@@ -455,6 +553,133 @@ export default function UserEdit() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Direct Permissions Sheet */}
+            <Sheet open={permSheetOpen} onOpenChange={setPermSheetOpen}>
+                <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[900px]">
+                    <SheetHeader className="shrink-0 space-y-0 border-b px-6 py-4">
+                        <SheetTitle className="text-lg">Direct Permissions</SheetTitle>
+                        <SheetDescription>Grant additional permissions beyond the user's role. These are for edge cases only.</SheetDescription>
+                    </SheetHeader>
+
+                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                        {/* Left Panel - Categories */}
+                        <div className="flex w-[240px] shrink-0 flex-col border-r">
+                            <div className="p-3">
+                                <div className="relative">
+                                    <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+                                    <Input
+                                        placeholder="Filter permissions..."
+                                        value={permSearch}
+                                        onChange={(e) => setPermSearch(e.target.value)}
+                                        className="h-8 pl-8 text-sm"
+                                    />
+                                </div>
+                            </div>
+                            <Separator />
+                            <ScrollArea className="flex-1">
+                                <nav className="flex flex-col gap-0.5 p-2">
+                                    {visibleCategories.length === 0 ? (
+                                        <p className="text-muted-foreground px-3 py-6 text-center text-xs">No matches.</p>
+                                    ) : (
+                                        visibleCategories.map((category) => {
+                                            const counts = getCategoryCount(category);
+                                            const isActive = category === resolvedCategory;
+                                            return (
+                                                <button
+                                                    key={category}
+                                                    type="button"
+                                                    onClick={() => setActiveCategory(category)}
+                                                    className={cn(
+                                                        'group flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors',
+                                                        isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                                    )}
+                                                >
+                                                    <span className="truncate">{category}</span>
+                                                    <Badge
+                                                        variant={counts.selected === counts.total ? 'default' : counts.selected > 0 ? 'secondary' : 'outline'}
+                                                        className="ml-2 shrink-0 font-mono text-[10px] tabular-nums"
+                                                    >
+                                                        {counts.selected}/{counts.total}
+                                                    </Badge>
+                                                </button>
+                                            );
+                                        })
+                                    )}
+                                </nav>
+                            </ScrollArea>
+                        </div>
+
+                        {/* Right Panel - Permissions */}
+                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            {resolvedCategory ? (
+                                <>
+                                    <div className="flex items-center justify-between border-b px-5 py-3">
+                                        <div>
+                                            <h3 className="text-sm font-semibold">{resolvedCategory}</h3>
+                                            <p className="text-muted-foreground text-xs">
+                                                {getCategoryCount(resolvedCategory).selected} of {getCategoryCount(resolvedCategory).total} permissions enabled
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Label className="text-muted-foreground cursor-pointer text-xs">
+                                                {getCategoryCount(resolvedCategory).selected === getCategoryCount(resolvedCategory).total ? 'Deselect All' : 'Select All'}
+                                            </Label>
+                                            <Switch
+                                                checked={getCategoryCount(resolvedCategory).selected === getCategoryCount(resolvedCategory).total && getCategoryCount(resolvedCategory).total > 0}
+                                                onCheckedChange={(checked) => toggleCategoryPermissions(resolvedCategory, checked)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <ScrollArea className="flex-1">
+                                        <div className="divide-y">
+                                            {activePerms.map((perm, index) => {
+                                                const isChecked = selectedPerms.includes(perm.name);
+                                                return (
+                                                    <label
+                                                        key={perm.id}
+                                                        className={cn(
+                                                            'flex cursor-pointer items-center gap-4 px-5 py-3 transition-colors',
+                                                            index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30',
+                                                            'hover:bg-muted/60',
+                                                        )}
+                                                    >
+                                                        <Switch checked={isChecked} onCheckedChange={() => togglePermission(perm.name)} />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className={cn('text-sm font-medium transition-colors', isChecked ? 'text-foreground' : 'text-muted-foreground')}>
+                                                                {perm.name.split('.').pop()?.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                            </div>
+                                                            {perm.description && <div className="text-muted-foreground/70 mt-0.5 text-xs leading-snug">{perm.description}</div>}
+                                                        </div>
+                                                        <span className="text-muted-foreground/50 hidden text-[10px] font-mono sm:block">{perm.name}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </ScrollArea>
+                                </>
+                            ) : (
+                                <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">No permissions match your search.</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="shrink-0 border-t bg-muted/30 px-6 py-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-muted-foreground text-sm">
+                                <span className="text-foreground font-semibold tabular-nums">{selectedPerms.length}</span> direct permissions selected
+                            </p>
+                            <div className="flex gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setPermSheetOpen(false)}>Cancel</Button>
+                                <Button type="button" size="sm" disabled={savingPerms} onClick={handleSavePermissions}>
+                                    {savingPerms ? 'Saving...' : 'Save Permissions'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </SheetContent>
+            </Sheet>
 
             {/* Disable/Enable Account Confirmation Dialog */}
             <AlertDialog open={disableDialog} onOpenChange={setDisableDialog}>

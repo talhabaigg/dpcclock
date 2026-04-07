@@ -32,8 +32,8 @@ class LabourForecastController extends Controller
             $query->where('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
         })->whereNotNull('external_id');
 
-        // Filter by kiosk access if user is not admin or backoffice
-        if (! $user->hasRole('admin') && ! $user->hasRole('backoffice')) {
+        // Filter by kiosk access if user is not admin or office-admin
+        if (! $user->can('locations.view-all')) {
             // Get location IDs where user has kiosk access (using eh_location_id from kiosks table)
             $accessibleLocationIds = $user->managedKiosks()->pluck('eh_location_id')->unique()->toArray();
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
@@ -249,8 +249,8 @@ class LabourForecastController extends Controller
 
         // Get current user permissions for workflow buttons
         $user = Auth::user();
-        $canSubmit = $user->hasRole('admin') || $user->hasRole('backoffice') || $user->can('forecast.submit');
-        $canApprove = $user->hasRole('admin') || $user->hasRole('backoffice') || $user->can('forecast.approve');
+        $canSubmit = $user->can('locations.view-all') || $user->can('forecast.submit');
+        $canApprove = $user->can('locations.view-all') || $user->can('forecast.approve');
 
         return Inertia::render('labour-forecast/show', [
             'location' => [
@@ -386,8 +386,8 @@ class LabourForecastController extends Controller
         $user = Auth::user();
         $forecast->submit($user);
 
-        // Notify admin and backoffice users
-        $approvers = User::role(['admin', 'backoffice'])->get();
+        // Notify admin and office-admin users
+        $approvers = User::role(['admin', 'office-admin'])->get();
         Notification::send($approvers, new LabourForecastStatusNotification(
             $forecast,
             'submitted',
