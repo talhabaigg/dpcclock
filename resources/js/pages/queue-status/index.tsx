@@ -53,42 +53,18 @@ const LANE_CONFIG = {
     pending: {
         label: 'Pending',
         icon: Clock,
-        headerBg: 'bg-amber-50 dark:bg-amber-950/30',
-        headerBorder: 'border-amber-200 dark:border-amber-800',
-        badgeBg: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-        cardBorder: 'border-amber-100 dark:border-amber-900/50',
-        iconColor: 'text-amber-500',
-        dot: 'bg-amber-400',
     },
     processing: {
         label: 'Processing',
         icon: RefreshCw,
-        headerBg: 'bg-blue-50 dark:bg-blue-950/30',
-        headerBorder: 'border-blue-200 dark:border-blue-800',
-        badgeBg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-        cardBorder: 'border-blue-100 dark:border-blue-900/50',
-        iconColor: 'text-blue-500',
-        dot: 'bg-blue-400',
     },
     completed: {
         label: 'Completed',
         icon: CheckCircle2,
-        headerBg: 'bg-emerald-50 dark:bg-emerald-950/30',
-        headerBorder: 'border-emerald-200 dark:border-emerald-800',
-        badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-        cardBorder: 'border-emerald-100 dark:border-emerald-900/50',
-        iconColor: 'text-emerald-500',
-        dot: 'bg-emerald-400',
     },
     failed: {
         label: 'Failed',
         icon: XCircle,
-        headerBg: 'bg-red-50 dark:bg-red-950/30',
-        headerBorder: 'border-red-200 dark:border-red-800',
-        badgeBg: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        cardBorder: 'border-red-100 dark:border-red-900/50',
-        iconColor: 'text-red-500',
-        dot: 'bg-red-400',
     },
 } as const;
 
@@ -101,7 +77,6 @@ function JobCard({
     lane: keyof typeof LANE_CONFIG;
     onClick?: () => void;
 }) {
-    const config = LANE_CONFIG[lane];
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return null;
         const date = new Date(dateStr);
@@ -122,29 +97,29 @@ function JobCard({
 
     return (
         <div
-            className={`rounded-lg border bg-white p-3 shadow-sm transition-shadow dark:bg-gray-900 ${config.cardBorder} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+            className={`rounded-lg border bg-card p-3 shadow-sm transition-shadow ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
             onClick={onClick}
         >
             <div className="mb-1.5 flex items-start justify-between gap-2">
                 <span className="text-sm font-medium leading-tight">{job.name}</span>
                 {lane === 'processing' && (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
+                    <Loader2 className="text-muted-foreground h-3.5 w-3.5 shrink-0 animate-spin" />
                 )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
                 {(job.queue || job.metadata?.queue) && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium">
                         {job.metadata?.queue || job.queue}
-                    </span>
+                    </Badge>
                 )}
                 {job.attempts != null && job.attempts > 0 && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium">
                         attempt {job.metadata?.attempts || job.attempts}
-                    </span>
+                    </Badge>
                 )}
             </div>
             {lane === 'failed' && job.message && (
-                <p className="mt-1.5 line-clamp-2 text-[11px] leading-tight text-red-600 dark:text-red-400">
+                <p className="text-destructive mt-1.5 line-clamp-2 text-[11px] leading-tight">
                     {job.message}
                 </p>
             )}
@@ -168,14 +143,12 @@ function KanbanLane({
     const Icon = config.icon;
 
     return (
-        <div className="flex min-w-[280px] flex-1 flex-col rounded-xl border bg-gray-50/50 dark:border-gray-800 dark:bg-gray-950/50">
+        <div className="flex min-w-[280px] flex-1 flex-col rounded-xl border bg-muted/40">
             {/* Lane header */}
-            <div className={`flex items-center gap-2 rounded-t-xl border-b px-4 py-3 ${config.headerBg} ${config.headerBorder}`}>
-                <div className={`flex h-6 w-6 items-center justify-center rounded-md ${config.badgeBg}`}>
-                    <Icon className="h-3.5 w-3.5" />
-                </div>
+            <div className="flex items-center gap-2 rounded-t-xl border-b px-4 py-3">
+                <Icon className="text-muted-foreground h-4 w-4" />
                 <span className="text-sm font-semibold">{config.label}</span>
-                <Badge variant="secondary" className={`ml-auto ${config.badgeBg}`}>
+                <Badge variant="outline" className="ml-auto">
                     {jobs.length}
                 </Badge>
             </div>
@@ -360,14 +333,11 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             <div className="flex h-full flex-col overflow-hidden">
                 {/* Top bar */}
                 <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-lg font-semibold">Queue Monitor</h1>
-                        <div className="flex items-center gap-1.5">
-                            <span className={`h-2 w-2 rounded-full ${isConnected ? 'animate-pulse bg-emerald-400' : 'bg-red-400'}`} />
-                            <span className="text-muted-foreground text-xs">
-                                {isConnected ? 'Live' : 'Disconnected'}
-                            </span>
-                        </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 rounded-full ${isConnected ? 'animate-pulse bg-foreground' : 'bg-muted-foreground/40'}`} />
+                        <span className="text-muted-foreground text-xs">
+                            {isConnected ? 'Live' : 'Disconnected'}
+                        </span>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={handleViewLogs}>
@@ -399,7 +369,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                     Clear Failed Jobs
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleClear('clear-logs')} className="text-red-600 focus:text-red-600">
+                                <DropdownMenuItem onClick={() => handleClear('clear-logs')} className="text-destructive focus:text-destructive">
                                     <FileText className="mr-2 h-4 w-4" />
                                     Clear Log File
                                 </DropdownMenuItem>
@@ -410,10 +380,10 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
 
                 {/* Reverb disconnected warning */}
                 {!isConnected && (
-                    <div className="flex items-center gap-2 border-b bg-amber-50 px-4 py-2 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    <div className="flex items-center gap-2 border-b bg-muted px-4 py-2 text-muted-foreground">
                         <Activity className="h-4 w-4 shrink-0" />
                         <span className="text-xs">
-                            Real-time updates unavailable. Start Reverb: <code className="rounded bg-amber-100 px-1 dark:bg-amber-900">php artisan reverb:start</code>
+                            Real-time updates unavailable. Start Reverb: <code className="bg-background rounded border px-1">php artisan reverb:start</code>
                         </span>
                     </div>
                 )}
@@ -436,7 +406,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <XCircle className="h-5 w-5 text-red-500" />
+                            <XCircle className="text-muted-foreground h-5 w-5" />
                             Failed Job Details
                         </DialogTitle>
                     </DialogHeader>
@@ -466,8 +436,8 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                             )}
                             <div>
                                 <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Error Message</h3>
-                                <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-md bg-red-50 p-3 dark:bg-red-950/30">
-                                    <pre className="break-words whitespace-pre-wrap text-xs text-red-900 dark:text-red-200">
+                                <div className="bg-muted max-h-96 overflow-x-auto overflow-y-auto rounded-md border p-3">
+                                    <pre className="text-foreground break-words whitespace-pre-wrap text-xs">
                                         {selectedFailedJob.message || 'No error message available'}
                                     </pre>
                                 </div>

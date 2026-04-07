@@ -18,3 +18,9 @@ export function fmtPercent(v: number): string {
 export function round2(n: number): number {
     return Math.round(n * 100) / 100;
 }
+
+export function isNavItemActive(href: string, currentUrl: string): boolean {
+    const url = currentUrl.split('?')[0];
+    if (href === '/dashboard') return url === '/dashboard';
+    return url === href || url.startsWith(href + '/');
+}

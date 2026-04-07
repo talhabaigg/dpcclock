@@ -1,5 +1,3 @@
-'use client';
-
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -18,6 +16,7 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 
+import { isNavItemActive } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
 
 const STORAGE_KEY = 'navDocumentsCollapsibleState';
@@ -57,10 +56,9 @@ function saveCollapseState(state: CollapseState) {
     }
 }
 
-function renderGroupedSubItems(subItems: SubItem[], currentUrl: string) {
+function groupAlpha(subItems: SubItem[]): { letter: string; items: SubItem[] }[] {
     const sorted = [...subItems].sort((a, b) => a.name.localeCompare(b.name));
     const groups: { letter: string; items: SubItem[] }[] = [];
-
     for (const item of sorted) {
         const letter = item.name[0].toUpperCase();
         const last = groups[groups.length - 1];
@@ -70,14 +68,17 @@ function renderGroupedSubItems(subItems: SubItem[], currentUrl: string) {
             groups.push({ letter, items: [item] });
         }
     }
+    return groups;
+}
 
-    return groups.map((group, groupIndex) => (
+function renderGroupedSubItems(subItems: SubItem[], currentUrl: string) {
+    return groupAlpha(subItems).map((group, groupIndex) => (
         <div key={group.letter}>
             {groupIndex > 0 && <hr className="border-sidebar-border my-1" />}
             {group.items.map((subItem) => (
                 <SidebarMenuSubItem key={subItem.name}>
-                    <SidebarMenuSubButton asChild isActive={subItem.url === currentUrl}>
-                        <Link href={subItem.url}>
+                    <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, currentUrl)}>
+                        <Link href={subItem.url} prefetch>
                             <span>{subItem.name}</span>
                         </Link>
                     </SidebarMenuSubButton>
@@ -90,8 +91,8 @@ function renderGroupedSubItems(subItems: SubItem[], currentUrl: string) {
 function renderDropdownSubItems(subItems: SubItem[], groupByAlpha: boolean, currentUrl: string) {
     if (!groupByAlpha) {
         return subItems.map((subItem) => (
-            <DropdownMenuItem key={subItem.name} asChild className={subItem.url === currentUrl ? 'bg-accent' : ''}>
-                <Link href={subItem.url}>
+            <DropdownMenuItem key={subItem.name} asChild className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
+                <Link href={subItem.url} prefetch>
                     <subItem.icon className="mr-2 size-4 shrink-0" />
                     {subItem.name}
                 </Link>
@@ -99,25 +100,13 @@ function renderDropdownSubItems(subItems: SubItem[], groupByAlpha: boolean, curr
         ));
     }
 
-    const sorted = [...subItems].sort((a, b) => a.name.localeCompare(b.name));
-    const groups: { letter: string; items: SubItem[] }[] = [];
-    for (const item of sorted) {
-        const letter = item.name[0].toUpperCase();
-        const last = groups[groups.length - 1];
-        if (last && last.letter === letter) {
-            last.items.push(item);
-        } else {
-            groups.push({ letter, items: [item] });
-        }
-    }
-
-    return groups.map((group, groupIndex) => (
+    return groupAlpha(subItems).map((group, groupIndex) => (
         <div key={group.letter}>
             {groupIndex > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel className="px-2 py-1 text-[10px] text-muted-foreground">{group.letter}</DropdownMenuLabel>
             {group.items.map((subItem) => (
-                <DropdownMenuItem key={subItem.name} asChild className={subItem.url === currentUrl ? 'bg-accent' : ''}>
-                    <Link href={subItem.url}>
+                <DropdownMenuItem key={subItem.name} asChild className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
+                    <Link href={subItem.url} prefetch>
                         <subItem.icon className="mr-2 size-4 shrink-0" />
                         {subItem.name}
                     </Link>
@@ -149,7 +138,7 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                     const visibleSubItems = item.subItems?.filter(
                         (sub) => !sub.permission || permissions.includes(sub.permission),
                     );
-                    const hasActiveChild = visibleSubItems?.some((sub) => sub.url === page.url) ?? false;
+                    const hasActiveChild = visibleSubItems?.some((sub) => isNavItemActive(sub.url, page.url)) ?? false;
                     const isOpen = openMap[item.name] !== undefined ? openMap[item.name] : hasActiveChild;
 
                     // Collapsed sidebar: show dropdown flyout so sub-items are still reachable
@@ -197,8 +186,8 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                                                     ? renderGroupedSubItems(visibleSubItems, page.url)
                                                     : visibleSubItems.map((subItem) => (
                                                           <SidebarMenuSubItem key={subItem.name}>
-                                                              <SidebarMenuSubButton asChild isActive={subItem.url === page.url}>
-                                                                  <Link href={subItem.url}>
+                                                              <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, page.url)}>
+                                                                  <Link href={subItem.url} prefetch>
                                                                       <span>{subItem.name}</span>
                                                                   </Link>
                                                               </SidebarMenuSubButton>

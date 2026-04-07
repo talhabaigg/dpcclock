@@ -352,6 +352,7 @@ export function AppSidebar() {
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredConfiguration = configuration.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -376,7 +377,7 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission))} className="mt-auto" />
+                <NavFooter items={filteredFooterNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>
