@@ -144,6 +144,7 @@ Route::middleware(['auth', 'permission:ai.voice'])->group(function () {
     Route::post('/voice/session', [VoiceCallController::class, 'createSession'])->name('voice.session');
     Route::post('/voice/session/end', [VoiceCallController::class, 'endSession'])->name('voice.session.end');
     Route::post('/voice/tool', [VoiceCallController::class, 'executeTool'])->name('voice.tool');
+    Route::post('/voice/transcript', [VoiceCallController::class, 'saveTranscript'])->name('voice.transcript');
 });
 
 Route::get('/employees/sync', [EmployeeController::class, 'sync'])->name('employees.sync');

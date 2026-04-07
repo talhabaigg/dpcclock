@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Check, Copy, Download, FileText, RefreshCw, Sparkles, User } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -555,6 +555,107 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
     );
 }
 
+/**
+ * Gemini-style smooth text reveal.
+ * Shows raw text during streaming with word-by-word deblur animation.
+ * ReactMarkdown only renders once streaming is complete.
+ */
+function SmoothStreamingText({ content }: { content: string }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const revealedCountRef = useRef(0);
+    const rafRef = useRef<number>(0);
+    const words = content.split(/(\s+)/);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const spans = container.querySelectorAll<HTMLSpanElement>('span[data-word]');
+        let current = revealedCountRef.current;
+
+        const reveal = () => {
+            const batch = Math.max(2, Math.ceil((spans.length - current) * 0.15));
+            const end = Math.min(current + batch, spans.length);
+
+            for (let i = current; i < end; i++) {
+                spans[i].classList.add('gemini-word-visible');
+            }
+
+            current = end;
+            revealedCountRef.current = current;
+
+            if (current < spans.length) {
+                rafRef.current = requestAnimationFrame(reveal);
+            }
+        };
+
+        rafRef.current = requestAnimationFrame(reveal);
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    }, [words.length]);
+
+    return (
+        <>
+            <div ref={containerRef} className="gemini-smooth-stream whitespace-pre-wrap text-sm leading-relaxed">
+                {words.map((word, i) => (
+                    <span
+                        key={i}
+                        data-word
+                        className={i < revealedCountRef.current ? 'gemini-word-visible' : ''}
+                    >
+                        {word}
+                    </span>
+                ))}
+            </div>
+            <style>{`
+                .gemini-smooth-stream span[data-word] {
+                    opacity: 0;
+                    filter: blur(6px);
+                    transition: opacity 0.3s ease-out, filter 0.3s ease-out;
+                    display: inline;
+                }
+                .gemini-smooth-stream span.gemini-word-visible {
+                    opacity: 1;
+                    filter: blur(0);
+                }
+            `}</style>
+        </>
+    );
+}
+
+function StreamingIndicator() {
+    return (
+        <div className="flex flex-col gap-3 py-1">
+            <div className="flex flex-col gap-[10px]">
+                <div className="gemini-line h-[14px] w-[85%] rounded-full" style={{ animationDelay: '0s' }} />
+                <div className="gemini-line h-[14px] w-[70%] rounded-full" style={{ animationDelay: '0.15s' }} />
+                <div className="gemini-line h-[14px] w-[50%] rounded-full" style={{ animationDelay: '0.3s' }} />
+            </div>
+            <style>{`
+                @keyframes gemini-shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+                .gemini-line {
+                    background: linear-gradient(90deg,
+                        rgba(66,133,244,0.08) 0%, rgba(155,114,203,0.2) 20%,
+                        rgba(217,101,112,0.25) 40%, rgba(155,114,203,0.2) 60%,
+                        rgba(66,133,244,0.08) 80%, transparent 100%);
+                    background-size: 200% 100%;
+                    animation: gemini-shimmer 2s ease-in-out infinite;
+                }
+                :is(.dark) .gemini-line {
+                    background: linear-gradient(90deg,
+                        rgba(66,133,244,0.12) 0%, rgba(155,114,203,0.3) 20%,
+                        rgba(217,101,112,0.35) 40%, rgba(155,114,203,0.3) 60%,
+                        rgba(66,133,244,0.12) 80%, transparent 100%);
+                    background-size: 200% 100%;
+                    animation: gemini-shimmer 2s ease-in-out infinite;
+                }
+            `}</style>
+        </div>
+    );
+}
+
 export const ChatMessage = memo(function ChatMessage({ message, isLatest = false, onRegenerate, showTimestamp = false }: ChatMessageProps) {
     const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
@@ -596,8 +697,8 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
         <div className={cn('group relative flex gap-3 px-4 py-4 transition-colors', isUser ? 'bg-transparent' : 'bg-muted/30')}>
             {/* Avatar */}
             <div className="flex-shrink-0">
-                <Avatar className={cn('size-8', isUser ? 'bg-primary' : 'bg-gradient-to-br from-violet-500 to-purple-600')}>
-                    <AvatarFallback className={cn(isUser ? 'bg-primary text-primary-foreground' : 'bg-transparent text-white')}>
+                <Avatar className={cn('size-8', isUser ? 'bg-primary' : 'border-border bg-background border')}>
+                    <AvatarFallback className={cn(isUser ? 'bg-primary text-primary-foreground' : 'bg-transparent text-foreground')}>
                         {isUser ? <User className="size-4" /> : <Sparkles className="size-4" />}
                     </AvatarFallback>
                 </Avatar>
@@ -643,6 +744,8 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                 <div className={cn('prose prose-sm dark:prose-invert max-w-none', isError && 'text-destructive')}>
                     {isStreaming && !message.content ? (
                         <StreamingIndicator />
+                    ) : isStreaming ? (
+                        <SmoothStreamingText content={message.content} />
                     ) : (
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -731,9 +834,6 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                             {message.content}
                         </ReactMarkdown>
                     )}
-
-                    {/* Streaming cursor */}
-                    {isStreaming && message.content && <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />}
                 </div>
 
                 {/* Action buttons - shown on hover for assistant messages */}
@@ -774,55 +874,5 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
         </div>
     );
 });
-
-function StreamingIndicator() {
-    return (
-        <div className="space-y-3">
-            {/* Animated thinking text with sparkle */}
-            <div className="flex items-center gap-2">
-                <Sparkles className="size-4 animate-pulse text-violet-500" />
-                <span className="animate-pulse bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent">
-                    Thinking...
-                </span>
-            </div>
-
-            {/* Skeleton shimmer lines */}
-            <div className="space-y-2">
-                <div className="bg-muted/50 h-4 w-full overflow-hidden rounded">
-                    <div className="ai-shimmer h-full w-full" />
-                </div>
-                <div className="bg-muted/50 h-4 w-4/5 overflow-hidden rounded">
-                    <div className="ai-shimmer h-full w-full" />
-                </div>
-                <div className="bg-muted/50 h-4 w-3/5 overflow-hidden rounded">
-                    <div className="ai-shimmer h-full w-full" />
-                </div>
-            </div>
-
-            {/* CSS for shimmer animation */}
-            <style>{`
-                @keyframes shimmer {
-                    0% {
-                        transform: translateX(-100%);
-                    }
-                    100% {
-                        transform: translateX(100%);
-                    }
-                }
-                .ai-shimmer {
-                    background: linear-gradient(
-                        90deg,
-                        transparent,
-                        rgba(139, 92, 246, 0.15),
-                        rgba(168, 85, 247, 0.2),
-                        rgba(139, 92, 246, 0.15),
-                        transparent
-                    );
-                    animation: shimmer 1.5s ease-in-out infinite;
-                }
-            `}</style>
-        </div>
-    );
-}
 
 export default ChatMessage;

@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiChatMessage;
 use App\Models\VoiceCallSession;
+use App\Traits\ExecutesAiTools;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class VoiceCallController extends Controller
 {
+    use ExecutesAiTools;
     /**
      * Create an ephemeral token for the OpenAI Realtime API
      * This allows secure browser-to-OpenAI WebSocket connections
@@ -149,7 +153,7 @@ class VoiceCallController extends Controller
         ]);
 
         try {
-            $result = $this->executeToolCall($validated['tool_name'], $validated['arguments']);
+            $result = $this->executeAiToolCall($validated['tool_name'], $validated['arguments']);
 
             return response()->json([
                 'call_id' => $validated['call_id'],
@@ -174,39 +178,48 @@ class VoiceCallController extends Controller
     private function getVoiceInstructions(): string
     {
         return <<<'INSTRUCTIONS'
-You are Superior AI, a voice assistant for the Superior Portal - a construction project management system.
+You are Superior AI, a voice assistant for the Superior Portal — a construction project management system used by Superior Wall & Ceiling.
 
-## Personality
-- Professional, friendly, and concise
-- Direct and practical - construction professionals are busy
-- Helpful and proactive - anticipate follow-up needs
+## Personality & Tone
+- Warm but efficient — like a knowledgeable colleague
+- Direct and practical — construction professionals are busy, don't waste their time
+- Confident but not robotic — sound like a real person, not a script
 
 ## Speaking Style
-- Use contractions naturally (I'm, you're, we'll)
-- Keep responses brief and to the point
-- Read numbers clearly (e.g. "two thousand five hundred dollars" for $2,500)
-- For lists, summarize the key items first and offer details if needed
-- Acknowledge requests simply: "Got it", "Sure", "No problem"
+- Use natural contractions (I'm, you're, we'll, that's)
+- Keep responses concise — aim for 1-2 sentences when possible
+- Read numbers naturally (e.g. "twenty-five hundred dollars" not "two thousand five hundred dollars")
+- For dollar amounts, say "dollars" not "USD"
+- For lists, give a quick summary count first, then offer to go through details
+- Use casual acknowledgements: "Got it", "Sure thing", "No worries", "Done"
+- Avoid filler phrases like "Great question!" or "I'd be happy to help with that"
+- Never start with "Sure, I can help you with that" — just do it
 
 ## Tool Usage
-You have access to database tools for:
-- Searching and reading requisitions/orders
+You have access to tools for:
+- Searching and reading requisitions/purchase orders
 - Looking up materials and pricing
-- Finding locations and suppliers
-- Creating new requisitions
+- Finding locations/projects and suppliers
+- Creating new requisitions with line items
+- Viewing job summaries with cost and revenue data
 
 When using tools:
-- Let the user know you're looking something up: "Let me check that for you"
-- Summarize results clearly - don't read out raw data
-- Highlight the most important information first
-- Offer more details if needed: "Would you like me to go through the details?"
+- Briefly let them know: "Let me pull that up" or "Checking now"
+- Summarize results conversationally — never read raw data or IDs
+- Lead with the most important info (status, total, key items)
+- If there are many results, give the count and highlights, then ask if they want more
 
 ## Creating Orders via Voice
 When helping create an order:
-1. Confirm location and supplier
-2. Add items one by one, confirming each
-3. Give a quick summary with total before creating
-4. Get confirmation before submitting
+1. Ask for the project/location and supplier
+2. Walk through items one by one — confirm each before moving on
+3. Before submitting, give a quick summary: "That's 3 items totalling twelve hundred dollars for Bunnings at the Smith Street project. Want me to submit?"
+4. Always get explicit confirmation before creating
+
+## Important
+- If you don't understand something, ask for clarification rather than guessing
+- If a tool returns an error, explain what went wrong in plain language
+- Remember context within the conversation — don't re-ask things they've already told you
 INSTRUCTIONS;
     }
 
@@ -357,6 +370,37 @@ INSTRUCTIONS;
             ],
             [
                 'type' => 'function',
+                'name' => 'get_job_summary',
+                'description' => 'Get job summary data including costs, revenue, and billing status for projects. Use "search" to find jobs by project name — this is the preferred parameter when the user says a project name.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'search' => [
+                            'type' => 'string',
+                            'description' => 'Search by project name or job number. Use this when the user says a name like "Southbank" or "CBD Tower".',
+                        ],
+                        'job_number' => [
+                            'type' => 'string',
+                            'description' => 'Filter by exact job number. Only if user gives a specific number.',
+                        ],
+                        'company_code' => [
+                            'type' => 'string',
+                            'description' => 'Filter by company code (SWC, GREEN, SWCP)',
+                        ],
+                        'status' => [
+                            'type' => 'string',
+                            'description' => 'Filter by job status',
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Max results (default 20)',
+                        ],
+                    ],
+                    'required' => [],
+                ],
+            ],
+            [
+                'type' => 'function',
                 'name' => 'create_requisition',
                 'description' => 'Create a new requisition/order with line items.',
                 'parameters' => [
@@ -400,18 +444,45 @@ INSTRUCTIONS;
     }
 
     /**
-     * Execute a tool call - delegates to ChatController's tool methods
+     * Save a voice transcript exchange to the conversation history.
      */
-    private function executeToolCall(string $name, array $arguments): string
+    public function saveTranscript(Request $request)
     {
-        // Instantiate ChatController to reuse its tool methods
-        $chatController = app(ChatController::class);
+        $validated = $request->validate([
+            'voice_session_id' => 'required|integer',
+            'conversation_id' => 'nullable|string',
+            'user_transcript' => 'nullable|string',
+            'ai_transcript' => 'nullable|string',
+        ]);
 
-        // Use reflection to call the private executeToolCall method
-        $reflection = new \ReflectionClass($chatController);
-        $method = $reflection->getMethod('executeToolCall');
-        $method->setAccessible(true);
+        $userId = $request->user()->id;
+        $conversationId = $validated['conversation_id'] ?? 'voice-'.($validated['voice_session_id'] ?? Str::uuid()->toString());
 
-        return $method->invoke($chatController, $name, $arguments);
+        $saved = [];
+
+        if (! empty($validated['user_transcript'])) {
+            $saved[] = AiChatMessage::create([
+                'user_id' => $userId,
+                'conversation_id' => $conversationId,
+                'role' => 'user',
+                'message' => $validated['user_transcript'],
+                'model_used' => 'voice-realtime',
+            ]);
+        }
+
+        if (! empty($validated['ai_transcript'])) {
+            $saved[] = AiChatMessage::create([
+                'user_id' => $userId,
+                'conversation_id' => $conversationId,
+                'role' => 'assistant',
+                'message' => $validated['ai_transcript'],
+                'model_used' => 'gpt-4o-mini-realtime',
+            ]);
+        }
+
+        return response()->json([
+            'conversation_id' => $conversationId,
+            'saved_count' => count($saved),
+        ]);
     }
 }

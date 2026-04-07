@@ -24,4 +24,4 @@ export type {
     UseChatReturn,
 } from './types';
 
-export type { UseVoiceCallOptions, UseVoiceCallReturn, VoiceCallEvent, VoiceCallStatus } from './use-voice-call';
+export type { TranscriptEntry, UseVoiceCallOptions, UseVoiceCallReturn, VoiceCallStatus } from './use-voice-call';

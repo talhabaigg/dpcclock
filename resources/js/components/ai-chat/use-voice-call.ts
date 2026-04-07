@@ -1,16 +1,12 @@
 // useVoiceCall Hook - OpenAI Realtime API voice call management
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'processing' | 'error' | 'disconnected';
 
-export interface VoiceCallEvent {
-    type: 'transcript' | 'response' | 'tool_call' | 'error' | 'status';
-    data: {
-        text?: string;
-        tool?: string;
-        error?: string;
-        status?: VoiceCallStatus;
-    };
+export interface TranscriptEntry {
+    role: 'user' | 'assistant';
+    text: string;
+    timestamp: Date;
 }
 
 export interface CallDurationInfo {
@@ -20,6 +16,7 @@ export interface CallDurationInfo {
 }
 
 export interface UseVoiceCallOptions {
+    voice?: string;
     onTranscript?: (text: string, isFinal: boolean) => void;
     onResponse?: (text: string) => void;
     onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
@@ -34,24 +31,36 @@ export interface UseVoiceCallReturn {
     isMuted: boolean;
     userTranscript: string;
     aiResponse: string;
+    transcriptHistory: TranscriptEntry[];
+    callDuration: number;
+    audioLevels: number[];
     startCall: () => Promise<void>;
     endCall: () => void;
     toggleMute: () => void;
 }
 
 export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallReturn {
-    const { onTranscript, onResponse, onToolCall, onError, onStatusChange, onCallEnded } = options;
+    const { voice = 'ash', onTranscript, onResponse, onToolCall, onError, onStatusChange, onCallEnded } = options;
 
     const [status, setStatus] = useState<VoiceCallStatus>('idle');
     const [isMuted, setIsMuted] = useState(false);
     const [userTranscript, setUserTranscript] = useState('');
     const [aiResponse, setAiResponse] = useState('');
+    const [transcriptHistory, setTranscriptHistory] = useState<TranscriptEntry[]>([]);
+    const [callDuration, setCallDuration] = useState(0);
+    const [audioLevels, setAudioLevels] = useState<number[]>([0, 0, 0, 0, 0]);
 
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
     const dataChannelRef = useRef<RTCDataChannel | null>(null);
     const audioElementRef = useRef<HTMLAudioElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const voiceSessionIdRef = useRef<number | null>(null);
+    const conversationIdRef = useRef<string | null>(null);
+    const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const aiResponseAccRef = useRef('');
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const animFrameRef = useRef<number | null>(null);
 
     const updateStatus = useCallback(
         (newStatus: VoiceCallStatus) => {
@@ -60,6 +69,29 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         },
         [onStatusChange],
     );
+
+    // Save transcript to server for conversation persistence
+    const saveTranscript = useCallback(async (userText?: string, aiText?: string) => {
+        if (!voiceSessionIdRef.current) return;
+
+        try {
+            await fetch('/voice/transcript', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({
+                    voice_session_id: voiceSessionIdRef.current,
+                    conversation_id: conversationIdRef.current,
+                    user_transcript: userText || undefined,
+                    ai_transcript: aiText || undefined,
+                }),
+            });
+        } catch (err) {
+            console.error('Failed to save voice transcript:', err);
+        }
+    }, []);
 
     const handleDataChannelMessage = useCallback(
         async (event: MessageEvent) => {
@@ -84,7 +116,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         // User's speech transcribed
                         const transcript = message.transcript || '';
                         setUserTranscript(transcript);
+                        setTranscriptHistory((prev) => [...prev, { role: 'user', text: transcript, timestamp: new Date() }]);
                         onTranscript?.(transcript, true);
+                        // Save user transcript
+                        saveTranscript(transcript, undefined);
                         break;
                     }
 
@@ -95,8 +130,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     case 'response.audio_transcript.delta': {
                         // AI is speaking - accumulate transcript
                         const delta = message.delta || '';
-                        setAiResponse((prev) => prev + delta);
-                        updateStatus('processing'); // AI is responding
+                        aiResponseAccRef.current += delta;
+                        setAiResponse(aiResponseAccRef.current);
+                        updateStatus('processing');
                         break;
                     }
 
@@ -104,7 +140,11 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         // AI finished speaking this segment
                         const fullTranscript = message.transcript || '';
                         setAiResponse(fullTranscript);
+                        aiResponseAccRef.current = '';
+                        setTranscriptHistory((prev) => [...prev, { role: 'assistant', text: fullTranscript, timestamp: new Date() }]);
                         onResponse?.(fullTranscript);
+                        // Save AI transcript
+                        saveTranscript(undefined, fullTranscript);
                         break;
                     }
 
@@ -163,10 +203,10 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     }
 
                     case 'response.done':
-                        // Full response completed
+                        // Full response completed — clear current response for next turn but keep history
                         updateStatus('listening');
-                        // Clear AI response for next turn
                         setAiResponse('');
+                        aiResponseAccRef.current = '';
                         break;
 
                     case 'error': {
@@ -181,12 +221,19 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                 console.error('Error parsing data channel message:', err);
             }
         },
-        [onTranscript, onResponse, onToolCall, onError, updateStatus],
+        [onTranscript, onResponse, onToolCall, onError, updateStatus, saveTranscript],
     );
 
     const startCall = useCallback(async () => {
         try {
             updateStatus('connecting');
+
+            // Reset state for new call
+            setTranscriptHistory([]);
+            setCallDuration(0);
+            setUserTranscript('');
+            setAiResponse('');
+            aiResponseAccRef.current = '';
 
             // Step 1: Get ephemeral token from server
             const sessionResponse = await fetch('/voice/session', {
@@ -195,6 +242,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                 },
+                body: JSON.stringify({ voice }),
             });
 
             if (!sessionResponse.ok) {
@@ -205,6 +253,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             const ephemeralKey = sessionData.client_secret?.value;
             voiceSessionIdRef.current = sessionData.voice_session_id;
+            conversationIdRef.current = `voice-${sessionData.voice_session_id}`;
 
             if (!ephemeralKey) {
                 throw new Error('No ephemeral key received');
@@ -221,6 +270,38 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             pc.ontrack = (e) => {
                 audioEl.srcObject = e.streams[0];
+
+                // Set up audio analyser for reactive waveform
+                try {
+                    const audioCtx = new AudioContext();
+                    audioContextRef.current = audioCtx;
+                    const source = audioCtx.createMediaStreamSource(e.streams[0]);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 32;
+                    analyser.smoothingTimeConstant = 0.6;
+                    source.connect(analyser);
+                    analyserRef.current = analyser;
+
+                    // Start animation loop to read audio levels
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    const updateLevels = () => {
+                        analyser.getByteFrequencyData(dataArray);
+                        // Pick 5 spread-out frequency bins, normalize to 0-1
+                        const bins = analyser.frequencyBinCount;
+                        const levels = [
+                            dataArray[Math.floor(bins * 0.1)] / 255,
+                            dataArray[Math.floor(bins * 0.25)] / 255,
+                            dataArray[Math.floor(bins * 0.4)] / 255,
+                            dataArray[Math.floor(bins * 0.6)] / 255,
+                            dataArray[Math.floor(bins * 0.8)] / 255,
+                        ];
+                        setAudioLevels(levels);
+                        animFrameRef.current = requestAnimationFrame(updateLevels);
+                    };
+                    animFrameRef.current = requestAnimationFrame(updateLevels);
+                } catch (err) {
+                    console.warn('Could not set up audio analyser:', err);
+                }
             };
 
             // Step 3: Get user microphone
@@ -244,20 +325,24 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             dc.onopen = () => {
                 updateStatus('connected');
-                // Clear transcripts for new call
                 setUserTranscript('');
                 setAiResponse('');
 
-                // Send initial response.create to prompt AI greeting
+                // Start call duration timer
+                const startTime = Date.now();
+                durationIntervalRef.current = setInterval(() => {
+                    setCallDuration(Math.floor((Date.now() - startTime) / 1000));
+                }, 1000);
+
+                // Prompt AI greeting
                 setTimeout(() => {
                     if (dc.readyState === 'open') {
-                        // Prompt the AI to greet the user
                         dc.send(
                             JSON.stringify({
                                 type: 'response.create',
                                 response: {
                                     modalities: ['text', 'audio'],
-                                    instructions: 'Greet the user briefly and ask how you can help them today.',
+                                    instructions: 'Greet the user briefly. Say something like "Hey, how can I help?" — keep it short and natural.',
                                 },
                             }),
                         );
@@ -309,9 +394,15 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             updateStatus('error');
             endCall();
         }
-    }, [handleDataChannelMessage, onError, updateStatus, status]);
+    }, [handleDataChannelMessage, onError, updateStatus, status, voice]);
 
     const endCall = useCallback(async () => {
+        // Stop duration timer
+        if (durationIntervalRef.current) {
+            clearInterval(durationIntervalRef.current);
+            durationIntervalRef.current = null;
+        }
+
         // Report session end to server first
         if (voiceSessionIdRef.current) {
             try {
@@ -338,6 +429,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                 console.error('Failed to end voice session on server:', err);
             }
             voiceSessionIdRef.current = null;
+            conversationIdRef.current = null;
         }
 
         // Close data channel
@@ -358,6 +450,17 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             mediaStreamRef.current = null;
         }
 
+        // Stop audio analyser
+        if (animFrameRef.current) {
+            cancelAnimationFrame(animFrameRef.current);
+            animFrameRef.current = null;
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+
         // Clean up audio element
         if (audioElementRef.current) {
             audioElementRef.current.srcObject = null;
@@ -365,8 +468,24 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         }
 
         setIsMuted(false);
+        setAudioLevels([0, 0, 0, 0, 0]);
         updateStatus('idle');
     }, [updateStatus, onCallEnded]);
+
+    // Clean up timer and analyser on unmount
+    useEffect(() => {
+        return () => {
+            if (durationIntervalRef.current) {
+                clearInterval(durationIntervalRef.current);
+            }
+            if (animFrameRef.current) {
+                cancelAnimationFrame(animFrameRef.current);
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close().catch(() => {});
+            }
+        };
+    }, []);
 
     const toggleMute = useCallback(() => {
         if (mediaStreamRef.current) {
@@ -384,6 +503,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         isMuted,
         userTranscript,
         aiResponse,
+        transcriptHistory,
+        callDuration,
+        audioLevels,
         startCall,
         endCall,
         toggleMute,

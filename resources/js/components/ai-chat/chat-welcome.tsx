@@ -1,10 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, AudioLines, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight, ArrowUp, AudioLines, Paperclip, Sparkles, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 import type { SuggestedPrompt } from './types';
@@ -20,7 +21,7 @@ interface ChatWelcomeProps {
     /** Placeholder for the input */
     placeholder?: string;
     /** Called when user submits a message */
-    onSubmit?: (message: string) => void;
+    onSubmit?: (message: string, attachments?: File[]) => void;
     /** Whether the chat is loading */
     isLoading?: boolean;
     /** Called when user clicks the voice call button */
@@ -31,91 +32,77 @@ interface ChatWelcomeProps {
     onModelChange?: (modelId: string) => void;
 }
 
+function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }) {
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = useMemo(() => (isImage ? URL.createObjectURL(file) : null), [file, isImage]);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
+
+    if (isImage && previewUrl) {
+        return (
+            <div className="group/att relative size-16 shrink-0 overflow-hidden rounded-lg">
+                <img src={previewUrl} alt={file.name} className="size-full object-cover" />
+                <button
+                    type="button"
+                    onClick={onRemove}
+                    className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover/att:opacity-100"
+                >
+                    <X className="size-3" />
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm">
+            <Paperclip className="text-muted-foreground size-3.5" />
+            <span className="max-w-[150px] truncate">{file.name}</span>
+            <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-foreground">
+                <X className="size-3.5" />
+            </button>
+        </div>
+    );
+}
+
 // Animated text component for typing effect
 function AnimatedGreeting({ userName }: { userName?: string }) {
-    const greeting = userName ? `Hi ${userName}` : 'Hello';
-    const subtitle = "I'm ready to help you.";
+    const greeting = userName ? `What can I help with, ${userName}?` : 'What can I help with?';
 
     const [displayedGreeting, setDisplayedGreeting] = useState('');
-    const [displayedSubtitle, setDisplayedSubtitle] = useState('');
-    const [showSubtitle, setShowSubtitle] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
 
     useEffect(() => {
         let greetingIndex = 0;
-        let subtitleIndex = 0;
 
-        // Type greeting first
         const greetingInterval = setInterval(() => {
             if (greetingIndex < greeting.length) {
                 setDisplayedGreeting(greeting.slice(0, greetingIndex + 1));
                 greetingIndex++;
             } else {
                 clearInterval(greetingInterval);
-                // Small delay before starting subtitle
-                setTimeout(() => {
-                    setShowSubtitle(true);
-                    // Type subtitle
-                    const subtitleInterval = setInterval(() => {
-                        if (subtitleIndex < subtitle.length) {
-                            setDisplayedSubtitle(subtitle.slice(0, subtitleIndex + 1));
-                            subtitleIndex++;
-                        } else {
-                            clearInterval(subtitleInterval);
-                            setIsComplete(true);
-                        }
-                    }, 20);
-                }, 300);
+                setIsComplete(true);
             }
-        }, 50);
+        }, 40);
 
         return () => {
             clearInterval(greetingInterval);
         };
-    }, [greeting, subtitle]);
+    }, [greeting]);
 
     return (
-        <div className="mb-10 w-full max-w-2xl">
-            {/* Greeting with gradient */}
-            <h1 className="flex items-center gap-3 text-4xl font-medium tracking-tight md:text-5xl">
-                <Sparkles className="ai-sparkle size-8 text-violet-500 md:size-10" />
-                <span className="bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+        <div className="mb-8 w-full max-w-2xl">
+            {/* Greeting */}
+            <h1 className="text-center text-3xl font-semibold tracking-tight md:text-4xl">
+                <span className="text-foreground">
                     {displayedGreeting}
-                    {!showSubtitle && <span className="animate-pulse">|</span>}
+                    {!isComplete && <span className="text-muted-foreground animate-pulse">|</span>}
                 </span>
             </h1>
-            {/* Subtitle */}
-            {showSubtitle && (
-                <p className="text-foreground/80 mt-3 text-2xl font-light md:text-3xl">
-                    {displayedSubtitle}
-                    {!isComplete && <span className="animate-pulse">|</span>}
-                </p>
-            )}
 
-            {/* Sparkle animation keyframes */}
-            <style>{`
-                @keyframes sparkle-rotate {
-                    0%, 100% {
-                        transform: rotate(0deg) scale(1);
-                        opacity: 1;
-                    }
-                    25% {
-                        transform: rotate(-15deg) scale(1.1);
-                        opacity: 0.8;
-                    }
-                    50% {
-                        transform: rotate(15deg) scale(0.95);
-                        opacity: 1;
-                    }
-                    75% {
-                        transform: rotate(-10deg) scale(1.05);
-                        opacity: 0.9;
-                    }
-                }
-                .ai-sparkle {
-                    animation: sparkle-rotate 3s ease-in-out infinite;
-                }
-            `}</style>
         </div>
     );
 }
@@ -135,7 +122,9 @@ export function ChatWelcome({
     onModelChange,
 }: ChatWelcomeProps) {
     const [inputValue, setInputValue] = useState('');
+    const [attachments, setAttachments] = useState<File[]>([]);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isFocused, setIsFocused] = useState(false);
 
     // Get user name from Inertia props
@@ -154,9 +143,29 @@ export function ChatWelcome({
 
     const handleSubmit = useCallback(() => {
         if (!inputValue.trim() || isLoading) return;
-        onSubmit?.(inputValue.trim());
+        onSubmit?.(inputValue.trim(), attachments.length > 0 ? attachments : undefined);
         setInputValue('');
-    }, [inputValue, isLoading, onSubmit]);
+        setAttachments([]);
+    }, [inputValue, attachments, isLoading, onSubmit]);
+
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const files = Array.from(e.target.files || []).filter((f) => {
+            if (f.size > MAX_FILE_SIZE) {
+                alert(`File "${f.name}" exceeds the 10MB limit.`);
+                return false;
+            }
+            return true;
+        });
+        setAttachments((prev) => [...prev, ...files].slice(0, 5));
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    }, []);
+
+    const removeAttachment = useCallback((index: number) => {
+        setAttachments((prev) => prev.filter((_, i) => i !== index));
+    }, []);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -173,29 +182,57 @@ export function ChatWelcome({
     if (centered) {
         return (
             <div className={cn('flex h-full flex-col items-center justify-center px-4', className)}>
-                {/* Animated greeting like Gemini */}
+                {/* Animated greeting */}
                 <AnimatedGreeting userName={userName} />
 
-                {/* Large centered input with rainbow glow */}
+                {/* Gemini-style input */}
                 <div className="w-full max-w-2xl">
-                    {/* Rainbow glow wrapper */}
-                    <div className="relative">
-                        {/* Rainbow gradient border effect */}
+                    {/* Outer wrapper — gradient border lives here */}
+                    <div className="relative rounded-[28px] p-[2px]">
+                        {/* Animated conic gradient border */}
                         <div
                             className={cn(
-                                'absolute -inset-[2px] rounded-[28px] opacity-60 blur-sm transition-opacity duration-300',
-                                isFocused ? 'opacity-80' : 'opacity-40',
+                                'gemini-border absolute inset-0 rounded-[28px] transition-opacity duration-500',
+                                isFocused ? 'opacity-100' : 'opacity-0',
                             )}
-                            style={{
-                                background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
-                                backgroundSize: '200% 100%',
-                                animation: 'rainbow-shift 8s linear infinite',
-                            }}
                         />
+                        {/* Soft glow behind the border */}
+                        <div
+                            className={cn(
+                                'gemini-border absolute inset-0 rounded-[28px] blur-md transition-opacity duration-500',
+                                isFocused ? 'opacity-50' : 'opacity-0',
+                            )}
+                        />
+
+                        {/* Hidden file input */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={handleFileSelect}
+                            accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                        />
+
                         {/* Inner card */}
-                        <div className="border-border/50 bg-card relative rounded-3xl border shadow-lg">
-                            <div className="flex items-center gap-2 p-3 md:gap-3 md:p-4">
-                                {/* Textarea - plain element for clean look */}
+                        <div className={cn(
+                            'relative rounded-[26px] transition-all duration-300',
+                            'bg-card',
+                            !isFocused && 'border border-border/80',
+                            'shadow-sm',
+                            isFocused && 'shadow-lg',
+                        )}>
+                            {/* Attachments preview */}
+                            {attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 px-4 pt-3">
+                                    {attachments.map((file, index) => (
+                                        <AttachmentChip key={`${file.name}-${index}`} file={file} onRemove={() => removeAttachment(index)} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Textarea area */}
+                            <div className="relative px-4 pt-4 pb-2">
                                 <textarea
                                     ref={textareaRef}
                                     value={inputValue}
@@ -206,38 +243,69 @@ export function ChatWelcome({
                                     placeholder={placeholder}
                                     disabled={isLoading}
                                     className={cn(
-                                        'max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none md:text-lg',
-                                        'placeholder:text-muted-foreground/60',
+                                        'max-h-[200px] min-h-[44px] w-full resize-none bg-transparent text-base leading-relaxed outline-none',
+                                        'placeholder:text-muted-foreground/50',
                                         'disabled:cursor-not-allowed disabled:opacity-50',
                                     )}
-                                    rows={1}
+                                    rows={2}
                                 />
+                            </div>
 
-                                {/* Voice/Send button */}
-                                {canSubmit ? (
-                                    <button
-                                        type="button"
-                                        className="bg-foreground text-background hover:bg-foreground/90 flex size-9 shrink-0 items-center justify-center rounded-full shadow-md transition-transform hover:scale-105"
-                                        onClick={handleSubmit}
-                                    >
-                                        <ArrowUp className="size-5" />
-                                    </button>
-                                ) : onVoiceCall ? (
-                                    <button
-                                        type="button"
-                                        className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-9 shrink-0 items-center justify-center rounded-full transition-colors"
-                                        onClick={onVoiceCall}
-                                        title="Start voice call"
-                                    >
-                                        <AudioLines className="size-5" />
-                                    </button>
-                                ) : null}
+                            {/* Bottom toolbar */}
+                            <div className="relative flex items-center justify-between px-3 pb-3">
+                                <div className="flex items-center gap-1">
+                                    {/* Attachment button */}
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isLoading}
+                                            >
+                                                <Paperclip className="size-[18px]" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Attach file</TooltipContent>
+                                    </Tooltip>
+                                    {/* Voice button */}
+                                    {onVoiceCall && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
+                                                    onClick={onVoiceCall}
+                                                >
+                                                    <AudioLines className="size-[18px]" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Voice call</TooltipContent>
+                                        </Tooltip>
+                                    )}
+                                </div>
+
+                                {/* Send button */}
+                                <button
+                                    type="button"
+                                    className={cn(
+                                        'flex size-8 items-center justify-center rounded-full transition-all',
+                                        canSubmit
+                                            ? 'bg-foreground text-background hover:bg-foreground/90'
+                                            : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
+                                    )}
+                                    onClick={handleSubmit}
+                                    disabled={!canSubmit}
+                                >
+                                    <ArrowUp className="size-[18px]" />
+                                </button>
                             </div>
                         </div>
                     </div>
+
                     {/* Model selector below input */}
                     {onModelChange && (
-                        <div className="mt-1.5 px-1">
+                        <div className="mt-2 px-1">
                             <ModelSelector
                                 selectedModelId={selectedModelId}
                                 onModelChange={onModelChange}
@@ -246,36 +314,23 @@ export function ChatWelcome({
                     )}
                 </div>
 
-                {/* Suggested prompts as list items */}
-                {suggestedPrompts.length > 0 && (
-                    <div className="mt-8 flex w-full max-w-2xl flex-col gap-1">
-                        {suggestedPrompts.map((item, index) => {
-                            const Icon = item.icon;
-                            return (
-                                <button
-                                    key={index}
-                                    className="group hover:bg-muted/60 flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-all hover:translate-x-1"
-                                    onClick={() => onPromptClick?.(item.prompt)}
-                                >
-                                    {Icon ? (
-                                        <Icon className="text-muted-foreground size-5 transition-colors group-hover:text-violet-500" />
-                                    ) : (
-                                        <Sparkles className="text-muted-foreground size-5 transition-colors group-hover:text-violet-500" />
-                                    )}
-                                    <span className="text-muted-foreground group-hover:text-foreground text-base transition-colors">
-                                        {item.label}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* Add CSS animation for rainbow effect */}
+                {/* Gemini gradient animation */}
                 <style>{`
-                    @keyframes rainbow-shift {
-                        0% { background-position: 0% 50%; }
-                        100% { background-position: 200% 50%; }
+                    @property --gemini-angle {
+                        syntax: '<angle>';
+                        initial-value: 0deg;
+                        inherits: false;
+                    }
+                    @keyframes gemini-spin {
+                        to { --gemini-angle: 360deg; }
+                    }
+                    .gemini-border {
+                        background: conic-gradient(
+                            from var(--gemini-angle),
+                            #4285f4, #9b72cb, #d96570,
+                            #d96570, #9b72cb, #4285f4
+                        );
+                        animation: gemini-spin 3s linear infinite;
                     }
                 `}</style>
             </div>

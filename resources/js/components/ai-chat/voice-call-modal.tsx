@@ -1,10 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff, PhoneOff, Sparkles } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
-import { useVoiceCall, VoiceCallStatus } from './use-voice-call';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useVoiceCall, VoiceCallStatus, TranscriptEntry } from './use-voice-call';
 
 interface VoiceCallModalProps {
     isOpen: boolean;
@@ -12,8 +14,18 @@ interface VoiceCallModalProps {
     className?: string;
 }
 
+const VOICE_OPTIONS = [
+    { id: 'ash', label: 'Ash' },
+    { id: 'ballad', label: 'Ballad' },
+    { id: 'coral', label: 'Coral' },
+    { id: 'echo', label: 'Echo' },
+    { id: 'sage', label: 'Sage' },
+    { id: 'shimmer', label: 'Shimmer' },
+    { id: 'verse', label: 'Verse' },
+] as const;
+
 const statusMessages: Record<VoiceCallStatus, string> = {
-    idle: 'Tap to start',
+    idle: 'Ready to connect',
     connecting: 'Connecting...',
     connected: 'Connected',
     listening: 'Listening...',
@@ -23,8 +35,22 @@ const statusMessages: Record<VoiceCallStatus, string> = {
     disconnected: 'Call ended',
 };
 
-// Animated sound wave bars component
-function SoundWave({ isActive, variant }: { isActive: boolean; variant: 'listening' | 'speaking' | 'processing' }) {
+function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// Animated sound wave bars component — uses real audio levels when available
+function SoundWave({
+    isActive,
+    variant,
+    audioLevels,
+}: {
+    isActive: boolean;
+    variant: 'listening' | 'speaking' | 'processing';
+    audioLevels?: number[];
+}) {
     const barCount = 5;
     const colors = {
         listening: 'bg-violet-500',
@@ -32,28 +58,44 @@ function SoundWave({ isActive, variant }: { isActive: boolean; variant: 'listeni
         processing: 'bg-purple-500',
     };
 
+    const hasRealLevels = audioLevels && audioLevels.some((l) => l > 0.02);
+
     return (
         <div className="flex h-12 items-center justify-center gap-1">
-            {Array.from({ length: barCount }).map((_, i) => (
-                <div
-                    key={i}
-                    className={cn(
-                        'w-1 rounded-full transition-all duration-300',
-                        isActive ? colors[variant] : 'bg-muted-foreground/30',
-                        isActive && 'voice-wave-bar',
-                    )}
-                    style={{
-                        height: isActive ? '100%' : '8px',
-                        animationDelay: `${i * 0.1}s`,
-                    }}
-                />
-            ))}
+            {Array.from({ length: barCount }).map((_, i) => {
+                // Use real audio data when AI is speaking with levels, otherwise CSS animation
+                const useRealData = isActive && hasRealLevels;
+                const level = audioLevels?.[i] ?? 0;
+                const barHeight = useRealData
+                    ? `${Math.max(15, level * 100)}%`
+                    : isActive
+                      ? '100%'
+                      : '8px';
+
+                return (
+                    <div
+                        key={i}
+                        className={cn(
+                            'w-1 rounded-full',
+                            isActive ? colors[variant] : 'bg-muted-foreground/30',
+                            // Only use CSS animation for listening (user mic doesn't have analyser)
+                            isActive && !useRealData && 'voice-wave-bar',
+                            // Smooth transitions for real data
+                            useRealData ? 'transition-[height] duration-75' : 'transition-all duration-300',
+                        )}
+                        style={{
+                            height: barHeight,
+                            animationDelay: !useRealData ? `${i * 0.1}s` : undefined,
+                        }}
+                    />
+                );
+            })}
         </div>
     );
 }
 
 // Floating orb with smooth animations
-function VoiceOrb({ status }: { status: VoiceCallStatus }) {
+function VoiceOrb({ status, audioLevels }: { status: VoiceCallStatus; audioLevels?: number[] }) {
     const isListening = status === 'listening';
     const isSpeaking = status === 'speaking';
     const isProcessing = status === 'processing';
@@ -66,8 +108,8 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
             <div
                 className={cn('absolute rounded-full transition-all duration-1000 ease-in-out', isActive && 'voice-glow-outer')}
                 style={{
-                    width: 200,
-                    height: 200,
+                    width: 180,
+                    height: 180,
                     background: isListening
                         ? 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)'
                         : isSpeaking
@@ -82,8 +124,8 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
             <div
                 className={cn('absolute rounded-full transition-all duration-700 ease-in-out', isActive && 'voice-glow-middle')}
                 style={{
-                    width: 160,
-                    height: 160,
+                    width: 140,
+                    height: 140,
                     background: isListening
                         ? 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, transparent 70%)'
                         : isSpeaking
@@ -97,7 +139,7 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
             {/* Main orb */}
             <div
                 className={cn(
-                    'relative flex size-28 items-center justify-center rounded-full shadow-2xl transition-all duration-500',
+                    'relative flex size-24 items-center justify-center rounded-full shadow-2xl transition-all duration-500',
                     status === 'idle' && 'bg-gradient-to-br from-zinc-700 to-zinc-800',
                     isConnecting && 'voice-orb-connecting bg-gradient-to-br from-amber-500 to-orange-600',
                     isListening && 'bg-gradient-to-br from-violet-500 to-purple-600',
@@ -121,10 +163,10 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
                 <div className="relative z-10">
                     {isProcessing ? (
                         <div className="flex items-center justify-center">
-                            <Sparkles className="voice-sparkle size-10 text-white" />
+                            <Sparkles className="voice-sparkle size-8 text-white" />
                         </div>
                     ) : (
-                        <SoundWave isActive={isListening || isSpeaking} variant={isSpeaking ? 'speaking' : 'listening'} />
+                        <SoundWave isActive={isListening || isSpeaking} variant={isSpeaking ? 'speaking' : 'listening'} audioLevels={audioLevels} />
                     )}
                 </div>
             </div>
@@ -132,8 +174,53 @@ function VoiceOrb({ status }: { status: VoiceCallStatus }) {
     );
 }
 
+// Transcript history list
+function TranscriptHistory({ entries }: { entries: TranscriptEntry[] }) {
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (viewport) {
+                viewport.scrollTop = viewport.scrollHeight;
+            }
+        }
+    }, [entries]);
+
+    if (entries.length === 0) return null;
+
+    return (
+        <ScrollArea ref={scrollRef} className="h-full w-full">
+            <div className="space-y-2 px-1">
+                {entries.map((entry, i) => (
+                    <div
+                        key={i}
+                        className={cn(
+                            'rounded-xl px-3 py-2 text-sm',
+                            entry.role === 'user' ? 'bg-muted/50' : 'bg-violet-500/10',
+                        )}
+                    >
+                        <p
+                            className={cn(
+                                'mb-0.5 text-[10px] font-medium tracking-wider uppercase',
+                                entry.role === 'user' ? 'text-muted-foreground' : 'text-violet-500',
+                            )}
+                        >
+                            {entry.role === 'user' ? 'You' : 'AI'}
+                        </p>
+                        <p className="leading-relaxed">{entry.text}</p>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+    );
+}
+
 export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalProps) {
-    const { status, isConnected, isMuted, userTranscript, aiResponse, startCall, endCall, toggleMute } = useVoiceCall({
+    const [selectedVoice, setSelectedVoice] = useState('ash');
+
+    const { status, isConnected, isMuted, aiResponse, transcriptHistory, callDuration, audioLevels, startCall, endCall, toggleMute } = useVoiceCall({
+        voice: selectedVoice,
         onError: (error) => {
             console.error('Voice call error:', error);
         },
@@ -177,20 +264,25 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
             {/* Modal */}
             <div
                 className={cn(
-                    'border-border/50 bg-card/80 relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl border p-8 shadow-2xl backdrop-blur-sm',
+                    'border-border/50 bg-card/80 relative z-10 flex max-h-[90vh] w-full max-w-md flex-col items-center rounded-3xl border p-8 shadow-2xl backdrop-blur-sm',
                     className,
                 )}
             >
                 {/* Header */}
-                <div className="mb-2 flex items-center gap-2">
+                <div className="mb-1 flex shrink-0 items-center gap-2">
                     <Sparkles className="size-5 text-violet-500" />
                     <h2 className="text-lg font-semibold">Superior AI</h2>
                 </div>
 
+                {/* Call timer */}
+                {isConnected && (
+                    <p className="text-muted-foreground mb-1 shrink-0 font-mono text-xs">{formatDuration(callDuration)}</p>
+                )}
+
                 {/* Status */}
                 <p
                     className={cn(
-                        'mb-8 text-sm font-medium transition-colors duration-300',
+                        'mb-4 shrink-0 text-sm font-medium transition-colors duration-300',
                         status === 'listening' && 'text-violet-500',
                         status === 'speaking' && 'text-emerald-500',
                         status === 'processing' && 'text-purple-500',
@@ -203,31 +295,25 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 </p>
 
                 {/* Animated orb */}
-                <div className="mb-8">
-                    <VoiceOrb status={status} />
+                <div className="mb-4 shrink-0">
+                    <VoiceOrb status={status} audioLevels={audioLevels} />
                 </div>
 
-                {/* Live transcripts */}
-                <div className="mb-8 min-h-[80px] w-full space-y-3">
-                    {/* User transcript */}
-                    {userTranscript && (
-                        <div className="bg-muted/50 rounded-2xl px-4 py-3 backdrop-blur-sm">
-                            <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">You</p>
-                            <p className="text-sm leading-relaxed">{userTranscript}</p>
-                        </div>
-                    )}
+                {/* Live AI response (current turn) */}
+                {aiResponse && (
+                    <div className="mb-3 w-full shrink-0 rounded-2xl bg-violet-500/10 px-4 py-3 backdrop-blur-sm">
+                        <p className="mb-1 text-[10px] font-medium tracking-wider text-violet-500 uppercase">Speaking</p>
+                        <p className="text-sm leading-relaxed">{aiResponse}</p>
+                    </div>
+                )}
 
-                    {/* AI response */}
-                    {aiResponse && (
-                        <div className="rounded-2xl bg-violet-500/10 px-4 py-3 backdrop-blur-sm">
-                            <p className="mb-1 text-[10px] font-medium tracking-wider text-violet-500 uppercase">AI Response</p>
-                            <p className="text-sm leading-relaxed">{aiResponse}</p>
-                        </div>
-                    )}
+                {/* Transcript history — scrollable, takes remaining space */}
+                <div className="mb-4 min-h-0 w-full flex-1 overflow-hidden">
+                    <TranscriptHistory entries={transcriptHistory} />
                 </div>
 
                 {/* Controls */}
-                <div className="flex items-center gap-6">
+                <div className="flex shrink-0 items-center gap-6">
                     {/* Mute button */}
                     <Button
                         variant="outline"
@@ -254,10 +340,25 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                     </Button>
                 </div>
 
-                {/* Help text */}
-                <p className="text-muted-foreground/70 mt-8 text-center text-xs">
-                    Press <kbd className="bg-muted/80 rounded-md px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd> to end call
-                </p>
+                {/* Voice selector + help */}
+                <div className="mt-6 flex w-full shrink-0 items-center justify-between">
+                    <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isConnected}>
+                        <SelectTrigger className="h-8 w-32 text-xs">
+                            <SelectValue placeholder="Voice" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {VOICE_OPTIONS.map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                    {v.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <p className="text-muted-foreground/70 text-xs">
+                        Press <kbd className="bg-muted/80 rounded-md px-1.5 py-0.5 font-mono text-[10px]">ESC</kbd> to end
+                    </p>
+                </div>
             </div>
 
             {/* CSS animations */}

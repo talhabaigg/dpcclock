@@ -72,17 +72,17 @@ export interface AiModel {
 }
 
 export const AVAILABLE_MODELS: AiModel[] = [
-    { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', description: 'Most capable model' },
-    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', description: 'Fast & efficient' },
-    { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'OpenAI', description: 'Lightweight' },
+    { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', description: 'Most capable — 1M context' },
+    { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', provider: 'OpenAI', description: 'Fast & powerful' },
+    { id: 'gpt-5.4-nano', name: 'GPT-5.4 Nano', provider: 'OpenAI', description: 'Cheapest GPT-5 class' },
+    { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', description: 'Reliable & efficient' },
+    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', description: 'Fast & affordable' },
     { id: 'o4-mini', name: 'O4 Mini', provider: 'OpenAI', description: 'Reasoning model' },
-    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', description: 'Multimodal' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', description: 'Fast multimodal' },
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'Anthropic', description: 'Balanced performance' },
     { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'Anthropic', description: 'Fast & affordable' },
 ];
 
-export const DEFAULT_MODEL_ID = 'gpt-4.1';
+export const DEFAULT_MODEL_ID = 'gpt-5.4-mini';
 
 export interface ConversationSummary {
     conversation_id: string;

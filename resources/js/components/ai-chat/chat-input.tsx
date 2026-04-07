@@ -1,10 +1,9 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 
@@ -25,6 +24,42 @@ export interface ChatInputRef {
     focus: () => void;
     clear: () => void;
     setValue: (value: string) => void;
+}
+
+function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }) {
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = useMemo(() => (isImage ? URL.createObjectURL(file) : null), [file, isImage]);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
+
+    if (isImage && previewUrl) {
+        return (
+            <div className="group/att relative size-16 shrink-0 overflow-hidden rounded-lg">
+                <img src={previewUrl} alt={file.name} className="size-full object-cover" />
+                <button
+                    type="button"
+                    onClick={onRemove}
+                    className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover/att:opacity-100"
+                >
+                    <X className="size-3" />
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm">
+            <Paperclip className="text-muted-foreground size-3.5" />
+            <span className="max-w-[150px] truncate">{file.name}</span>
+            <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-foreground">
+                <X className="size-3.5" />
+            </button>
+        </div>
+    );
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput(
@@ -118,111 +153,119 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         <div className={cn('relative w-full', className)}>
             {/* Attachments preview */}
             {attachments.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-2 px-2">
+                <div className="mb-2 flex flex-wrap gap-2 px-1">
                     {attachments.map((file, index) => (
-                        <div key={`${file.name}-${index}`} className="bg-muted flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm">
-                            <Paperclip className="text-muted-foreground size-3.5" />
-                            <span className="max-w-[150px] truncate">{file.name}</span>
-                            <button type="button" onClick={() => removeAttachment(index)} className="text-muted-foreground hover:text-foreground">
-                                <X className="size-3.5" />
-                            </button>
-                        </div>
+                        <AttachmentChip key={`${file.name}-${index}`} file={file} onRemove={() => removeAttachment(index)} />
                     ))}
                 </div>
             )}
 
-            {/* Input container with rainbow glow */}
-            <div className="relative">
-                {/* Rainbow gradient border effect */}
-                <div
-                    className={cn('absolute -inset-[1px] rounded-3xl opacity-0 blur-sm transition-opacity duration-300', isFocused && 'opacity-60')}
-                    style={{
-                        background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
-                        backgroundSize: '200% 100%',
-                        animation: 'rainbow-shift 8s linear infinite',
-                    }}
-                />
+            {/* Gemini-style input container */}
+            <div className="relative rounded-[28px] p-[2px]">
+                {/* Animated conic gradient border */}
                 <div
                     className={cn(
-                        'border-border/50 bg-card relative flex items-center gap-3 rounded-3xl border px-4 py-3 shadow-sm transition-all duration-200',
-                        isFocused && 'border-border shadow-md',
+                        'gemini-border absolute inset-0 rounded-[28px] transition-opacity duration-500',
+                        isFocused ? 'opacity-100' : 'opacity-0',
                     )}
-                >
-                    {/* Attachment button */}
-                    {enableAttachments && (
-                        <>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                className="hidden"
-                                onChange={handleFileSelect}
-                                accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-                            />
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 shrink-0 rounded-full"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={disabled || isLoading}
-                                    >
-                                        <Paperclip className="size-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Attach file</TooltipContent>
-                            </Tooltip>
-                        </>
+                />
+                {/* Soft glow */}
+                <div
+                    className={cn(
+                        'gemini-border absolute inset-0 rounded-[28px] blur-md transition-opacity duration-500',
+                        isFocused ? 'opacity-50' : 'opacity-0',
                     )}
+                />
 
-                    {/* Textarea - using plain textarea for cleaner look */}
-                    <textarea
-                        ref={textareaRef}
-                        value={value}
-                        onChange={(e) => setValue(e.target.value.slice(0, maxLength))}
-                        onKeyDown={handleKeyDown}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        placeholder={placeholder}
-                        disabled={disabled || isLoading}
-                        className={cn(
-                            'max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent text-base leading-relaxed outline-none',
-                            'placeholder:text-muted-foreground/60',
-                            'disabled:cursor-not-allowed disabled:opacity-50',
-                        )}
-                        rows={1}
-                    />
+                {/* Inner card */}
+                <div className={cn(
+                    'relative rounded-[26px] transition-all duration-300',
+                    'bg-card',
+                    !isFocused && 'border border-border/80',
+                    'shadow-sm',
+                    isFocused && 'shadow-lg',
+                )}>
+                    {/* Textarea area */}
+                    <div className="relative px-4 pt-3 pb-1.5">
+                        <textarea
+                            ref={textareaRef}
+                            value={value}
+                            onChange={(e) => setValue(e.target.value.slice(0, maxLength))}
+                            onKeyDown={handleKeyDown}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setIsFocused(false)}
+                            placeholder={placeholder}
+                            disabled={disabled || isLoading}
+                            className={cn(
+                                'max-h-[200px] min-h-[24px] w-full resize-none bg-transparent text-base leading-relaxed outline-none',
+                                'placeholder:text-muted-foreground/50',
+                                'disabled:cursor-not-allowed disabled:opacity-50',
+                            )}
+                            rows={1}
+                        />
+                    </div>
 
-                    {/* Submit/Stop button */}
-                    <div className="flex shrink-0 items-center">
+                    {/* Bottom toolbar */}
+                    <div className="relative flex items-center justify-between px-3 pb-2.5">
+                        <div className="flex items-center gap-1">
+                            {/* Attachment button */}
+                            {enableAttachments && (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        multiple
+                                        className="hidden"
+                                        onChange={handleFileSelect}
+                                        accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                                    />
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={disabled || isLoading}
+                                            >
+                                                <Paperclip className="size-[18px]" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Attach file</TooltipContent>
+                                    </Tooltip>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Submit/Stop button */}
                         {isLoading ? (
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button type="button" size="icon" variant="outline" className="size-9 rounded-full" onClick={onStop}>
-                                        <Square className="size-4" fill="currentColor" />
-                                    </Button>
+                                    <button
+                                        type="button"
+                                        className="bg-foreground text-background flex size-8 items-center justify-center rounded-full transition-colors hover:bg-foreground/90"
+                                        onClick={onStop}
+                                    >
+                                        <Square className="size-3.5" fill="currentColor" />
+                                    </button>
                                 </TooltipTrigger>
                                 <TooltipContent>Stop generating</TooltipContent>
                             </Tooltip>
                         ) : (
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button
+                                    <button
                                         type="button"
-                                        size="icon"
                                         className={cn(
-                                            'size-9 rounded-full transition-all',
+                                            'flex size-8 items-center justify-center rounded-full transition-all',
                                             canSubmit
-                                                ? 'bg-foreground text-background hover:bg-foreground/90 shadow-md hover:scale-105'
-                                                : 'bg-muted text-muted-foreground cursor-not-allowed',
+                                                ? 'bg-foreground text-background hover:bg-foreground/90'
+                                                : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
                                         )}
                                         onClick={handleSubmit}
                                         disabled={!canSubmit}
                                     >
-                                        <ArrowUp className="size-5" />
-                                    </Button>
+                                        <ArrowUp className="size-[18px]" />
+                                    </button>
                                 </TooltipTrigger>
                                 <TooltipContent>{canSubmit ? 'Send message' : 'Type a message'}</TooltipContent>
                             </Tooltip>
@@ -231,7 +274,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 </div>
             </div>
 
-            {/* Model selector & character count row */}
+            {/* Model selector & character count */}
             <div className="mt-1.5 flex items-center justify-between px-1">
                 <div>
                     {onModelChange && (
@@ -248,11 +291,23 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                 )}
             </div>
 
-            {/* CSS animation for rainbow effect */}
+            {/* Gemini gradient animation */}
             <style>{`
-                @keyframes rainbow-shift {
-                    0% { background-position: 0% 50%; }
-                    100% { background-position: 200% 50%; }
+                @property --gemini-angle {
+                    syntax: '<angle>';
+                    initial-value: 0deg;
+                    inherits: false;
+                }
+                @keyframes gemini-spin {
+                    to { --gemini-angle: 360deg; }
+                }
+                .gemini-border {
+                    background: conic-gradient(
+                        from var(--gemini-angle),
+                        #4285f4, #9b72cb, #d96570,
+                        #d96570, #9b72cb, #4285f4
+                    );
+                    animation: gemini-spin 3s linear infinite;
                 }
             `}</style>
         </div>

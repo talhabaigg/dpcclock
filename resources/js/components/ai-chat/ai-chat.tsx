@@ -171,8 +171,8 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                             <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
                                 <div className="flex items-center gap-2">
                                     {panelToggleButton}
-                                    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
-                                        <Sparkles className="size-4 text-white" />
+                                    <div className="border-border bg-background flex size-8 items-center justify-center rounded-full border">
+                                        <Sparkles className="size-4" />
                                     </div>
                                     <span className="font-semibold">Superior AI</span>
                                 </div>
