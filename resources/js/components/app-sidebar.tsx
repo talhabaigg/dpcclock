@@ -28,6 +28,7 @@ import {
     Hammer,
     HardHat,
     Hash,
+    HeartPulse,
     House,
     LayoutDashboard,
     Layers,
@@ -214,6 +215,12 @@ const safety = [
         icon: ShieldAlert,
         permission: 'sds.view',
         subItems: [
+            {
+                name: 'Injury Register',
+                url: '/injury-register',
+                icon: HeartPulse,
+                permission: 'injury-register.view',
+            },
             {
                 name: 'SDS Register',
                 url: '/sds',

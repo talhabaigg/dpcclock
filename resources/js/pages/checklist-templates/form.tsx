@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { GripVertical, Plus, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface TemplateItem {
     id?: number;
@@ -48,11 +48,31 @@ export default function ChecklistTemplateForm({ template }: PageProps) {
     );
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const dragIndexRef = useRef<number | null>(null);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Checklist Templates', href: '/checklist-templates' },
         { title: isEditing ? template.name : 'New Template', href: '#' },
     ];
+
+    function handleDragStart(index: number) {
+        dragIndexRef.current = index;
+    }
+
+    function handleDragOver(e: React.DragEvent, index: number) {
+        e.preventDefault();
+        const dragIndex = dragIndexRef.current;
+        if (dragIndex === null || dragIndex === index) return;
+        const next = [...items];
+        const [dragged] = next.splice(dragIndex, 1);
+        next.splice(index, 0, dragged);
+        setItems(next);
+        dragIndexRef.current = index;
+    }
+
+    function handleDragEnd() {
+        dragIndexRef.current = null;
+    }
 
     function addItem() {
         setItems([...items, { label: '', is_required: true }]);
@@ -111,7 +131,7 @@ export default function ChecklistTemplateForm({ template }: PageProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isEditing ? `Edit — ${template.name}` : 'New Checklist Template'} />
 
-            <div className="mx-auto max-w-2xl p-4">
+            <div className="mx-auto min-w-2xl max-w-2xl p-4">
                 <Card className="rounded-xl">
                     <CardHeader>
                         <CardTitle>{isEditing ? 'Edit Template' : 'New Checklist Template'}</CardTitle>
@@ -166,8 +186,15 @@ export default function ChecklistTemplateForm({ template }: PageProps) {
                             {errors.items && <p className="mt-1 text-xs text-red-500">{errors.items}</p>}
                             <div className="mt-2 space-y-2">
                                 {items.map((item, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                        <GripVertical className="text-muted-foreground h-4 w-4 shrink-0" />
+                                    <div
+                                        key={index}
+                                        className="flex items-center gap-2"
+                                        draggable
+                                        onDragStart={() => handleDragStart(index)}
+                                        onDragOver={(e) => handleDragOver(e, index)}
+                                        onDragEnd={handleDragEnd}
+                                    >
+                                        <GripVertical className="text-muted-foreground h-4 w-4 shrink-0 cursor-grab" />
                                         <Input
                                             value={item.label}
                                             onChange={(e) => updateItem(index, { label: e.target.value })}

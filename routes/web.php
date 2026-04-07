@@ -21,6 +21,7 @@ use App\Http\Controllers\FormRequestController;
 use App\Http\Controllers\FormTemplateController;
 use App\Http\Controllers\TakeoffConditionController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\InjuryController;
 use App\Http\Controllers\ForecastProjectController;
 use App\Http\Controllers\JobForecastController;
 use App\Http\Controllers\KioskAuthController;
@@ -1120,6 +1121,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/safety-dashboard/monthly-data', [SafetyDashboardController::class, 'getMonthlyData'])->name('reports.safetyDashboard.monthlyData');
         Route::get('/reports/safety-dashboard/fy-data', [SafetyDashboardController::class, 'getFYData'])->name('reports.safetyDashboard.fyData');
         Route::post('/reports/safety-dashboard/import', [SafetyDashboardController::class, 'import'])->name('reports.safetyDashboard.import');
+    });
+
+    // ============================================
+    // INJURY REGISTER
+    // ============================================
+    Route::middleware('permission:injury-register.view')->group(function () {
+        Route::get('/injury-register', [InjuryController::class, 'index'])->name('injury-register.index');
+        Route::get('/injury-register/create', [InjuryController::class, 'create'])->name('injury-register.create')
+            ->middleware('permission:injury-register.create');
+        Route::post('/injury-register', [InjuryController::class, 'store'])->name('injury-register.store')
+            ->middleware('permission:injury-register.create');
+        Route::get('/injury-register/{injury}', [InjuryController::class, 'show'])->name('injury-register.show');
+        Route::get('/injury-register/{injury}/edit', [InjuryController::class, 'edit'])->name('injury-register.edit')
+            ->middleware('permission:injury-register.edit');
+        Route::put('/injury-register/{injury}', [InjuryController::class, 'update'])->name('injury-register.update')
+            ->middleware('permission:injury-register.edit');
+        Route::delete('/injury-register/{injury}', [InjuryController::class, 'destroy'])->name('injury-register.destroy')
+            ->middleware('permission:injury-register.delete');
+        Route::put('/injury-register/{injury}/classification', [InjuryController::class, 'updateClassification'])->name('injury-register.classification')
+            ->middleware('permission:injury-register.edit');
+        Route::post('/injury-register/{injury}/lock', [InjuryController::class, 'lock'])->name('injury-register.lock')
+            ->middleware('permission:injury-register.lock');
+        Route::post('/injury-register/{injury}/unlock', [InjuryController::class, 'unlock'])->name('injury-register.unlock')
+            ->middleware('permission:injury-register.lock');
     });
 
     // ============================================

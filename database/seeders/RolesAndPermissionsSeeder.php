@@ -64,6 +64,18 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // INJURY REGISTER
+        // ============================================
+        'Injury Register' => [
+            'injury-register.view' => 'View injury register',
+            'injury-register.create' => 'Report new injuries',
+            'injury-register.edit' => 'Edit injury records',
+            'injury-register.delete' => 'Delete injury records',
+            'injury-register.lock' => 'Lock/unlock injury records',
+            'injury-register.export' => 'Export injury register',
+        ],
+
+        // ============================================
         // KIOSK MANAGEMENT
         // ============================================
         'Kiosks' => [
@@ -382,6 +394,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'worker-screening.search',
             // Credit Card Receipts (own only, no manage)
             'receipts.view',
+            // Injury Register
+            'injury-register.view',
+            'injury-register.create',
+            'injury-register.edit',
+            'injury-register.export',
         ],
 
         'site-supervisor' => [
@@ -414,6 +431,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'materials.view',
             // Worker Screening (search only)
             'worker-screening.search',
+            // Injury Register
+            'injury-register.view',
+            'injury-register.create',
+            'injury-register.edit',
         ],
 
         'director' => [
@@ -447,6 +468,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // AI
             'ai.chat',
             'ai.voice',
+            // Injury Register (view + export)
+            'injury-register.view',
+            'injury-register.export',
         ],
 
         'kiosk' => [
