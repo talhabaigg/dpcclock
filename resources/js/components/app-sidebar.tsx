@@ -1,3 +1,4 @@
+import { NavFavorites, type FavoriteEntry } from '@/components/nav-favorites';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -7,6 +8,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
     BadgeDollarSign,
+    Briefcase,
     Building,
     CalendarDays,
     ChartArea,
@@ -27,7 +29,6 @@ import {
     HardHat,
     Hash,
     House,
-    Hourglass,
     LayoutDashboard,
     Layers,
     ListChecks,
@@ -58,82 +59,84 @@ const mainNavItems: NavItem[] = [
         permission: 'dashboard.view',
     },
     {
-        title: 'Locations',
-        href: '/locations',
-        icon: Building,
-        permission: 'locations.view',
-    },
-    {
-        title: 'Project Dashboard',
-        href: '/project-dashboard',
-        icon: LayoutDashboard,
-        permission: 'project-dashboard.view',
-    },
-    {
-        title: 'Turnover Forecast',
-        href: '/turnover-forecast',
-        icon: ChartLine,
-        permission: 'turnover-forecast.view',
-    },
-    {
-        title: 'Labour Forecast',
-        href: '/labour-forecast',
-        icon: HardHat,
-        permission: 'turnover-forecast.view',
-    },
-    {
-        title: 'Cashflow Forecast',
-        href: '/cash-forecast',
-        icon: ChartArea,
-        permission: 'cash-forecast.view',
-    },
-    {
-        title: 'Employment Applications',
-        href: '/employment-applications',
-        icon: FileText,
-        permission: 'employment-applications.view',
-    },
-    {
-        title: 'Worker Check',
-        href: '/worker-screening/search',
-        icon: ShieldCheck,
-        permission: 'worker-screening.search',
-    },
-    {
-        title: 'SDS Register',
-        href: '/sds',
-        icon: FlaskConical,
-        permission: 'sds.view',
-    },
-    {
-        title: 'Kiosks',
-        href: '/kiosks',
-        icon: Monitor,
-        permission: 'kiosks.view',
-    },
-    {
         title: 'Requisitions',
         href: '/requisition/all',
         icon: ShoppingCart,
         permission: 'requisitions.view',
     },
+];
+
+const projects = [
     {
-        title: 'Variations',
-        href: '/variations',
-        icon: FileDiff,
-        permission: 'variations.view',
+        name: 'Projects',
+        icon: Briefcase,
+        permission: 'locations.view',
+        subItems: [
+            {
+                name: 'Locations',
+                url: '/locations',
+                icon: Building,
+                permission: 'locations.view',
+            },
+            {
+                name: 'Project Dashboard',
+                url: '/project-dashboard',
+                icon: LayoutDashboard,
+                permission: 'project-dashboard.view',
+            },
+            {
+                name: 'Variations',
+                url: '/variations',
+                icon: FileDiff,
+                permission: 'variations.view',
+            },
+            {
+                name: 'Labour Forecast',
+                url: '/labour-forecast',
+                icon: HardHat,
+                permission: 'turnover-forecast.view',
+            },
+        ],
     },
+];
+
+const finance = [
     {
-        title: 'My Receipts',
-        href: '/my-receipts',
-        icon: Receipt,
-        permission: 'receipts.view',
-    },
-    {
-        title: 'Manage Receipts',
-        href: '/manage-receipts',
-        icon: ReceiptText,
-        permission: 'receipts.manage',
+        name: 'Finance',
+        icon: DollarSign,
+        permission: 'cash-forecast.view',
+        subItems: [
+            {
+                name: 'Turnover Forecast',
+                url: '/turnover-forecast',
+                icon: ChartLine,
+                permission: 'turnover-forecast.view',
+            },
+            {
+                name: 'Cashflow Forecast',
+                url: '/cash-forecast',
+                icon: ChartArea,
+                permission: 'cash-forecast.view',
+            },
+            {
+                name: 'WIP Report',
+                url: '/reports/wip',
+                icon: TableProperties,
+                permission: 'reports.wip',
+            },
+            {
+                name: 'Manage Receipts',
+                url: '/manage-receipts',
+                icon: ReceiptText,
+                permission: 'receipts.manage',
+            },
+            {
+                name: 'Budget Management',
+                url: '/budget-management',
+                icon: PiggyBank,
+                permission: 'budget.view',
+            },
+        ],
     },
 ];
 
@@ -146,7 +149,7 @@ const timesheets = [
             {
                 name: 'Manage',
                 url: '/timesheets',
-                icon: Hourglass,
+                icon: Clock,
                 permission: 'timesheets.view',
             },
             {
@@ -154,6 +157,74 @@ const timesheets = [
                 url: '/timesheets/review',
                 icon: ClipboardCheck,
                 permission: 'timesheets.review',
+            },
+            {
+                name: 'Kiosks',
+                url: '/kiosks',
+                icon: Monitor,
+                permission: 'kiosks.view',
+            },
+            {
+                name: 'Calendar',
+                url: '/calendar',
+                icon: CalendarDays,
+                permission: 'calendar.view',
+            },
+        ],
+    },
+];
+
+const workforce = [
+    {
+        name: 'Workforce',
+        icon: UsersRound,
+        permission: 'employment-applications.view',
+        subItems: [
+            {
+                name: 'Applications',
+                url: '/employment-applications',
+                icon: FileText,
+                permission: 'employment-applications.view',
+            },
+            {
+                name: 'Worker Check',
+                url: '/worker-screening/search',
+                icon: ShieldCheck,
+                permission: 'worker-screening.search',
+            },
+            {
+                name: 'Worker Screening',
+                url: '/worker-screening',
+                icon: ShieldAlert,
+                permission: 'worker-screening.manage',
+            },
+            {
+                name: 'Employees',
+                url: '/employees',
+                icon: UsersRound,
+                permission: 'employees.view',
+            },
+        ],
+    },
+];
+
+const safety = [
+    {
+        name: 'Safety',
+        icon: ShieldAlert,
+        permission: 'sds.view',
+        subItems: [
+            {
+                name: 'SDS Register',
+                url: '/sds',
+                icon: FlaskConical,
+                permission: 'sds.view',
+            },
+            {
+                name: 'Safety Dashboard',
+                url: '/reports/safety-dashboard',
+                icon: ShieldAlert,
+                permission: 'reports.safety-dashboard',
             },
         ],
     },
@@ -173,12 +244,6 @@ const documents = [
                 permission: 'employees.manage-worktypes',
             },
             {
-                name: 'Budget Management',
-                url: '/budget-management',
-                icon: PiggyBank,
-                permission: 'budget.view',
-            },
-            {
                 name: 'Cost Codes',
                 url: '/cost-codes',
                 icon: Hash,
@@ -189,12 +254,6 @@ const documents = [
                 url: '/cost-types',
                 icon: Layers,
                 permission: 'costtypes.view',
-            },
-            {
-                name: 'Employees',
-                url: '/employees',
-                icon: UsersRound,
-                permission: 'employees.view',
             },
             {
                 name: 'Material',
@@ -233,12 +292,6 @@ const documents = [
                 permission: 'materials.edit',
             },
             {
-                name: 'Worker Screening',
-                url: '/worker-screening',
-                icon: ShieldAlert,
-                permission: 'worker-screening.manage',
-            },
-            {
                 name: 'Worktypes',
                 url: '/worktypes',
                 icon: Hammer,
@@ -272,18 +325,6 @@ const reports = [
                 icon: UserX,
                 permission: 'reports.missing-sign-out',
             },
-            {
-                name: 'Safety Dashboard',
-                url: '/reports/safety-dashboard',
-                icon: ShieldAlert,
-                permission: 'reports.safety-dashboard',
-            },
-            {
-                name: 'WIP Report',
-                url: '/reports/wip',
-                icon: TableProperties,
-                permission: 'reports.wip',
-            },
         ],
     },
 ];
@@ -312,16 +353,16 @@ const configuration = [
 
 const footerNavItems: NavItem[] = [
     {
+        title: 'My Receipts',
+        href: '/my-receipts',
+        icon: Receipt,
+        permission: 'receipts.view',
+    },
+    {
         title: 'Queue Status',
         href: '/queue-status',
         icon: Activity,
         permission: 'queue-status.view',
-    },
-    {
-        title: 'Calendar',
-        href: '/calendar',
-        icon: CalendarDays,
-        permission: 'calendar.view',
     },
 ];
 
@@ -348,11 +389,28 @@ export function AppSidebar() {
         }
         return !item.permission || permissions.includes(item.permission);
     });
+    const filteredProjects = projects.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredFinance = finance.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredWorkforce = workforce.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredSafety = safety.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredConfiguration = configuration.filter((item) => !item.permission || permissions.includes(item.permission));
     const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
+
+    const allNavGroups = [filteredProjects, filteredFinance, filteredTimesheets, filteredWorkforce, filteredSafety, filteredDocuments, filteredReports, filteredConfiguration];
+    const allItems: FavoriteEntry[] = [
+        ...filteredMainNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),
+        ...filteredFooterNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),
+        ...allNavGroups.flatMap((group) =>
+            group.flatMap((g) =>
+                (g.subItems ?? [])
+                    .filter((sub) => !sub.permission || permissions.includes(sub.permission))
+                    .map((sub) => ({ title: sub.name, url: sub.url, icon: sub.icon })),
+            ),
+        ),
+    ];
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -369,8 +427,13 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
+                <NavFavorites allItems={allItems} />
                 <NavMain items={filteredMainNavItems} />
+                <NavDocuments items={filteredProjects} permissions={permissions} />
+                <NavDocuments items={filteredFinance} permissions={permissions} />
                 <NavDocuments items={filteredTimesheets} permissions={permissions} />
+                <NavDocuments items={filteredWorkforce} permissions={permissions} />
+                <NavDocuments items={filteredSafety} permissions={permissions} />
                 <NavDocuments items={filteredDocuments} permissions={permissions} />
                 <NavDocuments items={filteredReports} permissions={permissions} />
                 <NavDocuments items={filteredConfiguration} permissions={permissions} />
