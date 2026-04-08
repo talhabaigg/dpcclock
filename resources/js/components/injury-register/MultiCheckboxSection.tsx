@@ -33,20 +33,20 @@ export default function MultiCheckboxSection({
 
     return (
         <div className="space-y-3">
-            {title && <Label className="text-sm font-semibold">{title}</Label>}
+            {title && <Label className="text-base font-semibold">{title}</Label>}
 
             {/* Selected chips */}
             {selected.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2 overflow-hidden">
                     {selected.map((key) => (
-                        <Badge key={key} variant="secondary" className="gap-1 pr-1">
-                            {options[key] ?? key}
+                        <Badge key={key} variant="secondary" className="max-w-full gap-1.5 py-1.5 pr-1.5 pl-2.5 text-sm">
+                            <span className="truncate">{options[key] ?? key}</span>
                             <button
                                 type="button"
                                 onClick={() => remove(key)}
-                                className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
+                                className="hover:bg-muted-foreground/20 active:bg-muted-foreground/30 rounded-full p-1"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                             </button>
                         </Badge>
                     ))}
@@ -55,12 +55,12 @@ export default function MultiCheckboxSection({
 
             {/* Multi-select listbox */}
             <div className="rounded-md border">
-                <div className="text-muted-foreground border-b px-3 py-2 text-sm">
+                <div className="text-muted-foreground border-b px-4 py-3 text-base">
                     {selected.length === 0
                         ? `Select multiple ${title ? title.toLowerCase() : 'items'}`
                         : `${selected.length} selected`}
                 </div>
-                <div className="max-h-48 overflow-y-auto">
+                <div className="max-h-64 overflow-y-auto overscroll-contain">
                     {Object.entries(options).map(([key, label]) => {
                         const isSelected = selected.includes(key);
                         return (
@@ -69,10 +69,10 @@ export default function MultiCheckboxSection({
                                 type="button"
                                 onClick={() => toggle(key)}
                                 className={cn(
-                                    'flex w-full items-center px-3 py-1.5 text-left text-sm transition-colors',
+                                    'flex w-full items-center border-b border-b-transparent px-4 py-3 text-left text-base transition-colors last:border-b-0 active:bg-muted/70',
                                     isSelected
                                         ? 'bg-primary/10 text-primary font-medium'
-                                        : 'hover:bg-muted text-foreground',
+                                        : 'text-foreground',
                                 )}
                             >
                                 {label}
@@ -84,12 +84,13 @@ export default function MultiCheckboxSection({
 
             {/* Comments */}
             {onCommentsChange && (
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <Label className="text-sm">{commentsPlaceholder}</Label>
-                        <span className="text-muted-foreground text-xs">Optional</span>
+                        <Label className="text-base">{commentsPlaceholder}</Label>
+                        <span className="text-muted-foreground text-sm">Optional</span>
                     </div>
                     <Textarea
+                        className="text-base"
                         value={comments ?? ''}
                         onChange={(e) => onCommentsChange(e.target.value)}
                         rows={3}

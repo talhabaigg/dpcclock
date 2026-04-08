@@ -96,7 +96,7 @@ function renderGroupedSubItems(subItems: SubItem[], currentUrl: string, isFavori
                 <SidebarMenuSubItem key={subItem.name}>
                     <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, currentUrl)}>
                         <Link href={subItem.url} prefetch>
-                            <span>{subItem.name}</span>
+                            <span className="truncate">{subItem.name}</span>
                             <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
                         </Link>
                     </SidebarMenuSubButton>
@@ -209,7 +209,7 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                                                           <SidebarMenuSubItem key={subItem.name}>
                                                               <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, page.url)}>
                                                                   <Link href={subItem.url} prefetch>
-                                                                      <span>{subItem.name}</span>
+                                                                      <span className="truncate">{subItem.name}</span>
                                                                       <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
                                                                   </Link>
                                                               </SidebarMenuSubButton>

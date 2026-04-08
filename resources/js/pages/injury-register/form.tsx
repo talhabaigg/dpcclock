@@ -1,18 +1,19 @@
+import AddressAutocomplete from '@/components/address-autocomplete';
+import BodyLocationCanvas from '@/components/injury-register/BodyLocationCanvas';
 import MultiCheckboxSection from '@/components/injury-register/MultiCheckboxSection';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFormOptions, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, RotateCcw, Trash2, X } from 'lucide-react';
+import Dropzone from 'shadcn-dropzone';
 import SignaturePad from 'signature_pad';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Props {
     injury: Injury | null;
@@ -21,15 +22,26 @@ interface Props {
     options: InjuryFormOptions;
 }
 
+const STEPS = [
+    'Incident Type',
+    'Worker & Location',
+    'Injury Details',
+    'Factors & Actions',
+    'Description & Files',
+    'Treatment & Witnesses',
+    'Signatures & Follow Up',
+];
+
 export default function InjuryForm({ injury, locations, employees, options }: Props) {
     const isEdit = !!injury;
+    const [step, setStep] = useState(0);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Injury Register', href: '/injury-register' },
         { title: isEdit ? `Edit ${injury.id_formal}` : 'Report Incident / Injury', href: '#' },
     ];
 
-    const { data, setData, post, put, processing, errors } = useForm({
+    const { data, setData, processing, errors } = useForm({
         incident: injury?.incident ?? '',
         incident_other: injury?.incident_other ?? '',
         employee_id: injury?.employee_id ? String(injury.employee_id) : '',
@@ -65,6 +77,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         worker_signature: injury?.worker_signature ?? '',
         representative_signature: injury?.representative_signature ?? '',
         representative_id: injury?.representative_id ? String(injury.representative_id) : '',
+        body_location_image: injury?.body_location_image ?? '',
         files: [] as File[],
     });
 
@@ -73,6 +86,9 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
     const workerPadRef = useRef<SignaturePad | null>(null);
     const repCanvasRef = useRef<HTMLCanvasElement>(null);
     const repPadRef = useRef<SignaturePad | null>(null);
+    const sigInitialized = useRef(false);
+
+    const isDark = () => document.documentElement.classList.contains('dark');
 
     const initPad = (canvasRef: React.RefObject<HTMLCanvasElement | null>, padRef: React.MutableRefObject<SignaturePad | null>, existing?: string) => {
         if (!canvasRef.current || padRef.current) return;
@@ -81,16 +97,30 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         canvas.width = canvas.offsetWidth * ratio;
         canvas.height = canvas.offsetHeight * ratio;
         canvas.getContext('2d')?.scale(ratio, ratio);
-        padRef.current = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
+        const dark = isDark();
+        padRef.current = new SignaturePad(canvas, {
+            backgroundColor: dark ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)',
+            penColor: dark ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+            minWidth: 1.5,
+            maxWidth: 3,
+        });
         if (existing) {
             padRef.current.fromDataURL(existing);
         }
     };
 
+    // Init signature pads when we reach step 6 (signatures)
     useEffect(() => {
-        initPad(workerCanvasRef, workerPadRef, injury?.worker_signature ?? undefined);
-        initPad(repCanvasRef, repPadRef, injury?.representative_signature ?? undefined);
-    }, []);
+        if (step === 6 && !sigInitialized.current) {
+            // Small delay to ensure canvas is rendered
+            const t = setTimeout(() => {
+                initPad(workerCanvasRef, workerPadRef, injury?.worker_signature ?? undefined);
+                initPad(repCanvasRef, repPadRef, injury?.representative_signature ?? undefined);
+                sigInitialized.current = true;
+            }, 100);
+            return () => clearTimeout(t);
+        }
+    }, [step]);
 
     const clearPad = useCallback((padRef: React.MutableRefObject<SignaturePad | null>) => {
         padRef.current?.clear();
@@ -106,9 +136,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         }
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
+    const handleSubmit = () => {
         const formData = {
             ...data,
             worker_signature: workerPadRef.current && !workerPadRef.current.isEmpty() ? workerPadRef.current.toDataURL('image/png') : '',
@@ -124,377 +152,349 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
 
     const fieldError = (field: string) => (errors as Record<string, string>)[field];
 
+    // Shared classes
+    const inputClass = 'h-12 text-base';
+    const selectTriggerClass = 'h-12 text-base';
+    const textareaClass = 'text-base';
+    const labelClass = 'text-base';
+
+    const YesNoButtons = ({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) => (
+        <div className="space-y-2">
+            <Label className={labelClass}>{label}</Label>
+            <div className="flex gap-2">
+                <Button type="button" variant={value ? 'default' : 'outline'} className="h-12 flex-1 text-base font-semibold" onClick={() => onChange(true)}>Yes</Button>
+                <Button type="button" variant={!value ? 'default' : 'outline'} className="h-12 flex-1 text-base font-semibold" onClick={() => onChange(false)}>No</Button>
+            </div>
+        </div>
+    );
+
+    const goNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    const goBack = () => setStep((s) => Math.max(s - 1, 0));
+    const isLast = step === STEPS.length - 1;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isEdit ? `Edit ${injury.id_formal}` : 'Report Incident / Injury'} />
 
-            <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-8 p-4">
-                {/* Type of Incident */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Type of Incident</h2>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Incident Type *</Label>
-                            <Select value={data.incident} onValueChange={(v) => setData('incident', v)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select incident type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(options.incidents).map(([key, label]) => (
-                                        <SelectItem key={key} value={key}>
-                                            {label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {fieldError('incident') && <p className="text-sm text-red-500">{fieldError('incident')}</p>}
-                        </div>
-                        {data.incident === 'other' && (
-                            <div className="space-y-2">
-                                <Label>Other (specify)</Label>
-                                <Input value={data.incident_other} onChange={(e) => setData('incident_other', e.target.value)} />
-                            </div>
-                        )}
+            <div className="mx-auto min-w-96 max-w-96 sm:min-w-2xl sm:max-w-2xl p-4">
+                {/* Progress Bar */}
+                <div className="mb-6">
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="font-medium">{STEPS[step]}</span>
+                        <span className="text-muted-foreground">{step + 1} / {STEPS.length}</span>
                     </div>
-                </section>
-
-                <Separator />
-
-                {/* Worker & Location */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Worker & Location</h2>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Worker *</Label>
-                            <Select value={data.employee_id} onValueChange={(v) => setData('employee_id', v)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select worker" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {employees.map((emp) => (
-                                        <SelectItem key={emp.id} value={String(emp.id)}>
-                                            {emp.preferred_name ?? emp.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {fieldError('employee_id') && <p className="text-sm text-red-500">{fieldError('employee_id')}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Worker Address</Label>
-                            <Input value={data.employee_address} onChange={(e) => setData('employee_address', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Project / Location *</Label>
-                            <Select value={data.location_id} onValueChange={(v) => setData('location_id', v)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select location" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {locations.map((loc) => (
-                                        <SelectItem key={loc.id} value={String(loc.id)}>
-                                            {loc.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {fieldError('location_id') && <p className="text-sm text-red-500">{fieldError('location_id')}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Location of Incident</Label>
-                            <Input value={data.location_of_incident} onChange={(e) => setData('location_of_incident', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Date & Time of Occurrence *</Label>
-                            <Input type="datetime-local" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
-                            {fieldError('occurred_at') && <p className="text-sm text-red-500">{fieldError('occurred_at')}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Reported By</Label>
-                            <Input value={data.reported_by} onChange={(e) => setData('reported_by', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Date & Time Reported</Label>
-                            <Input type="datetime-local" value={data.reported_at} onChange={(e) => setData('reported_at', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Reported To</Label>
-                            <Input value={data.reported_to} onChange={(e) => setData('reported_to', e.target.value)} />
-                        </div>
+                    <div className="bg-muted h-2 rounded-full">
+                        <div
+                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+                        />
                     </div>
-                </section>
+                </div>
 
-                <Separator />
-
-                {/* Nature of Injury */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Nature of Injury / Illness</h2>
-                    <MultiCheckboxSection
-                        title=""
-                        options={options.natures}
-                        selected={data.natures}
-                        onChange={(v) => setData('natures', v)}
-                        comments={data.natures_comments}
-                        onCommentsChange={(v) => setData('natures_comments', v)}
-                    />
-                </section>
-
-                <Separator />
-
-                {/* Mechanism of Injury */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Mechanism of Injury</h2>
-                    <MultiCheckboxSection
-                        title=""
-                        options={options.mechanisms}
-                        selected={data.mechanisms}
-                        onChange={(v) => setData('mechanisms', v)}
-                        comments={data.mechanisms_comments}
-                        onCommentsChange={(v) => setData('mechanisms_comments', v)}
-                    />
-                </section>
-
-                <Separator />
-
-                {/* Agency of Incident */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Agency of Incident</h2>
-                    <MultiCheckboxSection
-                        title=""
-                        options={options.agencies}
-                        selected={data.agencies}
-                        onChange={(v) => setData('agencies', v)}
-                        comments={data.agencies_comments}
-                        onCommentsChange={(v) => setData('agencies_comments', v)}
-                    />
-                </section>
-
-                <Separator />
-
-                {/* Contributing Factors */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Contributing Factors</h2>
-                    <MultiCheckboxSection
-                        title=""
-                        options={options.contributions}
-                        selected={data.contributions}
-                        onChange={(v) => setData('contributions', v)}
-                        comments={data.contributions_comments}
-                        onCommentsChange={(v) => setData('contributions_comments', v)}
-                    />
-                </section>
-
-                <Separator />
-
-                {/* Corrective Actions */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Corrective Actions</h2>
-                    <MultiCheckboxSection
-                        title=""
-                        options={options.correctiveActions}
-                        selected={data.corrective_actions}
-                        onChange={(v) => setData('corrective_actions', v)}
-                        comments={data.corrective_actions_comments}
-                        onCommentsChange={(v) => setData('corrective_actions_comments', v)}
-                    />
-                </section>
-
-                <Separator />
-
-                {/* File Uploads */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">File Uploads</h2>
-                    <Input
-                        type="file"
-                        multiple
-                        accept="image/*,.pdf"
-                        onChange={(e) => setData('files', Array.from(e.target.files ?? []))}
-                    />
-                    {injury?.media && injury.media.length > 0 && (
-                        <div className="space-y-1">
-                            <Label className="text-muted-foreground text-sm">Existing files:</Label>
-                            <ul className="list-inside list-disc text-sm">
-                                {injury.media
-                                    .filter((m) => m.collection_name === 'files')
-                                    .map((m) => (
-                                        <li key={m.id}>
-                                            <a href={m.original_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                                {m.file_name}
-                                            </a>
-                                        </li>
-                                    ))}
-                            </ul>
-                        </div>
-                    )}
-                </section>
-
-                <Separator />
-
-                {/* Description */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Detailed Description</h2>
-                    <Textarea
-                        value={data.description}
-                        onChange={(e) => setData('description', e.target.value)}
-                        rows={5}
-                        placeholder="Describe what happened in detail..."
-                    />
-                </section>
-
-                <Separator />
-
-                {/* Treatment */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Treatment</h2>
-                    <div className="flex items-center gap-3">
-                        <Switch checked={data.emergency_services} onCheckedChange={(v) => setData('emergency_services', v)} />
-                        <Label>Emergency services called?</Label>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Switch checked={data.treatment} onCheckedChange={(v) => setData('treatment', v)} />
-                        <Label>Was treatment provided?</Label>
-                    </div>
-                    {data.treatment ? (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Step Content */}
+                <div className="min-h-[400px] space-y-4">
+                    {/* Step 0: Incident Type */}
+                    {step === 0 && (
+                        <section className="space-y-4">
+                            <h2 className="text-lg font-semibold">Type of Incident</h2>
                             <div className="space-y-2">
-                                <Label>Treatment Date & Time</Label>
-                                <Input type="datetime-local" value={data.treatment_at} onChange={(e) => setData('treatment_at', e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Treatment Provider</Label>
-                                <Input value={data.treatment_provider} onChange={(e) => setData('treatment_provider', e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>External Treatment</Label>
-                                <Select value={data.treatment_external} onValueChange={(v) => setData('treatment_external', v)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select..." />
+                                <Label className={labelClass}>Incident Type *</Label>
+                                <Select value={data.incident} onValueChange={(v) => setData('incident', v)}>
+                                    <SelectTrigger className={selectTriggerClass}>
+                                        <SelectValue placeholder="Select incident type" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {Object.entries(options.treatmentExternal).map(([key, label]) => (
-                                            <SelectItem key={key} value={key}>
-                                                {label}
-                                            </SelectItem>
+                                        {Object.entries(options.incidents).map(([key, label]) => (
+                                            <SelectItem key={key} value={key} className="py-3 text-base">{label}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {fieldError('incident') && <p className="text-sm text-red-500">{fieldError('incident')}</p>}
+                            </div>
+                            {data.incident === 'other' && (
+                                <div className="space-y-2">
+                                    <Label className={labelClass}>Other (specify)</Label>
+                                    <Input className={inputClass} value={data.incident_other} onChange={(e) => setData('incident_other', e.target.value)} />
+                                </div>
+                            )}
+                        </section>
+                    )}
+
+                    {/* Step 1: Worker & Location */}
+                    {step === 1 && (
+                        <section className="space-y-4">
+                            <h2 className="text-lg font-semibold">Worker & Location</h2>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Worker *</Label>
+                                <Select value={data.employee_id} onValueChange={(v) => setData('employee_id', v)}>
+                                    <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select worker" /></SelectTrigger>
+                                    <SelectContent>
+                                        {employees.map((emp) => (
+                                            <SelectItem key={emp.id} value={String(emp.id)} className="py-3 text-base">{emp.preferred_name ?? emp.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {fieldError('employee_id') && <p className="text-sm text-red-500">{fieldError('employee_id')}</p>}
                             </div>
                             <div className="space-y-2">
-                                <Label>External Treatment Location</Label>
-                                <Input value={data.treatment_external_location} onChange={(e) => setData('treatment_external_location', e.target.value)} />
+                                <Label className={labelClass}>Worker Address</Label>
+                                <AddressAutocomplete
+                                    className={inputClass}
+                                    value={data.employee_address}
+                                    onChange={(v) => setData('employee_address', v)}
+                                    onSelect={(parts) => setData('employee_address', parts.address)}
+                                    placeholder="Start typing address..."
+                                />
                             </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <Label>Reason no treatment was provided</Label>
-                            <Textarea value={data.no_treatment_reason} onChange={(e) => setData('no_treatment_reason', e.target.value)} rows={2} />
-                        </div>
-                    )}
-                </section>
-
-                <Separator />
-
-                {/* Witnesses */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Witnesses</h2>
-                    <div className="flex items-center gap-3">
-                        <Switch checked={data.witnesses} onCheckedChange={(v) => setData('witnesses', v)} />
-                        <Label>Were there witnesses?</Label>
-                    </div>
-                    {data.witnesses && (
-                        <Textarea
-                            value={data.witness_details}
-                            onChange={(e) => setData('witness_details', e.target.value)}
-                            rows={3}
-                            placeholder="Witness names and details..."
-                        />
-                    )}
-                </section>
-
-                <Separator />
-
-                {/* Worker Signature */}
-                <section className="space-y-3">
-                    <h2 className="text-lg font-semibold">Worker Signature</h2>
-                    <div className="flex items-center justify-between">
-                        <Label className="text-xs">Draw signature below</Label>
-                        <div className="flex gap-1">
-                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => undoPad(workerPadRef)}>
-                                <RotateCcw className="mr-1 h-3 w-3" /> Undo
-                            </Button>
-                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => clearPad(workerPadRef)}>
-                                <Trash2 className="mr-1 h-3 w-3" /> Clear
-                            </Button>
-                        </div>
-                    </div>
-                    <canvas ref={workerCanvasRef} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
-                </section>
-
-                <Separator />
-
-                {/* Representative Sign-off */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">SWC Representative Sign-off</h2>
-                    <div className="space-y-2">
-                        <Label>Representative</Label>
-                        <Select value={data.representative_id} onValueChange={(v) => setData('representative_id', v)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select representative" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {employees.map((emp) => (
-                                    <SelectItem key={emp.id} value={String(emp.id)}>
-                                        {emp.preferred_name ?? emp.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-xs">Representative signature</Label>
-                            <div className="flex gap-1">
-                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => undoPad(repPadRef)}>
-                                    <RotateCcw className="mr-1 h-3 w-3" /> Undo
-                                </Button>
-                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => clearPad(repPadRef)}>
-                                    <Trash2 className="mr-1 h-3 w-3" /> Clear
-                                </Button>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Project / Location *</Label>
+                                <Select value={data.location_id} onValueChange={(v) => setData('location_id', v)}>
+                                    <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select location" /></SelectTrigger>
+                                    <SelectContent>
+                                        {locations.map((loc) => (
+                                            <SelectItem key={loc.id} value={String(loc.id)} className="py-3 text-base">{loc.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {fieldError('location_id') && <p className="text-sm text-red-500">{fieldError('location_id')}</p>}
                             </div>
-                        </div>
-                        <canvas ref={repCanvasRef} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
-                    </div>
-                </section>
-
-                <Separator />
-
-                {/* Follow Up */}
-                <section className="space-y-4">
-                    <h2 className="text-lg font-semibold">Follow Up</h2>
-                    <div className="flex items-center gap-3">
-                        <Switch checked={data.follow_up ?? false} onCheckedChange={(v) => setData('follow_up', v)} />
-                        <Label>Follow up required?</Label>
-                    </div>
-                    {data.follow_up && (
-                        <Textarea
-                            value={data.follow_up_notes}
-                            onChange={(e) => setData('follow_up_notes', e.target.value)}
-                            rows={3}
-                            placeholder="Follow up details..."
-                        />
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Location of Incident</Label>
+                                <Input className={inputClass} value={data.location_of_incident} onChange={(e) => setData('location_of_incident', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Date & Time of Occurrence *</Label>
+                                <Input className={inputClass} type="datetime-local" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
+                                {fieldError('occurred_at') && <p className="text-sm text-red-500">{fieldError('occurred_at')}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Reported By</Label>
+                                <Input className={inputClass} value={data.reported_by} onChange={(e) => setData('reported_by', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Date & Time Reported</Label>
+                                <Input className={inputClass} type="datetime-local" value={data.reported_at} onChange={(e) => setData('reported_at', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className={labelClass}>Reported To</Label>
+                                <Input className={inputClass} value={data.reported_to} onChange={(e) => setData('reported_to', e.target.value)} />
+                            </div>
+                        </section>
                     )}
-                </section>
 
-                {/* Submit */}
-                <div className="flex items-center justify-end gap-3 border-t pt-6 pb-8">
-                    <Button variant="outline" asChild>
-                        <Link href="/injury-register">Cancel</Link>
-                    </Button>
-                    <Button type="submit" disabled={processing}>
-                        {processing ? 'Saving...' : isEdit ? 'Update Report' : 'Submit Report'}
-                    </Button>
+                    {/* Step 2: Injury Details */}
+                    {step === 2 && (
+                        <section className="space-y-6">
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Nature of Injury / Illness</h2>
+                                <MultiCheckboxSection title="" options={options.natures} selected={data.natures} onChange={(v) => setData('natures', v)} comments={data.natures_comments} onCommentsChange={(v) => setData('natures_comments', v)} />
+                            </div>
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Mechanism of Injury</h2>
+                                <MultiCheckboxSection title="" options={options.mechanisms} selected={data.mechanisms} onChange={(v) => setData('mechanisms', v)} comments={data.mechanisms_comments} onCommentsChange={(v) => setData('mechanisms_comments', v)} />
+                            </div>
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Agency of Incident</h2>
+                                <MultiCheckboxSection title="" options={options.agencies} selected={data.agencies} onChange={(v) => setData('agencies', v)} comments={data.agencies_comments} onCommentsChange={(v) => setData('agencies_comments', v)} />
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Step 3: Factors & Actions */}
+                    {step === 3 && (
+                        <section className="space-y-6">
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Contributing Factors</h2>
+                                <MultiCheckboxSection title="" options={options.contributions} selected={data.contributions} onChange={(v) => setData('contributions', v)} comments={data.contributions_comments} onCommentsChange={(v) => setData('contributions_comments', v)} />
+                            </div>
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Corrective Actions</h2>
+                                <MultiCheckboxSection title="" options={options.correctiveActions} selected={data.corrective_actions} onChange={(v) => setData('corrective_actions', v)} comments={data.corrective_actions_comments} onCommentsChange={(v) => setData('corrective_actions_comments', v)} />
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Step 4: Description & Files */}
+                    {step === 4 && (
+                        <section className="space-y-6">
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Detailed Description</h2>
+                                <Textarea className={textareaClass} value={data.description} onChange={(e) => setData('description', e.target.value)} rows={5} placeholder="Describe what happened in detail..." />
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Upload incident related files here</h2>
+                                <Dropzone onDrop={(files) => setData('files', [...data.files, ...files])} accept={{ 'image/*': [], 'application/pdf': [] }} />
+                                {data.files.length > 0 && (
+                                    <div className="space-y-2">
+                                        {data.files.map((file, i) => (
+                                            <div key={i} className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
+                                                <FileText size={16} className="text-muted-foreground shrink-0" />
+                                                <span className="flex-1 truncate text-sm">{file.name}</span>
+                                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setData('files', data.files.filter((_, j) => j !== i))}><X size={14} /></Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {injury?.media && injury.media.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-muted-foreground text-sm">Existing files:</Label>
+                                        {injury.media.filter((m) => m.collection_name === 'files').map((m) => (
+                                            <div key={m.id} className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
+                                                <FileText size={16} className="text-muted-foreground shrink-0" />
+                                                <a href={m.original_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-sm text-blue-600 hover:underline">{m.file_name}</a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Body Location <span className="text-muted-foreground text-sm font-normal">(optional)</span></h2>
+                                <BodyLocationCanvas value={data.body_location_image || null} onChange={(dataUrl) => setData('body_location_image', dataUrl)} />
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Step 5: Treatment & Witnesses */}
+                    {step === 5 && (
+                        <section className="space-y-6">
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Treatment</h2>
+                                <YesNoButtons label="Emergency services called?" value={data.emergency_services} onChange={(v) => setData('emergency_services', v)} />
+                                <YesNoButtons label="Was treatment provided?" value={data.treatment} onChange={(v) => setData('treatment', v)} />
+                                {data.treatment ? (
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>Treatment Date & Time</Label>
+                                            <Input className={inputClass} type="datetime-local" value={data.treatment_at} onChange={(e) => setData('treatment_at', e.target.value)} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>Treatment Provider</Label>
+                                            <Input className={inputClass} value={data.treatment_provider} onChange={(e) => setData('treatment_provider', e.target.value)} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>External Treatment</Label>
+                                            <Select value={data.treatment_external} onValueChange={(v) => setData('treatment_external', v)}>
+                                                <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {Object.entries(options.treatmentExternal).map(([key, label]) => (
+                                                        <SelectItem key={key} value={key} className="py-3 text-base">{label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>External Treatment Location</Label>
+                                            <Input className={inputClass} value={data.treatment_external_location} onChange={(e) => setData('treatment_external_location', e.target.value)} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Reason no treatment was provided</Label>
+                                        <Textarea className={textareaClass} value={data.no_treatment_reason} onChange={(e) => setData('no_treatment_reason', e.target.value)} rows={3} />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Witnesses</h2>
+                                <YesNoButtons label="Were there witnesses?" value={data.witnesses} onChange={(v) => setData('witnesses', v)} />
+                                {data.witnesses && (
+                                    <Textarea className={textareaClass} value={data.witness_details} onChange={(e) => setData('witness_details', e.target.value)} rows={3} placeholder="Witness names and details..." />
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Step 6: Signatures & Follow Up */}
+                    {step === 6 && (
+                        <section className="space-y-6">
+                            <div className="space-y-3">
+                                <h2 className="text-lg font-semibold">Worker Sign Off <span className="text-muted-foreground text-sm font-normal">(Person involved in this incident)</span></h2>
+                                <div className="bg-muted/50 rounded-md border px-4 py-3 text-sm">
+                                    <strong>NOTE:</strong> By signing below you agree that the information provided in this report is correct and an accurate account of the incident / injury being reported.
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm">Draw signature below</Label>
+                                    <div className="flex gap-2">
+                                        <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(workerPadRef)}>
+                                            <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(workerPadRef)}>
+                                            <Trash2 className="mr-1.5 h-4 w-4" /> Clear
+                                        </Button>
+                                    </div>
+                                </div>
+                                <canvas ref={workerCanvasRef} className="h-44 w-full rounded-md border bg-white dark:bg-[rgb(30,30,30)]" style={{ touchAction: 'none' }} />
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">SWC Representative Sign-off</h2>
+                                <div className="space-y-2">
+                                    <Label className={labelClass}>Representative</Label>
+                                    <Select value={data.representative_id} onValueChange={(v) => setData('representative_id', v)}>
+                                        <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select representative" /></SelectTrigger>
+                                        <SelectContent>
+                                            {employees.map((emp) => (
+                                                <SelectItem key={emp.id} value={String(emp.id)} className="py-3 text-base">{emp.preferred_name ?? emp.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm">Representative signature</Label>
+                                        <div className="flex gap-2">
+                                            <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(repPadRef)}>
+                                                <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
+                                            </Button>
+                                            <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(repPadRef)}>
+                                                <Trash2 className="mr-1.5 h-4 w-4" /> Clear
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <canvas ref={repCanvasRef} className="h-44 w-full rounded-md border bg-white dark:bg-[rgb(30,30,30)]" style={{ touchAction: 'none' }} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Follow Up</h2>
+                                <YesNoButtons label="Follow up required?" value={data.follow_up ?? false} onChange={(v) => setData('follow_up', v)} />
+                                {data.follow_up && (
+                                    <Textarea className={textareaClass} value={data.follow_up_notes} onChange={(e) => setData('follow_up_notes', e.target.value)} rows={3} placeholder="Follow up details..." />
+                                )}
+                            </div>
+                        </section>
+                    )}
                 </div>
-            </form>
+
+                {/* Navigation */}
+                <div className="flex items-center justify-between border-t pt-6 pb-8 mt-6">
+                    <div>
+                        {step > 0 ? (
+                            <Button type="button" variant="outline" size="lg" className="h-12 px-6 text-base" onClick={goBack}>
+                                <ChevronLeft className="mr-1 h-5 w-5" /> Back
+                            </Button>
+                        ) : (
+                            <Button variant="outline" size="lg" className="h-12 px-6 text-base" asChild>
+                                <Link href="/injury-register">Cancel</Link>
+                            </Button>
+                        )}
+                    </div>
+                    <div className="flex gap-3">
+                        {isLast ? (
+                            <Button size="lg" className="h-12 px-8 text-base" onClick={handleSubmit} disabled={processing}>
+                                {processing ? 'Saving...' : isEdit ? 'Update Report' : 'Submit Report'}
+                            </Button>
+                        ) : (
+                            <Button size="lg" className="h-12 px-8 text-base" type="button" onClick={goNext}>
+                                Next <ChevronRight className="ml-1 h-5 w-5" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
         </AppLayout>
     );
 }

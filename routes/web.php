@@ -1145,6 +1145,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:injury-register.lock');
         Route::post('/injury-register/{injury}/unlock', [InjuryController::class, 'unlock'])->name('injury-register.unlock')
             ->middleware('permission:injury-register.lock');
+        Route::get('/injury-register/{injury}/pdf', [InjuryController::class, 'downloadPdf'])->name('injury-register.pdf')
+            ->middleware('permission:injury-register.view');
     });
 
     // ============================================

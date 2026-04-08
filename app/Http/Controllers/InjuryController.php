@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\Injury;
 use App\Models\Location;
 use Illuminate\Http\Request;
+use Spatie\Browsershot\Browsershot;
 use Inertia\Inertia;
 
 class InjuryController extends Controller
@@ -85,8 +86,41 @@ class InjuryController extends Controller
     {
         $injury->load(['employee', 'location', 'representative', 'creator', 'media']);
 
+        $comments = $injury->comments()
+            ->with(['user', 'media', 'replies.user', 'replies.media'])
+            ->whereNull('parent_id')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'body' => $c->body,
+                'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
+                'metadata' => $c->metadata,
+                'created_at' => $c->created_at->toISOString(),
+                'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
+                    'id' => $m->id,
+                    'file_name' => $m->file_name,
+                    'url' => $m->getUrl(),
+                    'mime_type' => $m->mime_type,
+                ]),
+                'replies' => $c->replies->map(fn ($r) => [
+                    'id' => $r->id,
+                    'body' => $r->body,
+                    'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name] : null,
+                    'metadata' => $r->metadata,
+                    'created_at' => $r->created_at->toISOString(),
+                    'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
+                        'id' => $m->id,
+                        'file_name' => $m->file_name,
+                        'url' => $m->getUrl(),
+                        'mime_type' => $m->mime_type,
+                    ]),
+                ]),
+            ]);
+
         return Inertia::render('injury-register/show', [
             'injury' => $injury,
+            'comments' => $comments,
             'options' => $this->getFormOptions(),
         ]);
     }
@@ -164,6 +198,98 @@ class InjuryController extends Controller
         $injury->update(['locked_at' => null]);
 
         return back()->with('success', 'Record unlocked.');
+    }
+
+    public function downloadPdf(Injury $injury)
+    {
+        $injury->load(['employee', 'location', 'representative', 'creator']);
+
+        // Parse body location annotation paths (stored as JSON)
+        $bodyLocationPaths = null;
+        if ($injury->body_location_image) {
+            $decoded = json_decode($injury->body_location_image, true);
+            if (is_array($decoded) && count($decoded) > 0) {
+                $bodyLocationPaths = $decoded;
+            }
+        }
+
+        // Convert body outline PNG to base64 and get dimensions for proper alignment
+        $bodyOutlineBase64 = null;
+        $bodyImageDims = null;
+        if ($bodyLocationPaths) {
+            $outlinePath = public_path('images/body-outline.png');
+            if (file_exists($outlinePath)) {
+                $bodyOutlineBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($outlinePath));
+                $size = getimagesize($outlinePath);
+                if ($size) {
+                    $bodyImageDims = ['w' => $size[0], 'h' => $size[1]];
+                }
+            }
+        }
+
+        $html = view('injury-register.pdf', [
+            'injury' => $injury,
+            'bodyLocationPaths' => $bodyLocationPaths,
+            'bodyOutlineBase64' => $bodyOutlineBase64,
+            'bodyImageDims' => $bodyImageDims,
+        ])->render();
+
+        $logoPath = public_path('logo.png');
+        if (!file_exists($logoPath)) {
+            $logoPath = public_path('SWCPE_Logo.PNG');
+        }
+        $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath));
+        $headerHtml = <<<HEADER
+        <div style="width: 100%; padding: 8px 15mm 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 2px solid #334155;">
+                <div>
+                    <img src="{$logoBase64}" style="max-height: 44px;" />
+                </div>
+                <div style="text-align: right; font-family: Arial, Helvetica, sans-serif;">
+                    <div style="font-size: 18px; color: #334155; font-weight: 700;">Incident / Injury Report</div>
+                    <div style="font-size: 16px; color: #334155; font-weight: 600;">{$injury->id_formal}</div>
+                </div>
+            </div>
+        </div>
+        HEADER;
+
+        $footerHtml = <<<FOOTER
+        <div style="width: 100%; padding: 0 15mm 6px;">
+            <div style="display: flex; align-items: center; font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #6b7280; padding-top: 6px; border-top: 2px solid #334155;">
+                <div style="flex: 1; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #334155;">Private &amp; Confidential</div>
+                <div style="flex: 1; text-align: right;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+            </div>
+        </div>
+        FOOTER;
+
+        $browsershot = Browsershot::html($html);
+
+        if ($nodeBinary = env('BROWSERSHOT_NODE_BINARY')) {
+            $browsershot->setNodeBinary($nodeBinary);
+        }
+        if ($npmBinary = env('BROWSERSHOT_NPM_BINARY')) {
+            $browsershot->setNpmBinary($npmBinary);
+        }
+        if ($chromePath = env('BROWSERSHOT_CHROME_PATH')) {
+            $browsershot->setChromePath($chromePath);
+        }
+
+        $pdfContent = $browsershot
+            ->noSandbox()
+            ->format('A4')
+            ->margins(22, 15, 20, 15, 'mm')
+            ->showBackground()
+            ->showBrowserHeaderAndFooter()
+            ->headerHtml($headerHtml)
+            ->footerHtml($footerHtml)
+            ->pdf();
+
+        $filename = $injury->id_formal . '.pdf';
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 
     protected function getFormOptions(): array

@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasComments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 class Injury extends Model implements HasMedia
 {
-    use InteractsWithMedia;
+    use HasComments, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
         'id_formal', 'location_id', 'employee_id', 'employee_address',
@@ -132,6 +135,135 @@ class Injury extends Model implements HasMedia
         'issue_non_conformance' => 'Issue non-conformance where company policies / procedures have not been followed (i.e. not wearing required PPE)',
         'other' => 'Other',
     ];
+
+    // --- Activity log ---
+
+    protected static array $fieldLabels = [
+        'location_id' => 'Location',
+        'employee_id' => 'Worker',
+        'employee_address' => 'Worker Address',
+        'incident' => 'Incident Type',
+        'incident_other' => 'Incident (Other)',
+        'occurred_at' => 'Occurred At',
+        'reported_by' => 'Reported By',
+        'reported_at' => 'Reported At',
+        'reported_to' => 'Reported To',
+        'location_of_incident' => 'Location of Incident',
+        'description' => 'Description',
+        'emergency_services' => 'Emergency Services',
+        'work_cover_claim' => 'WorkCover Claim',
+        'treatment' => 'Treatment Provided',
+        'treatment_at' => 'Treatment At',
+        'treatment_provider' => 'Treatment Provider',
+        'treatment_external' => 'External Treatment',
+        'treatment_external_location' => 'External Treatment Location',
+        'no_treatment_reason' => 'No Treatment Reason',
+        'follow_up' => 'Follow Up Required',
+        'follow_up_notes' => 'Follow Up Notes',
+        'work_days_missed' => 'Days Lost',
+        'report_type' => 'Report Type',
+        'witnesses' => 'Witnesses',
+        'witness_details' => 'Witness Details',
+        'locked_at' => 'Lock Status',
+        'representative_id' => 'Representative',
+    ];
+
+    protected static array $ignoredFields = [
+        'id_formal', 'created_by', 'updated_by', 'updated_at',
+        'worker_signature', 'representative_signature', 'body_location_image',
+        'natures', 'natures_comments', 'mechanisms', 'mechanisms_comments',
+        'agencies', 'agencies_comments', 'contributions', 'contributions_comments',
+        'corrective_actions', 'corrective_actions_comments',
+    ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnlyDirty()
+            ->logFillable()
+            ->useLogName('injury');
+    }
+
+    protected static function booted(): void
+    {
+        static::created(function (Injury $injury) {
+            $injury->addSystemComment(
+                'Created injury report ' . $injury->id_formal,
+                ['event' => 'created'],
+                auth()->id(),
+            );
+        });
+
+        static::updated(function (Injury $injury) {
+            $changes = $injury->getChanges();
+            $original = $injury->getOriginal();
+
+            // Filter out ignored fields
+            $tracked = array_diff_key($changes, array_flip(static::$ignoredFields));
+            unset($tracked['id'], $tracked['created_at']);
+
+            if (empty($tracked)) {
+                return;
+            }
+
+            // Special case: lock / unlock
+            if (array_key_exists('locked_at', $tracked)) {
+                $event = $injury->locked_at ? 'locked' : 'unlocked';
+                $body = $event === 'locked' ? 'Locked this record' : 'Unlocked this record';
+                $injury->addSystemComment($body, ['event' => $event], auth()->id());
+
+                unset($tracked['locked_at']);
+                if (empty($tracked)) {
+                    return;
+                }
+            }
+
+            $lines = [];
+            foreach ($tracked as $field => $newValue) {
+                $label = static::$fieldLabels[$field] ?? str_replace('_', ' ', ucfirst($field));
+                $oldValue = $original[$field] ?? null;
+
+                $oldDisplay = static::formatFieldValue($field, $oldValue);
+                $newDisplay = static::formatFieldValue($field, $newValue);
+
+                $lines[] = "**{$label}**: {$oldDisplay} → {$newDisplay}";
+            }
+
+            $body = count($lines) === 1
+                ? 'Updated ' . $lines[0]
+                : "Updated record:\n" . implode("\n", array_map(fn ($l) => "- {$l}", $lines));
+
+            $injury->addSystemComment(
+                $body,
+                ['event' => 'updated', 'changes' => array_keys($tracked)],
+                auth()->id(),
+            );
+        });
+    }
+
+    protected static function formatFieldValue(string $field, mixed $value): string
+    {
+        if (is_null($value) || $value === '') {
+            return '_empty_';
+        }
+
+        if (is_bool($value) || $value === '0' || $value === '1') {
+            if ($field === 'work_cover_claim' || $field === 'emergency_services'
+                || $field === 'treatment' || $field === 'follow_up' || $field === 'witnesses') {
+                return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'Yes' : 'No';
+            }
+        }
+
+        return match ($field) {
+            'incident' => self::INCIDENT_OPTIONS[$value] ?? $value,
+            'report_type' => self::REPORT_TYPE_OPTIONS[$value] ?? $value,
+            'treatment_external' => self::TREATMENT_EXTERNAL_OPTIONS[$value] ?? $value,
+            'location_id' => Location::find($value)?->name ?? $value,
+            'employee_id' => Employee::find($value)?->preferred_name ?? Employee::find($value)?->name ?? $value,
+            'representative_id' => Employee::find($value)?->preferred_name ?? Employee::find($value)?->name ?? $value,
+            default => (string) $value,
+        };
+    }
 
     // --- Media collections ---
 

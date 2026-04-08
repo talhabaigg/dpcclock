@@ -26,6 +26,7 @@ class CommentController extends Controller
         $modelClass = $request->commentable_type;
         $allowedModels = [
             'employment_application' => \App\Models\EmploymentApplication::class,
+            'injury' => \App\Models\Injury::class,
         ];
 
         $class = $allowedModels[$modelClass] ?? null;

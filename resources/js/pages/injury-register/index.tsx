@@ -1,5 +1,6 @@
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -11,8 +12,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/types/injury';
-import { Head, Link, router } from '@inertiajs/react';
-import { ClipboardList, Lock, MoreHorizontal, Plus, RotateCcw } from 'lucide-react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Check, ChevronsUpDown, Lock, MoreHorizontal, Plus, RotateCcw, X } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
@@ -36,7 +39,11 @@ interface Props {
     reportTypeOptions: Record<string, string>;
 }
 
-export default function InjuryRegisterIndex({ injuries, filters, locations, employees, incidentOptions, reportTypeOptions }: Props) {
+export default function InjuryRegisterIndex({ injuries, filters, locations, incidentOptions, reportTypeOptions }: Props) {
+    const permissions: string[] = (usePage().props.auth as { permissions?: string[] })?.permissions ?? [];
+    const can = (p: string) => permissions.includes(p);
+
+    const [locationOpen, setLocationOpen] = useState(false);
     const [classifyInjury, setClassifyInjury] = useState<Injury | null>(null);
     const [classForm, setClassForm] = useState({ work_cover_claim: false, work_days_missed: 0, report_type: '' });
     const [classSaving, setClassSaving] = useState(false);
@@ -55,11 +62,11 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
         setClassSaving(true);
         router.put(`/injury-register/${classifyInjury.id}/classification`, classForm, {
             preserveScroll: true,
-            onSuccess: () => {
-                setClassifyInjury(null);
+            preserveState: true,
+            onFinish: () => {
                 setClassSaving(false);
+                setClassifyInjury(null);
             },
-            onError: () => setClassSaving(false),
         });
     };
 
@@ -82,32 +89,45 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
             <Head title="Injury Register" />
 
             <div className="space-y-4 p-4">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Injury Register</h1>
-                    <Button asChild>
-                        <Link href="/injury-register/create">
-                            <Plus className="mr-1 h-4 w-4" />
-                            Report Incident / Injury
-                        </Link>
-                    </Button>
-                </div>
-
-                {/* Filters */}
+                {/* Filters + Report Button */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <Select value={filters.location_id ?? 'all'} onValueChange={(v) => setFilter('location_id', v)}>
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="All Locations" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Locations</SelectItem>
-                            {locations.map((loc) => (
-                                <SelectItem key={loc.id} value={String(loc.id)}>
-                                    {loc.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <Popover open={locationOpen} onOpenChange={setLocationOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" role="combobox" aria-expanded={locationOpen} className="w-48 justify-between font-normal">
+                                <span className="truncate">
+                                    {filters.location_id
+                                        ? locations.find((l) => String(l.id) === filters.location_id)?.name ?? 'All Locations'
+                                        : 'All Locations'}
+                                </span>
+                                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-0" align="start">
+                            <Command>
+                                <CommandInput placeholder="Search locations..." />
+                                <CommandList>
+                                    <CommandEmpty>No location found.</CommandEmpty>
+                                    <CommandGroup>
+                                        <CommandItem
+                                            onSelect={() => { setFilter('location_id', 'all'); setLocationOpen(false); }}
+                                        >
+                                            <Check className={`mr-2 h-3.5 w-3.5 ${!filters.location_id ? 'opacity-100' : 'opacity-0'}`} />
+                                            All Locations
+                                        </CommandItem>
+                                        {locations.map((loc) => (
+                                            <CommandItem
+                                                key={loc.id}
+                                                onSelect={() => { setFilter('location_id', String(loc.id)); setLocationOpen(false); }}
+                                            >
+                                                <Check className={`mr-2 h-3.5 w-3.5 ${filters.location_id === String(loc.id) ? 'opacity-100' : 'opacity-0'}`} />
+                                                {loc.name}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
 
                     <Select value={filters.incident ?? 'all'} onValueChange={(v) => setFilter('incident', v)}>
                         <SelectTrigger className="w-48">
@@ -137,16 +157,22 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
                         </SelectContent>
                     </Select>
 
-                    <Select value={filters.work_cover_claim ?? 'all'} onValueChange={(v) => setFilter('work_cover_claim', v)}>
-                        <SelectTrigger className="w-44">
-                            <SelectValue placeholder="WorkCover" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">WorkCover: All</SelectItem>
-                            <SelectItem value="1">Yes</SelectItem>
-                            <SelectItem value="0">No</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="inline-flex items-center rounded-md border text-sm">
+                        <span className="text-muted-foreground border-r px-2.5 py-1.5 text-xs font-medium">WorkCover</span>
+                        {(['all', '1', '0'] as const).map((val) => (
+                            <button
+                                key={val}
+                                onClick={() => setFilter('work_cover_claim', val)}
+                                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                    (filters.work_cover_claim ?? 'all') === val
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'hover:bg-muted'
+                                }`}
+                            >
+                                {val === 'all' ? 'All' : val === '1' ? 'Yes' : 'No'}
+                            </button>
+                        ))}
+                    </div>
 
                     <Select value={filters.status ?? 'all'} onValueChange={(v) => setFilter('status', v)}>
                         <SelectTrigger className="w-36">
@@ -165,7 +191,62 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
                             Reset
                         </Button>
                     )}
+
+                    {can('injury-register.create') && (
+                        <Button asChild className="ml-auto">
+                            <Link href="/injury-register/create">
+                                <Plus className="mr-1 h-4 w-4" />
+                                Report Incident / Injury
+                            </Link>
+                        </Button>
+                    )}
                 </div>
+
+                {/* Filter chips */}
+                {hasFilters && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {filters.location_id && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                {locations.find((l) => String(l.id) === filters.location_id)?.name ?? filters.location_id}
+                                <button onClick={() => setFilter('location_id', 'all')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+                        {filters.incident && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                {incidentOptions[filters.incident] ?? filters.incident}
+                                <button onClick={() => setFilter('incident', 'all')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+                        {filters.report_type && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                {reportTypeOptions[filters.report_type] ?? filters.report_type}
+                                <button onClick={() => setFilter('report_type', 'all')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+                        {filters.work_cover_claim && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                WorkCover: {filters.work_cover_claim === '1' ? 'Yes' : 'No'}
+                                <button onClick={() => setFilter('work_cover_claim', 'all')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+                        {filters.status && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                {filters.status === 'active' ? 'Active' : 'Locked'}
+                                <button onClick={() => setFilter('status', 'all')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="rounded-md border">
@@ -193,14 +274,16 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
                             )}
                             {injuries.data.map((injury) => (
                                 <TableRow key={injury.id}>
-                                    <TableCell className="font-mono text-sm">
+                                    <TableCell>
                                         <Link href={`/injury-register/${injury.id}`} className="hover:underline">
-                                            {injury.id_formal}
-                                            {injury.locked_at && <Lock className="ml-1 inline h-3 w-3 text-amber-500" />}
+                                            <Badge variant="outline" className="font-mono text-xs">
+                                                {injury.id_formal}
+                                                {injury.locked_at && <Lock className="ml-1 inline h-3 w-3" />}
+                                            </Badge>
                                         </Link>
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                        {injury.occurred_at ? new Date(injury.occurred_at).toLocaleDateString('en-AU') : '—'}
+                                        {injury.occurred_at ? new Date(injury.occurred_at).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                     </TableCell>
                                     <TableCell>
                                         <div className="text-sm font-medium">{injury.employee?.preferred_name ?? injury.employee?.name ?? '—'}</div>
@@ -209,14 +292,14 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
                                         )}
                                     </TableCell>
                                     <TableCell className="text-sm">{injury.location?.name ?? '—'}</TableCell>
-                                    <TableCell className="text-sm">{injury.incident_label}</TableCell>
+                                    <TableCell><Badge variant="secondary" className="text-xs">{injury.incident_label}</Badge></TableCell>
                                     <TableCell className="text-sm">{injury.work_cover_claim ? 'Yes' : 'No'}</TableCell>
                                     <TableCell className="text-sm">{injury.work_days_missed}</TableCell>
                                     <TableCell>
                                         <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
                                     </TableCell>
                                     <TableCell>
-                                        <DropdownMenu>
+                                        <DropdownMenu modal={false}>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                                     <MoreHorizontal className="h-4 w-4" />
@@ -226,34 +309,39 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
                                                 <DropdownMenuItem asChild>
                                                     <Link href={`/injury-register/${injury.id}`}>View</Link>
                                                 </DropdownMenuItem>
-                                                {!injury.locked_at && (
+                                                {can('injury-register.edit') && !injury.locked_at && (
                                                     <DropdownMenuItem asChild>
                                                         <Link href={`/injury-register/${injury.id}/edit`}>Edit</Link>
                                                     </DropdownMenuItem>
                                                 )}
-                                                <DropdownMenuItem onClick={() => openClassifyDialog(injury)}>
-                                                    <ClipboardList className="mr-2 h-4 w-4" />
-                                                    Classification
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                {!injury.locked_at ? (
-                                                    <DropdownMenuItem
-                                                        onClick={() =>
-                                                            router.post(`/injury-register/${injury.id}/lock`, {}, { preserveScroll: true })
-                                                        }
-                                                    >
-                                                        Lock
-                                                    </DropdownMenuItem>
-                                                ) : (
-                                                    <DropdownMenuItem
-                                                        onClick={() =>
-                                                            router.post(`/injury-register/${injury.id}/unlock`, {}, { preserveScroll: true })
-                                                        }
-                                                    >
-                                                        Unlock
+                                                {can('injury-register.edit') && (
+                                                    <DropdownMenuItem onClick={() => openClassifyDialog(injury)}>
+                                                        Work cover / days lost / report type
                                                     </DropdownMenuItem>
                                                 )}
-                                                {!injury.locked_at && (
+                                                {can('injury-register.lock') && (
+                                                    <>
+                                                        <DropdownMenuSeparator />
+                                                        {!injury.locked_at ? (
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    router.post(`/injury-register/${injury.id}/lock`, {}, { preserveScroll: true })
+                                                                }
+                                                            >
+                                                                Lock
+                                                            </DropdownMenuItem>
+                                                        ) : (
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    router.post(`/injury-register/${injury.id}/unlock`, {}, { preserveScroll: true })
+                                                                }
+                                                            >
+                                                                Unlock
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {can('injury-register.delete') && !injury.locked_at && (
                                                     <DropdownMenuItem
                                                         className="text-red-600"
                                                         onClick={() =>
@@ -313,7 +401,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, empl
 
             {/* Classification Dialog */}
             <Dialog open={!!classifyInjury} onOpenChange={(open) => !open && setClassifyInjury(null)}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Classification — {classifyInjury?.id_formal}</DialogTitle>
                     </DialogHeader>

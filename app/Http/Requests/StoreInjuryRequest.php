@@ -59,6 +59,7 @@ class StoreInjuryRequest extends FormRequest
             'worker_signature' => ['nullable', 'string'],
             'representative_signature' => ['nullable', 'string'],
             'representative_id' => ['nullable', 'exists:employees,id'],
+            'body_location_image' => ['nullable', 'string'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:10240'],
         ];
