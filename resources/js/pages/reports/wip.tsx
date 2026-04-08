@@ -54,7 +54,7 @@ interface WipProps {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
-    { title: 'WIP Report', href: '/reports/wip' },
+    { title: 'WIP', href: '/reports/wip' },
 ];
 
 const fmt = (value: number) =>
@@ -338,7 +338,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
 
     const exportToExcel = useCallback(async () => {
         const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet('WIP Report');
+        const ws = wb.addWorksheet('WIP');
 
         // Column widths (16 columns)
         ws.columns = [
@@ -453,7 +453,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="WIP Report" />
+            <Head title="WIP" />
 
             <div className="flex flex-col gap-4 p-4">
                 {/* Filters */}

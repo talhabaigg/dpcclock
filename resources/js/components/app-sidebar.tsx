@@ -120,7 +120,7 @@ const finance = [
                 permission: 'cash-forecast.view',
             },
             {
-                name: 'WIP Report',
+                name: 'WIP',
                 url: '/reports/wip',
                 icon: TableProperties,
                 permission: 'reports.wip',
@@ -396,14 +396,23 @@ export function AppSidebar() {
         }
         return !item.permission || permissions.includes(item.permission);
     });
-    const filteredProjects = projects.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredFinance = finance.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredTimesheets = timesheets.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredWorkforce = workforce.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredSafety = safety.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredDocuments = documents.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredReports = reports.filter((item) => !item.permission || permissions.includes(item.permission));
-    const filteredConfiguration = configuration.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filterGroup = (group: typeof projects) =>
+        group.filter((item) => {
+            // Show group if user has permission for any sub-item
+            if (item.subItems?.length) {
+                return item.subItems.some((sub) => !sub.permission || permissions.includes(sub.permission));
+            }
+            return !item.permission || permissions.includes(item.permission);
+        });
+
+    const filteredProjects = filterGroup(projects);
+    const filteredFinance = filterGroup(finance);
+    const filteredTimesheets = filterGroup(timesheets);
+    const filteredWorkforce = filterGroup(workforce);
+    const filteredSafety = filterGroup(safety);
+    const filteredDocuments = filterGroup(documents);
+    const filteredReports = filterGroup(reports);
+    const filteredConfiguration = filterGroup(configuration);
     const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
 
     const allNavGroups = [filteredProjects, filteredFinance, filteredTimesheets, filteredWorkforce, filteredSafety, filteredDocuments, filteredReports, filteredConfiguration];
