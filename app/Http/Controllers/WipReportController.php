@@ -34,6 +34,9 @@ class WipReportController extends Controller
             ->pluck('period_end_date')
             ->map(fn($d) => Carbon::parse($d)->endOfMonth()->format('Y-m-d'))
             ->unique()
+            ->push(Carbon::now()->endOfMonth()->format('Y-m-d'))
+            ->unique()
+            ->sortDesc()
             ->values();
 
         $asOfDate = $monthEnd ? Carbon::parse($monthEnd)->endOfMonth() : Carbon::now()->endOfMonth();
