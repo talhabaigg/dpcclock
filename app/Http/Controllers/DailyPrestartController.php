@@ -259,7 +259,7 @@ class DailyPrestartController extends Controller
         $pdf = $browsershot
             ->noSandbox()
             ->format('A4')
-            ->margins(15, 19, 15, 19, 'mm')
+            ->margins(15, 19, 20, 19, 'mm')
             ->showBackground()
             ->showBrowserHeaderAndFooter()
             ->headerHtml('<div></div>')

@@ -15,6 +15,7 @@ use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
+use App\Http\Controllers\ToolboxTalkController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
@@ -1183,6 +1184,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/daily-prestarts/{dailyPrestart}/unlock', [DailyPrestartController::class, 'unlock'])->name('daily-prestarts.unlock')
             ->middleware('permission:prestarts.edit');
         Route::get('/daily-prestarts/{dailyPrestart}/sign-sheet', [DailyPrestartController::class, 'downloadSignSheet'])->name('daily-prestarts.sign-sheet');
+    });
+
+    // ============================================
+    // TOOLBOX TALKS
+    // ============================================
+    Route::middleware('permission:prestarts.view')->group(function () {
+        Route::get('/toolbox-talks', [ToolboxTalkController::class, 'index'])->name('toolbox-talks.index');
+        Route::get('/toolbox-talks/create', [ToolboxTalkController::class, 'create'])->name('toolbox-talks.create')
+            ->middleware('permission:prestarts.create');
+        Route::post('/toolbox-talks', [ToolboxTalkController::class, 'store'])->name('toolbox-talks.store')
+            ->middleware('permission:prestarts.create');
+        Route::get('/toolbox-talks/{toolboxTalk}', [ToolboxTalkController::class, 'show'])->name('toolbox-talks.show');
+        Route::get('/toolbox-talks/{toolboxTalk}/edit', [ToolboxTalkController::class, 'edit'])->name('toolbox-talks.edit')
+            ->middleware('permission:prestarts.edit');
+        Route::put('/toolbox-talks/{toolboxTalk}', [ToolboxTalkController::class, 'update'])->name('toolbox-talks.update')
+            ->middleware('permission:prestarts.edit');
+        Route::delete('/toolbox-talks/{toolboxTalk}', [ToolboxTalkController::class, 'destroy'])->name('toolbox-talks.destroy')
+            ->middleware('permission:prestarts.delete');
+        Route::post('/toolbox-talks/{toolboxTalk}/lock', [ToolboxTalkController::class, 'lock'])->name('toolbox-talks.lock')
+            ->middleware('permission:prestarts.edit');
+        Route::post('/toolbox-talks/{toolboxTalk}/unlock', [ToolboxTalkController::class, 'unlock'])->name('toolbox-talks.unlock')
+            ->middleware('permission:prestarts.edit');
+        Route::get('/toolbox-talks/{toolboxTalk}/pdf', [ToolboxTalkController::class, 'downloadPdf'])->name('toolbox-talks.pdf');
+        Route::get('/toolbox-talks/{toolboxTalk}/sign-sheet', [ToolboxTalkController::class, 'downloadSignSheet'])->name('toolbox-talks.sign-sheet');
+        Route::get('/toolbox-talks/{toolboxTalk}/upload-signatures', [ToolboxTalkController::class, 'uploadSignatures'])->name('toolbox-talks.upload-signatures')
+            ->middleware('permission:prestarts.edit');
+        Route::post('/toolbox-talks/{toolboxTalk}/upload-signatures', [ToolboxTalkController::class, 'storeSignatures'])->name('toolbox-talks.store-signatures')
+            ->middleware('permission:prestarts.edit');
     });
 
     // ============================================

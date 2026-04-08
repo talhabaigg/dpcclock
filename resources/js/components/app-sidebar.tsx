@@ -228,6 +228,12 @@ const safety = [
                 permission: 'prestarts.view',
             },
             {
+                name: 'Toolbox Talks',
+                url: '/toolbox-talks',
+                icon: HardHat,
+                permission: 'prestarts.view',
+            },
+            {
                 name: 'Absentees',
                 url: '/absent',
                 icon: UserX,

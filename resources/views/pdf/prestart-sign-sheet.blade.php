@@ -12,10 +12,6 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        @page {
-            margin: 15mm 19mm 15mm 19mm;
-        }
-
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
             font-size: 11px;
