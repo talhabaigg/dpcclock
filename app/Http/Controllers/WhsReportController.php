@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Clock;
+use App\Models\GlTransactionDetail;
 use App\Models\Injury;
+use App\Models\JobCostDetail;
 use App\Models\Location;
 use App\Models\WhsReport;
 use Illuminate\Http\Request;
@@ -33,12 +35,63 @@ class WhsReportController extends Controller
         $prevYear = $month === 1 ? $year - 1 : $year;
         $previousReport = WhsReport::where('year', $prevYear)->where('month', $prevMonth)->first();
 
+        // Claims overview from injuries for FY start to end of selected month
+        $fyStartYear = $month >= 7 ? $year : $year - 1;
+        $fyStart = "{$fyStartYear}-07-01";
+        $monthEnd = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
+        $claimsInjuries = Injury::with('location.parentLocation.parentLocation')
+            ->where('work_cover_claim', true)
+            ->whereBetween('occurred_at', [$fyStart, $monthEnd])
+            ->get();
+
+        $claimsOverview = $claimsInjuries->groupBy(function ($injury) {
+            $location = $injury->location;
+            if (! $location) {
+                return 'Others';
+            }
+            return $location->parentLocation?->parentLocation?->name ?? $location->parentLocation?->name ?? $location->name;
+        })->map(function ($injuries, $entity) {
+            return [
+                'entity' => $entity,
+                'total_lodged' => $injuries->count(),
+                'active_statutory' => $injuries->where('claim_type', 'statutory')->where('claim_status', 'active')->count(),
+                'active_common_law' => $injuries->where('claim_type', 'common_law')->where('claim_status', 'active')->count(),
+                'denied' => $injuries->where('claim_status', 'denied')->count(),
+            ];
+        })->values()->all();
+
+        // Training job cost for the month (location eh_id 1249164 = TRAINING)
+        $trainingCost = (float) JobCostDetail::where('job_number', 'TRAINING')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->sum('amount');
+
+        // CSQ payments from GL transactions (income account 7002 = Misc. Income)
+        $csqGlPayments = GlTransactionDetail::where('account', '7002')
+            ->where('description', 'like', '%CSQ%')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->orderBy('transaction_date')
+            ->get()
+            ->map(fn ($gl) => [
+                'reference' => $gl->reference_document_number ?? '',
+                'date' => $gl->transaction_date?->format('d/m/Y') ?? '',
+                'description' => $gl->description ?? '',
+                'total' => round((float) $gl->credit, 2),
+            ])
+            ->values()
+            ->all();
+
         return Inertia::render('reports/whs-report-edit', [
             'report' => $report,
             'previousReport' => $previousReport,
             'year' => $year,
             'month' => $month,
             'users' => \App\Models\User::orderBy('name')->get(['id', 'name']),
+            'claimsOverview' => $claimsOverview,
+            'fyStartYear' => $fyStartYear,
+            'trainingCost' => round($trainingCost, 2),
+            'csqGlPayments' => $csqGlPayments,
         ]);
     }
 
@@ -56,18 +109,20 @@ class WhsReportController extends Controller
             'apprentices.*.year_level' => 'nullable|string',
             'apprentices.*.completion_date' => 'nullable|string',
             'apprentices.*.comments' => 'nullable|string',
-            'csq_payments' => 'nullable|array',
-            'csq_payments.*.reference' => 'nullable|string',
-            'csq_payments.*.date' => 'nullable|string',
-            'csq_payments.*.description' => 'nullable|string',
-            'csq_payments.*.total' => 'nullable|numeric',
             'training_summary' => 'nullable|string',
             'bottom_action_points' => 'nullable|array',
             'bottom_action_points.*.action' => 'required|string',
             'bottom_action_points.*.by_who' => 'nullable|string',
             'bottom_action_points.*.by_when' => 'nullable|string',
-            'claims_overview' => 'nullable|array',
         ]);
+
+        $allowedTags = '<p><br><strong><em><u><h2><h3><ul><ol><li>';
+        if (!empty($validated['key_issues'])) {
+            $validated['key_issues'] = strip_tags($validated['key_issues'], $allowedTags);
+        }
+        if (!empty($validated['training_summary'])) {
+            $validated['training_summary'] = strip_tags($validated['training_summary'], $allowedTags);
+        }
 
         $validated['updated_by'] = auth()->id();
         $whsReport->update($validated);
@@ -120,11 +175,69 @@ class WhsReportController extends Controller
         // Monthly injury chart data (all years, grouped by month)
         $chartData = $this->getMonthlyChartData();
 
+        // Claims overview (FY start to end of selected month)
+        $fyStart = "{$fyStartYear}-07-01";
+        $monthEnd = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
+        $claimsInjuries = Injury::with('location.parentLocation.parentLocation')
+            ->where('work_cover_claim', true)
+            ->whereBetween('occurred_at', [$fyStart, $monthEnd])
+            ->get();
+
+        $claimsOverview = $claimsInjuries->groupBy(function ($injury) {
+            $location = $injury->location;
+            if (! $location) {
+                return 'Others';
+            }
+            return $location->parentLocation?->parentLocation?->name ?? $location->parentLocation?->name ?? $location->name;
+        })->map(function ($injuries, $entity) {
+            return [
+                'entity' => $entity,
+                'total_lodged' => $injuries->count(),
+                'active_statutory' => $injuries->where('claim_type', 'statutory')->where('claim_status', 'active')->count(),
+                'active_common_law' => $injuries->where('claim_type', 'common_law')->where('claim_status', 'active')->count(),
+                'denied' => $injuries->where('claim_status', 'denied')->count(),
+            ];
+        })->values()->all();
+
         // Claims summary (active claims from injuries)
-        $claims = Injury::with(['employee', 'location.projectGroup'])
+        $claims = Injury::with(['employee', 'location.projectGroup', 'location.parentLocation.parentLocation'])
             ->where('work_cover_claim', true)
             ->forFinancialYear($fyStartYear)
             ->get();
+
+        // CSQ payments from GL
+        $csqGlPayments = GlTransactionDetail::where('account', '7002')
+            ->where('description', 'like', '%CSQ%')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->orderBy('transaction_date')
+            ->get()
+            ->map(fn ($gl) => [
+                'reference' => $gl->reference_document_number ?? '',
+                'date' => $gl->transaction_date?->format('d/m/Y') ?? '',
+                'description' => $gl->description ?? '',
+                'total' => round((float) $gl->credit, 2),
+            ])
+            ->values()
+            ->all();
+
+        // LTIFR comparison with previous years (keyed by FY end year, e.g. 2026 = FY 2025/2026)
+        $historicalLtifr = [
+            2021 => 9.93,
+            2022 => 12.86,
+            2023 => 12.84,
+            2024 => 10.62,
+            2025 => 60.07,
+        ];
+        $firstRealEndYear = 2026;
+        $currentFyEndYear = $fyStartYear + 1;
+        $ltifrComparison = $historicalLtifr;
+        for ($endYr = $firstRealEndYear; $endYr <= $currentFyEndYear; $endYr++) {
+            $startYr = $endYr - 1;
+            $ltiCount = Injury::forFinancialYear($startYr)->where('report_type', 'lti')->count();
+            $totalHours = (float) array_sum($this->getManHoursByProject($startYr, $endYr));
+            $ltifrComparison[$endYr] = $totalHours > 0 ? round(($ltiCount / $totalHours) * 1_000_000, 2) : 0;
+        }
 
         $monthLabel = date('F', mktime(0, 0, 0, $month, 1));
         $reportId = 'WHS-R-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . substr($year, 2);
@@ -150,7 +263,13 @@ class WhsReportController extends Controller
             'fyRows' => $fyRows,
             'fyTotals' => $fyTotals,
             'chartData' => $chartData,
+            'claimsOverview' => $claimsOverview,
             'claims' => $claims,
+            'csqGlPayments' => $csqGlPayments,
+            'ltifrComparison' => $ltifrComparison,
+            'fyStartYear' => $fyStartYear,
+            'currentFyEndYear' => $currentFyEndYear,
+            'firstRealEndYear' => $firstRealEndYear,
             'logoBase64' => $logoBase64,
         ])->render();
 
@@ -204,7 +323,7 @@ class WhsReportController extends Controller
 
         return response($pdfContent, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
     }
 

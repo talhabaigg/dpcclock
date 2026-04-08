@@ -5,6 +5,7 @@ use App\Jobs\LoadApPostedInvoices;
 use App\Jobs\LoadApPurchaseOrders;
 use App\Jobs\LoadArPostedInvoices;
 use App\Jobs\LoadArProgressBillingSummaries;
+use App\Jobs\LoadGlTransactionDetails;
 use App\Jobs\LoadJobCostData;
 use App\Jobs\LoadJobReportByCostItemAndCostTypes;
 use App\Jobs\LoadJobSummaries;
@@ -59,6 +60,10 @@ Schedule::job(LoadArProgressBillingSummaries::class)
     ->withoutOverlapping();
 
 Schedule::job(LoadArPostedInvoices::class)
+    ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
+    ->withoutOverlapping();
+
+Schedule::job(LoadGlTransactionDetails::class)
     ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
     ->withoutOverlapping();
 

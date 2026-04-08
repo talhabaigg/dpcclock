@@ -20,6 +20,20 @@ class InjuryController extends Controller
     {
         $query = Injury::with(['employee', 'location', 'representative', 'creator']);
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('id_formal', 'like', "%{$search}%")
+                  ->orWhereHas('employee', function ($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('preferred_name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('location', function ($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhere('incident', 'like', "%{$search}%");
+            });
+        }
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->location_id);
         }
@@ -35,6 +49,36 @@ class InjuryController extends Controller
         if ($request->filled('work_cover_claim')) {
             $query->where('work_cover_claim', $request->boolean('work_cover_claim'));
         }
+        if ($request->filled('claim_type')) {
+            $query->where('claim_type', $request->claim_type);
+        }
+        if ($request->filled('claim_status')) {
+            $query->where('claim_status', $request->claim_status);
+        }
+        if ($request->filled('fy')) {
+            $fyStartYear = (int) $request->fy;
+            $fyStart = "{$fyStartYear}-07-01";
+            if ($request->filled('fy_month') && $request->filled('fy_year')) {
+                $m = (int) $request->fy_month;
+                $y = (int) $request->fy_year;
+                $fyEnd = date('Y-m-t', mktime(0, 0, 0, $m, 1, $y));
+            } else {
+                $fyEnd = ($fyStartYear + 1) . '-06-30';
+            }
+            $query->whereBetween('occurred_at', [$fyStart, $fyEnd]);
+        }
+        if ($request->filled('entity')) {
+            $entity = $request->entity;
+            $query->whereHas('location', function ($q) use ($entity) {
+                $q->where('name', $entity)
+                  ->orWhereHas('parentLocation', function ($q2) use ($entity) {
+                      $q2->where('name', $entity)
+                        ->orWhereHas('parentLocation', function ($q3) use ($entity) {
+                            $q3->where('name', $entity);
+                        });
+                  });
+            });
+        }
         if ($request->filled('status')) {
             if ($request->status === 'locked') {
                 $query->whereNotNull('locked_at');
@@ -47,7 +91,7 @@ class InjuryController extends Controller
 
         return Inertia::render('injury-register/index', [
             'injuries' => $injuries,
-            'filters' => $request->only(['location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'status']),
+            'filters' => $request->only(['search', 'location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'claim_type', 'claim_status', 'fy', 'fy_month', 'fy_year', 'entity', 'status']),
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
             'employees' => Employee::orderBy('name')->get(['id', 'name', 'preferred_name']),
             'incidentOptions' => Injury::INCIDENT_OPTIONS,
@@ -183,6 +227,14 @@ class InjuryController extends Controller
             'work_cover_claim' => ['required', 'boolean'],
             'work_days_missed' => ['nullable', 'integer', 'min:0'],
             'report_type' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::REPORT_TYPE_OPTIONS))],
+            'claim_active' => ['nullable', 'boolean'],
+            'claim_type' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::CLAIM_TYPE_OPTIONS))],
+            'claim_status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::CLAIM_STATUS_OPTIONS))],
+            'capacity' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::CAPACITY_OPTIONS))],
+            'employment_status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::EMPLOYMENT_STATUS_OPTIONS))],
+            'claim_cost' => ['nullable', 'numeric', 'min:0'],
+            'days_suitable_duties' => ['nullable', 'integer', 'min:0'],
+            'medical_expenses' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $injury->update($validated);
@@ -353,6 +405,10 @@ class InjuryController extends Controller
             'agencies' => Injury::AGENCY_OPTIONS,
             'contributions' => Injury::CONTRIBUTION_OPTIONS,
             'correctiveActions' => Injury::CORRECTIVE_ACTION_OPTIONS,
+            'claimTypes' => Injury::CLAIM_TYPE_OPTIONS,
+            'claimStatuses' => Injury::CLAIM_STATUS_OPTIONS,
+            'capacities' => Injury::CAPACITY_OPTIONS,
+            'employmentStatuses' => Injury::EMPLOYMENT_STATUS_OPTIONS,
         ];
     }
 }

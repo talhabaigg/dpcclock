@@ -15,6 +15,14 @@ export interface Injury {
     description: string | null;
     emergency_services: boolean;
     work_cover_claim: boolean;
+    claim_active: boolean;
+    claim_type: string | null;
+    claim_status: string | null;
+    capacity: string | null;
+    employment_status: string | null;
+    claim_cost: number;
+    days_suitable_duties: number;
+    medical_expenses: number;
     treatment: boolean;
     treatment_at: string | null;
     treatment_provider: string | null;
@@ -86,9 +94,14 @@ export interface InjuryFormOptions {
     agencies: Record<string, string>;
     contributions: Record<string, string>;
     correctiveActions: Record<string, string>;
+    claimTypes: Record<string, string>;
+    claimStatuses: Record<string, string>;
+    capacities: Record<string, string>;
+    employmentStatuses: Record<string, string>;
 }
 
 export interface InjuryFilters {
+    search?: string;
     location_id?: string;
     employee_id?: string;
     incident?: string;

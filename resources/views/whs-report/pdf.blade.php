@@ -27,8 +27,15 @@
     .data-table .text-center { text-align: center; }
     .data-table .text-right { text-align: right; }
 
-    .claims-table th { background: #D32F2F; color: #fff; font-weight: 700; font-size: 7.5px; }
+    .claims-table th { background: #1a1a2e; color: #fff; font-weight: 700; font-size: 7.5px; text-transform: uppercase; padding: 5px 6px; }
     .claims-table td { border-bottom: 1px solid #e5e5e5; font-size: 8px; }
+    .claims-table .inactive-row td { color: #999; background: #f5f5f5; }
+    .claims-table .text-center { text-align: center; }
+    .claims-table .text-right { text-align: right; }
+    .claims-table .totals-row td { background: #e2e8f0; font-weight: 700; border-top: 2px solid #334155; }
+
+    .check-box { display: inline-block; width: 10px; height: 10px; border: 1px solid #999; text-align: center; line-height: 10px; font-size: 8px; }
+    .check-box.checked { background: #1a1a2e; border-color: #1a1a2e; color: #fff; }
 
     .yellow-table th { background: #F9A825; color: #000; font-weight: 700; font-size: 8px; padding: 5px 6px; }
     .yellow-table td { border-bottom: 1px solid #e5e5e5; font-size: 8px; }
@@ -41,6 +48,13 @@
     .ltifr-table .highlight { background: #4CAF50; color: #fff; }
 
     .page-break { page-break-before: always; }
+
+    .rich-content ul { list-style-type: disc; padding-left: 1.5em; margin: 4px 0; }
+    .rich-content ol { list-style-type: decimal; padding-left: 1.5em; margin: 4px 0; }
+    .rich-content li { margin: 2px 0; font-size: 8.5px; line-height: 1.5; }
+    .rich-content p { font-size: 8.5px; line-height: 1.5; margin: 2px 0; }
+    .rich-content h2 { font-size: 10px; font-weight: 700; margin: 6px 0 3px; }
+    .rich-content h3 { font-size: 9px; font-weight: 700; margin: 4px 0 2px; }
 
     .key-issues-box {
         border: 2px solid #0077B6; padding: 8px 10px; margin-bottom: 10px;
@@ -123,8 +137,6 @@
 {{-- FY Performance --}}
 @php
     $fyStart = $month >= 7 ? $year : $year - 1;
-    $fyEnd = $fyStart + 1;
-    $fyMonthRange = date('F', mktime(0,0,0,7,1)) . ' ' . $fyStart . ' - ' . date('F', mktime(0,0,0,$month,1)) . ' ' . $year;
 @endphp
 <h2>WHS PERFORMANCE: JULY {{ $fyStart }} &ndash; {{ strtoupper($monthLabel) }} {{ $year }}</h2>
 <table class="data-table">
@@ -180,16 +192,48 @@
     </tbody>
 </table>
 
-<p class="note">&loz; LTIFR = Lost Time Injuries per million hours worked</p>
-
 <p class="note">&loz; LTIFR = Lost Time Injuries per million hours worked. Data is from July to the report month only (SWCP).</p>
+
+{{-- LTIFR Comparison --}}
+<h2 style="margin-top:16px;">LTIFR COMPARISON WITH PREVIOUS YEARS</h2>
+<table style="margin-bottom:4px;width:auto;">
+    <thead>
+        <tr>
+            @foreach($ltifrComparison as $yr => $val)
+            <th style="background:{{ $yr === $currentFyEndYear ? '#16a34a' : '#1a1a2e' }};color:#fff;font-weight:700;font-size:8px;padding:5px 10px;text-align:center;">
+                {{ $yr >= $firstRealEndYear && $yr < $currentFyEndYear ? '*' : '' }}{{ $yr }}
+            </th>
+            @endforeach
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            @foreach($ltifrComparison as $yr => $val)
+            <td style="text-align:center;padding:5px 10px;font-size:9px;font-weight:{{ $yr === $currentFyEndYear ? '700' : '400' }};border-bottom:1px solid #e5e5e5;">
+                {{ number_format($val, 2) }}
+            </td>
+            @endforeach
+        </tr>
+    </tbody>
+</table>
+@php
+    $partialYears = [];
+    foreach ($ltifrComparison as $yr => $v) {
+        if ($yr >= $firstRealEndYear && $yr < $currentFyEndYear) {
+            $partialYears[] = $yr;
+        }
+    }
+@endphp
+@if(count($partialYears) > 0)
+<p class="note" style="display:inline-block;"><strong>NOTE:</strong> LTIFR data for {{ implode(', ', $partialYears) }} is from July to December only (SWCP). The data is not based off a full 12 month period (as per previous years) or full project duration.</p>
+@endif
 
 {{-- ==================== PAGE 2 - CLAIMS ==================== --}}
 <div class="page-break"></div>
 <h1>WHS MONTHLY REPORT: {{ $monthLabel }} {{ $year }}</h1>
 
 <h2>CLAIMS OVERVIEW</h2>
-@if($report && $report->claims_overview)
+@if(count($claimsOverview) > 0)
 <table class="data-table">
     <thead>
         <tr>
@@ -198,24 +242,22 @@
             <th class="text-center">Total Active Statutory Claims</th>
             <th class="text-center">Total Active Common Law Claims</th>
             <th class="text-center">Claims Denied</th>
-            <th>Comments</th>
         </tr>
     </thead>
     <tbody>
-        @foreach($report->claims_overview as $entity)
+        @foreach($claimsOverview as $entity)
         <tr>
             <td style="font-weight:600;">{{ $entity['entity'] ?? '' }}</td>
             <td class="text-center">{{ $entity['total_lodged'] ?? 0 }}</td>
             <td class="text-center">{{ $entity['active_statutory'] ?? 0 }}</td>
             <td class="text-center">{{ $entity['active_common_law'] ?? 0 }}</td>
             <td class="text-center">{{ $entity['denied'] ?? 0 }}</td>
-            <td>{{ $entity['comments'] ?? '' }}</td>
         </tr>
         @endforeach
     </tbody>
 </table>
 @else
-<p style="color:#999;margin-bottom:10px;">No claims overview data entered.</p>
+<p style="color:#999;margin-bottom:10px;">No claims lodged for the current financial year.</p>
 @endif
 
 <h2>CLAIMS SUMMARY</h2>
@@ -225,7 +267,8 @@
         <tr>
             <th>Name</th>
             <th>DOI</th>
-            <th>Active Y/N</th>
+            <th>Active</th>
+            <th>Company</th>
             <th>Project</th>
             <th>Injury</th>
             <th>Cause of Injury</th>
@@ -243,30 +286,34 @@
             $mechLabels = collect($claim->mechanisms ?? [])->map(fn($k) => \App\Models\Injury::MECHANISM_OPTIONS[$k] ?? $k)->implode(', ');
             $loc = $claim->location;
             $projectName = $loc ? ($loc->project_group_id ? ($loc->projectGroup?->name ?? $loc->name) : $loc->name) : '';
+            $company = $loc?->parentLocation?->parentLocation?->name ?? $loc?->parentLocation?->name ?? '';
+            $isActive = $claim->claim_active;
         @endphp
-        <tr>
+        <tr class="{{ !$isActive ? 'inactive-row' : '' }}">
             <td>{{ $claim->employee?->preferred_name ?? $claim->employee?->name ?? $claim->employee_name ?? '' }}</td>
             <td>{{ $claim->occurred_at?->format('d/m/Y') }}</td>
-            <td>{{ $claim->claim_active ? 'YES' : 'NO' }}</td>
+            <td>{{ $isActive ? 'YES' : 'NO' }}</td>
+            <td>{{ $company }}</td>
             <td>{{ $projectName }}</td>
             <td>{{ $natureLabels }}</td>
             <td>{{ $mechLabels }}</td>
-            <td class="text-center">{!! $claim->report_type === 'mti' ? '&#9632;' : '' !!}</td>
-            <td class="text-center">{!! $claim->report_type === 'lti' ? '&#9632;' : '' !!}</td>
+            <td class="text-center"><span class="check-box {{ $claim->report_type === 'mti' ? 'checked' : '' }}">{!! $claim->report_type === 'mti' ? '&#10003;' : '&nbsp;' !!}</span></td>
+            <td class="text-center"><span class="check-box {{ $claim->report_type === 'lti' ? 'checked' : '' }}">{!! $claim->report_type === 'lti' ? '&#10003;' : '&nbsp;' !!}</span></td>
             <td>{{ $claim->capacity }}</td>
             <td>{{ $claim->employment_status }}</td>
-            <td class="text-right">${{ number_format($claim->claim_cost, 2) }}</td>
+            <td class="text-right" style="color: #D32F2F; font-weight: 600;">${{ number_format($claim->claim_cost, 2) }}</td>
         </tr>
         @endforeach
         <tr class="totals-row">
-            <td colspan="10" style="text-align:right;font-weight:700;">TOTAL =</td>
-            <td class="text-right" style="font-weight:700;">${{ number_format($claims->sum('claim_cost'), 2) }}</td>
+            <td colspan="11" style="text-align:right;font-weight:700;">TOTAL =</td>
+            <td class="text-right" style="font-weight:700;color:#D32F2F;">${{ number_format($claims->sum('claim_cost'), 2) }}</td>
         </tr>
     </tbody>
 </table>
 @else
 <p style="color:#999;margin-bottom:10px;">No WorkCover claims for this period.</p>
 @endif
+<p class="note" style="margin-top:6px;"><strong>NOTE:</strong> Claim does not impact WCQ Premium.</p>
 
 {{-- ==================== PAGE 3 - ISSUES & CHART ==================== --}}
 <div class="page-break"></div>
@@ -275,8 +322,7 @@
 <h2>KEY ISSUES IDENTIFIED</h2>
 @if($report && $report->key_issues)
 <div class="key-issues-box">
-    <h3>WHS Reset</h3>
-    <p>{!! nl2br(e($report->key_issues)) !!}</p>
+    <div class="rich-content">{!! $report->key_issues !!}</div>
 </div>
 @else
 <p style="color:#999;margin-bottom:10px;">No key issues entered.</p>
@@ -296,7 +342,7 @@
         @foreach($report->action_points as $ap)
         <tr>
             <td>{{ $ap['action'] ?? '' }}</td>
-            <td>{{ $ap['by_who'] ?? '' }}</td>
+            <td>{{ str_replace('|', ', ', $ap['by_who'] ?? '') }}</td>
             <td>{{ $ap['by_when'] ?? '' }}</td>
         </tr>
         @endforeach
@@ -387,7 +433,7 @@
 <p style="color:#999;margin-bottom:10px;">No apprentice data entered.</p>
 @endif
 
-@if($report && $report->csq_payments && count($report->csq_payments) > 0)
+@if(count($csqGlPayments) > 0)
 <h2>CONSTRUCTION SKILLS QUEENSLAND (CSQ) PAYMENTS RECEIVED SUMMARY</h2>
 <table class="yellow-table">
     <thead>
@@ -395,11 +441,11 @@
             <th>Reference</th>
             <th>Date</th>
             <th>Description</th>
-            <th class="text-right">Total Funding Received incl GST</th>
+            <th class="text-right">Total Funding Received excl GST</th>
         </tr>
     </thead>
     <tbody>
-        @foreach($report->csq_payments as $pay)
+        @foreach($csqGlPayments as $pay)
         <tr>
             <td>{{ $pay['reference'] ?? '' }}</td>
             <td>{{ $pay['date'] ?? '' }}</td>
@@ -407,14 +453,18 @@
             <td class="text-right">${{ number_format($pay['total'] ?? 0, 2) }}</td>
         </tr>
         @endforeach
+        <tr class="totals-row">
+            <td colspan="3" style="text-align:right;font-weight:700;">TOTAL =</td>
+            <td class="text-right" style="font-weight:700;">${{ number_format(collect($csqGlPayments)->sum('total'), 2) }}</td>
+        </tr>
     </tbody>
 </table>
 @endif
 
 @if($report && $report->training_summary)
 <h2>TRAINING SUMMARY</h2>
-<div style="padding:6px 10px;border:1px solid #F9A825;background:#FFF8E1;">
-    {!! nl2br(e($report->training_summary)) !!}
+<div class="rich-content" style="padding:6px 10px;border:1px solid #F9A825;background:#FFF8E1;">
+    {!! $report->training_summary !!}
 </div>
 @endif
 
@@ -432,7 +482,7 @@
         @foreach($report->bottom_action_points as $ap)
         <tr>
             <td>{{ $ap['action'] ?? '' }}</td>
-            <td>{{ $ap['by_who'] ?? '' }}</td>
+            <td>{{ str_replace('|', ', ', $ap['by_who'] ?? '') }}</td>
             <td>{{ $ap['by_when'] ?? '' }}</td>
         </tr>
         @endforeach

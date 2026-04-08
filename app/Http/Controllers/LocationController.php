@@ -1066,6 +1066,7 @@ class LocationController extends Controller
             'ap_posted_invoice_lines' => ['label' => 'AP Posted Invoice Lines', 'class' => \App\Jobs\LoadApPostedInvoiceLines::class],
             'job_vendor_commitments' => ['label' => 'Job Vendor Commitments', 'class' => \App\Jobs\LoadJobVendorCommitments::class],
             'ap_purchase_orders' => ['label' => 'AP Purchase Orders', 'class' => \App\Jobs\LoadApPurchaseOrders::class],
+            'gl_transaction_details' => ['label' => 'GL Transaction Details', 'class' => \App\Jobs\LoadGlTransactionDetails::class],
             'variations' => ['label' => 'Variations (Change Orders)', 'class' => null],
         ];
 

@@ -1,22 +1,22 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import RichTextEditor from '@/components/ui/rich-text-editor';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ClipboardCopy, Download, Loader2, Plus, Save, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronLeft, ChevronRight, ClipboardCopy, FileText, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface ActionPoint { action: string; by_who: string; by_when: string }
 interface Apprentice { name: string; project: string; year_level: string; completion_date: string; comments: string }
 interface CsqPayment { reference: string; date: string; description: string; total: number }
-interface ClaimOverview { entity: string; total_lodged: number; active_statutory: number; active_common_law: number; denied: number; comments: string }
+interface ClaimOverview { entity: string; total_lodged: number; active_statutory: number; active_common_law: number; denied: number }
 
 interface WhsReport {
     id: number;
@@ -25,10 +25,8 @@ interface WhsReport {
     key_issues: string | null;
     action_points: ActionPoint[] | null;
     apprentices: Apprentice[] | null;
-    csq_payments: CsqPayment[] | null;
     training_summary: string | null;
     bottom_action_points: ActionPoint[] | null;
-    claims_overview: ClaimOverview[] | null;
 }
 
 interface SimpleUser {
@@ -42,6 +40,10 @@ interface Props {
     year: number;
     month: number;
     users: SimpleUser[];
+    claimsOverview: ClaimOverview[];
+    fyStartYear: number;
+    trainingCost: number;
+    csqGlPayments: CsqPayment[];
 }
 
 const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -53,34 +55,69 @@ function getInitials(name: string): string {
 }
 
 function MultiUserSelect({ value, users, onChange }: { value: string; users: SimpleUser[]; onChange: (v: string) => void }) {
-    const selected = value ? value.split(', ').filter(Boolean) : [];
+    const [search, setSearch] = useState('');
+    const selected = useMemo(() => value ? value.split('|').filter(Boolean) : [], [value]);
 
-    const toggle = (initials: string) => {
-        const next = selected.includes(initials)
-            ? selected.filter(s => s !== initials)
-            : [...selected, initials];
-        onChange(next.join(', '));
+    const toggle = (name: string) => {
+        const next = selected.includes(name)
+            ? selected.filter(s => s !== name)
+            : [...selected, name];
+        onChange(next.join('|'));
     };
+
+    const filtered = useMemo(() => {
+        if (!search) return users;
+        const q = search.toLowerCase();
+        return users.filter(u => u.name.toLowerCase().includes(q));
+    }, [users, search]);
+
+    const selectedUsers = useMemo(() => users.filter(u => selected.includes(u.name)), [users, selected]);
 
     return (
         <Popover>
             <PopoverTrigger asChild>
-                <Button variant="outline" type="button" className="w-44 justify-start font-normal truncate">
-                    {selected.length > 0 ? selected.join(', ') : <span className="text-muted-foreground">By who</span>}
+                <Button variant="outline" type="button" className="w-44 justify-start font-normal px-2">
+                    {selectedUsers.length > 0 ? (
+                        <div className="flex -space-x-1.5 overflow-hidden">
+                            {selectedUsers.slice(0, 4).map(u => (
+                                <Avatar key={u.id} className="size-6 border-2 border-background">
+                                    <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+                                </Avatar>
+                            ))}
+                            {selectedUsers.length > 4 && (
+                                <Avatar className="size-6 border-2 border-background">
+                                    <AvatarFallback className="text-[10px]">+{selectedUsers.length - 4}</AvatarFallback>
+                                </Avatar>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="text-muted-foreground">By who</span>
+                    )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-52 p-2" align="start">
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                    {users.map(u => {
-                        const initials = getInitials(u.name);
-                        return (
-                            <label key={u.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted cursor-pointer">
-                                <Checkbox checked={selected.includes(initials)} onCheckedChange={() => toggle(initials)} />
-                                <span>{u.name}</span>
-                                <span className="ml-auto text-xs text-muted-foreground">{initials}</span>
-                            </label>
-                        );
-                    })}
+            <PopoverContent className="w-60 p-2" align="start">
+                <div className="relative mb-2">
+                    <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        className="h-8 pl-7 text-sm"
+                        placeholder="Search..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                    {filtered.map(u => (
+                        <label key={u.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted cursor-pointer">
+                            <Checkbox checked={selected.includes(u.name)} onCheckedChange={() => toggle(u.name)} />
+                            <Avatar className="size-5">
+                                <AvatarFallback className="text-[9px]">{getInitials(u.name)}</AvatarFallback>
+                            </Avatar>
+                            <span className="truncate">{u.name}</span>
+                        </label>
+                    ))}
+                    {filtered.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-2">No users found</p>
+                    )}
                 </div>
             </PopoverContent>
         </Popover>
@@ -88,15 +125,14 @@ function MultiUserSelect({ value, users, onChange }: { value: string; users: Sim
 }
 const byWhenYears = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() + i - 1));
 
-function ActionPointsSection({ items, users, onUpdate, onAdd, onRemove }: {
+function ActionPointsSection({ items, users, onUpdate, onRemove }: {
     items: ActionPoint[];
     users: SimpleUser[];
     onUpdate: (index: number, field: keyof ActionPoint, value: string) => void;
-    onAdd: () => void;
     onRemove: (index: number) => void;
 }) {
-    const parseByWhen = (val: string) => {
-        const parts = val.split(' ');
+    const parseByWhen = (val: string | null | undefined) => {
+        const parts = (val ?? '').split(' ');
         return { month: parts[0] ?? '', year: parts[1] ?? '' };
     };
     const setByWhen = (index: number, month: string, year: string) => {
@@ -105,16 +141,11 @@ function ActionPointsSection({ items, users, onUpdate, onAdd, onRemove }: {
 
     return (
         <div className="space-y-3">
-            <div className="flex justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-                    <Plus className="mr-1 h-3 w-3" /> Add
-                </Button>
-            </div>
             {items.map((ap, i) => {
                 const bw = parseByWhen(ap.by_when);
                 return (
                     <div key={i} className="flex gap-2 items-start">
-                        <Input className="flex-1" placeholder="Action..." value={ap.action} onChange={e => onUpdate(i, 'action', e.target.value)} />
+                        <Input className="flex-1" placeholder="Action..." value={ap.action ?? ''} onChange={e => onUpdate(i, 'action', e.target.value)} />
                         <MultiUserSelect value={ap.by_who} users={users} onChange={v => onUpdate(i, 'by_who', v)} />
                         <Select value={bw.month || undefined} onValueChange={v => setByWhen(i, v, bw.year)}>
                             <SelectTrigger className="w-24">
@@ -144,7 +175,7 @@ function ActionPointsSection({ items, users, onUpdate, onAdd, onRemove }: {
     );
 }
 
-export default function WhsReportEdit({ report, previousReport, year, month, users }: Props) {
+export default function WhsReportEdit({ report, previousReport, year, month, users, claimsOverview, fyStartYear, trainingCost, csqGlPayments }: Props) {
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props as { flash: { success?: string; error?: string } };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -157,15 +188,8 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
     const [keyIssues, setKeyIssues] = useState(report.key_issues ?? '');
     const [actionPoints, setActionPoints] = useState<ActionPoint[]>(report.action_points ?? []);
     const [apprentices, setApprentices] = useState<Apprentice[]>(report.apprentices ?? []);
-    const [csqPayments, setCsqPayments] = useState<CsqPayment[]>(report.csq_payments ?? []);
     const [trainingSummary, setTrainingSummary] = useState(report.training_summary ?? '');
     const [bottomActionPoints, setBottomActionPoints] = useState<ActionPoint[]>(report.bottom_action_points ?? []);
-    const [claimsOverview, setClaimsOverview] = useState<ClaimOverview[]>(
-        report.claims_overview ?? [
-            { entity: 'GrLine', total_lodged: 0, active_statutory: 0, active_common_law: 0, denied: 0, comments: '' },
-            { entity: 'SWCPE', total_lodged: 0, active_statutory: 0, active_common_law: 0, denied: 0, comments: '' },
-        ]
-    );
 
     const copyFromPrevious = () => {
         if (!previousReport) return;
@@ -173,13 +197,8 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
         setKeyIssues(previousReport.key_issues ?? '');
         setActionPoints(previousReport.action_points ?? []);
         setApprentices(previousReport.apprentices ?? []);
-        setCsqPayments(previousReport.csq_payments ?? []);
         setTrainingSummary(previousReport.training_summary ?? '');
         setBottomActionPoints(previousReport.bottom_action_points ?? []);
-        setClaimsOverview(previousReport.claims_overview ?? [
-            { entity: 'GrLine', total_lodged: 0, active_statutory: 0, active_common_law: 0, denied: 0, comments: '' },
-            { entity: 'SWCPE', total_lodged: 0, active_statutory: 0, active_common_law: 0, denied: 0, comments: '' },
-        ]);
     };
 
     const handleSave = () => {
@@ -188,10 +207,8 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
             key_issues: keyIssues,
             action_points: actionPoints,
             apprentices,
-            csq_payments: csqPayments,
             training_summary: trainingSummary,
             bottom_action_points: bottomActionPoints,
-            claims_overview: claimsOverview,
         }, {
             preserveScroll: true,
             onFinish: () => setSaving(false),
@@ -216,7 +233,23 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                 {flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-semibold">WHS Monthly Report: {months[month - 1]} {year}</h1>
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                            const prevMonth = month === 1 ? 12 : month - 1;
+                            const prevYear = month === 1 ? year - 1 : year;
+                            router.get(`/reports/whs-report?year=${prevYear}&month=${prevMonth}`);
+                        }}>
+                            <ChevronLeft className="h-5 w-5" />
+                        </Button>
+                        <h1 className="text-2xl font-semibold">WHS Monthly Report: {months[month - 1]} {year}</h1>
+                        <Button variant="ghost" size="icon" onClick={() => {
+                            const nextMonth = month === 12 ? 1 : month + 1;
+                            const nextYear = month === 12 ? year + 1 : year;
+                            router.get(`/reports/whs-report?year=${nextYear}&month=${nextMonth}`);
+                        }}>
+                            <ChevronRight className="h-5 w-5" />
+                        </Button>
+                    </div>
                     <div className="flex gap-2">
                         {previousReport && (
                             <Button variant="outline" onClick={copyFromPrevious}>
@@ -225,8 +258,8 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                             </Button>
                         )}
                         <Button variant="outline" asChild>
-                            <a href={`/reports/whs-report/pdf?year=${year}&month=${month}`}>
-                                <Download className="mr-1 h-4 w-4" /> Download PDF
+                            <a href={`/reports/whs-report/pdf?year=${year}&month=${month}`} target="_blank" rel="noopener noreferrer">
+                                <FileText className="mr-1 h-4 w-4" /> View PDF
                             </a>
                         </Button>
                         <Button onClick={handleSave} disabled={saving}>
@@ -238,38 +271,43 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
 
                 {/* Claims Overview */}
                 <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Claims Overview</CardTitle></CardHeader>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Claims Overview (Jul {fyStartYear} – {months[month - 1]} {year})</CardTitle></CardHeader>
                     <CardContent>
-                        <div className="space-y-3">
-                            {claimsOverview.map((co, i) => (
-                                <div key={i} className="grid grid-cols-6 gap-2 items-end">
-                                    <div>
-                                        <Label className="text-xs">Entity</Label>
-                                        <Input value={co.entity} onChange={e => updateItem(claimsOverview, i, 'entity', e.target.value, setClaimsOverview)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Claims Lodged</Label>
-                                        <Input type="number" value={co.total_lodged} onChange={e => updateItem(claimsOverview, i, 'total_lodged', Number(e.target.value), setClaimsOverview)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Active Statutory</Label>
-                                        <Input type="number" value={co.active_statutory} onChange={e => updateItem(claimsOverview, i, 'active_statutory', Number(e.target.value), setClaimsOverview)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Active Common Law</Label>
-                                        <Input type="number" value={co.active_common_law} onChange={e => updateItem(claimsOverview, i, 'active_common_law', Number(e.target.value), setClaimsOverview)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Denied</Label>
-                                        <Input type="number" value={co.denied} onChange={e => updateItem(claimsOverview, i, 'denied', Number(e.target.value), setClaimsOverview)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Comments</Label>
-                                        <Input value={co.comments} onChange={e => updateItem(claimsOverview, i, 'comments', e.target.value, setClaimsOverview)} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        {claimsOverview.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No claims lodged for the current financial year.</p>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b text-left">
+                                        <th className="pb-2 font-medium">Entity</th>
+                                        <th className="pb-2 font-medium text-center">Claims Lodged</th>
+                                        <th className="pb-2 font-medium text-center">Active Statutory</th>
+                                        <th className="pb-2 font-medium text-center">Active Common Law</th>
+                                        <th className="pb-2 font-medium text-center">Denied</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {claimsOverview.map((co, i) => {
+                                        const base = `/injury-register?work_cover_claim=1&fy=${fyStartYear}&fy_month=${month}&fy_year=${year}&entity=${encodeURIComponent(co.entity)}`;
+                                        const link = (count: number, extra: string) =>
+                                            count > 0 ? (
+                                                <a href={`${base}${extra}`} className="text-primary underline hover:text-primary/80">{count}</a>
+                                            ) : (
+                                                <span className="text-muted-foreground">0</span>
+                                            );
+                                        return (
+                                            <tr key={i} className="border-b last:border-0">
+                                                <td className="py-2">{co.entity}</td>
+                                                <td className="py-2 text-center">{link(co.total_lodged, '')}</td>
+                                                <td className="py-2 text-center">{link(co.active_statutory, '&claim_type=statutory&claim_status=active')}</td>
+                                                <td className="py-2 text-center">{link(co.active_common_law, '&claim_type=common_law&claim_status=active')}</td>
+                                                <td className="py-2 text-center">{link(co.denied, '&claim_status=denied')}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -277,19 +315,23 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                 <Card>
                     <CardHeader className="pb-3"><CardTitle className="text-base">Key Issues Identified</CardTitle></CardHeader>
                     <CardContent>
-                        <Textarea rows={5} value={keyIssues} onChange={e => setKeyIssues(e.target.value)} placeholder="Describe key WHS issues for this month..." />
+                        <RichTextEditor content={keyIssues} onChange={setKeyIssues} placeholder="Describe key WHS issues for this month..." />
                     </CardContent>
                 </Card>
 
                 {/* Proposed Action Points */}
                 <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Proposed Action Points</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Proposed Action Points</CardTitle>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addItem(actionPoints, { action: '', by_who: '', by_when: '' }, setActionPoints)}>
+                            <Plus className="mr-1 h-3 w-3" /> Add
+                        </Button>
+                    </CardHeader>
                     <CardContent>
                         <ActionPointsSection
                             items={actionPoints}
                             users={users}
                             onUpdate={(i, field, value) => updateItem(actionPoints, i, field, value, setActionPoints)}
-                            onAdd={() => addItem(actionPoints, { action: '', by_who: '', by_when: '' }, setActionPoints)}
                             onRemove={(i) => removeItem(actionPoints, i, setActionPoints)}
                         />
                     </CardContent>
@@ -323,42 +365,55 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                 <Card>
                     <CardHeader className="pb-3"><CardTitle className="text-base">CSQ Payments Received</CardTitle></CardHeader>
                     <CardContent>
-                        <div className="space-y-3">
-                            <div className="flex justify-end">
-                                <Button type="button" variant="outline" size="sm" onClick={() => addItem(csqPayments, { reference: '', date: '', description: '', total: 0 }, setCsqPayments)}>
-                                    <Plus className="mr-1 h-3 w-3" /> Add
-                                </Button>
-                            </div>
-                            {csqPayments.map((pay, i) => (
-                                <div key={i} className="flex gap-2 items-start">
-                                    <Input className="w-28" placeholder="Reference" value={pay.reference} onChange={e => updateItem(csqPayments, i, 'reference', e.target.value, setCsqPayments)} />
-                                    <Input className="w-28" placeholder="Date" value={pay.date} onChange={e => updateItem(csqPayments, i, 'date', e.target.value, setCsqPayments)} />
-                                    <Input className="flex-1" placeholder="Description" value={pay.description} onChange={e => updateItem(csqPayments, i, 'description', e.target.value, setCsqPayments)} />
-                                    <Input className="w-32" type="number" placeholder="Total" value={pay.total} onChange={e => updateItem(csqPayments, i, 'total', Number(e.target.value), setCsqPayments)} />
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(csqPayments, i, setCsqPayments)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                        {csqGlPayments.length > 0 ? (
+                            <div className="space-y-2">
+                                {csqGlPayments.map((pay, i) => (
+                                    <div key={i} className="flex gap-2 items-center rounded border bg-muted/30 px-3 py-2 text-sm">
+                                        <span className="w-24 shrink-0 font-mono text-xs">{pay.reference}</span>
+                                        <span className="w-24 shrink-0">{pay.date}</span>
+                                        <span className="flex-1 truncate">{pay.description}</span>
+                                        <span className="w-28 text-right font-medium">${Number(pay.total).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                ))}
+                                <div className="flex justify-end border-t pt-2">
+                                    <span className="text-sm font-semibold">Total: ${csqGlPayments.reduce((s, p) => s + Number(p.total), 0).toLocaleString('en-AU', { minimumFractionDigits: 2 })}</span>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">No CSQ payments found for this month.</p>
+                        )}
                     </CardContent>
                 </Card>
 
                 {/* Training Summary */}
                 <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Training Summary</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Training Summary</CardTitle>
+                        <Card className="bg-muted/50">
+                            <CardContent className="py-2 px-3 text-right">
+                                <div className="text-sm font-semibold">${trainingCost.toLocaleString('en-AU', { minimumFractionDigits: 2 })}</div>
+                                <div className="text-xs font-medium text-muted-foreground uppercase">Training Cost – {months[month - 1]}</div>
+                            </CardContent>
+                        </Card>
+                    </CardHeader>
                     <CardContent>
-                        <Textarea rows={4} value={trainingSummary} onChange={e => setTrainingSummary(e.target.value)} placeholder="Training activities this month (one per line)..." />
+                        <RichTextEditor content={trainingSummary} onChange={setTrainingSummary} placeholder="Training activities this month..." />
                     </CardContent>
                 </Card>
 
                 {/* Bottom Action Points */}
                 <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Action Points</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="text-base">Action Points</CardTitle>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addItem(bottomActionPoints, { action: '', by_who: '', by_when: '' }, setBottomActionPoints)}>
+                            <Plus className="mr-1 h-3 w-3" /> Add
+                        </Button>
+                    </CardHeader>
                     <CardContent>
                         <ActionPointsSection
                             items={bottomActionPoints}
                             users={users}
                             onUpdate={(i, field, value) => updateItem(bottomActionPoints, i, field, value, setBottomActionPoints)}
-                            onAdd={() => addItem(bottomActionPoints, { action: '', by_who: '', by_when: '' }, setBottomActionPoints)}
                             onRemove={(i) => removeItem(bottomActionPoints, i, setBottomActionPoints)}
                         />
                     </CardContent>
@@ -367,8 +422,8 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                 {/* Bottom save */}
                 <div className="flex justify-end gap-2 pb-8">
                     <Button variant="outline" asChild>
-                        <a href={`/reports/whs-report/pdf?year=${year}&month=${month}`}>
-                            <Download className="mr-1 h-4 w-4" /> Download PDF
+                        <a href={`/reports/whs-report/pdf?year=${year}&month=${month}`} target="_blank" rel="noopener noreferrer">
+                            <FileText className="mr-1 h-4 w-4" /> View PDF
                         </a>
                     </Button>
                     <Button onClick={handleSave} disabled={saving}>

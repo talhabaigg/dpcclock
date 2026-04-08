@@ -157,7 +157,19 @@ export default function InjuryShow({ injury, comments, options }: Props) {
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
 
     const [classifyOpen, setClassifyOpen] = useState(false);
-    const [classForm, setClassForm] = useState({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '' });
+    const [classForm, setClassForm] = useState({
+        work_cover_claim: injury.work_cover_claim,
+        work_days_missed: injury.work_days_missed,
+        report_type: injury.report_type ?? '',
+        claim_active: injury.claim_active ?? false,
+        claim_type: injury.claim_type ?? '',
+        claim_status: injury.claim_status ?? '',
+        capacity: injury.capacity ?? '',
+        employment_status: injury.employment_status ?? '',
+        claim_cost: injury.claim_cost ?? 0,
+        days_suitable_duties: injury.days_suitable_duties ?? 0,
+        medical_expenses: injury.medical_expenses ?? 0,
+    });
     const [classSaving, setClassSaving] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -348,7 +360,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reporting</h4>
                                     {can('injury-register.edit') && (
-                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '' }); setClassifyOpen(true); }}>
+                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '', claim_active: injury.claim_active ?? false, claim_type: injury.claim_type ?? '', claim_status: injury.claim_status ?? '', capacity: injury.capacity ?? '', employment_status: injury.employment_status ?? '', claim_cost: injury.claim_cost ?? 0, days_suitable_duties: injury.days_suitable_duties ?? 0, medical_expenses: injury.medical_expenses ?? 0 }); setClassifyOpen(true); }}>
                                             <Pencil className="mr-1 h-3 w-3" /> Edit
                                         </Button>
                                     )}
@@ -358,6 +370,18 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                 <SidebarField label="Reported To" value={injury.reported_to} />
                                 <SidebarField label="WorkCover Claim" value={injury.work_cover_claim ? 'Yes' : 'No'} />
                                 <SidebarField label="Days Lost" value={injury.work_days_missed} />
+                                <SidebarField label="Days Suitable Duties" value={injury.days_suitable_duties} />
+                                {injury.work_cover_claim && (
+                                    <>
+                                        <SidebarField label="Claim Active" value={injury.claim_active ? 'Yes' : 'No'} />
+                                        <SidebarField label="Claim Type" value={injury.claim_type ? (options.claimTypes[injury.claim_type] ?? injury.claim_type) : null} />
+                                        <SidebarField label="Claim Status" value={injury.claim_status ? (options.claimStatuses[injury.claim_status] ?? injury.claim_status) : null} />
+                                        <SidebarField label="Capacity" value={injury.capacity ? (options.capacities[injury.capacity] ?? injury.capacity) : null} />
+                                        <SidebarField label="Employment Status" value={injury.employment_status ? (options.employmentStatuses[injury.employment_status] ?? injury.employment_status) : null} />
+                                        <SidebarField label="Claim Cost" value={injury.claim_cost ? `$${Number(injury.claim_cost).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
+                                    </>
+                                )}
+                                <SidebarField label="Medical Expenses (Non-WC)" value={injury.medical_expenses ? `$${Number(injury.medical_expenses).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
                             </div>
 
                             <Separator />
@@ -461,9 +485,9 @@ export default function InjuryShow({ injury, comments, options }: Props) {
 
             {/* Classification Dialog */}
             <Dialog open={classifyOpen} onOpenChange={(open) => !open && setClassifyOpen(false)}>
-                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
                     <DialogHeader>
-                        <DialogTitle>Work cover / days lost / report type</DialogTitle>
+                        <DialogTitle>Classification & Claims</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                         <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
@@ -473,30 +497,135 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                             />
                             <Label>Was a WorkCover claim submitted?</Label>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Report Type</Label>
+                                <Select value={classForm.report_type} onValueChange={(v) => setClassForm({ ...classForm, report_type: v })}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select report type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(options.reportTypes).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>
+                                                {label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Days Lost</Label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    value={classForm.work_days_missed}
+                                    onChange={(e) => setClassForm({ ...classForm, work_days_missed: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                        </div>
                         <div className="space-y-2">
-                            <Label>Number of Days Lost</Label>
+                            <Label>Days on Suitable Duties</Label>
                             <Input
                                 type="number"
                                 min={0}
-                                value={classForm.work_days_missed}
-                                onChange={(e) => setClassForm({ ...classForm, work_days_missed: parseInt(e.target.value) || 0 })}
+                                value={classForm.days_suitable_duties}
+                                onChange={(e) => setClassForm({ ...classForm, days_suitable_duties: parseInt(e.target.value) || 0 })}
                                 className="w-32"
                             />
                         </div>
+
+                        {classForm.work_cover_claim && (
+                            <>
+                                <Separator />
+                                <h4 className="text-sm font-semibold">Claim Details</h4>
+                                <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+                                    <Switch
+                                        checked={classForm.claim_active}
+                                        onCheckedChange={(v) => setClassForm({ ...classForm, claim_active: v })}
+                                    />
+                                    <Label>Claim Active</Label>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Claim Type</Label>
+                                        <Select value={classForm.claim_type} onValueChange={(v) => setClassForm({ ...classForm, claim_type: v })}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(options.claimTypes).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Claim Status</Label>
+                                        <Select value={classForm.claim_status} onValueChange={(v) => setClassForm({ ...classForm, claim_status: v })}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(options.claimStatuses).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Capacity</Label>
+                                        <Select value={classForm.capacity} onValueChange={(v) => setClassForm({ ...classForm, capacity: v })}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select capacity" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(options.capacities).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Employment Status</Label>
+                                        <Select value={classForm.employment_status} onValueChange={(v) => setClassForm({ ...classForm, employment_status: v })}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(options.employmentStatuses).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Claim Cost ($)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={classForm.claim_cost}
+                                        onChange={(e) => setClassForm({ ...classForm, claim_cost: parseFloat(e.target.value) || 0 })}
+                                        className="w-40"
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        <Separator />
                         <div className="space-y-2">
-                            <Label>Report Type</Label>
-                            <Select value={classForm.report_type} onValueChange={(v) => setClassForm({ ...classForm, report_type: v })}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select report type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(options.reportTypes).map(([key, label]) => (
-                                        <SelectItem key={key} value={key}>
-                                            {label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label>Medical Expenses — Non WorkCover ($)</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={classForm.medical_expenses}
+                                onChange={(e) => setClassForm({ ...classForm, medical_expenses: parseFloat(e.target.value) || 0 })}
+                                className="w-40"
+                            />
                         </div>
                     </div>
                     <DialogFooter>

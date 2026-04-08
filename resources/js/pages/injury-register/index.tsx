@@ -16,8 +16,8 @@ import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/ty
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown, Download, Loader2, Lock, MoreHorizontal, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Check, ChevronsUpDown, Download, Loader2, Lock, MoreHorizontal, Plus, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
 
@@ -52,6 +52,20 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
     const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
     const [importFlash, setImportFlash] = useState<{ success?: string; error?: string }>({});
     const importFileRef = useRef<HTMLInputElement>(null);
+    const [searchValue, setSearchValue] = useState(filters.search ?? '');
+    const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+    useEffect(() => {
+        clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => {
+            const trimmed = searchValue.trim();
+            if (trimmed !== (filters.search ?? '')) {
+                setFilter('search', trimmed || undefined);
+            }
+        }, 400);
+        return () => clearTimeout(searchTimeout.current);
+    }, [searchValue]);
+
     const [classifyInjury, setClassifyInjury] = useState<Injury | null>(null);
     const [classForm, setClassForm] = useState({ work_cover_claim: false, work_days_missed: 0, report_type: '' });
     const [classSaving, setClassSaving] = useState(false);
@@ -122,6 +136,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
     };
 
     const resetFilters = () => {
+        setSearchValue('');
         router.get('/injury-register', {}, { preserveState: true });
     };
 
@@ -137,6 +152,23 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
             <div className="space-y-4 p-4">
                 {/* Filters + Report Button */}
                 <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                        <Search className="text-muted-foreground absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2" />
+                        <Input
+                            placeholder="Search worker, location, incident..."
+                            value={searchValue}
+                            onChange={(e) => setSearchValue(e.target.value)}
+                            className="w-64 pl-9"
+                        />
+                        {searchValue && (
+                            <button
+                                onClick={() => setSearchValue('')}
+                                className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
                     <Popover open={locationOpen} onOpenChange={setLocationOpen}>
                         <PopoverTrigger asChild>
                             <Button variant="outline" role="combobox" aria-expanded={locationOpen} className="w-48 justify-between font-normal">
@@ -290,6 +322,14 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                 {/* Filter chips */}
                 {hasFilters && (
                     <div className="flex flex-wrap items-center gap-1.5">
+                        {filters.search && (
+                            <Badge variant="secondary" className="gap-1 pr-1">
+                                Search: {filters.search}
+                                <button onClick={() => setSearchValue('')} className="hover:bg-muted rounded-full p-0.5">
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
                         {filters.location_id && (
                             <Badge variant="secondary" className="gap-1 pr-1">
                                 {locations.find((l) => String(l.id) === filters.location_id)?.name ?? filters.location_id}

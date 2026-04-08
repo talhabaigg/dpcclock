@@ -11,13 +11,13 @@ use Inertia\Inertia;
 
 class SafetyDashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $now = now();
 
         return Inertia::render('reports/safety-dashboard', [
-            'currentMonth' => $now->month,
-            'currentYear' => $now->year,
+            'currentMonth' => $request->filled('month') ? (int) $request->month : $now->month,
+            'currentYear' => $request->filled('year') ? (int) $request->year : $now->year,
             'totalRecords' => Injury::count(),
         ]);
     }
@@ -46,21 +46,27 @@ class SafetyDashboardController extends Controller
 
     public function getFYData(Request $request)
     {
-        $now = now();
-        $currentMonth = $now->month;
-        $currentYear = $now->year;
+        $request->validate([
+            'year' => 'nullable|integer|min:2000|max:2100',
+            'month' => 'nullable|integer|min:1|max:12',
+        ]);
 
-        if ($currentMonth >= 7) {
-            $fyStartYear = $currentYear;
-            $fyEndYear = $currentYear + 1;
-        } else {
-            $fyStartYear = $currentYear - 1;
-            $fyEndYear = $currentYear;
-        }
+        $selectedYear = $request->filled('year') ? (int) $request->year : now()->year;
+        $selectedMonth = $request->filled('month') ? (int) $request->month : now()->month;
+
+        // Determine FY based on selected month/year
+        $fyStartYear = $selectedMonth >= 7 ? $selectedYear : $selectedYear - 1;
+        $fyEndYear = $fyStartYear + 1;
 
         $fyLabel = "FY{$fyStartYear}/{$fyEndYear}";
 
-        $injuries = Injury::with('location.projectGroup')->forFinancialYear($fyStartYear)->get();
+        // FY to date: from July of FY start year up to end of selected month
+        $fyStart = "{$fyStartYear}-07-01";
+        $fyEnd = date('Y-m-t', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear));
+
+        $injuries = Injury::with('location.projectGroup')
+            ->whereBetween('occurred_at', [$fyStart, $fyEnd])
+            ->get();
         $rows = $this->aggregateByProject($injuries);
 
         // Build man hours per project using location hierarchy

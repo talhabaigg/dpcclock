@@ -135,6 +135,30 @@ class Injury extends Model implements HasMedia
         'unauthorised_equipment_use' => 'Unauthorised equipment use', 'other' => 'Other',
     ];
 
+    public const CLAIM_TYPE_OPTIONS = [
+        'statutory' => 'Statutory',
+        'common_law' => 'Common Law',
+    ];
+
+    public const CLAIM_STATUS_OPTIONS = [
+        'active' => 'Active',
+        'denied' => 'Denied',
+        'closed' => 'Closed',
+    ];
+
+    public const CAPACITY_OPTIONS = [
+        'full_duties' => 'Full Duties',
+        'suitable_duties' => 'Suitable Duties',
+        'no_capacity' => 'No Capacity',
+    ];
+
+    public const EMPLOYMENT_STATUS_OPTIONS = [
+        'full_time' => 'Full Time',
+        'part_time' => 'Part Time',
+        'casual' => 'Casual',
+        'contractor' => 'Contractor',
+    ];
+
     public const CORRECTIVE_ACTION_OPTIONS = [
         'swms_review' => 'SWMS Review with individual / workgroup',
         'amend_swms' => 'Amend SWMS (controls relating to the incident / injury to be reviewed and amended)',
