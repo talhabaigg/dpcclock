@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\InjuryExport;
 use App\Http\Requests\StoreInjuryRequest;
 use App\Http\Requests\UpdateInjuryRequest;
+use App\Imports\InjuryImport;
 use App\Models\Employee;
 use App\Models\Injury;
 use App\Models\Location;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Browsershot\Browsershot;
 use Inertia\Inertia;
 
@@ -49,6 +52,7 @@ class InjuryController extends Controller
             'employees' => Employee::orderBy('name')->get(['id', 'name', 'preferred_name']),
             'incidentOptions' => Injury::INCIDENT_OPTIONS,
             'reportTypeOptions' => Injury::REPORT_TYPE_OPTIONS,
+            'isLocal' => app()->environment('local'),
         ]);
     }
 
@@ -289,6 +293,52 @@ class InjuryController extends Controller
         return response($pdfContent, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function dropAll()
+    {
+        abort_unless(app()->environment('local'), 403);
+
+        $count = Injury::count();
+
+        // Delete orphan comments, activity log, and media before truncating
+        \App\Models\Comment::where('commentable_type', Injury::class)->delete();
+        \Spatie\Activitylog\Models\Activity::where('subject_type', Injury::class)->delete();
+        Injury::each(fn ($injury) => $injury->clearMediaCollection('files'));
+        Injury::truncate();
+
+        return back()->with('success', "Dropped all {$count} injury records.");
+    }
+
+    public function export(Request $request)
+    {
+        $filters = $request->only(['location_id', 'employee_id', 'incident', 'report_type']);
+        $filename = 'injury-register-export-' . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+        return Excel::download(new InjuryExport($filters), $filename);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx,xls|max:10240']);
+
+        $import = new InjuryImport(auth()->id());
+
+        try {
+            Excel::import($import, $request->file('file'));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'imported' => $import->importedCount,
+            'skipped' => $import->skippedCount,
+            'errors' => $import->errors,
         ]);
     }
 

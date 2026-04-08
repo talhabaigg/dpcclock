@@ -2,6 +2,7 @@
 
 
 use App\Http\Controllers\AllowanceTypeController;
+use App\Http\Controllers\WhsReportController;
 use App\Http\Controllers\BidAreaController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
@@ -1117,10 +1118,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Safety Dashboard
     Route::middleware('permission:reports.safety-dashboard')->group(function () {
         Route::get('/reports/safety-dashboard', [SafetyDashboardController::class, 'index'])->name('reports.safetyDashboard');
-        Route::get('/reports/safety-dashboard/import', [SafetyDashboardController::class, 'importPage'])->name('reports.safetyDashboard.importPage');
         Route::get('/reports/safety-dashboard/monthly-data', [SafetyDashboardController::class, 'getMonthlyData'])->name('reports.safetyDashboard.monthlyData');
         Route::get('/reports/safety-dashboard/fy-data', [SafetyDashboardController::class, 'getFYData'])->name('reports.safetyDashboard.fyData');
-        Route::post('/reports/safety-dashboard/import', [SafetyDashboardController::class, 'import'])->name('reports.safetyDashboard.import');
+
+        // WHS Monthly Report
+        Route::get('/reports/whs-report', [WhsReportController::class, 'edit'])->name('reports.whsReport.edit');
+        Route::put('/reports/whs-report/{whsReport}', [WhsReportController::class, 'update'])->name('reports.whsReport.update');
+        Route::get('/reports/whs-report/pdf', [WhsReportController::class, 'downloadPdf'])->name('reports.whsReport.pdf');
     });
 
     // ============================================
@@ -1132,6 +1136,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:injury-register.create');
         Route::post('/injury-register', [InjuryController::class, 'store'])->name('injury-register.store')
             ->middleware('permission:injury-register.create');
+        Route::post('/injury-register/import', [InjuryController::class, 'import'])->name('injury-register.import')
+            ->middleware('permission:injury-register.create');
+        Route::delete('/injury-register/drop-all', [InjuryController::class, 'dropAll'])->name('injury-register.drop-all')
+            ->middleware('permission:injury-register.delete');
+        Route::get('/injury-register/export', [InjuryController::class, 'export'])->name('injury-register.export');
         Route::get('/injury-register/{injury}', [InjuryController::class, 'show'])->name('injury-register.show');
         Route::get('/injury-register/{injury}/edit', [InjuryController::class, 'edit'])->name('injury-register.edit')
             ->middleware('permission:injury-register.edit');

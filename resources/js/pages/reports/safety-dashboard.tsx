@@ -1,12 +1,12 @@
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
+import { Button } from '@/components/ui/button';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Loader2, Upload } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -67,7 +67,6 @@ type Totals = {
 type PageProps = {
     currentMonth: number;
     currentYear: number;
-    lastImport: string | null;
     totalRecords: number;
 };
 
@@ -80,7 +79,7 @@ function formatNumber(value: number): string {
 }
 
 export default function SafetyDashboard() {
-    const { currentMonth, currentYear, lastImport, totalRecords } = usePage<{ props: PageProps }>().props as unknown as PageProps;
+    const { currentMonth, currentYear, totalRecords } = usePage<{ props: PageProps }>().props as unknown as PageProps;
 
     // Monthly tab state
     const [selectedMonth, setSelectedMonth] = useState(String(currentMonth));
@@ -163,15 +162,14 @@ export default function SafetyDashboard() {
                     <h1 className="text-2xl font-semibold">Safety Dashboard</h1>
                     <div className="flex items-center gap-3">
                         <span className="text-sm text-muted-foreground">
-                            {formatNumber(totalRecords)} records
-                            {lastImport && <> &middot; Last import: {new Date(lastImport).toLocaleDateString('en-AU')}</>}
+                            {formatNumber(totalRecords)} injury records
                         </span>
-                        <Link href="/reports/safety-dashboard/import">
-                            <Button variant="outline" size="sm">
-                                <Upload className="mr-2 h-4 w-4" />
-                                Import Data
-                            </Button>
-                        </Link>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/reports/whs-report?year=${selectedYear}&month=${selectedMonth}`}>
+                                <FileText className="mr-1 h-4 w-4" />
+                                WHS Report
+                            </Link>
+                        </Button>
                     </div>
                 </div>
 

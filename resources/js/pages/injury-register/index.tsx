@@ -1,3 +1,4 @@
+import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +16,8 @@ import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/ty
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown, Lock, MoreHorizontal, Plus, RotateCcw, X } from 'lucide-react';
-import { useState } from 'react';
+import { Check, ChevronsUpDown, Download, Loader2, Lock, MoreHorizontal, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
 
@@ -37,13 +38,20 @@ interface Props {
     employees: InjuryEmployee[];
     incidentOptions: Record<string, string>;
     reportTypeOptions: Record<string, string>;
+    isLocal: boolean;
 }
 
-export default function InjuryRegisterIndex({ injuries, filters, locations, incidentOptions, reportTypeOptions }: Props) {
-    const permissions: string[] = (usePage().props.auth as { permissions?: string[] })?.permissions ?? [];
+export default function InjuryRegisterIndex({ injuries, filters, locations, incidentOptions, reportTypeOptions, isLocal }: Props) {
+    const { flash, auth } = usePage<{ flash: { success?: string; error?: string }; auth: { permissions?: string[] } }>().props as { flash: { success?: string; error?: string }; auth: { permissions?: string[] } };
+    const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
 
     const [locationOpen, setLocationOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+    const [importFlash, setImportFlash] = useState<{ success?: string; error?: string }>({});
+    const importFileRef = useRef<HTMLInputElement>(null);
     const [classifyInjury, setClassifyInjury] = useState<Injury | null>(null);
     const [classForm, setClassForm] = useState({ work_cover_claim: false, work_days_missed: 0, report_type: '' });
     const [classSaving, setClassSaving] = useState(false);
@@ -70,6 +78,41 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
         });
     };
 
+    const handleImport = async () => {
+        const file = importFileRef.current?.files?.[0];
+        if (!file) {
+            setImportFlash({ error: 'Please select a file first' });
+            return;
+        }
+        setImporting(true);
+        setImportResult(null);
+        setImportFlash({});
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch('/injury-register/import', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
+                body: formData,
+            });
+            const data = await res.json();
+            if (data.success) {
+                setImportFlash({ success: `Imported ${data.imported} records` + (data.skipped > 0 ? `, ${data.skipped} skipped` : '') });
+                setImportResult({ imported: data.imported, skipped: data.skipped, errors: data.errors || [] });
+                if (data.imported > 0) {
+                    router.reload({ only: ['injuries'] });
+                }
+            } else {
+                setImportFlash({ error: 'Import failed' });
+            }
+        } catch {
+            setImportFlash({ error: 'Import failed — network error' });
+        } finally {
+            setImporting(false);
+            if (importFileRef.current) importFileRef.current.value = '';
+        }
+    };
+
     const setFilter = (key: string, value: string | undefined) => {
         router.get(
             '/injury-register',
@@ -87,6 +130,9 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Injury Register" />
+
+            {flash?.success && <SuccessAlertFlash message={flash.success} />}
+            {flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
             <div className="space-y-4 p-4">
                 {/* Filters + Report Button */}
@@ -192,14 +238,53 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                         </Button>
                     )}
 
-                    {can('injury-register.create') && (
-                        <Button asChild className="ml-auto">
-                            <Link href="/injury-register/create">
-                                <Plus className="mr-1 h-4 w-4" />
-                                Report Incident / Injury
-                            </Link>
-                        </Button>
-                    )}
+                    <div className="ml-auto flex gap-2">
+                        {can('injury-register.create') && (
+                            <Button asChild>
+                                <Link href="/injury-register/create">
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Report Incident / Injury
+                                </Link>
+                            </Button>
+                        )}
+                        <DropdownMenu modal={false}>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <a href={`/injury-register/export?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString()}`}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Export
+                                    </a>
+                                </DropdownMenuItem>
+                                {can('injury-register.create') && (
+                                    <DropdownMenuItem onClick={() => { setImportOpen(true); setImportResult(null); }}>
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Import Legacy
+                                    </DropdownMenuItem>
+                                )}
+                                {isLocal && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-red-600"
+                                            onClick={() => {
+                                                if (confirm('Drop ALL injury records? This cannot be undone.')) {
+                                                    router.delete('/injury-register/drop-all', { preserveScroll: true });
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Drop All
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 {/* Filter chips */}
@@ -286,7 +371,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                         {injury.occurred_at ? new Date(injury.occurred_at).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                     </TableCell>
                                     <TableCell>
-                                        <div className="text-sm font-medium">{injury.employee?.preferred_name ?? injury.employee?.name ?? '—'}</div>
+                                        <div className="text-sm font-medium">{injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name ?? '—'}</div>
                                         {injury.employee?.employment_type && (
                                             <div className="text-muted-foreground text-xs">{injury.employee.employment_type}</div>
                                         )}
@@ -398,6 +483,51 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                     </div>
                 )}
             </div>
+
+            {/* Import Legacy Dialog */}
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
+                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
+                    <DialogHeader>
+                        <DialogTitle>Import Legacy Injury Records</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        {importFlash.success && <SuccessAlertFlash message={importFlash.success} />}
+                        {importFlash.error && <ErrorAlertFlash error={{ message: importFlash.error }} />}
+                        <p className="text-muted-foreground text-sm">
+                            Upload an exported Injury Register Excel file (.xlsx). Existing records (matched by ID) will be skipped.
+                        </p>
+                        <div className="space-y-2">
+                            <Label>Excel File (.xlsx)</Label>
+                            <Input ref={importFileRef} type="file" accept=".xlsx,.xls" />
+                        </div>
+                        {importResult && (
+                            <div className="space-y-2 rounded-md border p-3">
+                                <div className="flex gap-6 text-sm">
+                                    <span>Imported: <strong className="text-green-600">{importResult.imported}</strong></span>
+                                    <span>Skipped: <strong className="text-yellow-600">{importResult.skipped}</strong></span>
+                                </div>
+                                {importResult.errors.length > 0 && (
+                                    <div>
+                                        <p className="text-destructive mb-1 text-sm font-medium">Errors:</p>
+                                        <ul className="max-h-40 overflow-y-auto text-sm text-muted-foreground">
+                                            {importResult.errors.map((err, i) => (
+                                                <li key={i}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+                        <Button onClick={handleImport} disabled={importing}>
+                            {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                            {importing ? 'Importing...' : 'Import'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Classification Dialog */}
             <Dialog open={!!classifyInjury} onOpenChange={(open) => !open && setClassifyInjury(null)}>

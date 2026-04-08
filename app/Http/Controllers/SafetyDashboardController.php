@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Imports\IncidentReportImport;
 use App\Models\Clock;
-use App\Models\IncidentReport;
+use App\Models\Injury;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Maatwebsite\Excel\Facades\Excel;
 
 class SafetyDashboardController extends Controller
 {
@@ -20,16 +18,7 @@ class SafetyDashboardController extends Controller
         return Inertia::render('reports/safety-dashboard', [
             'currentMonth' => $now->month,
             'currentYear' => $now->year,
-            'lastImport' => IncidentReport::max('updated_at'),
-            'totalRecords' => IncidentReport::count(),
-        ]);
-    }
-
-    public function importPage()
-    {
-        return Inertia::render('reports/safety-dashboard-import', [
-            'lastImport' => IncidentReport::max('updated_at'),
-            'totalRecords' => IncidentReport::count(),
+            'totalRecords' => Injury::count(),
         ]);
     }
 
@@ -43,9 +32,9 @@ class SafetyDashboardController extends Controller
         $year = (int) $request->year;
         $month = (int) $request->month;
 
-        $incidents = IncidentReport::forMonth($year, $month)->get();
+        $injuries = Injury::with('location.projectGroup')->forMonth($year, $month)->get();
 
-        $rows = $this->aggregateByProject($incidents);
+        $rows = $this->aggregateByProject($injuries);
         $totals = $this->computeTotals($rows);
 
         return response()->json([
@@ -71,24 +60,14 @@ class SafetyDashboardController extends Controller
 
         $fyLabel = "FY{$fyStartYear}/{$fyEndYear}";
 
-        $incidents = IncidentReport::forFinancialYear($fyStartYear)->get();
-        $rows = $this->aggregateByProject($incidents);
+        $injuries = Injury::with('location.projectGroup')->forFinancialYear($fyStartYear)->get();
+        $rows = $this->aggregateByProject($injuries);
 
         // Build man hours per project using location hierarchy
         $manHours = $this->getManHoursByProject($fyStartYear, $fyEndYear);
 
-        // Match incident project names to project locations and merge man hours + LTIFR
-        $projectLocationMap = $this->buildProjectNameToLocationMap();
         foreach ($rows as &$row) {
-            // Sum man hours across all matched project locations (e.g., DGC → DGC00 + DGC01 + DGC02)
-            $locationIds = $projectLocationMap[$row['project']] ?? [];
-            if (empty($locationIds) && $row['location_id']) {
-                $locationIds = [$row['location_id']];
-            }
-            $hours = 0;
-            foreach ($locationIds as $locId) {
-                $hours += (float) ($manHours[$locId] ?? 0);
-            }
+            $hours = (float) ($manHours[$row['location_id']] ?? 0);
             $row['man_hours'] = round($hours, 0);
             $row['ltifr'] = $row['man_hours'] > 0
                 ? round(($row['lti_count'] / $row['man_hours']) * 1_000_000, 2)
@@ -109,38 +88,16 @@ class SafetyDashboardController extends Controller
         ]);
     }
 
-    public function import(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:10240',
-        ]);
-
-        $import = new IncidentReportImport(auth()->id());
-        Excel::import($import, $request->file('file'));
-
-        return response()->json([
-            'success' => true,
-            'imported' => $import->importedCount,
-            'skipped' => $import->skippedCount,
-            'errors' => $import->errors,
-            'total_records' => IncidentReport::count(),
-            'last_import' => now()->toIso8601String(),
-        ]);
-    }
-
     /**
      * Get man hours per project location by aggregating clock hours across all descendant locations.
      * Returns [location_id => total_hours].
      */
     private function getManHoursByProject(int $fyStartYear, int $fyEndYear): array
     {
-        // Get project-level locations (children of "Jobs" nodes), excluding SWC company
-        $swcEhId = Location::where('name', 'SWC')->value('eh_location_id');
-        $jobsEhIds = Location::where('name', 'Jobs')
-            ->when($swcEhId, fn ($q) => $q->where('eh_parent_id', '!=', $swcEhId))
-            ->pluck('eh_location_id');
+        // Get all project-level locations (children of "Jobs" nodes)
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id');
         $projects = Location::whereIn('eh_parent_id', $jobsEhIds)
-            ->get(['id', 'name', 'eh_location_id']);
+            ->get(['id', 'name', 'eh_location_id', 'project_group_id']);
 
         // Build parent→children map for the entire location tree
         $allLocations = Location::whereNotNull('eh_location_id')
@@ -152,11 +109,25 @@ class SafetyDashboardController extends Controller
             }
         }
 
-        // For each project, recursively collect all descendant eh_location_ids
+        // Collect descendants per project (including grouped members' trees)
         $projectDescendants = [];
         foreach ($projects as $project) {
+            // Skip members — their hours will be counted under the primary
+            if ($project->project_group_id) {
+                continue;
+            }
+
+            // Collect this project's descendants
             $descendants = [$project->eh_location_id];
             $queue = [$project->eh_location_id];
+
+            // Also include descendants of any group members
+            $members = $projects->where('project_group_id', $project->id);
+            foreach ($members as $member) {
+                $descendants[] = $member->eh_location_id;
+                $queue[] = $member->eh_location_id;
+            }
+
             while ($queue) {
                 $current = array_shift($queue);
                 foreach ($childrenMap[$current] ?? [] as $childEhId) {
@@ -168,7 +139,6 @@ class SafetyDashboardController extends Controller
         }
 
         // Flatten all descendant eh_location_ids and query clocks once
-        // Only count processed clocks with base-rate work types (01-01, 03-01, 05-01, 07-01)
         $allEhIds = collect($projectDescendants)->flatten()->unique()->values()->all();
         $baseRateWorktypeIds = \App\Models\Worktype::whereIn('eh_external_id', ['01-01', '03-01', '05-01', '07-01'])
             ->pluck('eh_worktype_id');
@@ -196,82 +166,57 @@ class SafetyDashboardController extends Controller
         return $result;
     }
 
-    /**
-     * Build a mapping of incident project_name → project location_id.
-     * Uses the same fuzzy matching logic as the import class.
-     */
-    private function buildProjectNameToLocationMap(): array
+    private function aggregateByProject($injuries): array
     {
-        $swcEhId = Location::where('name', 'SWC')->value('eh_location_id');
-        $jobsEhIds = Location::where('name', 'Jobs')
-            ->when($swcEhId, fn ($q) => $q->where('eh_parent_id', '!=', $swcEhId))
-            ->pluck('eh_location_id');
-        $projects = Location::whereIn('eh_parent_id', $jobsEhIds)
-            ->get(['id', 'name', 'eh_location_id', 'external_id']);
-
-        $incidentNames = IncidentReport::select('project_name')
-            ->distinct()
-            ->pluck('project_name');
-
-        $map = []; // project_name => [location_id, location_id, ...]
-        foreach ($incidentNames as $projectName) {
-            if (! $projectName) {
-                continue;
+        // Resolve each injury to its project group primary location
+        $grouped = $injuries->groupBy(function ($injury) {
+            $location = $injury->location;
+            if (! $location) {
+                return 'Others';
             }
-
-            // Strategy 1: Location name contains the project name
-            $candidates = $projects->filter(
-                fn ($loc) => stripos($loc->name, $projectName) !== false
-            );
-            if ($candidates->isNotEmpty()) {
-                $map[$projectName] = $candidates->pluck('id')->all();
-                continue;
+            // If this location is a group member, use the primary's name
+            if ($location->project_group_id) {
+                return $location->projectGroup?->name ?? $location->name;
             }
-
-            // Strategy 2: Display name after code prefix matches
-            $candidates = $projects->filter(function ($loc) use ($projectName) {
-                $parts = explode(' - ', $loc->name, 2);
-                $displayName = $parts[1] ?? $parts[0];
-
-                return stripos($displayName, $projectName) !== false
-                    || stripos($projectName, $displayName) !== false;
-            });
-            if ($candidates->isNotEmpty()) {
-                $map[$projectName] = $candidates->pluck('id')->all();
-            }
-        }
-
-        return $map;
-    }
-
-    private function aggregateByProject($incidents): array
-    {
-        $grouped = $incidents->groupBy('project_name');
+            return $location->name;
+        });
         $rows = [];
 
         foreach ($grouped as $project => $records) {
-            // Build type of injuries string: "2x Back Sprain/Strain, 1x Eye Foreign Body"
-            $injuryTypes = $records
-                ->filter(fn ($r) => $r->body_location || $r->nature_of_injury)
-                ->groupBy(fn ($r) => trim(($r->body_location ?? '') . ' ' . ($r->nature_of_injury ?? '')))
-                ->map(fn ($group, $key) => count($group) . 'x ' . $key)
-                ->values()
+            // Build type of injuries string from natures JSON
+            $natureCounts = [];
+            foreach ($records as $record) {
+                if (is_array($record->natures)) {
+                    foreach ($record->natures as $key) {
+                        $label = Injury::NATURE_OPTIONS[$key] ?? $key;
+                        $natureCounts[$label] = ($natureCounts[$label] ?? 0) + 1;
+                    }
+                }
+            }
+            $injuryTypes = collect($natureCounts)
+                ->map(fn ($count, $label) => "{$count}x {$label}")
                 ->implode(', ');
+
+            // Resolve to primary location ID for man hours matching
+            $firstLoc = $records->first()->location;
+            $primaryLocationId = $firstLoc
+                ? ($firstLoc->project_group_id ?? $firstLoc->id)
+                : null;
 
             $rows[] = [
                 'project' => $project,
-                'location_id' => $records->first()->location_id,
+                'location_id' => $primaryLocationId,
                 'reported_injuries' => $records->count(),
                 'type_of_injuries' => $injuryTypes ?: '-',
-                'wcq_claims' => $records->where('workcover_claim', true)->count(),
-                'lti_count' => $records->where('incident_type', 'LTI')->count(),
-                'total_days_lost' => $records->sum('days_lost'),
-                'mti_count' => $records->where('incident_type', 'MTI')->count(),
+                'wcq_claims' => $records->where('work_cover_claim', true)->count(),
+                'lti_count' => $records->where('report_type', 'lti')->count(),
+                'total_days_lost' => $records->sum('work_days_missed'),
+                'mti_count' => $records->where('report_type', 'mti')->count(),
                 'days_suitable_duties' => $records->sum('days_suitable_duties'),
-                'first_aid_count' => $records->where('incident_type', 'First Aid Only')->count(),
-                'report_only_count' => $records->where('incident_type', 'Report Only')->count(),
-                'near_miss_count' => $records->where('incident_type', 'Near Miss')->count(),
-                'medical_expenses' => round($records->sum('medical_expenses_non_workcover'), 2),
+                'first_aid_count' => $records->where('report_type', 'first_aid')->count(),
+                'report_only_count' => $records->where('report_type', 'report')->count(),
+                'near_miss_count' => $records->where('incident', 'near_miss')->count(),
+                'medical_expenses' => round($records->sum('medical_expenses'), 2),
             ];
         }
 

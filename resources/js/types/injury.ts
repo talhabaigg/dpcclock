@@ -3,6 +3,7 @@ export interface Injury {
     id_formal: string;
     location_id: number | null;
     employee_id: number | null;
+    employee_name: string | null;
     employee_address: string | null;
     incident: string;
     incident_other: string | null;

@@ -337,7 +337,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                             {/* Worker */}
                             <div className="space-y-3">
                                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Worker</h4>
-                                <SidebarField label="Name" value={injury.employee?.preferred_name ?? injury.employee?.name} />
+                                <SidebarField label="Name" value={injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name} />
                                 <SidebarField label="Address" value={injury.employee_address} />
                             </div>
 

@@ -22,6 +22,7 @@ class Location extends Model
         'closed_by',
         'variation_number_start',
         'variation_next_number',
+        'project_group_id',
     ];
 
     protected $casts = [
@@ -94,6 +95,33 @@ class Location extends Model
     public function parentLocation()
     {
         return $this->belongsTo(Location::class, 'eh_parent_id', 'eh_location_id');
+    }
+
+    public function projectGroup()
+    {
+        return $this->belongsTo(Location::class, 'project_group_id');
+    }
+
+    public function projectGroupMembers()
+    {
+        return $this->hasMany(Location::class, 'project_group_id');
+    }
+
+    /**
+     * Get all location IDs in this project group (primary + members).
+     * If this location is a member, resolves via the primary.
+     */
+    public function getProjectGroupLocationIds(): array
+    {
+        if ($this->project_group_id) {
+            // This is a member — delegate to the primary
+            return $this->projectGroup->getProjectGroupLocationIds();
+        }
+
+        // This is a primary (or ungrouped) — self + any members
+        return collect([$this->id])
+            ->merge($this->projectGroupMembers()->pluck('id'))
+            ->all();
     }
 
     public function header()

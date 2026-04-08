@@ -15,12 +15,15 @@ class Injury extends Model implements HasMedia
     use HasComments, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
-        'id_formal', 'location_id', 'employee_id', 'employee_address',
+        'id_formal', 'location_id', 'employee_id', 'employee_name', 'employee_address',
         'incident', 'incident_other', 'occurred_at', 'reported_by',
         'reported_at', 'reported_to', 'location_of_incident', 'description',
-        'emergency_services', 'work_cover_claim', 'treatment', 'treatment_at',
+        'emergency_services', 'work_cover_claim',
+        'claim_active', 'claim_type', 'claim_status', 'capacity', 'employment_status', 'claim_cost',
+        'treatment', 'treatment_at',
         'treatment_provider', 'treatment_external', 'treatment_external_location',
-        'no_treatment_reason', 'follow_up', 'follow_up_notes', 'work_days_missed',
+        'no_treatment_reason', 'follow_up', 'follow_up_notes',
+        'work_days_missed', 'days_suitable_duties', 'medical_expenses',
         'report_type', 'witnesses', 'witness_details',
         'natures', 'natures_comments',
         'mechanisms', 'mechanisms_comments',
@@ -38,6 +41,10 @@ class Injury extends Model implements HasMedia
         'locked_at' => 'datetime',
         'emergency_services' => 'boolean',
         'work_cover_claim' => 'boolean',
+        'claim_active' => 'boolean',
+        'claim_cost' => 'decimal:2',
+        'days_suitable_duties' => 'integer',
+        'medical_expenses' => 'decimal:2',
         'treatment' => 'boolean',
         'follow_up' => 'boolean',
         'witnesses' => 'boolean',
@@ -187,11 +194,14 @@ class Injury extends Model implements HasMedia
     protected static function booted(): void
     {
         static::created(function (Injury $injury) {
-            $injury->addSystemComment(
-                'Created injury report ' . $injury->id_formal,
-                ['event' => 'created'],
-                auth()->id(),
-            );
+            $userId = auth()->id() ?? $injury->created_by;
+            if ($userId) {
+                $injury->addSystemComment(
+                    'Created injury report ' . $injury->id_formal,
+                    ['event' => 'created'],
+                    $userId,
+                );
+            }
         });
 
         static::updated(function (Injury $injury) {
@@ -305,6 +315,22 @@ class Injury extends Model implements HasMedia
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // --- Query scopes ---
+
+    public function scopeForMonth($query, int $year, int $month)
+    {
+        return $query->whereYear('occurred_at', $year)
+            ->whereMonth('occurred_at', $month);
+    }
+
+    public function scopeForFinancialYear($query, int $fyStartYear)
+    {
+        return $query->whereBetween('occurred_at', [
+            "{$fyStartYear}-07-01",
+            ($fyStartYear + 1) . '-06-30',
+        ]);
     }
 
     // --- Helpers ---
