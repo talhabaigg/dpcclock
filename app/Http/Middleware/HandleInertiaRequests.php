@@ -82,7 +82,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user()?->load('roles.permissions'),
                 'isAdmin' => $request->user()?->isAdmin(),
-                'permissions' => $request->user()?->roles->first()?->permissions->pluck('name'),
+                'permissions' => $request->user()?->getAllPermissions()->pluck('name'),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

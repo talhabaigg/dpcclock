@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -564,7 +563,7 @@ export default function UserEdit() {
 
                     <div className="flex min-h-0 flex-1 overflow-hidden">
                         {/* Left Panel - Categories */}
-                        <div className="flex w-[240px] shrink-0 flex-col border-r">
+                        <div className="flex w-[240px] shrink-0 flex-col overflow-hidden border-r">
                             <div className="p-3">
                                 <div className="relative">
                                     <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
@@ -577,7 +576,7 @@ export default function UserEdit() {
                                 </div>
                             </div>
                             <Separator />
-                            <ScrollArea className="flex-1">
+                            <div className="min-h-0 flex-1 overflow-y-auto">
                                 <nav className="flex flex-col gap-0.5 p-2">
                                     {visibleCategories.length === 0 ? (
                                         <p className="text-muted-foreground px-3 py-6 text-center text-xs">No matches.</p>
@@ -607,7 +606,7 @@ export default function UserEdit() {
                                         })
                                     )}
                                 </nav>
-                            </ScrollArea>
+                            </div>
                         </div>
 
                         {/* Right Panel - Permissions */}
@@ -631,7 +630,7 @@ export default function UserEdit() {
                                             />
                                         </div>
                                     </div>
-                                    <ScrollArea className="flex-1">
+                                    <div className="min-h-0 flex-1 overflow-y-auto">
                                         <div className="divide-y">
                                             {activePerms.map((perm, index) => {
                                                 const isChecked = selectedPerms.includes(perm.name);
@@ -656,7 +655,7 @@ export default function UserEdit() {
                                                 );
                                             })}
                                         </div>
-                                    </ScrollArea>
+                                    </div>
                                 </>
                             ) : (
                                 <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">No permissions match your search.</div>
