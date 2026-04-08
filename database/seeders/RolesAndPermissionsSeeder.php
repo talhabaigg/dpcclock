@@ -76,6 +76,16 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // DAILY PRESTARTS
+        // ============================================
+        'Daily Prestarts' => [
+            'prestarts.view' => 'View daily prestarts',
+            'prestarts.create' => 'Create daily prestarts',
+            'prestarts.edit' => 'Edit daily prestarts',
+            'prestarts.delete' => 'Delete daily prestarts',
+        ],
+
+        // ============================================
         // KIOSK MANAGEMENT
         // ============================================
         'Kiosks' => [
@@ -399,6 +409,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'injury-register.create',
             'injury-register.edit',
             'injury-register.export',
+            // Daily Prestarts
+            'prestarts.view',
+            'prestarts.create',
+            'prestarts.edit',
+            'prestarts.delete',
         ],
 
         'site-supervisor' => [
@@ -435,6 +450,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'injury-register.view',
             'injury-register.create',
             'injury-register.edit',
+            // Daily Prestarts
+            'prestarts.view',
+            'prestarts.create',
+            'prestarts.edit',
         ],
 
         'director' => [

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\LoadTimesheetsFromEH;
 use App\Models\Clock;
+use App\Models\DailyPrestart;
+use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
@@ -30,12 +32,33 @@ class ClockController extends Controller
      * Show the form for creating a new resource.
      */
 
-    // show the clock in form
+    // show the clock in form — redirects to prestart signing if unsigned prestart exists
     public function create($kioskId, $employeeId)
     {
         $kiosk = Kiosk::findOrFail($kioskId);
         $employee = Employee::findOrFail($employeeId);
         $kiosk->load('location');
+
+        // Check for unsigned active prestart
+        if ($kiosk->location) {
+            $prestart = DailyPrestart::active()
+                ->forLocation($kiosk->location->id)
+                ->forDate(now('Australia/Brisbane')->toDateString())
+                ->first();
+
+            if ($prestart) {
+                $alreadySigned = DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+                    ->where('employee_id', $employee->id)
+                    ->exists();
+
+                if (! $alreadySigned) {
+                    return redirect()->route('kiosk.prestart', [
+                        'kioskId' => $kiosk->eh_kiosk_id,
+                        'employeeId' => $employee->id,
+                    ]);
+                }
+            }
+        }
 
         return Inertia::render('kiosks/clocking/in', [
             'kiosk' => $kiosk,

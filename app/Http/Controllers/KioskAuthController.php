@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Clock;
+use App\Models\DailyPrestart;
+use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
@@ -67,12 +69,35 @@ class KioskAuthController extends Controller
             ]);
         }
 
-        // If employee is not clocked in, show the clock-in page
-
+        // If employee is not clocked in, check for unsigned prestart first
         $location = $kiosk->location;
+
+        if ($location) {
+            $prestart = DailyPrestart::active()
+                ->forLocation($location->id)
+                ->forDate(now('Australia/Brisbane')->toDateString())
+                ->with('media')
+                ->first();
+
+            if ($prestart) {
+                $alreadySigned = DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+                    ->where('employee_id', $employee->id)
+                    ->exists();
+
+                if (! $alreadySigned) {
+                    return Inertia::render('kiosks/clocking/prestart-sign', [
+                        'kiosk' => $kiosk,
+                        'employee' => $employee,
+                        'prestart' => $prestart,
+                        'employees' => $employees,
+                        'adminMode' => $adminMode,
+                    ]);
+                }
+            }
+        }
+
         $locations = Location::where('eh_parent_id', $location->eh_location_id)->pluck('external_id')->toArray();
 
-        // dd('reached here');
         return Inertia::render('kiosks/clocking/in', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,

@@ -222,6 +222,12 @@ const safety = [
                 permission: 'injury-register.view',
             },
             {
+                name: 'Daily Prestarts',
+                url: '/daily-prestarts',
+                icon: ClipboardCheck,
+                permission: 'prestarts.view',
+            },
+            {
                 name: 'SDS Register',
                 url: '/sds',
                 icon: FlaskConical,

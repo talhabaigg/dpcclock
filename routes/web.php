@@ -13,6 +13,7 @@ use App\Http\Controllers\CreditCardReceiptController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
@@ -1159,6 +1160,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ============================================
+    // DAILY PRESTARTS
+    // ============================================
+    Route::middleware('permission:prestarts.view')->group(function () {
+        Route::get('/daily-prestarts', [DailyPrestartController::class, 'index'])->name('daily-prestarts.index');
+        Route::get('/daily-prestarts/create', [DailyPrestartController::class, 'create'])->name('daily-prestarts.create')
+            ->middleware('permission:prestarts.create');
+        Route::get('/daily-prestarts/{dailyPrestart}/duplicate', [DailyPrestartController::class, 'duplicate'])->name('daily-prestarts.duplicate')
+            ->middleware('permission:prestarts.create');
+        Route::post('/daily-prestarts', [DailyPrestartController::class, 'store'])->name('daily-prestarts.store')
+            ->middleware('permission:prestarts.create');
+        Route::get('/daily-prestarts/{dailyPrestart}', [DailyPrestartController::class, 'show'])->name('daily-prestarts.show');
+        Route::get('/daily-prestarts/{dailyPrestart}/edit', [DailyPrestartController::class, 'edit'])->name('daily-prestarts.edit')
+            ->middleware('permission:prestarts.edit');
+        Route::put('/daily-prestarts/{dailyPrestart}', [DailyPrestartController::class, 'update'])->name('daily-prestarts.update')
+            ->middleware('permission:prestarts.edit');
+        Route::delete('/daily-prestarts/{dailyPrestart}', [DailyPrestartController::class, 'destroy'])->name('daily-prestarts.destroy')
+            ->middleware('permission:prestarts.delete');
+        Route::post('/daily-prestarts/{dailyPrestart}/lock', [DailyPrestartController::class, 'lock'])->name('daily-prestarts.lock')
+            ->middleware('permission:prestarts.edit');
+        Route::post('/daily-prestarts/{dailyPrestart}/unlock', [DailyPrestartController::class, 'unlock'])->name('daily-prestarts.unlock')
+            ->middleware('permission:prestarts.edit');
+        Route::get('/daily-prestarts/{dailyPrestart}/sign-sheet', [DailyPrestartController::class, 'downloadSignSheet'])->name('daily-prestarts.sign-sheet');
+    });
+
+    // ============================================
     // SYSTEM & ADMIN
     // ============================================
     Route::get('/queue-status', [QueueStatusController::class, 'index'])->name('queueStatus.index')
@@ -1239,6 +1265,10 @@ Route::middleware('kiosk.access')->group(function () {
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', [KioskAuthController::class, 'validatePin'])->name('kiosk.validate-pin');
     Route::get('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'showResetPinPage'])->name('kiosk.auth.reset-pin');
     Route::post('kiosk/{kiosk}/auth/{employeeId}/reset-pin', [KioskAuthController::class, 'resetPin'])->name('kiosk.auth.reset-pin.post');
+
+    // Daily prestart signing (kiosk context)
+    Route::get('/kiosk/{kioskId}/employee/{employeeId}/prestart', [DailyPrestartController::class, 'showKioskPrestart'])->name('kiosk.prestart');
+    Route::post('/kiosk/{kioskId}/employee/{employeeId}/prestart/sign', [DailyPrestartController::class, 'signKioskPrestart'])->name('kiosk.prestart.sign');
 });
 
 Route::get('/kiosk', function () {
