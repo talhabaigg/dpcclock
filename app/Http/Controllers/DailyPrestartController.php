@@ -107,7 +107,7 @@ class DailyPrestartController extends Controller
     {
         $data = $request->validate([
             'location_id' => 'required|exists:locations,id',
-            'work_date' => 'required|date',
+            'work_date' => 'required|date|unique:daily_prestarts,work_date,NULL,id,location_id,' . $request->location_id,
             'foreman_id' => 'nullable|exists:users,id',
             'weather' => 'nullable|string',
             'weather_impact' => 'nullable|string',
@@ -162,7 +162,7 @@ class DailyPrestartController extends Controller
 
         $data = $request->validate([
             'location_id' => 'required|exists:locations,id',
-            'work_date' => 'required|date',
+            'work_date' => 'required|date|unique:daily_prestarts,work_date,' . $dailyPrestart->id . ',id,location_id,' . $request->location_id,
             'foreman_id' => 'nullable|exists:users,id',
             'weather' => 'nullable|string',
             'weather_impact' => 'nullable|string',

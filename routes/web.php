@@ -14,6 +14,7 @@ use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\DailyPrestartController;
+use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
@@ -1182,6 +1183,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/daily-prestarts/{dailyPrestart}/unlock', [DailyPrestartController::class, 'unlock'])->name('daily-prestarts.unlock')
             ->middleware('permission:prestarts.edit');
         Route::get('/daily-prestarts/{dailyPrestart}/sign-sheet', [DailyPrestartController::class, 'downloadSignSheet'])->name('daily-prestarts.sign-sheet');
+    });
+
+    // ============================================
+    // PRESTART ABSENTEES
+    // ============================================
+    Route::middleware('permission:prestarts.view')->group(function () {
+        Route::get('/absent', [PrestartAbsenteeController::class, 'index'])->name('absentees.index');
+        Route::get('/absent/{dailyPrestart}/manage', [PrestartAbsenteeController::class, 'manage'])->name('absentees.manage')
+            ->middleware('permission:prestarts.edit');
+        Route::post('/absent', [PrestartAbsenteeController::class, 'update'])->name('absentees.update')
+            ->middleware('permission:prestarts.edit');
     });
 
     // ============================================

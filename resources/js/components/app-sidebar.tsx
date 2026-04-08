@@ -228,6 +228,12 @@ const safety = [
                 permission: 'prestarts.view',
             },
             {
+                name: 'Absentees',
+                url: '/absent',
+                icon: UserX,
+                permission: 'prestarts.view',
+            },
+            {
                 name: 'SDS Register',
                 url: '/sds',
                 icon: FlaskConical,
