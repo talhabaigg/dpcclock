@@ -50,6 +50,7 @@ import {
     Wrench,
     FileSignature,
     UserCheck,
+    Reply,
     XCircle,
     XIcon,
 } from 'lucide-react';
@@ -351,20 +352,23 @@ function getInitials(name: string): string {
 function UserAvatar({ name, className }: { name: string; className?: string }) {
     return (
         <Avatar className={cn('h-8 w-8', className)}>
-            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+            <AvatarFallback className="bg-muted text-primary text-xs font-medium">
                 {getInitials(name)}
             </AvatarFallback>
         </Avatar>
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onReply, isReply }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
     onOpenRefCheck?: (referenceId: number) => void;
+    onReply?: (commentId: number, userName: string) => void;
+    isReply?: boolean;
 }) {
+    const [showReplies, setShowReplies] = useState(false);
     const isSystem = comment.metadata !== null;
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
     const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
@@ -499,83 +503,116 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
         );
     }
 
+    const hasReplies = comment.replies && comment.replies.length > 0;
+    const replyCount = comment.replies?.length ?? 0;
+
     return (
-        <div className="flex gap-3">
-            {comment.user ? (
-                <UserAvatar name={comment.user.name} />
-            ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <ArrowRight className="h-4 w-4 text-slate-500" />
-                </div>
-            )}
-            <div className="min-w-0 flex-1 pt-1">
-                <div className="flex items-center gap-2">
-                    <p className="text-sm">
-                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
-                        <span className="text-muted-foreground ml-2 text-xs">{formatDateTime(comment.created_at)}</span>
-                    </p>
-                    {isOwner && !isSystem && (
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <button type="button" className="text-muted-foreground hover:text-foreground ml-auto shrink-0 p-0.5">
-                                    <Settings className="h-4 w-4" />
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="flex w-auto gap-1 p-1.5" side="top" align="end">
-                                <Button
-                                    size="sm"
-                                    className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
-                                    onClick={() => onEdit?.(comment)}
-                                >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    Edit
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="h-8 gap-1.5"
-                                    onClick={() => onDelete?.(comment.id)}
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    Delete
-                                </Button>
-                            </PopoverContent>
-                        </Popover>
-                    )}
-                </div>
-                {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
-                {comment.attachments.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {comment.attachments.map((att) =>
-                            att.mime_type.startsWith('image/') ? (
-                                <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block">
-                                    <img src={att.url} alt={att.name} className="max-h-48 rounded-lg border object-cover" />
-                                </a>
-                            ) : (
-                                <a
-                                    key={att.id}
-                                    href={att.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="hover:bg-muted flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors"
-                                >
-                                    <FileIcon className="h-4 w-4 shrink-0" />
-                                    <span className="truncate">{att.name}</span>
-                                    <span className="text-muted-foreground shrink-0">({formatFileSize(att.size)})</span>
-                                </a>
-                            ),
+        <div className={cn('group/comment', !isReply && 'pb-1')}>
+            <div className={cn('flex gap-3', isReply && 'gap-2.5')}>
+                {comment.user ? (
+                    <UserAvatar name={comment.user.name} className={isReply ? 'h-6 w-6 text-[10px]' : undefined} />
+                ) : (
+                    <div className={cn(
+                        'flex shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800',
+                        isReply ? 'h-6 w-6' : 'h-8 w-8'
+                    )}>
+                        <ArrowRight className={cn(isReply ? 'h-3 w-3' : 'h-4 w-4', 'text-slate-500')} />
+                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <p className={cn('leading-tight', isReply ? 'text-xs' : 'text-sm')}>
+                            <span className="font-semibold">{comment.user?.name ?? 'System'}</span>
+                            <span className="text-muted-foreground ml-2 text-xs font-normal">{formatDateTime(comment.created_at)}</span>
+                        </p>
+                        {isOwner && !isSystem && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <button type="button" className="text-muted-foreground hover:text-foreground ml-auto shrink-0 p-0.5">
+                                        <Settings className="h-4 w-4" />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="flex w-auto gap-1 p-1.5" side="top" align="end">
+                                    <Button
+                                        size="sm"
+                                        className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+                                        onClick={() => onEdit?.(comment)}
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        className="h-8 gap-1.5"
+                                        onClick={() => onDelete?.(comment.id)}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                    </Button>
+                                </PopoverContent>
+                            </Popover>
                         )}
                     </div>
-                )}
-                {/* Replies */}
-                {comment.replies && comment.replies.length > 0 && (
-                    <div className="mt-3 space-y-3 border-l-2 pl-4">
-                        {comment.replies.map((reply) => (
-                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} />
-                        ))}
-                    </div>
-                )}
+                    {comment.body && <p className={cn('mt-0.5 whitespace-pre-wrap', isReply ? 'text-xs' : 'text-sm')}>{comment.body}</p>}
+                    {comment.attachments.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {comment.attachments.map((att) =>
+                                att.mime_type.startsWith('image/') ? (
+                                    <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+                                        <img src={att.url} alt={att.name} className="max-h-48 rounded-lg border object-cover" />
+                                    </a>
+                                ) : (
+                                    <a
+                                        key={att.id}
+                                        href={att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:bg-muted flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors"
+                                    >
+                                        <FileIcon className="h-4 w-4 shrink-0" />
+                                        <span className="truncate">{att.name}</span>
+                                        <span className="text-muted-foreground shrink-0">({formatFileSize(att.size)})</span>
+                                    </a>
+                                ),
+                            )}
+                        </div>
+                    )}
+                    {!isSystem && !isReply && onReply && (
+                        <div className="mt-1 flex items-center gap-4">
+                            <button
+                                type="button"
+                                onClick={() => onReply(comment.id, comment.user?.name ?? 'someone')}
+                                className="text-muted-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors"
+                            >
+                                <Reply className="h-3.5 w-3.5" />
+                                Reply
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
+
+            {/* YouTube-style collapsible replies */}
+            {hasReplies && !isReply && (
+                <div className="ml-11 mt-0.5">
+                    <button
+                        type="button"
+                        onClick={() => setShowReplies(!showReplies)}
+                        className="text-primary hover:bg-primary/10 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors"
+                    >
+                        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showReplies && 'rotate-180')} />
+                        {showReplies ? 'Hide' : `${replyCount}`} {replyCount === 1 ? 'reply' : 'replies'}
+                    </button>
+                    {showReplies && (
+                        <div className="mt-1 space-y-2.5 border-l-2 border-border/50 pl-3">
+                            {comment.replies!.map((reply) => (
+                                <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} isReply />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -1878,6 +1915,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [alertMessage, setAlertMessage] = useState<{ type: 'error'; text: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(undefined);
 
+    // Reply state
+    const [replyingTo, setReplyingTo] = useState<{ id: number; userName: string } | null>(null);
+
     // Comment edit/delete state
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
     const [editBody, setEditBody] = useState('');
@@ -1923,6 +1963,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         formData.append('commentable_type', 'employment_application');
         formData.append('commentable_id', String(app.id));
         formData.append('body', commentBody);
+        if (replyingTo) formData.append('parent_id', String(replyingTo.id));
         attachments.forEach((file) => formData.append('attachments[]', file));
 
         setSubmitting(true);
@@ -1931,6 +1972,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             onSuccess: () => {
                 setCommentBody('');
                 setAttachments([]);
+                setReplyingTo(null);
             },
             onError: (errors) => {
                 const msg = Object.values(errors).flat().join(', ');
@@ -2107,22 +2149,34 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         No {commentFilter === 'attachments' ? 'attachments' : commentFilter === 'history' ? 'history' : 'messages'} found.
                                     </p>
                                 ) : (
-                                    filteredComments.map((comment) => (
-                                        <CommentBubble
-                                            key={comment.id}
-                                            comment={comment}
-                                            currentUserId={currentUserId}
-                                            onEdit={handleEditComment}
-                                            onDelete={handleDeleteComment}
-                                            onOpenRefCheck={openRefCheckDialog}
-                                        />
-                                    ))
+                                    <div className="space-y-3">
+                                        {filteredComments.map((comment) => (
+                                            <CommentBubble
+                                                key={comment.id}
+                                                comment={comment}
+                                                currentUserId={currentUserId}
+                                                onEdit={handleEditComment}
+                                                onDelete={handleDeleteComment}
+                                                onOpenRefCheck={openRefCheckDialog}
+                                                onReply={(id, userName) => setReplyingTo({ id, userName })}
+                                            />
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 
                             {/* Comment Input */}
                             {canView && (
                                 <div className="mt-auto border-t p-3">
+                                    {replyingTo && (
+                                        <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 text-xs">
+                                            <Reply className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-muted-foreground">Replying to <span className="font-medium text-foreground">{replyingTo.userName}</span></span>
+                                            <button type="button" onClick={() => setReplyingTo(null)} className="text-muted-foreground hover:text-foreground ml-auto">
+                                                <XIcon className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                     {attachments.length > 0 && (
                                         <div className="mb-2 flex flex-wrap gap-2">
                                             {attachments.map((file, i) => (
