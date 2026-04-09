@@ -222,7 +222,7 @@ class LoadGlTransactionDetails implements ShouldQueue
 
         // OData v2 format: /Date(1234567890000)/
         if (preg_match('/\/Date\((\d+)\)\//', $dateString, $m)) {
-            $carbon = Carbon::createFromTimestampMsUTC((int) $m[1]);
+            $carbon = Carbon::createFromTimestampMsUTC((int) $m[1])->setTimezone('Australia/Brisbane');
 
             return $includeTime ? $carbon->toDateTimeString() : $carbon->toDateString();
         }
