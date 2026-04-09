@@ -71,6 +71,7 @@ class UserController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
             'roles' => 'required|string|exists:roles,id',
             'disable_kiosk_notifications' => 'boolean',
+            'receive_injury_alerts' => 'boolean',
         ]);
 
         // Update basic info
@@ -79,6 +80,7 @@ class UserController extends Controller
             'position' => $request->input('position'),
             'email' => $request->input('email'),
             'disable_kiosk_notifications' => $request->boolean('disable_kiosk_notifications'),
+            'receive_injury_alerts' => $request->boolean('receive_injury_alerts'),
         ]);
 
         // Get the role model by ID

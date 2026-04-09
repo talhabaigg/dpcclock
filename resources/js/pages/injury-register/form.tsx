@@ -88,8 +88,6 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
     const repPadRef = useRef<SignaturePad | null>(null);
     const sigInitialized = useRef(false);
 
-    const isDark = () => document.documentElement.classList.contains('dark');
-
     const initPad = (canvasRef: React.RefObject<HTMLCanvasElement | null>, padRef: React.MutableRefObject<SignaturePad | null>, existing?: string) => {
         if (!canvasRef.current || padRef.current) return;
         const canvas = canvasRef.current;
@@ -97,10 +95,9 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         canvas.width = canvas.offsetWidth * ratio;
         canvas.height = canvas.offsetHeight * ratio;
         canvas.getContext('2d')?.scale(ratio, ratio);
-        const dark = isDark();
         padRef.current = new SignaturePad(canvas, {
-            backgroundColor: dark ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)',
-            penColor: dark ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+            backgroundColor: 'rgb(255, 255, 255)',
+            penColor: 'rgb(0, 0, 0)',
             minWidth: 1.5,
             maxWidth: 3,
         });
@@ -426,7 +423,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                         </Button>
                                     </div>
                                 </div>
-                                <canvas ref={workerCanvasRef} className="h-44 w-full rounded-md border bg-white dark:bg-[rgb(30,30,30)]" style={{ touchAction: 'none' }} />
+                                <canvas ref={workerCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
                             </div>
 
                             <div className="space-y-4">
@@ -454,7 +451,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                             </Button>
                                         </div>
                                     </div>
-                                    <canvas ref={repCanvasRef} className="h-44 w-full rounded-md border bg-white dark:bg-[rgb(30,30,30)]" style={{ touchAction: 'none' }} />
+                                    <canvas ref={repCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
                                 </div>
                             </div>
 

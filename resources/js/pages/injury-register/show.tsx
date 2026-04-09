@@ -1,3 +1,4 @@
+import { SuccessAlertFlash } from '@/components/alert-flash';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, Download, FileText, Lock, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { Activity, Download, FileText, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 interface Attachment {
@@ -143,10 +144,14 @@ function SidebarField({ label, value }: { label: string; value?: string | number
 }
 
 export default function InjuryShow({ injury, comments, options }: Props) {
-    const auth = usePage().props.auth as { user?: { id: number }; permissions?: string[] };
+    const pageProps = usePage().props;
+    const auth = pageProps.auth as { user?: { id: number }; permissions?: string[] };
+    const flash = pageProps.flash as { success?: string } | undefined;
+    const appEnv = pageProps.appEnv as string;
     const currentUserId = auth?.user?.id;
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
+    const [sendingTestNotification, setSendingTestNotification] = useState(false);
     const [commentBody, setCommentBody] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -239,6 +244,8 @@ export default function InjuryShow({ injury, comments, options }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={injury.id_formal} />
+
+            {flash?.success && <SuccessAlertFlash message={flash.success} />}
 
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 <Card className="gap-0 overflow-hidden rounded-xl py-0 lg:min-h-[calc(100vh-7rem)]">
@@ -335,6 +342,23 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                             <Unlock className="mr-1 h-3 w-3" /> Unlock
                                         </Button>
                                     )
+                                )}
+                                {appEnv !== 'production' && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1"
+                                        disabled={sendingTestNotification}
+                                        onClick={() => {
+                                            setSendingTestNotification(true);
+                                            router.post(`/injury-register/${injury.id}/test-notification`, {}, {
+                                                preserveScroll: true,
+                                                onFinish: () => setSendingTestNotification(false),
+                                            });
+                                        }}
+                                    >
+                                        <Mail className="mr-1 h-3 w-3" /> {sendingTestNotification ? 'Sending...' : 'Test Email'}
+                                    </Button>
                                 )}
                             </div>
 

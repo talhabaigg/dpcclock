@@ -9,6 +9,8 @@ use App\Imports\InjuryImport;
 use App\Models\Employee;
 use App\Models\Injury;
 use App\Models\Location;
+use App\Models\User;
+use App\Notifications\InjuryCreatedNotification;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Browsershot\Browsershot;
@@ -19,6 +21,10 @@ class InjuryController extends Controller
     public function index(Request $request)
     {
         $query = Injury::with(['employee', 'location', 'representative', 'creator']);
+
+        if (! $request->user()->can('injury-register.view-all')) {
+            $query->whereIn('location_id', $request->user()->managedLocationIds());
+        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -139,6 +145,24 @@ class InjuryController extends Controller
             }
         }
 
+        $injury->load(['employee', 'location.kiosk.managers', 'creator']);
+
+        // 1. Kiosk managers for the injury's location
+        $kioskManagerIds = $injury->location?->kiosk?->managers?->pluck('id') ?? collect();
+
+        // 2. Global injury alert subscribers (construction/safety/general managers)
+        $globalSubscriberIds = User::where('receive_injury_alerts', true)->pluck('id');
+
+        $recipientIds = $kioskManagerIds->merge($globalSubscriberIds)
+            ->unique()
+            ->reject(fn ($id) => $id === auth()->id());
+
+        $recipients = User::whereIn('id', $recipientIds)->get();
+
+        foreach ($recipients as $recipient) {
+            $recipient->notify(new InjuryCreatedNotification($injury));
+        }
+
         return redirect()->route('injury-register.index')
             ->with('success', 'Injury report created successfully.');
     }
@@ -161,7 +185,7 @@ class InjuryController extends Controller
                 'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'file_name' => $m->file_name,
-                    'url' => $m->getUrl(),
+                    'url' => $this->mediaUrl($m),
                     'mime_type' => $m->mime_type,
                 ]),
                 'replies' => $c->replies->map(fn ($r) => [
@@ -173,7 +197,7 @@ class InjuryController extends Controller
                     'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
                         'id' => $m->id,
                         'file_name' => $m->file_name,
-                        'url' => $m->getUrl(),
+                        'url' => $this->mediaUrl($m),
                         'mime_type' => $m->mime_type,
                     ]),
                 ]),
@@ -271,11 +295,35 @@ class InjuryController extends Controller
         return back()->with('success', 'Record unlocked.');
     }
 
+    public function testNotification(Injury $injury)
+    {
+        $injury->load(['employee', 'location', 'creator']);
+
+        $notification = new InjuryCreatedNotification($injury);
+        $notification->afterCommit = false;
+
+        auth()->user()->notifyNow($notification);
+
+        return back()->with('success', 'Test notification sent to ' . auth()->user()->email);
+    }
+
     public function downloadPdf(Injury $injury)
     {
         $injury->load(['employee', 'location', 'representative', 'creator']);
 
-        // Parse body location annotation paths (stored as JSON)
+        $pdfContent = self::generatePdf($injury);
+        $filename = $injury->id_formal . '.pdf';
+
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    public static function generatePdf(Injury $injury): string
+    {
+        $injury->loadMissing(['employee', 'location', 'representative', 'creator']);
+
         $bodyLocationPaths = null;
         if ($injury->body_location_image) {
             $decoded = json_decode($injury->body_location_image, true);
@@ -284,7 +332,6 @@ class InjuryController extends Controller
             }
         }
 
-        // Convert body outline PNG to base64 and get dimensions for proper alignment
         $bodyOutlineBase64 = null;
         $bodyImageDims = null;
         if ($bodyLocationPaths) {
@@ -345,7 +392,7 @@ class InjuryController extends Controller
             $browsershot->setChromePath($chromePath);
         }
 
-        $pdfContent = $browsershot
+        return $browsershot
             ->noSandbox()
             ->format('A4')
             ->margins(22, 15, 20, 15, 'mm')
@@ -354,13 +401,6 @@ class InjuryController extends Controller
             ->headerHtml($headerHtml)
             ->footerHtml($footerHtml)
             ->pdf();
-
-        $filename = $injury->id_formal . '.pdf';
-
-        return response($pdfContent, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
     }
 
     public function downloadFile(Injury $injury, int $media)
@@ -438,5 +478,14 @@ class InjuryController extends Controller
             'capacities' => Injury::CAPACITY_OPTIONS,
             'employmentStatuses' => Injury::EMPLOYMENT_STATUS_OPTIONS,
         ];
+    }
+
+    private function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media): string
+    {
+        try {
+            return $media->getTemporaryUrl(now()->addMinutes(30));
+        } catch (\RuntimeException) {
+            return $media->getUrl();
+        }
     }
 }

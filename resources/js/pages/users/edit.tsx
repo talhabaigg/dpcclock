@@ -49,6 +49,7 @@ type User = {
     created_at: string;
     disabled_at: string | null;
     disable_kiosk_notifications: boolean;
+    receive_injury_alerts: boolean;
     roles: {
         permissions: Permission[];
         id: number;
@@ -90,6 +91,7 @@ export default function UserEdit() {
         roles: user.roles[0]?.id.toString() ?? '',
         managed_kiosks: user.managed_kiosks,
         disable_kiosk_notifications: user.disable_kiosk_notifications ?? false,
+        receive_injury_alerts: user.receive_injury_alerts ?? false,
     });
 
     const [selectedKiosk, setSelectedKiosk] = useState('');
@@ -411,6 +413,19 @@ export default function UserEdit() {
                                 />
                                 <Label htmlFor="disable_kiosk_notifications" className="cursor-pointer leading-tight sm:leading-normal">
                                     Disable Kiosk Clock-in Notifications
+                                </Label>
+                            </div>
+
+                            {/* Injury alert toggle */}
+                            <div className="flex items-start gap-3 sm:items-center">
+                                <Switch
+                                    id="receive_injury_alerts"
+                                    checked={data.receive_injury_alerts}
+                                    onCheckedChange={(checked) => setData('receive_injury_alerts', checked)}
+                                    className="mt-0.5 sm:mt-0"
+                                />
+                                <Label htmlFor="receive_injury_alerts" className="cursor-pointer leading-tight sm:leading-normal">
+                                    Receive Injury Alerts (all locations)
                                 </Label>
                             </div>
 

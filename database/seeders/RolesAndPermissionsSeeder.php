@@ -68,7 +68,8 @@ class RolesAndPermissionsSeeder extends Seeder
         // INJURY REGISTER
         // ============================================
         'Injury Register' => [
-            'injury-register.view' => 'View injury register',
+            'injury-register.view' => 'View injury register (scoped to managed locations)',
+            'injury-register.view-all' => 'View all injuries across all locations',
             'injury-register.create' => 'Report new injuries',
             'injury-register.edit' => 'Edit injury records',
             'injury-register.delete' => 'Delete injury records',
@@ -408,6 +409,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'receipts.view',
             // Injury Register
             'injury-register.view',
+            'injury-register.view-all',
             'injury-register.create',
             'injury-register.edit',
             'injury-register.export',
@@ -492,6 +494,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'ai.voice',
             // Injury Register (view + export)
             'injury-register.view',
+            'injury-register.view-all',
             'injury-register.export',
         ],
 

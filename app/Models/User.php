@@ -31,6 +31,7 @@ class User extends Authenticatable implements HasPasskeys
         'password',
         'phone',
         'disable_kiosk_notifications',
+        'receive_injury_alerts',
         'passkey_prompt_dismissed',
         'disabled_at',
     ];
@@ -56,6 +57,7 @@ class User extends Authenticatable implements HasPasskeys
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'passkey_prompt_dismissed' => 'boolean',
+            'receive_injury_alerts' => 'boolean',
             'disabled_at' => 'datetime',
         ];
     }

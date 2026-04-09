@@ -86,7 +86,7 @@ class EmployeeController extends Controller
                 'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'name' => $m->file_name,
-                    'url' => $m->getUrl(),
+                    'url' => $this->mediaUrl($m),
                     'mime_type' => $m->mime_type,
                     'size' => $m->size,
                 ]),
@@ -385,5 +385,14 @@ class EmployeeController extends Controller
         SyncKioskEmployees::dispatch($user->id);
 
         return redirect()->back()->with('success', 'Kiosk employees update job has been dispatched. You will be notified when it is complete.');
+    }
+
+    private function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media): string
+    {
+        try {
+            return $media->getTemporaryUrl(now()->addMinutes(30));
+        } catch (\RuntimeException) {
+            return $media->getUrl();
+        }
     }
 }

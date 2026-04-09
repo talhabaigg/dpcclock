@@ -376,22 +376,6 @@
     <div class="description-box">{{ $injury->follow_up_notes ?? '—' }}</div>
     @endif
 
-    {{-- WorkCover / Classification --}}
-    <h2>Classification</h2>
-    <table class="fields">
-        <tr>
-            <td class="label">WorkCover Claim Submitted</td>
-            <td class="value">{!! $boolVal($injury->work_cover_claim) !!}</td>
-        </tr>
-        <tr>
-            <td class="label">Work Days Missed</td>
-            <td class="value">{{ $injury->work_days_missed }}</td>
-        </tr>
-        <tr>
-            <td class="label">Report Type</td>
-            <td class="value">{{ Injury::REPORT_TYPE_OPTIONS[$injury->report_type] ?? '—' }}</td>
-        </tr>
-    </table>
 
 </body>
 </html>
