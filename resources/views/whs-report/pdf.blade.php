@@ -433,8 +433,8 @@
 <p style="color:#999;margin-bottom:10px;">No apprentice data entered.</p>
 @endif
 
-@if(count($csqGlPayments) > 0)
 <h2>CONSTRUCTION SKILLS QUEENSLAND (CSQ) PAYMENTS RECEIVED SUMMARY</h2>
+@if(count($csqGlPayments) > 0)
 <table class="yellow-table">
     <thead>
         <tr>
@@ -459,13 +459,18 @@
         </tr>
     </tbody>
 </table>
+@else
+<p style="color:#999;margin-bottom:10px;">No payments received during this period.</p>
 @endif
 
-@if($report && $report->training_summary)
 <h2>TRAINING SUMMARY</h2>
+<p style="font-size:9px;margin-bottom:6px;">Training Cost for {{ $monthLabel }}: <strong style="color:#D32F2F;">${{ number_format($trainingCost, 2) }}</strong></p>
+@if($report && $report->training_summary)
 <div class="rich-content" style="padding:6px 10px;border:1px solid #F9A825;background:#FFF8E1;">
     {!! $report->training_summary !!}
 </div>
+@else
+<p style="color:#999;margin-bottom:10px;">No training summary entered.</p>
 @endif
 
 @if($report && $report->bottom_action_points && count($report->bottom_action_points) > 0)

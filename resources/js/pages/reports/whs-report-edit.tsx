@@ -228,11 +228,11 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`WHS Report - ${months[month - 1]} ${year}`} />
 
-            <div className="mx-auto max-w-5xl space-y-4 p-4">
+            <div className="mx-auto min-w-full max-w-5xl space-y-4 p-4">
                 {flash?.success && <SuccessAlertFlash message={flash.success} />}
                 {flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
-                <div className="flex items-center justify-between">
+                <div className="space-y-3">
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => {
                             const prevMonth = month === 1 ? 12 : month - 1;
@@ -252,17 +252,18 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                     </div>
                     <div className="flex gap-2">
                         {previousReport && (
-                            <Button variant="outline" onClick={copyFromPrevious}>
+                            <Button variant="outline" size="sm" onClick={copyFromPrevious}>
                                 <ClipboardCopy className="mr-1 h-4 w-4" />
                                 Copy from {months[(month === 1 ? 11 : month - 2)]}
                             </Button>
                         )}
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <a href={`/reports/whs-report/pdf?year=${year}&month=${month}`} target="_blank" rel="noopener noreferrer">
                                 <FileText className="mr-1 h-4 w-4" /> View PDF
                             </a>
                         </Button>
-                        <Button onClick={handleSave} disabled={saving}>
+                        <div className="flex-1" />
+                        <Button size="sm" onClick={handleSave} disabled={saving}>
                             {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
                             {saving ? 'Saving...' : 'Save'}
                         </Button>

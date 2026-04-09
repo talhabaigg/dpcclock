@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Clock;
 use App\Models\Injury;
 use App\Models\Location;
+use App\Models\TimesheetEvent;
+use App\Models\Worktype;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -35,6 +38,155 @@ class SafetyDashboardController extends Controller
         $injuries = Injury::with('location.projectGroup')->forMonth($year, $month)->get();
 
         $rows = $this->aggregateByProject($injuries);
+
+        // Workcover days lost from clock hours (same logic as PDF)
+        $workcoverWorktypeId = Worktype::where('name', 'Workcover')->value('eh_worktype_id');
+        if ($workcoverWorktypeId) {
+            $wcHoursByLocation = Clock::where('eh_worktype_id', $workcoverWorktypeId)
+                ->whereYear('clock_in', $year)
+                ->whereMonth('clock_in', $month)
+                ->whereNotNull('clock_out')
+                ->select('eh_location_id', DB::raw('SUM(hours_worked) as total_hours'))
+                ->groupBy('eh_location_id')
+                ->pluck('total_hours', 'eh_location_id');
+
+            if ($wcHoursByLocation->isNotEmpty()) {
+                $ehLocationToProject = $this->buildLocationToProjectMap($wcHoursByLocation->keys()->all());
+
+                foreach ($rows as &$mRow) {
+                    $mRow['total_days_lost'] = 0;
+                }
+                unset($mRow);
+
+                $daysByProject = [];
+                foreach ($wcHoursByLocation as $ehLocId => $hours) {
+                    $project = $ehLocationToProject[$ehLocId] ?? 'Others';
+                    $daysByProject[$project] = ($daysByProject[$project] ?? 0) + round((float) $hours / 8, 1);
+                }
+
+                foreach ($daysByProject as $project => $days) {
+                    $found = false;
+                    foreach ($rows as &$mRow) {
+                        if ($mRow['project'] === $project) {
+                            $mRow['total_days_lost'] = $days;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    unset($mRow);
+
+                    if (! $found && $days > 0) {
+                        $rows[] = [
+                            'project' => $project,
+                            'location_id' => null,
+                            'reported_injuries' => 0,
+                            'type_of_injuries' => '-',
+                            'wcq_claims' => 0,
+                            'lti_count' => 0,
+                            'total_days_lost' => $days,
+                            'mti_count' => 0,
+                            'days_suitable_duties' => 0,
+                            'first_aid_count' => 0,
+                            'report_only_count' => 0,
+                            'near_miss_count' => 0,
+                            'medical_expenses' => 0,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Suitable duties days from date ranges overlapping this month
+        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+
+        $suitableDutiesInjuries = Injury::with('location.projectGroup')
+            ->whereNotNull('suitable_duties_from')
+            ->where('suitable_duties_from', '<=', $monthEnd->toDateString())
+            ->where(function ($q) use ($monthStart) {
+                $q->whereNull('suitable_duties_to')
+                  ->orWhere('suitable_duties_to', '>=', $monthStart->toDateString());
+            })
+            ->get();
+
+        if ($suitableDutiesInjuries->isNotEmpty()) {
+            $excludedDates = TimesheetEvent::whereIn('type', ['public_holiday', 'rdo'])
+                ->where('start', '<=', $monthEnd->toDateString())
+                ->where('end', '>=', $monthStart->toDateString())
+                ->get()
+                ->flatMap(function ($event) use ($monthStart, $monthEnd) {
+                    $dates = [];
+                    $s = Carbon::parse($event->start)->max($monthStart);
+                    $e = Carbon::parse($event->end)->min($monthEnd);
+                    for ($d = $s->copy(); $d->lte($e); $d->addDay()) {
+                        $dates[] = $d->toDateString();
+                    }
+                    return $dates;
+                })
+                ->unique()
+                ->toArray();
+
+            foreach ($rows as &$mRow) {
+                $mRow['days_suitable_duties'] = 0;
+            }
+            unset($mRow);
+
+            foreach ($suitableDutiesInjuries as $injury) {
+                $today = Carbon::today();
+                $effectiveEnd = $monthEnd->gt($today) ? $today : $monthEnd;
+                $from = Carbon::parse($injury->suitable_duties_from)->max($monthStart);
+                $to = $injury->suitable_duties_to
+                    ? Carbon::parse($injury->suitable_duties_to)->min($effectiveEnd)
+                    : $effectiveEnd->copy();
+
+                $days = 0;
+                for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                    if ($d->isWeekend() || in_array($d->toDateString(), $excludedDates)) {
+                        continue;
+                    }
+                    $days++;
+                }
+
+                if ($days > 0) {
+                    $loc = $injury->location;
+                    $project = 'Others';
+                    if ($loc) {
+                        $project = $loc->project_group_id
+                            ? ($loc->projectGroup?->name ?? $loc->name)
+                            : $loc->name;
+                    }
+
+                    $found = false;
+                    foreach ($rows as &$mRow) {
+                        if ($mRow['project'] === $project) {
+                            $mRow['days_suitable_duties'] += $days;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    unset($mRow);
+
+                    if (! $found) {
+                        $rows[] = [
+                            'project' => $project,
+                            'location_id' => $loc?->project_group_id ?? $loc?->id,
+                            'reported_injuries' => 0,
+                            'type_of_injuries' => '-',
+                            'wcq_claims' => 0,
+                            'lti_count' => 0,
+                            'total_days_lost' => 0,
+                            'mti_count' => 0,
+                            'days_suitable_duties' => $days,
+                            'first_aid_count' => 0,
+                            'report_only_count' => 0,
+                            'near_miss_count' => 0,
+                            'medical_expenses' => 0,
+                        ];
+                    }
+                }
+            }
+        }
+
         $totals = $this->computeTotals($rows);
 
         return response()->json([
@@ -146,7 +298,7 @@ class SafetyDashboardController extends Controller
 
         // Flatten all descendant eh_location_ids and query clocks once
         $allEhIds = collect($projectDescendants)->flatten()->unique()->values()->all();
-        $baseRateWorktypeIds = \App\Models\Worktype::whereIn('eh_external_id', ['01-01', '03-01', '05-01', '07-01'])
+        $baseRateWorktypeIds = Worktype::whereIn('eh_external_id', ['01-01', '03-01', '05-01', '07-01'])
             ->pluck('eh_worktype_id');
         $clockHours = Clock::whereIn('eh_location_id', $allEhIds)
             ->whereBetween('clock_in', ["{$fyStartYear}-07-01", "{$fyEndYear}-06-30"])
@@ -218,7 +370,7 @@ class SafetyDashboardController extends Controller
                 'lti_count' => $records->where('report_type', 'lti')->count(),
                 'total_days_lost' => $records->sum('work_days_missed'),
                 'mti_count' => $records->where('report_type', 'mti')->count(),
-                'days_suitable_duties' => $records->sum('days_suitable_duties'),
+                'days_suitable_duties' => $records->sum('computed_suitable_duties_days'),
                 'first_aid_count' => $records->where('report_type', 'first_aid')->count(),
                 'report_only_count' => $records->where('report_type', 'report')->count(),
                 'near_miss_count' => $records->where('incident', 'near_miss')->count(),
@@ -243,5 +395,45 @@ class SafetyDashboardController extends Controller
             'near_miss_count' => array_sum(array_column($rows, 'near_miss_count')),
             'medical_expenses' => round(array_sum(array_column($rows, 'medical_expenses')), 2),
         ];
+    }
+
+    private function buildLocationToProjectMap(array $ehLocationIds): array
+    {
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
+
+        $projects = Location::whereIn('eh_parent_id', $jobsEhIds)
+            ->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'project_group_id']);
+
+        $allLocations = Location::whereNotNull('eh_location_id')
+            ->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'project_group_id']);
+        $locationByEhId = $allLocations->keyBy('eh_location_id');
+
+        $map = [];
+        foreach ($ehLocationIds as $ehId) {
+            $current = $ehId;
+            $projectName = 'Others';
+            $visited = [];
+
+            while ($current && ! in_array($current, $visited)) {
+                $visited[] = $current;
+
+                $loc = $locationByEhId[$current] ?? null;
+                if ($loc && in_array($loc->eh_parent_id, $jobsEhIds)) {
+                    if ($loc->project_group_id) {
+                        $group = $projects->firstWhere('id', $loc->project_group_id);
+                        $projectName = $group?->name ?? $loc->name;
+                    } else {
+                        $projectName = $loc->name;
+                    }
+                    break;
+                }
+
+                $current = $loc?->eh_parent_id;
+            }
+
+            $map[$ehId] = $projectName;
+        }
+
+        return $map;
     }
 }

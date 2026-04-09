@@ -22,6 +22,9 @@ export interface Injury {
     employment_status: string | null;
     claim_cost: number;
     days_suitable_duties: number;
+    suitable_duties_from: string | null;
+    suitable_duties_to: string | null;
+    computed_suitable_duties_days: number;
     medical_expenses: number;
     treatment: boolean;
     treatment_at: string | null;

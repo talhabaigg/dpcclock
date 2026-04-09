@@ -226,7 +226,13 @@ export default function SafetyDashboard() {
                                         {monthlyRows.map((row) => (
                                             <TableRow key={row.project}>
                                                 <TableCell className="font-medium">{row.project}</TableCell>
-                                                <TableCell className="text-center">{row.reported_injuries}</TableCell>
+                                                <TableCell className="text-center">
+                                                    {row.reported_injuries > 0 ? (
+                                                        <a href={`/injury-register?year=${selectedYear}&month=${selectedMonth}&project=${encodeURIComponent(row.project)}`} className="text-primary underline hover:text-primary/80">{row.reported_injuries}</a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">0</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-sm">{row.type_of_injuries}</TableCell>
                                                 <TableCell className="text-center">{row.wcq_claims}</TableCell>
                                                 <TableCell className="text-center">{row.lti_count}</TableCell>
@@ -241,7 +247,13 @@ export default function SafetyDashboard() {
                                         {monthlyTotals && (
                                             <TableRow className="bg-muted/50 font-bold">
                                                 <TableCell>TOTAL</TableCell>
-                                                <TableCell className="text-center">{monthlyTotals.reported_injuries}</TableCell>
+                                                <TableCell className="text-center">
+                                                    {monthlyTotals.reported_injuries > 0 ? (
+                                                        <a href={`/injury-register?year=${selectedYear}&month=${selectedMonth}`} className="text-primary underline hover:text-primary/80">{monthlyTotals.reported_injuries}</a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">0</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell></TableCell>
                                                 <TableCell className="text-center">{monthlyTotals.wcq_claims}</TableCell>
                                                 <TableCell className="text-center">{monthlyTotals.lti_count}</TableCell>
@@ -301,7 +313,13 @@ export default function SafetyDashboard() {
                                         {fyRows.map((row) => (
                                             <TableRow key={row.project}>
                                                 <TableCell className="font-medium">{row.project}</TableCell>
-                                                <TableCell className="text-center">{row.reported_injuries}</TableCell>
+                                                <TableCell className="text-center">
+                                                    {row.reported_injuries > 0 ? (
+                                                        <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${selectedMonth}&fy_year=${selectedYear}&project=${encodeURIComponent(row.project)}`} className="text-primary underline hover:text-primary/80">{row.reported_injuries}</a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">0</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-center">{row.wcq_claims}</TableCell>
                                                 <TableCell className="text-center">{row.lti_count}</TableCell>
                                                 <TableCell className="text-center">{row.total_days_lost}</TableCell>
@@ -318,7 +336,13 @@ export default function SafetyDashboard() {
                                         {fyTotals && (
                                             <TableRow className="bg-muted/50 font-bold">
                                                 <TableCell>TOTAL</TableCell>
-                                                <TableCell className="text-center">{fyTotals.reported_injuries}</TableCell>
+                                                <TableCell className="text-center">
+                                                    {fyTotals.reported_injuries > 0 ? (
+                                                        <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${selectedMonth}&fy_year=${selectedYear}`} className="text-primary underline hover:text-primary/80">{fyTotals.reported_injuries}</a>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">0</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-center">{fyTotals.wcq_claims}</TableCell>
                                                 <TableCell className="text-center">{fyTotals.lti_count}</TableCell>
                                                 <TableCell className="text-center">{fyTotals.total_days_lost}</TableCell>

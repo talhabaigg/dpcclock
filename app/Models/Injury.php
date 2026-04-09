@@ -23,7 +23,7 @@ class Injury extends Model implements HasMedia
         'treatment', 'treatment_at',
         'treatment_provider', 'treatment_external', 'treatment_external_location',
         'no_treatment_reason', 'follow_up', 'follow_up_notes',
-        'work_days_missed', 'days_suitable_duties', 'medical_expenses',
+        'work_days_missed', 'days_suitable_duties', 'suitable_duties_from', 'suitable_duties_to', 'medical_expenses',
         'report_type', 'witnesses', 'witness_details',
         'natures', 'natures_comments',
         'mechanisms', 'mechanisms_comments',
@@ -44,6 +44,8 @@ class Injury extends Model implements HasMedia
         'claim_active' => 'boolean',
         'claim_cost' => 'decimal:2',
         'days_suitable_duties' => 'integer',
+        'suitable_duties_from' => 'date',
+        'suitable_duties_to' => 'date',
         'medical_expenses' => 'decimal:2',
         'treatment' => 'boolean',
         'follow_up' => 'boolean',
@@ -56,7 +58,7 @@ class Injury extends Model implements HasMedia
         'corrective_actions' => 'array',
     ];
 
-    protected $appends = ['incident_label', 'report_type_label'];
+    protected $appends = ['incident_label', 'report_type_label', 'computed_suitable_duties_days'];
 
     // --- Enum option constants ---
 
@@ -317,6 +319,50 @@ class Injury extends Model implements HasMedia
     public function getReportTypeLabelAttribute(): ?string
     {
         return self::REPORT_TYPE_OPTIONS[$this->report_type] ?? $this->report_type;
+    }
+
+    public function getComputedSuitableDutiesDaysAttribute(): int
+    {
+        if (! $this->suitable_duties_from) {
+            return $this->days_suitable_duties ?? 0;
+        }
+
+        $from = \Carbon\Carbon::parse($this->suitable_duties_from);
+        $to = $this->suitable_duties_to ? \Carbon\Carbon::parse($this->suitable_duties_to) : \Carbon\Carbon::today();
+
+        if ($to->lt($from)) {
+            return 0;
+        }
+
+        // Get all public holidays and RDOs in the date range
+        $excludedDates = TimesheetEvent::whereIn('type', ['public_holiday', 'rdo'])
+            ->where('start', '<=', $to->toDateString())
+            ->where('end', '>=', $from->toDateString())
+            ->get()
+            ->flatMap(function ($event) use ($from, $to) {
+                $dates = [];
+                $eventStart = \Carbon\Carbon::parse($event->start)->max($from);
+                $eventEnd = \Carbon\Carbon::parse($event->end)->min($to);
+                for ($d = $eventStart->copy(); $d->lte($eventEnd); $d->addDay()) {
+                    $dates[] = $d->toDateString();
+                }
+                return $dates;
+            })
+            ->unique()
+            ->toArray();
+
+        $days = 0;
+        for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+            if ($d->isWeekend()) {
+                continue;
+            }
+            if (in_array($d->toDateString(), $excludedDates)) {
+                continue;
+            }
+            $days++;
+        }
+
+        return $days;
     }
 
     // --- Relationships ---

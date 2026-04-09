@@ -145,8 +145,163 @@ class WhsReportController extends Controller
         // --- Auto-generated data ---
 
         // Monthly overview
-        $monthlyInjuries = Injury::with('location.projectGroup')->forMonth($year, $month)->get();
+        $monthlyInjuries = Injury::with(['location.projectGroup', 'employee'])->forMonth($year, $month)->get();
         $monthlyRows = $this->aggregateByProject($monthlyInjuries);
+
+        // Work cover days: sum ALL workcover timesheets for the month, mapped to projects
+        $workcoverWorktypeId = \App\Models\Worktype::where('name', 'Workcover')->value('eh_worktype_id');
+        if ($workcoverWorktypeId) {
+            // Get workcover hours grouped by eh_location_id
+            $wcHoursByLocation = Clock::where('eh_worktype_id', $workcoverWorktypeId)
+                ->whereYear('clock_in', $year)
+                ->whereMonth('clock_in', $month)
+                ->whereNotNull('clock_out')
+                ->select('eh_location_id', DB::raw('SUM(hours_worked) as total_hours'))
+                ->groupBy('eh_location_id')
+                ->pluck('total_hours', 'eh_location_id');
+
+            if ($wcHoursByLocation->isNotEmpty()) {
+                // Build eh_location_id -> project name map using location hierarchy
+                $ehLocationToProject = $this->buildLocationToProjectMap($wcHoursByLocation->keys()->all());
+
+                // Reset total_days_lost for all rows
+                foreach ($monthlyRows as &$mRow) {
+                    $mRow['total_days_lost'] = 0;
+                }
+                unset($mRow);
+
+                // Aggregate hours by project
+                $daysByProject = [];
+                foreach ($wcHoursByLocation as $ehLocId => $hours) {
+                    $project = $ehLocationToProject[$ehLocId] ?? 'Others';
+                    $daysByProject[$project] = ($daysByProject[$project] ?? 0) + round((float) $hours / 8, 1);
+                }
+
+                foreach ($daysByProject as $project => $days) {
+                    $found = false;
+                    foreach ($monthlyRows as &$mRow) {
+                        if ($mRow['project'] === $project) {
+                            $mRow['total_days_lost'] = $days;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    unset($mRow);
+
+                    if (! $found && $days > 0) {
+                        $monthlyRows[] = [
+                            'project' => $project,
+                            'location_id' => null,
+                            'reported_injuries' => 0,
+                            'type_of_injuries' => '-',
+                            'wcq_claims' => 0,
+                            'lti_count' => 0,
+                            'total_days_lost' => $days,
+                            'mti_count' => 0,
+                            'days_suitable_duties' => 0,
+                            'first_aid_count' => 0,
+                            'report_only_count' => 0,
+                            'near_miss_count' => 0,
+                            'medical_expenses' => 0,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Suitable duties days: find injuries whose suitable duties period overlaps this month
+        $monthStart = \Carbon\Carbon::create($year, $month, 1)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+
+        $suitableDutiesInjuries = Injury::with('location.projectGroup')
+            ->whereNotNull('suitable_duties_from')
+            ->where('suitable_duties_from', '<=', $monthEnd->toDateString())
+            ->where(function ($q) use ($monthStart) {
+                $q->whereNull('suitable_duties_to')
+                  ->orWhere('suitable_duties_to', '>=', $monthStart->toDateString());
+            })
+            ->get();
+
+        if ($suitableDutiesInjuries->isNotEmpty()) {
+            // Get excluded dates (public holidays + RDOs) for this month
+            $excludedDates = \App\Models\TimesheetEvent::whereIn('type', ['public_holiday', 'rdo'])
+                ->where('start', '<=', $monthEnd->toDateString())
+                ->where('end', '>=', $monthStart->toDateString())
+                ->get()
+                ->flatMap(function ($event) use ($monthStart, $monthEnd) {
+                    $dates = [];
+                    $s = \Carbon\Carbon::parse($event->start)->max($monthStart);
+                    $e = \Carbon\Carbon::parse($event->end)->min($monthEnd);
+                    for ($d = $s->copy(); $d->lte($e); $d->addDay()) {
+                        $dates[] = $d->toDateString();
+                    }
+                    return $dates;
+                })
+                ->unique()
+                ->toArray();
+
+            // Reset suitable duties for all rows
+            foreach ($monthlyRows as &$mRow) {
+                $mRow['days_suitable_duties'] = 0;
+            }
+            unset($mRow);
+
+            foreach ($suitableDutiesInjuries as $injury) {
+                $today = \Carbon\Carbon::today();
+                $effectiveEnd = $monthEnd->gt($today) ? $today : $monthEnd;
+                $from = \Carbon\Carbon::parse($injury->suitable_duties_from)->max($monthStart);
+                $to = $injury->suitable_duties_to
+                    ? \Carbon\Carbon::parse($injury->suitable_duties_to)->min($effectiveEnd)
+                    : $effectiveEnd->copy();
+
+                $days = 0;
+                for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                    if ($d->isWeekend() || in_array($d->toDateString(), $excludedDates)) {
+                        continue;
+                    }
+                    $days++;
+                }
+
+                if ($days > 0) {
+                    $loc = $injury->location;
+                    $project = 'Others';
+                    if ($loc) {
+                        $project = $loc->project_group_id
+                            ? ($loc->projectGroup?->name ?? $loc->name)
+                            : $loc->name;
+                    }
+
+                    $found = false;
+                    foreach ($monthlyRows as &$mRow) {
+                        if ($mRow['project'] === $project) {
+                            $mRow['days_suitable_duties'] += $days;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    unset($mRow);
+
+                    if (! $found) {
+                        $monthlyRows[] = [
+                            'project' => $project,
+                            'location_id' => $loc?->project_group_id ?? $loc?->id,
+                            'reported_injuries' => 0,
+                            'type_of_injuries' => '-',
+                            'wcq_claims' => 0,
+                            'lti_count' => 0,
+                            'total_days_lost' => 0,
+                            'mti_count' => 0,
+                            'days_suitable_duties' => $days,
+                            'first_aid_count' => 0,
+                            'report_only_count' => 0,
+                            'near_miss_count' => 0,
+                            'medical_expenses' => 0,
+                        ];
+                    }
+                }
+            }
+        }
+
         $monthlyTotals = $this->computeTotals($monthlyRows);
 
         // FY performance
@@ -239,6 +394,12 @@ class WhsReportController extends Controller
             $ltifrComparison[$endYr] = $totalHours > 0 ? round(($ltiCount / $totalHours) * 1_000_000, 2) : 0;
         }
 
+        // Training cost for the month
+        $trainingCost = round((float) JobCostDetail::where('job_number', 'TRAINING')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->sum('amount'), 2);
+
         $monthLabel = date('F', mktime(0, 0, 0, $month, 1));
         $reportId = 'WHS-R-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . substr($year, 2);
 
@@ -266,6 +427,7 @@ class WhsReportController extends Controller
             'claimsOverview' => $claimsOverview,
             'claims' => $claims,
             'csqGlPayments' => $csqGlPayments,
+            'trainingCost' => $trainingCost,
             'ltifrComparison' => $ltifrComparison,
             'fyStartYear' => $fyStartYear,
             'currentFyEndYear' => $currentFyEndYear,
@@ -371,7 +533,7 @@ class WhsReportController extends Controller
                 'lti_count' => $records->where('report_type', 'lti')->count(),
                 'total_days_lost' => $records->sum('work_days_missed'),
                 'mti_count' => $records->where('report_type', 'mti')->count(),
-                'days_suitable_duties' => $records->sum('days_suitable_duties'),
+                'days_suitable_duties' => $records->sum('computed_suitable_duties_days'),
                 'first_aid_count' => $records->where('report_type', 'first_aid')->count(),
                 'report_only_count' => $records->where('report_type', 'report')->count(),
                 'near_miss_count' => $records->where('incident', 'near_miss')->count(),
@@ -475,5 +637,55 @@ class WhsReportController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Map eh_location_ids to project names by walking up the location hierarchy.
+     */
+    private function buildLocationToProjectMap(array $ehLocationIds): array
+    {
+        // Get "Jobs" container IDs
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
+
+        // Get all projects (direct children of Jobs)
+        $projects = Location::whereIn('eh_parent_id', $jobsEhIds)
+            ->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'project_group_id']);
+
+        // Build parent->children map for traversal
+        $allLocations = Location::whereNotNull('eh_location_id')
+            ->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'project_group_id']);
+        $locationByEhId = $allLocations->keyBy('eh_location_id');
+
+        // For each target eh_location_id, walk up to find its project ancestor
+        $map = [];
+        foreach ($ehLocationIds as $ehId) {
+            $current = $ehId;
+            $projectName = 'Others';
+            $visited = [];
+
+            while ($current && ! in_array($current, $visited)) {
+                $visited[] = $current;
+
+                // Check if this is a project (direct child of Jobs)
+                $loc = $locationByEhId[$current] ?? null;
+                if ($loc && in_array($loc->eh_parent_id, $jobsEhIds)) {
+                    // Found the project — use group name if grouped
+                    if ($loc->project_group_id) {
+                        $group = $projects->firstWhere('id', $loc->project_group_id);
+                        $projectName = $group?->name ?? $loc->name;
+                    } else {
+                        $projectName = $loc->name;
+                    }
+                    break;
+                }
+
+                // Walk up
+                $current = $loc?->eh_parent_id;
+            }
+
+            $map[$ehId] = $projectName;
+        }
+
+        return $map;
     }
 }

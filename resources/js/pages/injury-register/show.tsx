@@ -168,6 +168,8 @@ export default function InjuryShow({ injury, comments, options }: Props) {
         employment_status: injury.employment_status ?? '',
         claim_cost: injury.claim_cost ?? 0,
         days_suitable_duties: injury.days_suitable_duties ?? 0,
+        suitable_duties_from: injury.suitable_duties_from ?? '',
+        suitable_duties_to: injury.suitable_duties_to ?? '',
         medical_expenses: injury.medical_expenses ?? 0,
     });
     const [classSaving, setClassSaving] = useState(false);
@@ -360,7 +362,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reporting</h4>
                                     {can('injury-register.edit') && (
-                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '', claim_active: injury.claim_active ?? false, claim_type: injury.claim_type ?? '', claim_status: injury.claim_status ?? '', capacity: injury.capacity ?? '', employment_status: injury.employment_status ?? '', claim_cost: injury.claim_cost ?? 0, days_suitable_duties: injury.days_suitable_duties ?? 0, medical_expenses: injury.medical_expenses ?? 0 }); setClassifyOpen(true); }}>
+                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '', claim_active: injury.claim_active ?? false, claim_type: injury.claim_type ?? '', claim_status: injury.claim_status ?? '', capacity: injury.capacity ?? '', employment_status: injury.employment_status ?? '', claim_cost: injury.claim_cost ?? 0, days_suitable_duties: injury.days_suitable_duties ?? 0, suitable_duties_from: injury.suitable_duties_from ?? '', suitable_duties_to: injury.suitable_duties_to ?? '', medical_expenses: injury.medical_expenses ?? 0 }); setClassifyOpen(true); }}>
                                             <Pencil className="mr-1 h-3 w-3" /> Edit
                                         </Button>
                                     )}
@@ -370,7 +372,12 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                 <SidebarField label="Reported To" value={injury.reported_to} />
                                 <SidebarField label="WorkCover Claim" value={injury.work_cover_claim ? 'Yes' : 'No'} />
                                 <SidebarField label="Days Lost" value={injury.work_days_missed} />
-                                <SidebarField label="Days Suitable Duties" value={injury.days_suitable_duties} />
+                                <SidebarField label="Days Suitable Duties" value={injury.computed_suitable_duties_days} />
+                                {injury.suitable_duties_from && (
+                                    <div className="text-xs text-muted-foreground">
+                                        {injury.suitable_duties_from} → {injury.suitable_duties_to ?? 'ongoing'}
+                                    </div>
+                                )}
                                 {injury.work_cover_claim && (
                                     <>
                                         <SidebarField label="Claim Active" value={injury.claim_active ? 'Yes' : 'No'} />
@@ -524,14 +531,25 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>Days on Suitable Duties</Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                value={classForm.days_suitable_duties}
-                                onChange={(e) => setClassForm({ ...classForm, days_suitable_duties: parseInt(e.target.value) || 0 })}
-                                className="w-32"
-                            />
+                            <Label>Suitable Duties Period</Label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">From</Label>
+                                    <Input
+                                        type="date"
+                                        value={classForm.suitable_duties_from}
+                                        onChange={(e) => setClassForm({ ...classForm, suitable_duties_from: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">To (empty = ongoing)</Label>
+                                    <Input
+                                        type="date"
+                                        value={classForm.suitable_duties_to}
+                                        onChange={(e) => setClassForm({ ...classForm, suitable_duties_to: e.target.value })}
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {classForm.work_cover_claim && (

@@ -55,6 +55,19 @@ class InjuryController extends Controller
         if ($request->filled('claim_status')) {
             $query->where('claim_status', $request->claim_status);
         }
+        if ($request->filled('month') && $request->filled('year')) {
+            $query->whereYear('occurred_at', (int) $request->year)
+                  ->whereMonth('occurred_at', (int) $request->month);
+        }
+        if ($request->filled('project')) {
+            $projectName = $request->project;
+            $query->whereHas('location', function ($q) use ($projectName) {
+                $q->where('name', $projectName)
+                  ->orWhereHas('projectGroup', function ($q2) use ($projectName) {
+                      $q2->where('name', $projectName);
+                  });
+            });
+        }
         if ($request->filled('fy')) {
             $fyStartYear = (int) $request->fy;
             $fyStart = "{$fyStartYear}-07-01";
@@ -91,7 +104,7 @@ class InjuryController extends Controller
 
         return Inertia::render('injury-register/index', [
             'injuries' => $injuries,
-            'filters' => $request->only(['search', 'location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'claim_type', 'claim_status', 'fy', 'fy_month', 'fy_year', 'entity', 'status']),
+            'filters' => $request->only(['search', 'location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'claim_type', 'claim_status', 'fy', 'fy_month', 'fy_year', 'entity', 'project', 'month', 'year', 'status']),
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
             'employees' => Employee::orderBy('name')->get(['id', 'name', 'preferred_name']),
             'incidentOptions' => Injury::INCIDENT_OPTIONS,
@@ -234,6 +247,8 @@ class InjuryController extends Controller
             'employment_status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(Injury::EMPLOYMENT_STATUS_OPTIONS))],
             'claim_cost' => ['nullable', 'numeric', 'min:0'],
             'days_suitable_duties' => ['nullable', 'integer', 'min:0'],
+            'suitable_duties_from' => ['nullable', 'date'],
+            'suitable_duties_to' => ['nullable', 'date'],
             'medical_expenses' => ['nullable', 'numeric', 'min:0'],
         ]);
 
