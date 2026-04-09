@@ -208,13 +208,13 @@ class LoadGlTransactionDetails implements ShouldQueue
             'company_from' => $r['Company_From'] ?? null,
             'company_to' => $r['Company_To'] ?? null,
             'update_user' => $r['Update_User'] ?? null,
-            'update_date' => $this->parseDate($r['Update_Date'] ?? null),
+            'update_date' => $this->parseDate($r['Update_Date'] ?? null, includeTime: true),
             'created_at' => now(),
             'updated_at' => now(),
         ];
     }
 
-    private function parseDate(?string $dateString): ?string
+    private function parseDate(?string $dateString, bool $includeTime = false): ?string
     {
         if (empty($dateString)) {
             return null;
@@ -222,12 +222,16 @@ class LoadGlTransactionDetails implements ShouldQueue
 
         // OData v2 format: /Date(1234567890000)/
         if (preg_match('/\/Date\((\d+)\)\//', $dateString, $m)) {
-            return Carbon::createFromTimestampMsUTC((int) $m[1])->toDateString();
+            $carbon = Carbon::createFromTimestampMsUTC((int) $m[1]);
+
+            return $includeTime ? $carbon->toDateTimeString() : $carbon->toDateString();
         }
 
         // ISO format from some endpoints
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {
-            return Carbon::parse($dateString)->toDateTimeString();
+            $carbon = Carbon::parse($dateString);
+
+            return $includeTime ? $carbon->toDateTimeString() : $carbon->toDateString();
         }
 
         return null;
