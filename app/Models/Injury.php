@@ -35,10 +35,10 @@ class Injury extends Model implements HasMedia
     ];
 
     protected $casts = [
-        'occurred_at' => 'datetime',
-        'reported_at' => 'datetime',
-        'treatment_at' => 'datetime',
-        'locked_at' => 'datetime',
+        'occurred_at' => 'datetime:Y-m-d\TH:i:s',
+        'reported_at' => 'datetime:Y-m-d\TH:i:s',
+        'treatment_at' => 'datetime:Y-m-d\TH:i:s',
+        'locked_at' => 'datetime:Y-m-d\TH:i:s',
         'emergency_services' => 'boolean',
         'work_cover_claim' => 'boolean',
         'claim_active' => 'boolean',
