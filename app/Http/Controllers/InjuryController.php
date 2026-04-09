@@ -363,6 +363,18 @@ class InjuryController extends Controller
         ]);
     }
 
+    public function downloadFile(Injury $injury, int $media)
+    {
+        $mediaItem = $injury->media()->where('id', $media)->where('collection_name', 'files')->first();
+        abort_unless($mediaItem, 404);
+
+        if (app()->environment('production')) {
+            return redirect($mediaItem->getTemporaryUrl(now()->addMinutes(30)));
+        }
+
+        return $mediaItem;
+    }
+
     public function dropAll()
     {
         abort_unless(app()->environment('local'), 403);

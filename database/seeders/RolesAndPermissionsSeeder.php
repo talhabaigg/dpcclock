@@ -34,7 +34,8 @@ class RolesAndPermissionsSeeder extends Seeder
         // EMPLOYEE MANAGEMENT
         // ============================================
         'Employees' => [
-            'employees.view' => 'View employee list',
+            'employees.view' => 'View employees assigned to your kiosks',
+            'employees.view-all' => 'View all employees (across all kiosks)',
             'employees.sync' => 'Sync employees from external system',
             'employees.manage-worktypes' => 'Manage employee work types',
         ],
@@ -329,6 +330,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.edit',
             // Employees
             'employees.view',
+            'employees.view-all',
             'employees.sync',
             'employees.manage-worktypes',
             // Locations (no close — admin/PM only)
@@ -466,6 +468,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.dashboard.view',
             // Employees
             'employees.view',
+            'employees.view-all',
             // Employment Applications
             'employment-applications.view',
             'employment-applications.approve',

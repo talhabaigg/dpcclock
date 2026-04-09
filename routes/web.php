@@ -1160,6 +1160,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:injury-register.lock');
         Route::get('/injury-register/{injury}/pdf', [InjuryController::class, 'downloadPdf'])->name('injury-register.pdf')
             ->middleware('permission:injury-register.view');
+        Route::get('/injury-register/{injury}/files/{media}', [InjuryController::class, 'downloadFile'])->name('injury-register.download-file');
     });
 
     // ============================================

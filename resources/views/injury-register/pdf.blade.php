@@ -236,7 +236,7 @@
         @foreach($injury->getMedia('files') as $media)
         <tr>
             <td class="label">{{ $media->file_name }}</td>
-            <td class="value"><a href="{{ $media->getUrl() }}" style="color:#2563eb; text-decoration:underline;">Download</a></td>
+            <td class="value"><a href="{{ route('injury-register.download-file', [$injury, $media->id]) }}" style="color:#2563eb; text-decoration:underline;">Download</a></td>
         </tr>
         @endforeach
     </table>

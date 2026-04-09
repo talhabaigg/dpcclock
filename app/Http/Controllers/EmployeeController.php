@@ -17,15 +17,41 @@ class EmployeeController extends Controller
 {
     public function index()
     {
-        $employees = Employee::with('worktypes')->get();
+        $user = Auth::user();
+
+        $query = Employee::with('worktypes');
+
+        if (! $user->can('employees.view-all')) {
+            $kioskEmployeeIds = $user->managedKiosks()
+                ->with('employees')
+                ->get()
+                ->flatMap(fn ($kiosk) => $kiosk->employees->pluck('eh_employee_id'))
+                ->unique();
+
+            $query->whereIn('eh_employee_id', $kioskEmployeeIds);
+        }
 
         return Inertia::render('employees/index', [
-            'employees' => $employees,
+            'employees' => $query->get(),
         ]);
     }
 
     public function show(Employee $employee)
     {
+        $user = Auth::user();
+
+        if (! $user->can('employees.view-all')) {
+            $kioskEmployeeIds = $user->managedKiosks()
+                ->with('employees')
+                ->get()
+                ->flatMap(fn ($kiosk) => $kiosk->employees->pluck('eh_employee_id'))
+                ->unique();
+
+            if (! $kioskEmployeeIds->contains($employee->eh_employee_id)) {
+                abort(403, 'You do not have access to this employee.');
+            }
+        }
+
         $employee->load(['worktypes', 'kiosks.location', 'incidentReports.location', 'clocks' => function ($query) {
             $query->select('id', 'eh_employee_id', 'clock_in')->latest('clock_in')->limit(10);
         }]);
