@@ -52,7 +52,7 @@ const ReviewTimesheets = ({ weekEnding, locations, selectedLocation, days, emplo
 
         setLoading(true);
         router.get(
-            '/timesheets/review',
+            '/timesheet-review',
             { weekEnding: nextWeek, location: nextLoc },
             {
                 replace: true,

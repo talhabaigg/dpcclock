@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Employee extends Model
 {
     use \Illuminate\Database\Eloquent\SoftDeletes;
+    use Concerns\HasComments;
 
     protected $fillable = [
         'eh_employee_id',

@@ -1,6 +1,7 @@
 <?php
 
 
+use App\Http\Controllers\AiTextController;
 use App\Http\Controllers\AllowanceTypeController;
 use App\Http\Controllers\WhsReportController;
 use App\Http\Controllers\BidAreaController;
@@ -133,6 +134,11 @@ Route::post('/notifications/{id}/mark-read', function ($id) {
 Route::middleware('auth')->group(function () {
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+});
+
+// AI Text Transformation (inline editor AI features)
+Route::middleware(['auth'])->group(function () {
+    Route::post('/ai-text/stream', [AiTextController::class, 'stream'])->name('ai-text.stream');
 });
 
 // AI Chat Routes (restricted to users with ai.chat permission)
@@ -275,7 +281,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // WORKER SCREENING
     // ============================================
     Route::middleware('permission:worker-screening.search')->group(function () {
-        Route::get('/worker-screening/search', [WorkerScreeningController::class, 'search'])->name('worker-screening.search');
+        Route::get('/worker-check', [WorkerScreeningController::class, 'search'])->name('worker-screening.search');
     });
     Route::middleware('permission:worker-screening.manage')->group(function () {
         Route::get('/worker-screening', [WorkerScreeningController::class, 'index'])->name('worker-screening.index');
@@ -532,7 +538,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/timesheets/edit', [ClockController::class, 'saveTimesheets'])->name('clock.edit.summary.post');
     });
     Route::middleware('permission:timesheets.review')->group(function () {
-        Route::get('/timesheets/review', [ClockController::class, 'reviewTimesheets'])->name('timesheets.review');
+        Route::get('/timesheet-review', [ClockController::class, 'reviewTimesheets'])->name('timesheets.review');
         Route::get('/timesheets/{employeeId}/{weekEnding}/approve-all', [ClockController::class, 'approveAllTimesheets'])->name('timesheets.approve-all');
     });
     Route::middleware('permission:timesheets.sync')->group(function () {
@@ -1120,9 +1126,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Safety Dashboard
     Route::middleware('permission:reports.safety-dashboard')->group(function () {
-        Route::get('/reports/safety-dashboard', [SafetyDashboardController::class, 'index'])->name('reports.safetyDashboard');
-        Route::get('/reports/safety-dashboard/monthly-data', [SafetyDashboardController::class, 'getMonthlyData'])->name('reports.safetyDashboard.monthlyData');
-        Route::get('/reports/safety-dashboard/fy-data', [SafetyDashboardController::class, 'getFYData'])->name('reports.safetyDashboard.fyData');
+        Route::get('/safety-dashboard', [SafetyDashboardController::class, 'index'])->name('reports.safetyDashboard');
+        Route::get('/safety-dashboard/monthly-data', [SafetyDashboardController::class, 'getMonthlyData'])->name('reports.safetyDashboard.monthlyData');
+        Route::get('/safety-dashboard/fy-data', [SafetyDashboardController::class, 'getFYData'])->name('reports.safetyDashboard.fyData');
 
         // WHS Monthly Report
         Route::get('/reports/whs-report', [WhsReportController::class, 'edit'])->name('reports.whsReport.edit');

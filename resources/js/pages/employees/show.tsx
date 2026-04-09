@@ -6,11 +6,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
-import { AlertTriangle, Check, Clock, FolderOpen, LinkIcon, Loader2, Pencil } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Clock, FileIcon, FolderOpen, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -39,6 +40,23 @@ interface Project {
     name: string;
     external_id: string;
     kiosk_id: number;
+}
+
+interface JournalAttachment {
+    id: number;
+    name: string;
+    url: string;
+    mime_type: string;
+    size: number;
+}
+
+interface JournalEntry {
+    id: number;
+    body: string;
+    type: 'positive' | 'negative' | null;
+    user: { id: number; name: string } | null;
+    created_at: string;
+    attachments: JournalAttachment[];
 }
 
 interface Employee {
@@ -86,11 +104,52 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
+        journal: JournalEntry[];
+        auth: { user?: { id: number; name: string } };
     }>().props;
+
+    const currentUserId = auth?.user?.id;
+
+    // Journal form state
+    const [journalBody, setJournalBody] = useState('');
+    const [journalType, setJournalType] = useState<string>('positive');
+    const [journalFiles, setJournalFiles] = useState<File[]>([]);
+    const [journalSubmitting, setJournalSubmitting] = useState(false);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+    const submitJournal = useCallback(() => {
+        if (!journalBody.trim() && journalFiles.length === 0) return;
+        setJournalSubmitting(true);
+
+        const formData = new FormData();
+        formData.append('commentable_type', 'employee');
+        formData.append('commentable_id', String(emp.id));
+        formData.append('body', journalBody.trim());
+        formData.append('type', journalType);
+        journalFiles.forEach((file) => formData.append('attachments[]', file));
+
+        router.post('/comments', formData as any, {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                setJournalBody('');
+                setJournalType('positive');
+                setJournalFiles([]);
+            },
+            onFinish: () => setJournalSubmitting(false),
+        });
+    }, [journalBody, journalType, journalFiles, emp.id]);
+
+    const deleteJournal = useCallback((id: number) => {
+        router.delete(`/comments/${id}`, {
+            preserveScroll: true,
+            onSuccess: () => setConfirmDeleteId(null),
+        });
+    }, []);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/employees' },
@@ -329,6 +388,130 @@ export default function EmployeeShow() {
                                     ))}
                             </CardContent>
                         </Card>
+
+                        {/* Journal Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <BookOpen className="h-4 w-4" />
+                                    Journal
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-4 pt-0">
+                                <Separator />
+                                {/* New entry form */}
+                                <div className="flex flex-col gap-2">
+                                    <AiRichTextEditor
+                                        content={journalBody}
+                                        onChange={setJournalBody}
+                                        placeholder="Add a journal entry..."
+                                        enableAttachments
+                                        attachments={journalFiles}
+                                        onAttachmentsChange={setJournalFiles}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <div className="ml-auto flex items-center gap-0">
+                                            <div className="inline-flex rounded-md border" role="group">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setJournalType('positive')}
+                                                    className={`inline-flex h-8 items-center gap-1.5 rounded-l-md px-3 text-xs font-medium transition-colors ${
+                                                        journalType === 'positive'
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                                                            : 'bg-background text-muted-foreground hover:bg-accent'
+                                                    }`}
+                                                >
+                                                    <ThumbsUp className="h-3.5 w-3.5" />
+                                                    Positive
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setJournalType('negative')}
+                                                    className={`inline-flex h-8 items-center gap-1.5 rounded-r-md border-l px-3 text-xs font-medium transition-colors ${
+                                                        journalType === 'negative'
+                                                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                                                            : 'bg-background text-muted-foreground hover:bg-accent'
+                                                    }`}
+                                                >
+                                                    <ThumbsDown className="h-3.5 w-3.5" />
+                                                    Negative
+                                                </button>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-8 ml-2"
+                                                onClick={submitJournal}
+                                                disabled={journalSubmitting || (!journalBody.trim() && journalFiles.length === 0)}
+                                            >
+                                                {journalSubmitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                                Add Entry
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Journal entries */}
+                                {journal && journal.length > 0 ? (
+                                    <div className="flex flex-col gap-3">
+                                        {journal.map((entry) => (
+                                            <div key={entry.id} className={`rounded-lg border p-3 ${
+                                                entry.type === 'positive'
+                                                    ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20'
+                                                    : entry.type === 'negative'
+                                                    ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20'
+                                                    : ''
+                                            }`}>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        {entry.type === 'positive' ? (
+                                                            <ThumbsUp className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                                        ) : entry.type === 'negative' ? (
+                                                            <ThumbsDown className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                                                        ) : null}
+                                                        <span className="text-xs font-medium">{entry.user?.name ?? 'System'}</span>
+                                                        <span className="text-muted-foreground text-xs">{formatDate(entry.created_at)}</span>
+                                                    </div>
+                                                    {currentUserId === entry.user?.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmDeleteId(entry.id)}
+                                                            className="text-muted-foreground hover:text-destructive shrink-0 p-0.5"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {entry.body && <div className="prose prose-sm max-w-none dark:prose-invert mt-1.5" dangerouslySetInnerHTML={{ __html: entry.body }} />}
+                                                {entry.attachments && entry.attachments.length > 0 && (
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        {entry.attachments.map((att) =>
+                                                            att.mime_type.startsWith('image/') ? (
+                                                                <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+                                                                    <img src={att.url} alt={att.name} className="max-h-36 rounded-lg border object-cover" />
+                                                                </a>
+                                                            ) : (
+                                                                <a
+                                                                    key={att.id}
+                                                                    href={att.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="hover:bg-muted flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors"
+                                                                >
+                                                                    <FileIcon className="h-4 w-4 shrink-0" />
+                                                                    <span className="truncate">{att.name}</span>
+                                                                </a>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground text-sm italic">No journal entries yet</p>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* RIGHT COLUMN */}
@@ -419,6 +602,20 @@ export default function EmployeeShow() {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Journal Entry Confirmation */}
+            <Dialog open={confirmDeleteId !== null} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Journal Entry</DialogTitle>
+                        <DialogDescription>Are you sure you want to delete this journal entry? This cannot be undone.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => confirmDeleteId && deleteJournal(confirmDeleteId)}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Edit Locations Dialog */}
             <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>

@@ -9,9 +9,8 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Reports', href: '/' },
-    { title: 'Safety Dashboard', href: '/reports/safety-dashboard' },
-    { title: 'Import', href: '/reports/safety-dashboard/import' },
+    { title: 'Safety Dashboard', href: '/safety-dashboard' },
+    { title: 'Import', href: '/safety-dashboard/import' },
 ];
 
 type PageProps = {
@@ -45,7 +44,7 @@ export default function SafetyDashboardImport() {
         formData.append('file', file);
 
         try {
-            const res = await fetch('/reports/safety-dashboard/import', {
+            const res = await fetch('/safety-dashboard/import', {
                 method: 'POST',
                 headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
                 body: formData,
@@ -75,7 +74,7 @@ export default function SafetyDashboardImport() {
             <Head title="Import Incident Register" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex items-center gap-3">
-                    <Link href="/reports/safety-dashboard">
+                    <Link href="/safety-dashboard">
                         <Button variant="ghost" size="icon">
                             <ArrowLeft className="h-4 w-4" />
                         </Button>

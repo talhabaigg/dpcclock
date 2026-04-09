@@ -155,7 +155,7 @@ const timesheets = [
             },
             {
                 name: 'Review',
-                url: '/timesheets/review',
+                url: '/timesheet-review',
                 icon: ClipboardCheck,
                 permission: 'timesheets.review',
             },
@@ -189,7 +189,7 @@ const workforce = [
             },
             {
                 name: 'Worker Check',
-                url: '/worker-screening/search',
+                url: '/worker-check',
                 icon: ShieldCheck,
                 permission: 'worker-screening.search',
             },
@@ -247,7 +247,7 @@ const safety = [
             },
             {
                 name: 'Safety Dashboard',
-                url: '/reports/safety-dashboard',
+                url: '/safety-dashboard',
                 icon: ShieldAlert,
                 permission: 'reports.safety-dashboard',
             },

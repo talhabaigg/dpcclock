@@ -11,7 +11,7 @@ import { useState } from 'react';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Worker Check',
-        href: '/worker-screening/search',
+        href: '/worker-check',
     },
 ];
 
@@ -51,7 +51,7 @@ export default function WorkerScreeningSearch({ result, searched, query }: Props
         if (surname.trim()) params.surname = surname.trim();
         if (dob) params.date_of_birth = dob;
 
-        router.get('/worker-screening/search', params, {
+        router.get('/worker-check', params, {
             preserveState: true,
             onFinish: () => setIsSearching(false),
         });
@@ -146,7 +146,7 @@ export default function WorkerScreeningSearch({ result, searched, query }: Props
                                             setFirstName('');
                                             setSurname('');
                                             setDob('');
-                                            router.get('/worker-screening/search', {}, { preserveState: false });
+                                            router.get('/worker-check', {}, { preserveState: false });
                                         }}
                                     >
                                         Clear

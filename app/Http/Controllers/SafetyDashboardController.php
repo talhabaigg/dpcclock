@@ -238,11 +238,41 @@ class SafetyDashboardController extends Controller
             ? round(($totals['lti_count'] / $totals['man_hours']) * 1_000_000, 2)
             : null;
 
+        // Monthly trend from the same injuries collection
+        $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        $trend = [];
+        // Build all months from FY start to selected month
+        $cursor = Carbon::create($fyStartYear, 7, 1);
+        $end = Carbon::create($selectedYear, $selectedMonth, 1);
+        while ($cursor->lte($end)) {
+            $key = $cursor->format('Y-m');
+            $trend[$key] = [
+                'month' => $monthNames[$cursor->month - 1].' '.$cursor->format('y'),
+                'injuries' => 0,
+                'lti' => 0,
+                'near_miss' => 0,
+            ];
+            $cursor->addMonth();
+        }
+        foreach ($injuries as $injury) {
+            $key = Carbon::parse($injury->occurred_at)->format('Y-m');
+            if (isset($trend[$key])) {
+                $trend[$key]['injuries']++;
+                if ($injury->report_type === 'lti') {
+                    $trend[$key]['lti']++;
+                }
+                if ($injury->incident === 'near_miss') {
+                    $trend[$key]['near_miss']++;
+                }
+            }
+        }
+
         return response()->json([
             'success' => true,
             'rows' => $rows,
             'totals' => $totals,
             'fy_label' => $fyLabel,
+            'monthly_trend' => array_values($trend),
         ]);
     }
 

@@ -20,6 +20,7 @@ class Comment extends Model implements HasMedia
         'commentable_id',
         'user_id',
         'body',
+        'type',
         'parent_id',
         'metadata',
     ];

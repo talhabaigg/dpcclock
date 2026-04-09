@@ -17,6 +17,7 @@ class CommentController extends Controller
             'commentable_type' => ['required', 'string'],
             'commentable_id' => ['required', 'integer'],
             'body' => ['required_without:attachments', 'nullable', 'string', 'max:5000'],
+            'type' => ['nullable', 'string', 'in:positive,negative'],
             'parent_id' => ['nullable', 'integer', 'exists:comments,id'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['file', 'max:20480'], // 20MB per file
@@ -27,6 +28,7 @@ class CommentController extends Controller
         $allowedModels = [
             'employment_application' => \App\Models\EmploymentApplication::class,
             'injury' => \App\Models\Injury::class,
+            'employee' => \App\Models\Employee::class,
         ];
 
         $class = $allowedModels[$modelClass] ?? null;
@@ -39,6 +41,7 @@ class CommentController extends Controller
         $comment = $model->addComment(
             body: $request->body ?? '',
             parentId: $request->parent_id,
+            type: $request->type,
         );
 
         // Handle file attachments via Spatie Media Library

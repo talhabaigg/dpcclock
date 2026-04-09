@@ -71,10 +71,32 @@ class EmployeeController extends Controller
         // Current week ending (Friday)
         $weekEnding = now()->endOfWeek(\Carbon\Carbon::FRIDAY)->format('d-m-Y');
 
+        // Journal entries (comments on employee)
+        $journal = $employee->comments()
+            ->with(['user', 'media'])
+            ->whereNull('parent_id')
+            ->latest()
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'body' => $c->body,
+                'type' => $c->type,
+                'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
+                'created_at' => $c->created_at->toISOString(),
+                'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
+                    'id' => $m->id,
+                    'name' => $m->file_name,
+                    'url' => $m->getUrl(),
+                    'mime_type' => $m->mime_type,
+                    'size' => $m->size,
+                ]),
+            ]);
+
         return Inertia::render('employees/show', [
             'employee' => $employee,
             'projects' => $projects,
             'weekEnding' => $weekEnding,
+            'journal' => $journal,
         ]);
     }
 
