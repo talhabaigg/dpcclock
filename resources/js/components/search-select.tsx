@@ -26,9 +26,9 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-                    {selectedOption ? options.find((option) => option.value === selectedOption)?.label : `Select ${optionName}`}
-                    <ChevronsUpDown className="opacity-50" />
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between overflow-hidden">
+                    <span className="truncate">{selectedOption ? options.find((option) => option.value === selectedOption)?.label : `Select ${optionName}`}</span>
+                    <ChevronsUpDown className="shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">

@@ -1,4 +1,6 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
+import { DatePickerDemo } from '@/components/date-picker';
+import { SearchSelect } from '@/components/search-select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +12,8 @@ import RichTextEditor from '@/components/ui/rich-text-editor';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, ClipboardCopy, FileText, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { ChevronLeft, ChevronRight, ClipboardCopy, FileText, Loader2, Plus, Save, Search, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface ActionPoint { action: string; by_who: string; by_when: string }
@@ -44,6 +47,7 @@ interface Props {
     fyStartYear: number;
     trainingCost: number;
     csqGlPayments: CsqPayment[];
+    projectLocations: string[];
 }
 
 const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -175,7 +179,7 @@ function ActionPointsSection({ items, users, onUpdate, onRemove }: {
     );
 }
 
-export default function WhsReportEdit({ report, previousReport, year, month, users, claimsOverview, fyStartYear, trainingCost, csqGlPayments }: Props) {
+export default function WhsReportEdit({ report, previousReport, year, month, users, claimsOverview, fyStartYear, trainingCost, csqGlPayments, projectLocations }: Props) {
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props as { flash: { success?: string; error?: string } };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -190,6 +194,25 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
     const [apprentices, setApprentices] = useState<Apprentice[]>(report.apprentices ?? []);
     const [trainingSummary, setTrainingSummary] = useState(report.training_summary ?? '');
     const [bottomActionPoints, setBottomActionPoints] = useState<ActionPoint[]>(report.bottom_action_points ?? []);
+    const [loadingApprentices, setLoadingApprentices] = useState(false);
+
+    const projectOptions = useMemo(() => projectLocations.map(name => ({ value: name, label: name })), [projectLocations]);
+
+    const populateApprentices = async () => {
+        if (apprentices.length > 0 && !confirm('This will replace existing apprentices with data from employees. Continue?')) return;
+        setLoadingApprentices(true);
+        try {
+            const res = await fetch('/reports/whs-report/apprentices-from-employees');
+            const data = await res.json();
+            if (data.success) {
+                setApprentices(data.apprentices);
+            }
+        } catch {
+            // ignore
+        } finally {
+            setLoadingApprentices(false);
+        }
+    };
 
     const copyFromPrevious = () => {
         if (!previousReport) return;
@@ -343,7 +366,11 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                     <CardHeader className="pb-3"><CardTitle className="text-base">Apprentice Overview</CardTitle></CardHeader>
                     <CardContent>
                         <div className="space-y-3">
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={populateApprentices} disabled={loadingApprentices}>
+                                    {loadingApprentices ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Users className="mr-1 h-3 w-3" />}
+                                    Populate from Employees
+                                </Button>
                                 <Button type="button" variant="outline" size="sm" onClick={() => addItem(apprentices, { name: '', project: '', year_level: '', completion_date: '', comments: '' }, setApprentices)}>
                                     <Plus className="mr-1 h-3 w-3" /> Add
                                 </Button>
@@ -351,9 +378,28 @@ export default function WhsReportEdit({ report, previousReport, year, month, use
                             {apprentices.map((app, i) => (
                                 <div key={i} className="flex gap-2 items-start">
                                     <Input className="flex-1" placeholder="Name" value={app.name} onChange={e => updateItem(apprentices, i, 'name', e.target.value, setApprentices)} />
-                                    <Input className="w-28" placeholder="Project" value={app.project} onChange={e => updateItem(apprentices, i, 'project', e.target.value, setApprentices)} />
-                                    <Input className="w-20" placeholder="Year" value={app.year_level} onChange={e => updateItem(apprentices, i, 'year_level', e.target.value, setApprentices)} />
-                                    <Input className="w-28" placeholder="Completion" value={app.completion_date} onChange={e => updateItem(apprentices, i, 'completion_date', e.target.value, setApprentices)} />
+                                    <div className="w-64 shrink-0">
+                                        <SearchSelect
+                                            options={projectOptions}
+                                            optionName="Project"
+                                            selectedOption={app.project}
+                                            onValueChange={v => updateItem(apprentices, i, 'project', v, setApprentices)}
+                                        />
+                                    </div>
+                                    <Input className="w-16" placeholder="Year" value={app.year_level} onChange={e => updateItem(apprentices, i, 'year_level', e.target.value, setApprentices)} />
+                                    <DatePickerDemo
+                                        className="w-40 shrink-0"
+                                        placeholder="Completion"
+                                        displayFormat="MMM yyyy"
+                                        value={(() => {
+                                            if (!app.completion_date) return undefined;
+                                            try {
+                                                const d = parse(app.completion_date, 'MMM yyyy', new Date());
+                                                return isNaN(d.getTime()) ? undefined : d;
+                                            } catch { return undefined; }
+                                        })()}
+                                        onChange={date => updateItem(apprentices, i, 'completion_date', date ? format(date, 'MMM yyyy') : '', setApprentices)}
+                                    />
                                     <Input className="flex-1" placeholder="Comments" value={app.comments} onChange={e => updateItem(apprentices, i, 'comments', e.target.value, setApprentices)} />
                                     <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(apprentices, i, setApprentices)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                                 </div>

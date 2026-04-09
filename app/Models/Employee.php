@@ -18,6 +18,8 @@ class Employee extends Model
         'email',
         'pin',
         'employment_type',
+        'employment_agreement',
+        'start_date',
     ];
 
     protected $appends = ['display_name'];

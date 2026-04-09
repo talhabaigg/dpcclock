@@ -1128,6 +1128,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/whs-report', [WhsReportController::class, 'edit'])->name('reports.whsReport.edit');
         Route::put('/reports/whs-report/{whsReport}', [WhsReportController::class, 'update'])->name('reports.whsReport.update');
         Route::get('/reports/whs-report/pdf', [WhsReportController::class, 'downloadPdf'])->name('reports.whsReport.pdf');
+        Route::get('/reports/whs-report/apprentices-from-employees', [WhsReportController::class, 'apprenticesFromEmployees'])->name('reports.whsReport.apprenticesFromEmployees');
     });
 
     // ============================================

@@ -20,6 +20,7 @@ interface DatePickerProps {
   placeholder?: string
   fromDate?: Date
   disabled?: (date: Date) => boolean
+  displayFormat?: string
 }
 
 export function DatePickerDemo({
@@ -29,6 +30,7 @@ export function DatePickerDemo({
   placeholder = "Pick a date",
   fromDate,
   disabled,
+  displayFormat = "PPP",
 }: DatePickerProps) {
   return (
     <Popover>
@@ -37,12 +39,12 @@ export function DatePickerDemo({
           variant="outline"
           data-empty={!value}
           className={cn(
-            "data-[empty=true]:text-muted-foreground w-[212px] justify-between text-left font-normal",
+            "data-[empty=true]:text-muted-foreground w-[212px] justify-between text-left font-normal overflow-hidden",
             className,
           )}
         >
-          {value ? format(value, "PPP") : <span>{placeholder}</span>}
-          <ChevronDownIcon />
+          <span className="truncate">{value ? format(value, displayFormat) : placeholder}</span>
+          <ChevronDownIcon className="shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

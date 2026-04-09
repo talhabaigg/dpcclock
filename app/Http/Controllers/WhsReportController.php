@@ -82,6 +82,15 @@ class WhsReportController extends Controller
             ->values()
             ->all();
 
+        // Project locations for apprentice selector
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
+        $projectLocations = Location::whereIn('eh_parent_id', $jobsEhIds)
+            ->whereNull('project_group_id')
+            ->orderBy('name')
+            ->pluck('name')
+            ->values()
+            ->all();
+
         return Inertia::render('reports/whs-report-edit', [
             'report' => $report,
             'previousReport' => $previousReport,
@@ -92,6 +101,7 @@ class WhsReportController extends Controller
             'fyStartYear' => $fyStartYear,
             'trainingCost' => round($trainingCost, 2),
             'csqGlPayments' => $csqGlPayments,
+            'projectLocations' => $projectLocations,
         ]);
     }
 
@@ -486,6 +496,76 @@ class WhsReportController extends Controller
         return response($pdfContent, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function apprenticesFromEmployees()
+    {
+        $apprentices = \App\Models\Employee::where('employment_agreement', 'like', '%Apprentice%')
+            ->orderBy('name')
+            ->get(['id', 'eh_employee_id', 'name', 'employment_agreement', 'start_date']);
+
+        // Build location hierarchy for project resolution
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
+        $allLocations = Location::whereNotNull('eh_location_id')->get()->keyBy('eh_location_id');
+        $projects = Location::whereIn('eh_parent_id', $jobsEhIds)->get();
+
+        return response()->json([
+            'success' => true,
+            'apprentices' => $apprentices->map(function ($emp) use ($jobsEhIds, $allLocations, $projects) {
+                // Extract stage/year from agreement e.g. "CFMEU Apprentice - Stage 4 - Full Time"
+                $yearLevel = '';
+                if (preg_match('/Stage\s*(\d+)/i', $emp->employment_agreement, $m)) {
+                    $yearLevel = $m[1];
+                }
+
+                // Resolve project from most recent clock (skip TAFE/non-job locations)
+                $project = '';
+                $recentClocks = Clock::where('eh_employee_id', $emp->eh_employee_id)
+                    ->whereNotNull('clock_out')
+                    ->orderByDesc('clock_in')
+                    ->limit(20)
+                    ->get();
+
+                foreach ($recentClocks as $clock) {
+                    $current = $clock->eh_location_id;
+                    $visited = [];
+                    while ($current && ! in_array($current, $visited)) {
+                        $visited[] = $current;
+                        $loc = $allLocations[$current] ?? null;
+                        if ($loc && in_array($loc->eh_parent_id, $jobsEhIds)) {
+                            $resolvedName = $loc->name;
+                            if ($loc->project_group_id) {
+                                $group = $projects->firstWhere('id', $loc->project_group_id);
+                                $resolvedName = $group?->name ?? $loc->name;
+                            }
+                            // Skip TAFE and similar non-project locations
+                            if (! str_contains(strtolower($resolvedName), 'tafe')) {
+                                $project = $resolvedName;
+                            }
+                            break;
+                        }
+                        $current = $loc?->eh_parent_id;
+                    }
+                    if ($project) {
+                        break;
+                    }
+                }
+
+                // Calculate completion date: start_date + 4 years
+                $completionDate = '';
+                if ($emp->start_date) {
+                    $completionDate = \Carbon\Carbon::parse($emp->start_date)->addYears(4)->format('M Y');
+                }
+
+                return [
+                    'name' => $emp->name,
+                    'project' => $project,
+                    'year_level' => $yearLevel,
+                    'completion_date' => $completionDate,
+                    'comments' => '',
+                ];
+            })->values(),
         ]);
     }
 
