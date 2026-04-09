@@ -1094,7 +1094,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
-            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,variations',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations',
             'force_full' => 'boolean',
         ]);
 
@@ -1110,6 +1110,7 @@ class LocationController extends Controller
             'ap_posted_invoice_lines' => \App\Jobs\LoadApPostedInvoiceLines::class,
             'job_vendor_commitments' => \App\Jobs\LoadJobVendorCommitments::class,
             'ap_purchase_orders' => \App\Jobs\LoadApPurchaseOrders::class,
+            'gl_transaction_details' => \App\Jobs\LoadGlTransactionDetails::class,
         ];
 
         $dispatched = [];
@@ -1123,7 +1124,7 @@ class LocationController extends Controller
             $class = $jobClassMap[$jobKey];
             // Jobs that support forceFullSync parameter
             $supportsForce = in_array($jobKey, [
-                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders',
+                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders', 'gl_transaction_details',
             ]);
 
             if ($supportsForce) {
