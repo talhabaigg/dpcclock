@@ -30,7 +30,7 @@ export default function SafetyDashboardImport() {
     const [importing, setImporting] = useState(false);
     const [lastImportTime, setLastImportTime] = useState(lastImport);
     const [recordCount, setRecordCount] = useState(totalRecords);
-    const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+    const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number; errors: string[] } | null>(null);
 
     const handleImport = async () => {
         const file = fileInputRef.current?.files?.[0];
@@ -52,10 +52,13 @@ export default function SafetyDashboardImport() {
             });
             const data = await res.json();
             if (data.success) {
-                toast.success(`Imported ${data.imported} records` + (data.skipped > 0 ? `, ${data.skipped} skipped` : ''));
+                const parts = [`Imported ${data.imported}`];
+                if (data.updated > 0) parts.push(`updated ${data.updated}`);
+                if (data.skipped > 0) parts.push(`skipped ${data.skipped}`);
+                toast.success(parts.join(', '));
                 setLastImportTime(data.last_import);
                 setRecordCount(data.total_records);
-                setImportResult({ imported: data.imported, skipped: data.skipped, errors: data.errors || [] });
+                setImportResult({ imported: data.imported, updated: data.updated ?? 0, skipped: data.skipped, errors: data.errors || [] });
             } else {
                 toast.error('Import failed');
             }
@@ -116,6 +119,7 @@ export default function SafetyDashboardImport() {
                         <CardContent>
                             <div className="flex gap-6 text-sm">
                                 <span>Imported: <strong className="text-green-600">{importResult.imported}</strong></span>
+                                <span>Updated: <strong className="text-blue-600">{importResult.updated}</strong></span>
                                 <span>Skipped: <strong className="text-yellow-600">{importResult.skipped}</strong></span>
                             </div>
                             {importResult.errors.length > 0 && (

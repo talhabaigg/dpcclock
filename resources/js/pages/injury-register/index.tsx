@@ -408,7 +408,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                         </Link>
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                        {injury.occurred_at ? new Date(injury.occurred_at).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                        {injury.occurred_at ? new Date(injury.occurred_at.replace(/Z$|[+-]\d{2}:\d{2}$/, '')).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                     </TableCell>
                                     <TableCell>
                                         <div className="text-sm font-medium">{injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name ?? '—'}</div>

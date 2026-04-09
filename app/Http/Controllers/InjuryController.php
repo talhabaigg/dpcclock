@@ -404,6 +404,7 @@ class InjuryController extends Controller
         return response()->json([
             'success' => true,
             'imported' => $import->importedCount,
+            'updated' => $import->updatedCount,
             'skipped' => $import->skippedCount,
             'errors' => $import->errors,
         ]);

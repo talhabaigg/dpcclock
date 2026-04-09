@@ -14,6 +14,7 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 class InjuryImport implements ToCollection, WithHeadingRow, WithChunkReading
 {
     public int $importedCount = 0;
+    public int $updatedCount = 0;
     public int $skippedCount = 0;
     public array $errors = [];
 
@@ -80,12 +81,6 @@ class InjuryImport implements ToCollection, WithHeadingRow, WithChunkReading
                     continue;
                 }
 
-                // Skip if this ID already exists
-                if (Injury::where('id_formal', $idFormal)->exists()) {
-                    $this->skippedCount++;
-                    continue;
-                }
-
                 $occurredAt = $this->parseDateTime($row['occurred_at'] ?? null);
                 $workerName = $this->trimValue($row['worker'] ?? null);
                 $projectName = $this->trimValue($row['project'] ?? null);
@@ -102,7 +97,6 @@ class InjuryImport implements ToCollection, WithHeadingRow, WithChunkReading
                 }
 
                 $data = [
-                    'id_formal' => $idFormal,
                     'occurred_at' => $occurredAt,
                     'employee_id' => $this->resolveEmployeeId($workerName),
                     'employee_name' => $workerName,
@@ -115,16 +109,23 @@ class InjuryImport implements ToCollection, WithHeadingRow, WithChunkReading
                     'work_days_missed' => $this->numericValue($row['no_of_days_lost'] ?? null) ?? 0,
                     'report_type' => $this->resolveEnumKey($this->trimValue($row['type'] ?? null), $this->reportTypeMap),
                     'description' => count($descParts) > 0 ? implode("\n", $descParts) : null,
-                    'created_by' => $this->uploadedBy,
                 ];
 
-                $injury = Injury::create($data);
+                $existing = Injury::where('id_formal', $idFormal)->first();
 
-                // Import comments column as a system comment if present
-                if ($comments) {
-                    $injury->addSystemComment($comments, ['event' => 'legacy_import'], $this->uploadedBy);
+                if ($existing) {
+                    $existing->update($data);
+                    $this->updatedCount++;
+                } else {
+                    $data['id_formal'] = $idFormal;
+                    $data['created_by'] = $this->uploadedBy;
+                    $injury = Injury::create($data);
+
+                    if ($comments) {
+                        $injury->addSystemComment($comments, ['event' => 'legacy_import'], $this->uploadedBy);
+                    }
+                    $this->importedCount++;
                 }
-                $this->importedCount++;
             } catch (\Exception $e) {
                 $this->errors[] = "Row {$idFormal}: " . $e->getMessage();
                 $this->skippedCount++;
@@ -193,13 +194,22 @@ class InjuryImport implements ToCollection, WithHeadingRow, WithChunkReading
         return null;
     }
 
-    private function parseDateTime(?string $value): ?string
+    private function parseDateTime($value): ?string
     {
-        if (! $value) {
+        if ($value === null || $value === '') {
             return null;
         }
 
-        $v = trim($value);
+        // Excel serial number (e.g. 44890 or 44890.625 for date+time)
+        if (is_numeric($value)) {
+            try {
+                $dt = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value);
+                return Carbon::instance($dt)->format('Y-m-d H:i:s');
+            } catch (\Exception) {
+            }
+        }
+
+        $v = trim((string) $value);
 
         // Try with time: "Wed 25/03/2026 10:30am"
         try {

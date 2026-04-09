@@ -191,7 +191,10 @@ export default function InjuryShow({ injury, comments, options }: Props) {
         });
     }
 
-    const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleString('en-AU') : '—');
+    const fmtDate = (d: string | null) => {
+        if (!d) return '—';
+        return new Date(d.replace(/Z$|[+-]\d{2}:\d{2}$/, '')).toLocaleString('en-AU');
+    };
 
     function handlePostComment() {
         if (!commentBody.trim() && attachments.length === 0) return;
