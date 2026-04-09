@@ -29,13 +29,21 @@ class SafetyDashboardController extends Controller
     {
         $request->validate([
             'year' => 'required|integer|min:2000|max:2100',
-            'month' => 'required|integer|min:1|max:12',
+            'months' => 'required|string',
         ]);
 
         $year = (int) $request->year;
-        $month = (int) $request->month;
+        $monthValues = array_map('intval', explode(',', $request->months));
+        $monthValues = array_filter($monthValues, fn ($m) => $m >= 1 && $m <= 12);
 
-        $injuries = Injury::with('location.projectGroup')->forMonth($year, $month)->get();
+        if (empty($monthValues)) {
+            return response()->json(['success' => false, 'message' => 'Invalid months'], 422);
+        }
+
+        $injuries = Injury::with('location.projectGroup')
+            ->whereYear('occurred_at', $year)
+            ->whereIn(DB::raw('MONTH(occurred_at)'), $monthValues)
+            ->get();
 
         $rows = $this->aggregateByProject($injuries);
 
@@ -44,7 +52,7 @@ class SafetyDashboardController extends Controller
         if ($workcoverWorktypeId) {
             $wcHoursByLocation = Clock::where('eh_worktype_id', $workcoverWorktypeId)
                 ->whereYear('clock_in', $year)
-                ->whereMonth('clock_in', $month)
+                ->whereIn(DB::raw('MONTH(clock_in)'), $monthValues)
                 ->whereNotNull('clock_out')
                 ->select('eh_location_id', DB::raw('SUM(hours_worked) as total_hours'))
                 ->groupBy('eh_location_id')
@@ -96,9 +104,11 @@ class SafetyDashboardController extends Controller
             }
         }
 
-        // Suitable duties days from date ranges overlapping this month
-        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
-        $monthEnd = $monthStart->copy()->endOfMonth();
+        // Suitable duties days from date ranges overlapping selected months
+        $sortedMonths = $monthValues;
+        sort($sortedMonths);
+        $monthStart = Carbon::create($year, $sortedMonths[0], 1)->startOfDay();
+        $monthEnd = Carbon::create($year, end($sortedMonths), 1)->endOfMonth();
 
         $suitableDutiesInjuries = Injury::with('location.projectGroup')
             ->whereNotNull('suitable_duties_from')
@@ -141,6 +151,9 @@ class SafetyDashboardController extends Controller
 
                 $days = 0;
                 for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                    if (! in_array($d->month, $monthValues)) {
+                        continue;
+                    }
                     if ($d->isWeekend() || in_array($d->toDateString(), $excludedDates)) {
                         continue;
                     }

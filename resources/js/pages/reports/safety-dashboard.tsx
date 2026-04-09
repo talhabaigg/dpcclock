@@ -1,10 +1,12 @@
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertTriangle, ChevronLeft, ChevronRight, FileText, Loader2, ShieldAlert, Activity, Flame } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, Printer, ShieldAlert, Activity, Flame } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts';
 
@@ -118,7 +120,7 @@ function StatCard({ label, value, icon: Icon, href }: { label: string; value: st
 export default function SafetyDashboard() {
     const { currentMonth, currentYear } = usePage<{ props: PageProps }>().props as unknown as PageProps;
 
-    const [selectedMonth, setSelectedMonth] = useState(String(currentMonth));
+    const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth]);
     const [selectedYear, setSelectedYear] = useState(String(currentYear));
     const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[]>([]);
     const [monthlyTotals, setMonthlyTotals] = useState<Totals | null>(null);
@@ -131,10 +133,10 @@ export default function SafetyDashboard() {
 
     const years = useMemo(() => Array.from({ length: 10 }, (_, i) => String(currentYear - 5 + i)), [currentYear]);
 
-    const fetchMonthlyData = useCallback(async (month: string, year: string) => {
+    const fetchMonthlyData = useCallback(async (monthNums: number[], year: string) => {
         setMonthlyLoading(true);
         try {
-            const params = new URLSearchParams({ year, month });
+            const params = new URLSearchParams({ year, months: monthNums.join(',') });
             const res = await fetch(`/safety-dashboard/monthly-data?${params}`);
             const data = await res.json();
             if (data.success) {
@@ -170,52 +172,108 @@ export default function SafetyDashboard() {
     }, []);
 
     useEffect(() => {
-        fetchMonthlyData(String(currentMonth), String(currentYear));
+        fetchMonthlyData([currentMonth], String(currentYear));
         fetchFYData(String(currentMonth), String(currentYear));
     }, [currentMonth, currentYear, fetchMonthlyData, fetchFYData]);
 
-    const handleFilterChange = (month: string, year: string) => {
-        setSelectedMonth(month);
+    const handleFilterChange = (monthNums: number[], year: string) => {
+        setSelectedMonths(monthNums);
         setSelectedYear(year);
-        fetchMonthlyData(month, year);
-        fetchFYData(month, year);
+        fetchMonthlyData(monthNums, year);
+        // FY uses latest selected month
+        const latestMonth = Math.max(...monthNums);
+        fetchFYData(String(latestMonth), year);
         const url = new URL(window.location.href);
-        url.searchParams.set('month', month);
+        url.searchParams.set('months', monthNums.join(','));
         url.searchParams.set('year', year);
         window.history.replaceState({}, '', url.toString());
     };
 
-    const goMonth = (dir: -1 | 1) => {
-        let m = Number(selectedMonth) + dir;
-        let y = Number(selectedYear);
-        if (m < 1) { m = 12; y--; }
-        if (m > 12) { m = 1; y++; }
-        handleFilterChange(String(m), String(y));
+    const toggleMonth = (monthNum: number) => {
+        const updated = selectedMonths.includes(monthNum)
+            ? selectedMonths.filter(m => m !== monthNum)
+            : [...selectedMonths, monthNum].sort((a, b) => a - b);
+        if (updated.length === 0) return; // must have at least 1
+        handleFilterChange(updated, selectedYear);
     };
 
-    const monthLabel = months.find((m) => m.value === selectedMonth)?.label ?? '';
+    const goMonth = (dir: -1 | 1) => {
+        // Shift all selected months by 1, wrapping year
+        const shifted = selectedMonths.map(m => m + dir);
+        let y = Number(selectedYear);
+        if (shifted.some(m => m < 1)) { y--; }
+        if (shifted.some(m => m > 12)) { y++; }
+        const wrapped = shifted.map(m => m < 1 ? m + 12 : m > 12 ? m - 12 : m);
+        handleFilterChange(wrapped, String(y));
+    };
+
+    const buildMonthLabel = (monthNums: number[]) => {
+        const sorted = [...monthNums].sort((a, b) => a - b);
+        if (sorted.length === 1) return months[sorted[0] - 1].label;
+        // Check if contiguous
+        const isContiguous = sorted.every((m, i) => i === 0 || m === sorted[i - 1] + 1);
+        if (isContiguous) {
+            return `${months[sorted[0] - 1].label.slice(0, 3)} - ${months[sorted[sorted.length - 1] - 1].label.slice(0, 3)}`;
+        }
+        return sorted.map(m => months[m - 1].label.slice(0, 3)).join(', ');
+    };
+
+    const monthLabel = buildMonthLabel(selectedMonths);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Safety Dashboard" />
-            <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 p-4">
+            <style>{`
+                @media print {
+                    [data-sidebar="sidebar"], [data-sidebar="rail"], [data-sidebar="trigger"],
+                    .peer, .group.peer, header, nav,
+                    [class*="SidebarProvider"], [class*="sidebar-header"] {
+                        display: none !important;
+                    }
+                    .no-print { display: none !important; }
+                    .print-title { display: block !important; }
+                    body, html { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    main, [role="main"], .flex.min-h-screen { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+                    .print-container { max-width: 100% !important; padding: 0 !important; gap: 16px !important; }
+                    .print-container table { font-size: 10px !important; min-width: 0 !important; width: 100% !important; }
+                    .print-container .overflow-x-auto { overflow: visible !important; }
+                    .print-container table th, .print-container table td { padding: 4px 6px !important; white-space: nowrap; }
+                    .print-container > div, .print-container > .grid { page-break-inside: avoid; break-inside: avoid; }
+                    @page { margin: 10mm; size: landscape; }
+                }
+            `}</style>
+            <div className="print-container w-full max-w-7xl mx-auto flex flex-col gap-6 p-4">
+                {/* Print-only title */}
+                <div className="print-title hidden text-center">
+                    <h1 className="text-lg font-bold">Safety Dashboard — {monthLabel} {selectedYear}</h1>
+                </div>
+
                 {/* Header */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="no-print flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => goMonth(-1)}>
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <Select value={selectedMonth} onValueChange={(v) => handleFilterChange(v, selectedYear)}>
-                            <SelectTrigger className="w-[130px] h-9 border-0 shadow-none text-base font-semibold px-2">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" className="h-9 px-2 text-base font-semibold gap-1">
+                                    {monthLabel}
+                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-48 p-2" align="start">
                                 {months.map((m) => (
-                                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                                    <label key={m.value} className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted cursor-pointer text-sm">
+                                        <Checkbox
+                                            checked={selectedMonths.includes(Number(m.value))}
+                                            onCheckedChange={() => toggleMonth(Number(m.value))}
+                                        />
+                                        {m.label}
+                                    </label>
                                 ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={selectedYear} onValueChange={(v) => handleFilterChange(selectedMonth, v)}>
+                            </PopoverContent>
+                        </Popover>
+                        <Select value={selectedYear} onValueChange={(v) => handleFilterChange(selectedMonths, v)}>
                             <SelectTrigger className="w-[80px] h-9 border-0 shadow-none text-base font-semibold px-1">
                                 <SelectValue />
                             </SelectTrigger>
@@ -229,13 +287,19 @@ export default function SafetyDashboard() {
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={`/reports/whs-report?year=${selectedYear}&month=${selectedMonth}`}>
-                            <FileText className="mr-1 h-4 w-4" />
-                            <span className="hidden sm:inline">WHS Report</span>
-                            <span className="sm:hidden">Report</span>
-                        </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => window.print()}>
+                            <Printer className="mr-1 h-4 w-4" />
+                            <span className="hidden sm:inline">Print</span>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/reports/whs-report?year=${selectedYear}&month=${Math.max(...selectedMonths)}`}>
+                                <FileText className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">WHS Report</span>
+                                <span className="sm:hidden">Report</span>
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Summary stat cards */}
@@ -245,7 +309,7 @@ export default function SafetyDashboard() {
                             label="Reported Injuries"
                             value={monthlyTotals.reported_injuries}
                             icon={AlertTriangle}
-                            href={monthlyTotals.reported_injuries > 0 ? `/injury-register?year=${selectedYear}&month=${selectedMonth}` : undefined}
+                            href={monthlyTotals.reported_injuries > 0 ? `/injury-register?year=${selectedYear}&months=${selectedMonths.join(',')}` : undefined}
                         />
                         <StatCard label="LTIs" value={monthlyTotals.lti_count} icon={ShieldAlert} />
                         <StatCard label="Near Misses" value={monthlyTotals.near_miss_count} icon={Activity} />
@@ -401,7 +465,7 @@ export default function SafetyDashboard() {
                 {/* Monthly Overview */}
                 <div>
                     <div className="flex items-baseline justify-between mb-3">
-                        <h3 className="text-base font-semibold">Monthly Overview</h3>
+                        <h3 className="text-base font-semibold">{monthLabel} Overview</h3>
                         <span className="text-xs text-muted-foreground">{monthLabel} {selectedYear}</span>
                     </div>
 
@@ -435,7 +499,7 @@ export default function SafetyDashboard() {
                                             <td className="px-4 py-2.5 font-medium">{row.project}</td>
                                             <td className="px-3 py-2.5 text-center">
                                                 {row.reported_injuries > 0 ? (
-                                                    <a href={`/injury-register?year=${selectedYear}&month=${selectedMonth}&project=${encodeURIComponent(row.project)}`} className="text-primary font-medium hover:underline">{row.reported_injuries}</a>
+                                                    <a href={`/injury-register?year=${selectedYear}&months=${selectedMonths.join(',')}&project=${encodeURIComponent(row.project)}`} className="text-primary font-medium hover:underline">{row.reported_injuries}</a>
                                                 ) : (
                                                     <span className="text-muted-foreground">0</span>
                                                 )}
@@ -458,7 +522,7 @@ export default function SafetyDashboard() {
                                             <td className="px-4 py-2.5">Total</td>
                                             <td className="px-3 py-2.5 text-center">
                                                 {monthlyTotals.reported_injuries > 0 ? (
-                                                    <a href={`/injury-register?year=${selectedYear}&month=${selectedMonth}`} className="text-primary hover:underline">{monthlyTotals.reported_injuries}</a>
+                                                    <a href={`/injury-register?year=${selectedYear}&months=${selectedMonths.join(',')}`} className="text-primary hover:underline">{monthlyTotals.reported_injuries}</a>
                                                 ) : '0'}
                                             </td>
                                             <td className="px-3 py-2.5"></td>
@@ -486,7 +550,7 @@ export default function SafetyDashboard() {
                 <div>
                     <div className="flex items-baseline justify-between mb-3">
                         <h3 className="text-base font-semibold">WHS Performance</h3>
-                        {fyLabel && <span className="text-xs text-muted-foreground">{fyLabel} (Jul {fyLabel.slice(2, 6)} – {monthLabel} {selectedYear})</span>}
+                        {fyLabel && <span className="text-xs text-muted-foreground">{fyLabel} (Jul {fyLabel.slice(2, 6)} – {months[Math.max(...selectedMonths) - 1].label} {selectedYear})</span>}
                     </div>
 
                     {fyLoading && (
@@ -521,7 +585,7 @@ export default function SafetyDashboard() {
                                             <td className="px-4 py-2.5 font-medium">{row.project}</td>
                                             <td className="px-3 py-2.5 text-center">
                                                 {row.reported_injuries > 0 ? (
-                                                    <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${selectedMonth}&fy_year=${selectedYear}&project=${encodeURIComponent(row.project)}`} className="text-primary font-medium hover:underline">{row.reported_injuries}</a>
+                                                    <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${Math.max(...selectedMonths)}&fy_year=${selectedYear}&project=${encodeURIComponent(row.project)}`} className="text-primary font-medium hover:underline">{row.reported_injuries}</a>
                                                 ) : (
                                                     <span className="text-muted-foreground">0</span>
                                                 )}
@@ -546,7 +610,7 @@ export default function SafetyDashboard() {
                                             <td className="px-4 py-2.5">Total</td>
                                             <td className="px-3 py-2.5 text-center">
                                                 {fyTotals.reported_injuries > 0 ? (
-                                                    <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${selectedMonth}&fy_year=${selectedYear}`} className="text-primary hover:underline">{fyTotals.reported_injuries}</a>
+                                                    <a href={`/injury-register?fy=${fyLabel.slice(2, 6)}&fy_month=${Math.max(...selectedMonths)}&fy_year=${selectedYear}`} className="text-primary hover:underline">{fyTotals.reported_injuries}</a>
                                                 ) : '0'}
                                             </td>
                                             <td className="px-3 py-2.5 text-center">{fyTotals.wcq_claims}</td>
