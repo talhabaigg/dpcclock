@@ -519,7 +519,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
 
                         {/* 3 key metrics — widths aligned with progress bar sections */}
                         <div className="flex">
-                            <div className="shrink-0 space-y-0.5" style={{ width: `${formatPercent(completedTurnoverYTD, targetBaseline)}%` }}>
+                            <div className="shrink-0 space-y-0.5" style={{ width: `${Math.max(parseFloat(formatPercent(completedTurnoverYTD, targetBaseline)), 15)}%` }}>
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
                                     Completed YTD
