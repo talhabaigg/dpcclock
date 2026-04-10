@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\CreditCardReceipt;
+use App\Services\GlAccountSuggestionService;
 use App\Services\ReceiptExtractionService;
 use App\Services\ReceiptImageProcessorService;
 use Illuminate\Bus\Queueable;
@@ -49,13 +50,18 @@ class ExtractReceiptData implements ShouldQueue
                 $category = 'other';
             }
 
+            // Suggest GL account based on extracted data
+            $glAccountId = app(GlAccountSuggestionService::class)->suggest($data);
+
             $receipt->update([
                 'merchant_name' => $data['merchant_name'] ?? $receipt->merchant_name,
+                'merchant_website' => $data['merchant_website'] ?? $receipt->merchant_website,
                 'total_amount' => $data['total_amount'] ?? $receipt->total_amount,
                 'gst_amount' => $data['gst_amount'] ?? $receipt->gst_amount,
                 'currency' => $data['currency'] ?? $receipt->currency,
                 'transaction_date' => $data['transaction_date'] ?? $receipt->transaction_date,
                 'category' => $category ?? $receipt->category,
+                'gl_account_id' => $glAccountId,
                 'extraction_status' => CreditCardReceipt::STATUS_COMPLETED,
                 'raw_extraction' => $result['raw'],
             ]);

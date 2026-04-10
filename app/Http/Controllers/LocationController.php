@@ -1068,6 +1068,8 @@ class LocationController extends Controller
             'ap_purchase_orders' => ['label' => 'AP Purchase Orders', 'class' => \App\Jobs\LoadApPurchaseOrders::class],
             'gl_transaction_details' => ['label' => 'GL Transaction Details', 'class' => \App\Jobs\LoadGlTransactionDetails::class],
             'variations' => ['label' => 'Variations (Change Orders)', 'class' => null],
+            'premier_vendors' => ['label' => 'Premier Vendors', 'class' => null],
+            'premier_gl_accounts' => ['label' => 'Premier GL Accounts', 'class' => null],
         ];
 
         $syncLogs = \App\Models\DataSyncLog::all()->keyBy('job_name');
@@ -1094,7 +1096,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
-            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations,premier_vendors,premier_gl_accounts',
             'force_full' => 'boolean',
         ]);
 
@@ -1117,6 +1119,26 @@ class LocationController extends Controller
         foreach ($validated['jobs'] as $jobKey) {
             if ($jobKey === 'variations') {
                 \Artisan::call('premier:sync-variations');
+                $dispatched[] = $jobKey;
+                continue;
+            }
+
+            if ($jobKey === 'premier_vendors') {
+                \Artisan::call('premier:sync-vendors');
+                \App\Models\DataSyncLog::updateOrCreate(
+                    ['job_name' => 'premier_vendors'],
+                    ['last_successful_sync' => now(), 'records_synced' => \App\Models\PremierVendor::count()]
+                );
+                $dispatched[] = $jobKey;
+                continue;
+            }
+
+            if ($jobKey === 'premier_gl_accounts') {
+                \Artisan::call('premier:sync-gl-accounts');
+                \App\Models\DataSyncLog::updateOrCreate(
+                    ['job_name' => 'premier_gl_accounts'],
+                    ['last_successful_sync' => now(), 'records_synced' => \App\Models\PremierGlAccount::count()]
+                );
                 $dispatched[] = $jobKey;
                 continue;
             }

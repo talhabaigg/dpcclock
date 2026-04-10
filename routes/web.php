@@ -941,6 +941,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/manage-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('manage-receipts.update');
         Route::post('/manage-receipts/{creditCardReceipt}/reconcile', [CreditCardReceiptController::class, 'reconcile'])->name('manage-receipts.reconcile');
         Route::delete('/manage-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'destroy'])->name('manage-receipts.destroy');
+        Route::post('/manage-receipts/{creditCardReceipt}/create-invoice', [CreditCardReceiptController::class, 'createInvoice'])->name('manage-receipts.create-invoice');
     });
 
     // ============================================

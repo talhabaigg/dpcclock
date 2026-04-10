@@ -31,15 +31,21 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                     <ChevronsUpDown className="shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+            <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] p-0"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+            >
                 <Command>
-                    <CommandInput placeholder={`Select ${optionName}`} className="h-9" />
+                    <CommandInput placeholder={`Search ${optionName}...`} className="h-9" />
                     <CommandList>
                         <CommandEmpty>No {optionName.toLowerCase()} found.</CommandEmpty>
                         <CommandGroup>
                             {options.map((option) => (
                                 <CommandItem
                                     key={option.value}
+                                    value={option.label}
                                     onSelect={() => {
                                         onValueChange(option.value);
                                         setOpen(false);

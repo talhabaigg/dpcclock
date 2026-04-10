@@ -32,6 +32,7 @@ class User extends Authenticatable implements HasPasskeys
         'phone',
         'disable_kiosk_notifications',
         'receive_injury_alerts',
+        'premier_vendor_id',
         'passkey_prompt_dismissed',
         'disabled_at',
     ];
@@ -101,6 +102,11 @@ class User extends Authenticatable implements HasPasskeys
         // Return IDs of: kiosk locations + their parent locations
         return Location::whereIn('eh_location_id', $kioskEhLocationIds->merge($parentEhIds)->unique())
             ->pluck('id');
+    }
+
+    public function premierVendor()
+    {
+        return $this->belongsTo(PremierVendor::class, 'premier_vendor_id');
     }
 
     public function aiChatMessages()

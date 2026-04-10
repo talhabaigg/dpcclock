@@ -71,6 +71,15 @@ Schedule::job(LoadJobVendorCommitments::class)
     ->monthlyOn(10, '05:00')  // 10th of month at 5:00 AM
     ->withoutOverlapping();
 
+// Premier Vendor & GL Account Sync - Weekly (Monday)
+Schedule::command('premier:sync-vendors')
+    ->weeklyOn(1, '05:00')
+    ->withoutOverlapping();
+
+Schedule::command('premier:sync-gl-accounts')
+    ->weeklyOn(1, '05:00')
+    ->withoutOverlapping();
+
 // Premier Variation Sync - Daily
 Schedule::command('premier:sync-variations')
     ->dailyAt('05:30')

@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { SearchSelect } from '@/components/search-select';
 import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -50,6 +51,7 @@ type User = {
     disabled_at: string | null;
     disable_kiosk_notifications: boolean;
     receive_injury_alerts: boolean;
+    premier_vendor_id: number | null;
     roles: {
         permissions: Permission[];
         id: number;
@@ -68,8 +70,14 @@ type Kiosk = {
     name: string;
 };
 
+type Vendor = {
+    id: number;
+    code: string;
+    name: string;
+};
+
 export default function UserEdit() {
-    const { user, roles, flash, kiosks, directPermissions, groupedPermissions, categories } = usePage<{
+    const { user, roles, flash, kiosks, directPermissions, groupedPermissions, categories, vendors } = usePage<{
         user: User;
         roles: Role[];
         flash: { success: string; error: string };
@@ -77,6 +85,7 @@ export default function UserEdit() {
         directPermissions: string[];
         groupedPermissions: GroupedPermissions;
         categories: string[];
+        vendors: Vendor[];
     }>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -92,6 +101,7 @@ export default function UserEdit() {
         managed_kiosks: user.managed_kiosks,
         disable_kiosk_notifications: user.disable_kiosk_notifications ?? false,
         receive_injury_alerts: user.receive_injury_alerts ?? false,
+        premier_vendor_id: user.premier_vendor_id ? String(user.premier_vendor_id) : '',
     });
 
     const [selectedKiosk, setSelectedKiosk] = useState('');
@@ -341,6 +351,20 @@ export default function UserEdit() {
                                     </p>
                                 )}
                             </div>
+                            {vendors && vendors.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label>CC Vendor (Premier)</Label>
+                                    <SearchSelect
+                                        options={vendors.map((v) => ({ value: String(v.id), label: `${v.code} — ${v.name}` }))}
+                                        optionName="CC vendor"
+                                        selectedOption={data.premier_vendor_id}
+                                        onValueChange={(value) => setData('premier_vendor_id', value)}
+                                    />
+                                    {errors.premier_vendor_id && (
+                                        <p className="text-destructive text-sm">{errors.premier_vendor_id}</p>
+                                    )}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

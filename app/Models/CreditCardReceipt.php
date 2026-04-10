@@ -30,6 +30,7 @@ class CreditCardReceipt extends Model implements HasMedia
     protected $fillable = [
         'user_id',
         'merchant_name',
+        'merchant_website',
         'total_amount',
         'gst_amount',
         'currency',
@@ -39,6 +40,9 @@ class CreditCardReceipt extends Model implements HasMedia
         'description',
         'extraction_status',
         'is_reconciled',
+        'premier_invoice_id',
+        'invoice_status',
+        'gl_account_id',
         'raw_extraction',
     ];
 
@@ -53,6 +57,11 @@ class CreditCardReceipt extends Model implements HasMedia
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function glAccount(): BelongsTo
+    {
+        return $this->belongsTo(PremierGlAccount::class, 'gl_account_id');
     }
 
     public function registerMediaCollections(): void

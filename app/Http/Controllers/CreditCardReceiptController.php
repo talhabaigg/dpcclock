@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCreditCardReceiptRequest;
 use App\Jobs\ExtractReceiptData;
 use App\Models\CreditCardReceipt;
+use App\Models\PremierGlAccount;
+use App\Models\PremierVendor;
 use App\Models\User;
+use App\Services\CreditCardInvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -99,6 +102,11 @@ class CreditCardReceiptController extends Controller
             'filters' => $request->only(['date_from', 'date_to', 'amount_min', 'amount_max', 'user_id', 'category', 'search', 'show_reconciled']),
             'categories' => CreditCardReceipt::CATEGORIES,
             'users' => User::select('id', 'name')->orderBy('name')->get(),
+            'vendors' => PremierVendor::where('code', 'like', 'CC%')
+                ->orWhere('name', 'like', '%credit%')
+                ->orderBy('name')
+                ->get(['id', 'premier_vendor_id', 'code', 'name']),
+            'glAccounts' => PremierGlAccount::orderBy('account_number')->get(['id', 'premier_account_id', 'account_number', 'description']),
         ]);
     }
 
@@ -165,6 +173,56 @@ class CreditCardReceiptController extends Controller
         $creditCardReceipt->delete();
 
         return back()->with('success', 'Receipt deleted.');
+    }
+
+    public function createInvoice(Request $request, CreditCardReceipt $creditCardReceipt): RedirectResponse
+    {
+        if (! $request->user()->can('receipts.manage')) {
+            abort(403);
+        }
+
+        if ($creditCardReceipt->premier_invoice_id) {
+            return back()->with('error', 'This receipt has already been sent to Premier.');
+        }
+
+        $validated = $request->validate([
+            'gl_account_id' => ['required', 'exists:premier_gl_accounts,id'],
+            'vendor_id' => ['required', 'exists:premier_vendors,id'],
+        ]);
+
+        $vendor = PremierVendor::findOrFail($validated['vendor_id']);
+        $glAccount = PremierGlAccount::findOrFail($validated['gl_account_id']);
+
+        $service = new CreditCardInvoiceService;
+        $payload = $service->generateInvoicePayload($creditCardReceipt, $vendor, $glAccount);
+        $result = $service->sendInvoiceToPremier($creditCardReceipt, $payload);
+
+        if ($result['success']) {
+            $creditCardReceipt->update([
+                'premier_invoice_id' => $result['invoice_id'] ?? 'sent',
+                'invoice_status' => 'success',
+                'gl_account_id' => $glAccount->id,
+                'is_reconciled' => true,
+            ]);
+
+            activity()
+                ->performedOn($creditCardReceipt)
+                ->event('invoice created')
+                ->causedBy(auth()->user())
+                ->log("CC Receipt #{$creditCardReceipt->id} sent to Premier. Invoice ID: " . ($result['invoice_id'] ?? 'N/A'));
+
+            return back()->with('success', 'Invoice created in Premier successfully.');
+        }
+
+        $creditCardReceipt->update(['invoice_status' => 'failed']);
+
+        activity()
+            ->performedOn($creditCardReceipt)
+            ->event('invoice failed')
+            ->causedBy(auth()->user())
+            ->log("CC Receipt #{$creditCardReceipt->id} failed to send to Premier: " . ($result['message'] ?? 'Unknown error'));
+
+        return back()->with('error', 'Failed to create invoice in Premier. ' . ($result['message'] ?? ''));
     }
 
     public function export(Request $request): StreamedResponse
@@ -248,6 +306,11 @@ class CreditCardReceiptController extends Controller
                 } catch (\RuntimeException) {
                     $receipt->processed_image_url = $processedMedia->getUrl();
                 }
+            }
+
+            // Merchant logo from Google Favicon API
+            if ($receipt->merchant_website) {
+                $receipt->merchant_logo_url = 'https://www.google.com/s2/favicons?domain=' . $receipt->merchant_website . '&sz=128';
             }
 
             return $receipt;

@@ -43,6 +43,8 @@ return [
         'batch_size' => env('PREMIER_JOB_BATCH_SIZE', 1000),
     ],
 
+    'swcp_company_id' => env('PREMIER_SWCP_COMPANY_ID', '3341c7c6-2abb-49e1-8a59-839d1bcff972'),
+
     'web' => [
         'url' => env('PREMIER_WEB_URL'),
         'client_id' => env('PREMIER_WEB_CLIENT_ID', '324204'),

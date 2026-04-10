@@ -10,7 +10,7 @@ import PaginationComponent, { type PaginationData } from '@/components/index-pag
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Camera, CreditCard, Eye, FileText, Loader2, AlertCircle, CheckCircle2, Pencil, Plus, Sparkles, Upload, X, Receipt, Filter } from 'lucide-react';
+import { Camera, Coffee, CreditCard, Eye, FileText, Fuel, Hammer, Loader2, AlertCircle, CheckCircle2, Package, Pencil, Plane, Plus, ShoppingBag, Sparkles, Upload, X, Receipt, Filter } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -32,6 +32,7 @@ interface Receipt {
     category: string | null;
     description: string | null;
     extraction_status: 'pending' | 'completed' | 'failed';
+    merchant_logo_url: string | null;
     mime_type?: string;
     image_url: string;
     processed_image_url?: string;
@@ -170,6 +171,35 @@ export default function MyReceiptsIndex({ receipts, filters, categories }: Props
         return new Date(value).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
     };
 
+    const CategoryIcon = ({ category, className = 'h-4 w-4' }: { category: string | null; className?: string }) => {
+        switch (category) {
+            case 'fuel': return <Fuel className={className} />;
+            case 'materials': return <Package className={className} />;
+            case 'meals': return <Coffee className={className} />;
+            case 'travel': return <Plane className={className} />;
+            case 'tools': return <Hammer className={className} />;
+            case 'office': return <ShoppingBag className={className} />;
+            default: return <Receipt className={className} />;
+        }
+    };
+
+    const MerchantLogo = ({ receipt }: { receipt: Receipt }) => {
+        const [imgError, setImgError] = useState(false);
+
+        if (receipt.merchant_logo_url && !imgError) {
+            return (
+                <img
+                    src={receipt.merchant_logo_url}
+                    alt=""
+                    className="h-full w-full object-contain p-2"
+                    onError={() => setImgError(true)}
+                />
+            );
+        }
+
+        return <CategoryIcon category={receipt.category} className="h-7 w-7 text-muted-foreground" />;
+    };
+
     const StatusBadge = ({ status }: { status: Receipt['extraction_status'] }) => {
         switch (status) {
             case 'pending':
@@ -224,13 +254,7 @@ export default function MyReceiptsIndex({ receipts, filters, categories }: Props
                             <Card key={receipt.id} className="cursor-pointer py-0 transition-shadow active:shadow-md hover:shadow-md" onClick={() => openEditDialog(receipt)}>
                                 <CardContent className="flex items-center gap-3 p-3 sm:p-4">
                                     <div className="bg-muted flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:h-16 sm:w-16">
-                                        {receipt.image_url && receipt.mime_type !== 'application/pdf' ? (
-                                            <img src={receipt.processed_image_url || receipt.image_url} alt="" className="h-full w-full object-cover" />
-                                        ) : receipt.mime_type === 'application/pdf' ? (
-                                            <FileText className="text-muted-foreground h-7 w-7" />
-                                        ) : (
-                                            <Receipt className="text-muted-foreground h-7 w-7" />
-                                        )}
+                                        <MerchantLogo receipt={receipt} />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-start justify-between gap-2">

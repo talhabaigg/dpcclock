@@ -14,12 +14,13 @@ class ReceiptExtractionService
     private const MODEL = 'gpt-4o-mini';
 
     private const PROMPT = <<<'PROMPT'
-Analyze this receipt/invoice and extract ALL of the following 6 fields. You MUST include every field in your response. Return ONLY valid JSON with no markdown formatting or explanation.
+Analyze this receipt/invoice and extract ALL of the following 7 fields. You MUST include every field in your response. Return ONLY valid JSON with no markdown formatting or explanation.
 
 IMPORTANT: If the invoice shows amounts in multiple currencies (e.g. USD charges with an AUD converted total), extract ALL amounts in the SAME single currency. The total_amount, gst_amount, and currency must all be consistent with each other.
 
 {
   "merchant_name": "string - the business/store name on the receipt",
+  "merchant_website": "string or null - the merchant's main website domain (e.g. 'woolworths.com.au', 'shell.com.au', 'bunnings.com.au'). Use your knowledge of the business to provide the correct domain even if not on the receipt. Just the domain, no https:// prefix",
   "total_amount": "number - the final total amount charged. If multiple currencies shown, use the amount matching the currency field below",
   "gst_amount": "number or null - tax/GST amount in the same currency as total_amount",
   "currency": "string - REQUIRED - the 3-letter currency code. If the invoice shows charges in USD but a converted AUD total, use USD and the USD amount. Use the currency of the original charges, not the local conversion",

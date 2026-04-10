@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Kiosk;
+use App\Models\PremierVendor;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\Request;
@@ -60,6 +61,10 @@ class UserController extends Controller
             'categories' => array_keys($permissionsByCategory),
             'roles' => Role::all(),
             'kiosks' => $kiosks,
+            'vendors' => PremierVendor::where('code', 'like', 'CC%')
+                ->orWhere('name', 'like', '%credit%')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name']),
         ]);
     }
 
@@ -72,6 +77,7 @@ class UserController extends Controller
             'roles' => 'required|string|exists:roles,id',
             'disable_kiosk_notifications' => 'boolean',
             'receive_injury_alerts' => 'boolean',
+            'premier_vendor_id' => 'nullable|exists:premier_vendors,id',
         ]);
 
         // Update basic info
@@ -81,6 +87,7 @@ class UserController extends Controller
             'email' => $request->input('email'),
             'disable_kiosk_notifications' => $request->boolean('disable_kiosk_notifications'),
             'receive_injury_alerts' => $request->boolean('receive_injury_alerts'),
+            'premier_vendor_id' => $request->input('premier_vendor_id'),
         ]);
 
         // Get the role model by ID

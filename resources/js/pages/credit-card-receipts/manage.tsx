@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchSelect } from '@/components/search-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +12,7 @@ import PaginationComponent, { type PaginationData } from '@/components/index-pag
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Calendar, Check, CreditCard, Download, Eye, FileText, Loader2, AlertCircle, CheckCircle2, Pencil, Sparkles, Trash2, Undo2, User, Receipt, Filter, DollarSign } from 'lucide-react';
+import { ArrowLeft, Calendar, Check, CreditCard, Coffee, Download, Eye, FileText, Fuel, Hammer, Loader2, AlertCircle, CheckCircle2, Package, Pencil, Plane, Send, Sparkles, Trash2, User, Receipt, Filter, DollarSign, ShoppingBag } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -24,11 +25,27 @@ interface UserType {
     name: string;
 }
 
+interface PremierVendorType {
+    id: number;
+    premier_vendor_id: string;
+    code: string;
+    name: string;
+}
+
+interface PremierGlAccountType {
+    id: number;
+    premier_account_id: string;
+    account_number: string;
+    description: string | null;
+}
+
 interface ReceiptType {
     id: number;
     user_id: number;
-    user: UserType;
+    user: UserType & { premier_vendor_id?: number | null };
     merchant_name: string | null;
+    merchant_website: string | null;
+    merchant_logo_url: string | null;
     total_amount: string | null;
     gst_amount: string | null;
     currency: string;
@@ -38,6 +55,9 @@ interface ReceiptType {
     description: string | null;
     extraction_status: 'pending' | 'completed' | 'failed';
     is_reconciled: boolean;
+    premier_invoice_id: string | null;
+    invoice_status: string | null;
+    gl_account_id: number | null;
     mime_type?: string;
     image_url: string;
     processed_image_url?: string;
@@ -62,9 +82,11 @@ interface Props {
     filters: Filters;
     categories: string[];
     users: UserType[];
+    vendors: PremierVendorType[];
+    glAccounts: PremierGlAccountType[];
 }
 
-export default function ManageReceipts({ receipts, filters, categories, users }: Props) {
+export default function ManageReceipts({ receipts, filters, categories, users, vendors, glAccounts }: Props) {
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props;
 
     const [selectedReceipt, setSelectedReceipt] = useState<ReceiptType | null>(null);
@@ -73,6 +95,7 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [invoiceForm, setInvoiceForm] = useState({ vendor_id: '', gl_account_id: '' });
     const [showProcessedImage, setShowProcessedImage] = useState(true);
     const [localFilters, setLocalFilters] = useState<Filters>(filters);
 
@@ -99,10 +122,18 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
         return () => clearInterval(interval);
     }, [receipts.data]);
 
+    const syncInvoiceForm = (receipt: ReceiptType) => {
+        setInvoiceForm({
+            vendor_id: receipt.user?.premier_vendor_id ? String(receipt.user.premier_vendor_id) : '',
+            gl_account_id: receipt.gl_account_id ? String(receipt.gl_account_id) : '',
+        });
+    };
+
     // Auto-select first receipt on desktop
     useEffect(() => {
         if (!selectedReceipt && receipts.data.length > 0) {
             setSelectedReceipt(receipts.data[0]);
+            syncInvoiceForm(receipts.data[0]);
         }
     }, [receipts.data]);
 
@@ -110,13 +141,17 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
     useEffect(() => {
         if (selectedReceipt) {
             const updated = receipts.data.find(r => r.id === selectedReceipt.id);
-            if (updated) setSelectedReceipt(updated);
+            if (updated) {
+                setSelectedReceipt(updated);
+                syncInvoiceForm(updated);
+            }
         }
     }, [receipts.data]);
 
     const selectReceipt = (receipt: ReceiptType) => {
         setSelectedReceipt(receipt);
         setShowProcessedImage(!!receipt.processed_image_url);
+        syncInvoiceForm(receipt);
         setMobileViewerOpen(true);
     };
 
@@ -164,17 +199,15 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
         });
     };
 
-    const handleReconcile = () => {
+    const handleCreateInvoice = () => {
         if (!selectedReceipt) return;
-        router.post(`/manage-receipts/${selectedReceipt.id}/reconcile`, {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                // If it was reconciled and we're not showing reconciled, it'll vanish from list
-                if (!selectedReceipt.is_reconciled && filters.show_reconciled !== '1') {
-                    setSelectedReceipt(null);
-                    setMobileViewerOpen(false);
-                }
-            },
+        setIsSubmitting(true);
+        router.post(`/manage-receipts/${selectedReceipt.id}/create-invoice`, {
+            vendor_id: invoiceForm.vendor_id ? parseInt(invoiceForm.vendor_id) : null,
+            gl_account_id: invoiceForm.gl_account_id ? parseInt(invoiceForm.gl_account_id) : null,
+        }, {
+            onSuccess: () => setIsSubmitting(false),
+            onError: () => setIsSubmitting(false),
         });
     };
 
@@ -212,6 +245,40 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
         return colors[category] || 'bg-gray-100 text-gray-600';
     };
 
+    const CategoryIcon = ({ category, className = 'h-4 w-4' }: { category: string | null; className?: string }) => {
+        switch (category) {
+            case 'fuel': return <Fuel className={className} />;
+            case 'materials': return <Package className={className} />;
+            case 'meals': return <Coffee className={className} />;
+            case 'travel': return <Plane className={className} />;
+            case 'tools': return <Hammer className={className} />;
+            case 'office': return <ShoppingBag className={className} />;
+            default: return <Receipt className={className} />;
+        }
+    };
+
+    const MerchantLogo = ({ receipt, size = 'sm' }: { receipt: ReceiptType; size?: 'sm' | 'lg' }) => {
+        const [imgError, setImgError] = useState(false);
+        const dim = size === 'lg' ? 'h-8 w-8' : 'h-8 w-8';
+
+        if (receipt.merchant_logo_url && !imgError) {
+            return (
+                <img
+                    src={receipt.merchant_logo_url}
+                    alt=""
+                    className={`${dim} shrink-0 rounded-md object-contain`}
+                    onError={() => setImgError(true)}
+                />
+            );
+        }
+
+        return (
+            <div className={`${dim} shrink-0 rounded-md bg-muted flex items-center justify-center`}>
+                <CategoryIcon category={receipt.category} className="h-4 w-4 text-muted-foreground" />
+            </div>
+        );
+    };
+
     const StatusBadge = ({ status }: { status: ReceiptType['extraction_status'] }) => {
         switch (status) {
             case 'pending':
@@ -236,6 +303,9 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
             onClick={() => selectReceipt(receipt)}
         >
             <div className="flex items-start justify-between gap-2">
+                <div className="mt-0.5">
+                    <MerchantLogo receipt={receipt} />
+                </div>
                 <div className="min-w-0 flex-1">
                     {receipt.extraction_status === 'pending' ? (
                         <div className="flex items-center gap-1.5">
@@ -258,7 +328,17 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
                             </span>
                         )}
                         {receipt.extraction_status !== 'completed' && <StatusBadge status={receipt.extraction_status} />}
-                        {receipt.is_reconciled && (
+                        {receipt.invoice_status === 'success' && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                <Send className="h-2.5 w-2.5" />Sent
+                            </span>
+                        )}
+                        {receipt.invoice_status === 'failed' && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                <AlertCircle className="h-2.5 w-2.5" />Failed
+                            </span>
+                        )}
+                        {receipt.is_reconciled && !receipt.invoice_status && (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
                                 <Check className="h-2.5 w-2.5" />Reconciled
                             </span>
@@ -270,130 +350,199 @@ export default function ManageReceipts({ receipts, filters, categories, users }:
         </div>
     );
 
+    // Invoice fields — shared between normal and failed states
+    const InvoiceFields = ({ failed = false }: { failed?: boolean }) => (
+        <div className="space-y-2">
+            <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">CC Vendor</Label>
+                <SearchSelect
+                    options={vendors.map((v) => ({ value: String(v.id), label: `${v.code} — ${v.name}` }))}
+                    optionName="vendor"
+                    selectedOption={invoiceForm.vendor_id}
+                    onValueChange={(value) => setInvoiceForm({ ...invoiceForm, vendor_id: value })}
+                />
+            </div>
+            <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">GL Account</Label>
+                <SearchSelect
+                    options={glAccounts.map((a) => ({ value: String(a.id), label: `${a.account_number}${a.description ? ` — ${a.description}` : ''}` }))}
+                    optionName="GL account"
+                    selectedOption={invoiceForm.gl_account_id}
+                    onValueChange={(value) => setInvoiceForm({ ...invoiceForm, gl_account_id: value })}
+                />
+            </div>
+            <Button
+                size="sm"
+                variant={failed ? 'destructive' : 'default'}
+                className="w-full"
+                disabled={isSubmitting || !invoiceForm.vendor_id || !invoiceForm.gl_account_id}
+                onClick={handleCreateInvoice}
+            >
+                {isSubmitting
+                    ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Sending...</>
+                    : <><Send className="mr-1.5 h-3.5 w-3.5" />{failed ? 'Retry Send' : 'Approve & Send to Premier'}</>
+                }
+            </Button>
+        </div>
+    );
+
     // Viewer content — shared between mobile overlay and desktop panel
     const ViewerContent = ({ compact = false }: { compact?: boolean }) => {
         if (!selectedReceipt) return null;
-        return (
-            <>
-                {/* Receipt image viewer */}
-                <div className="flex-1 bg-muted/30 flex items-center justify-center overflow-auto p-3 sm:p-4 relative">
-                    {selectedReceipt.mime_type === 'application/pdf' ? (
-                        <object
-                            data={selectedReceipt.image_url}
-                            type="application/pdf"
-                            className="h-full w-full rounded-lg border"
-                        >
-                            <div className="flex flex-col items-center justify-center gap-3 h-full">
-                                <FileText className="h-12 w-12 text-muted-foreground" />
-                                <p className="text-muted-foreground text-sm">PDF preview not available</p>
-                                <Button variant="outline" size="sm" asChild>
-                                    <a href={selectedReceipt.image_url} target="_blank" rel="noopener noreferrer">Open PDF</a>
-                                </Button>
-                            </div>
-                        </object>
-                    ) : viewerImageUrl ? (
-                        <img
-                            src={viewerImageUrl}
-                            alt="Receipt"
-                            className="max-h-full max-w-full object-contain rounded-lg shadow-sm"
-                        />
-                    ) : (
-                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                            <Receipt className="h-12 w-12" />
-                            <p>No image available</p>
-                        </div>
-                    )}
-                    {/* Image toggle */}
-                    {selectedReceipt.processed_image_url && selectedReceipt.mime_type !== 'application/pdf' && (
-                        <div className="absolute top-5 right-5">
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                className="gap-1.5 rounded-full shadow-md text-xs"
-                                onClick={() => setShowProcessedImage(!showProcessedImage)}
-                            >
-                                {showProcessedImage ? <><Eye className="h-3.5 w-3.5" />Original</> : <><Sparkles className="h-3.5 w-3.5" />Enhanced</>}
+
+        const imageViewer = (
+            <div className="flex-1 bg-muted/30 flex items-center justify-center overflow-auto p-3 sm:p-4 relative min-h-0">
+                {selectedReceipt.mime_type === 'application/pdf' ? (
+                    <object
+                        data={selectedReceipt.image_url}
+                        type="application/pdf"
+                        className="h-full w-full rounded-lg border"
+                    >
+                        <div className="flex flex-col items-center justify-center gap-3 h-full">
+                            <FileText className="h-12 w-12 text-muted-foreground" />
+                            <p className="text-muted-foreground text-sm">PDF preview not available</p>
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={selectedReceipt.image_url} target="_blank" rel="noopener noreferrer">Open PDF</a>
                             </Button>
                         </div>
-                    )}
-                </div>
+                    </object>
+                ) : viewerImageUrl ? (
+                    <img
+                        src={viewerImageUrl}
+                        alt="Receipt"
+                        className="max-h-full max-w-full object-contain rounded-lg shadow-sm"
+                    />
+                ) : (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Receipt className="h-12 w-12" />
+                        <p>No image available</p>
+                    </div>
+                )}
+                {selectedReceipt.processed_image_url && selectedReceipt.mime_type !== 'application/pdf' && (
+                    <div className="absolute top-5 right-5">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            className="gap-1.5 rounded-full shadow-md text-xs"
+                            onClick={() => setShowProcessedImage(!showProcessedImage)}
+                        >
+                            {showProcessedImage ? <><Eye className="h-3.5 w-3.5" />Original</> : <><Sparkles className="h-3.5 w-3.5" />Enhanced</>}
+                        </Button>
+                    </div>
+                )}
+            </div>
+        );
 
-                {/* Details card */}
-                <div className="border-t bg-background shrink-0">
-                    <div className={compact ? 'p-3' : 'p-4'}>
-                        <div className={compact ? 'flex flex-col gap-3' : 'flex items-start justify-between gap-4'}>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className={`font-semibold truncate ${compact ? 'text-base' : 'text-lg'}`}>
-                                        {selectedReceipt.merchant_name || 'Unknown Merchant'}
-                                    </h3>
-                                    <StatusBadge status={selectedReceipt.extraction_status} />
-                                    {selectedReceipt.is_reconciled && (
-                                        <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-                                            <Check className="h-3 w-3" />Reconciled
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className={`mt-2 grid gap-x-6 gap-y-1.5 text-sm ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <DollarSign className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="font-medium text-foreground">{formatAmount(selectedReceipt.total_amount, selectedReceipt.currency)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <span className="text-xs">GST</span>
-                                        <span className="font-medium text-foreground">{formatAmount(selectedReceipt.gst_amount, selectedReceipt.currency)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <Calendar className="h-3.5 w-3.5 shrink-0" />
-                                        <span>{formatDate(selectedReceipt.transaction_date)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <User className="h-3.5 w-3.5 shrink-0" />
-                                        <span>{selectedReceipt.user?.name}</span>
-                                    </div>
-                                    {selectedReceipt.card_last_four && (
-                                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                                            <CreditCard className="h-3.5 w-3.5 shrink-0" />
-                                            <span>****{selectedReceipt.card_last_four}</span>
-                                        </div>
-                                    )}
-                                    {selectedReceipt.category && (
-                                        <div className="flex items-center gap-1.5">
-                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getCategoryColor(selectedReceipt.category)}`}>
-                                                {selectedReceipt.category}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                                {selectedReceipt.description && (
-                                    <p className="text-muted-foreground mt-2 text-sm">{selectedReceipt.description}</p>
-                                )}
-                            </div>
-                            <div className="flex gap-2 shrink-0 flex-wrap">
-                                <Button
-                                    variant={selectedReceipt.is_reconciled ? 'outline' : 'default'}
-                                    size="sm"
-                                    onClick={handleReconcile}
-                                >
-                                    {selectedReceipt.is_reconciled ? (
-                                        <><Undo2 className="mr-1.5 h-3.5 w-3.5" />Unreconcile</>
-                                    ) : (
-                                        <><Check className="mr-1.5 h-3.5 w-3.5" />Reconcile</>
-                                    )}
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={openEditDialog}>
-                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                    Edit
-                                </Button>
-                                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setIsDeleteOpen(true)}>
-                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                    Delete
-                                </Button>
-                            </div>
-                        </div>
+        const detailsPanel = (
+            <div className="p-3 space-y-3 overflow-y-auto">
+                {/* Header + badges */}
+                <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <MerchantLogo receipt={selectedReceipt} size="lg" />
+                        <h3 className={`font-semibold truncate ${compact ? 'text-base' : 'text-lg'}`}>
+                            {selectedReceipt.merchant_name || 'Unknown Merchant'}
+                        </h3>
+                        <StatusBadge status={selectedReceipt.extraction_status} />
+                        {selectedReceipt.invoice_status === 'success' && (
+                            <Badge className="gap-1 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                <Send className="h-3 w-3" />Sent to Premier
+                            </Badge>
+                        )}
+                        {selectedReceipt.invoice_status === 'failed' && (
+                            <Badge className="gap-1 bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+                                <AlertCircle className="h-3 w-3" />Invoice Failed
+                            </Badge>
+                        )}
+                        {selectedReceipt.is_reconciled && !selectedReceipt.invoice_status && (
+                            <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                                <Check className="h-3 w-3" />Reconciled
+                            </Badge>
+                        )}
                     </div>
                 </div>
-            </>
+
+                {/* Receipt details */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <DollarSign className="h-3.5 w-3.5 shrink-0" />
+                        <span className="font-medium text-foreground">{formatAmount(selectedReceipt.total_amount, selectedReceipt.currency)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="text-xs">GST</span>
+                        <span className="font-medium text-foreground">{formatAmount(selectedReceipt.gst_amount, selectedReceipt.currency)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                        <span>{formatDate(selectedReceipt.transaction_date)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <User className="h-3.5 w-3.5 shrink-0" />
+                        <span>{selectedReceipt.user?.name}</span>
+                    </div>
+                    {selectedReceipt.card_last_four && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                            <span>****{selectedReceipt.card_last_four}</span>
+                        </div>
+                    )}
+                    {selectedReceipt.category && (
+                        <div className="flex items-center gap-1.5">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getCategoryColor(selectedReceipt.category)}`}>
+                                {selectedReceipt.category}
+                            </span>
+                        </div>
+                    )}
+                </div>
+                {selectedReceipt.description && (
+                    <p className="text-muted-foreground text-sm">{selectedReceipt.description}</p>
+                )}
+
+                {/* Invoice fields */}
+                {(selectedReceipt.extraction_status === 'completed' && !selectedReceipt.premier_invoice_id) && (
+                    <div className="border-t pt-3">
+                        <InvoiceFields />
+                    </div>
+                )}
+                {selectedReceipt.invoice_status === 'failed' && (
+                    <div className="border-t pt-3">
+                        <InvoiceFields failed />
+                    </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-2 flex-wrap border-t pt-3">
+                    <Button variant="outline" size="sm" onClick={openEditDialog}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setIsDeleteOpen(true)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Delete
+                    </Button>
+                </div>
+            </div>
+        );
+
+        if (compact) {
+            // Mobile: vertical stack
+            return (
+                <>
+                    {imageViewer}
+                    <div className="border-t bg-background shrink-0">
+                        {detailsPanel}
+                    </div>
+                </>
+            );
+        }
+
+        // Desktop: horizontal split — image left, details right
+        return (
+            <div className="flex flex-1 overflow-hidden">
+                {imageViewer}
+                <div className="w-80 xl:w-96 shrink-0 border-l bg-background overflow-y-auto">
+                    {detailsPanel}
+                </div>
+            </div>
         );
     };
 
