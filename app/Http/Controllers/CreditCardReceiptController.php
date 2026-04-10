@@ -190,39 +190,19 @@ class CreditCardReceiptController extends Controller
             'vendor_id' => ['required', 'exists:premier_vendors,id'],
         ]);
 
-        $vendor = PremierVendor::findOrFail($validated['vendor_id']);
-        $glAccount = PremierGlAccount::findOrFail($validated['gl_account_id']);
+        $creditCardReceipt->update([
+            'invoice_status' => 'processing',
+            'gl_account_id' => $validated['gl_account_id'],
+        ]);
 
-        $service = new CreditCardInvoiceService;
-        $payload = $service->generateInvoicePayload($creditCardReceipt, $vendor, $glAccount);
-        $result = $service->sendInvoiceToPremier($creditCardReceipt, $payload);
+        \App\Jobs\SendReceiptToPremier::dispatch(
+            $creditCardReceipt->id,
+            (int) $validated['vendor_id'],
+            (int) $validated['gl_account_id'],
+            auth()->id(),
+        );
 
-        if ($result['success']) {
-            $creditCardReceipt->update([
-                'premier_invoice_id' => $result['invoice_id'] ?? 'sent',
-                'invoice_status' => 'success',
-                'gl_account_id' => $glAccount->id,
-                'is_reconciled' => true,
-            ]);
-
-            activity()
-                ->performedOn($creditCardReceipt)
-                ->event('invoice created')
-                ->causedBy(auth()->user())
-                ->log("CC Receipt #{$creditCardReceipt->id} sent to Premier. Invoice ID: " . ($result['invoice_id'] ?? 'N/A'));
-
-            return back()->with('success', 'Invoice created in Premier successfully.');
-        }
-
-        $creditCardReceipt->update(['invoice_status' => 'failed']);
-
-        activity()
-            ->performedOn($creditCardReceipt)
-            ->event('invoice failed')
-            ->causedBy(auth()->user())
-            ->log("CC Receipt #{$creditCardReceipt->id} failed to send to Premier: " . ($result['message'] ?? 'Unknown error'));
-
-        return back()->with('error', 'Failed to create invoice in Premier. ' . ($result['message'] ?? ''));
+        return back()->with('success', 'Invoice is being sent to Premier...');
     }
 
     public function export(Request $request): StreamedResponse

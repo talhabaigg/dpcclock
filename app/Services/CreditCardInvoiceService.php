@@ -187,7 +187,8 @@ class CreditCardInvoiceService
                 ->timeout(60)
                 ->attach('File', $contents, $fileName, ['Content-Type' => $mimeType])
                 ->put("{$baseUrl}/api/APInvoice/AddDocumentToAPInvoice", [
-                    'InvoiceId' => $invoiceId,
+                    'APInvoiceId' => $invoiceId,
+                    'DocumentName' => $fileName,
                 ]);
 
             if ($response->successful()) {

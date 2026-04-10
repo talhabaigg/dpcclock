@@ -116,7 +116,7 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
     }, [flash.success, flash.error]);
 
     useEffect(() => {
-        const hasPending = receipts.data.some((r) => r.extraction_status === 'pending');
+        const hasPending = receipts.data.some((r) => r.extraction_status === 'pending' || r.invoice_status === 'processing');
         if (!hasPending) return;
         const interval = setInterval(() => { router.reload({ only: ['receipts'] }); }, 5000);
         return () => clearInterval(interval);
@@ -328,6 +328,11 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
                             </span>
                         )}
                         {receipt.extraction_status !== 'completed' && <StatusBadge status={receipt.extraction_status} />}
+                        {receipt.invoice_status === 'processing' && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />Sending
+                            </span>
+                        )}
                         {receipt.invoice_status === 'success' && (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
                                 <Send className="h-2.5 w-2.5" />Sent
@@ -443,6 +448,11 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
                             {selectedReceipt.merchant_name || 'Unknown Merchant'}
                         </h3>
                         <StatusBadge status={selectedReceipt.extraction_status} />
+                        {selectedReceipt.invoice_status === 'processing' && (
+                            <Badge className="gap-1 bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">
+                                <Loader2 className="h-3 w-3 animate-spin" />Sending...
+                            </Badge>
+                        )}
                         {selectedReceipt.invoice_status === 'success' && (
                             <Badge className="gap-1 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
                                 <Send className="h-3 w-3" />Sent to Premier
