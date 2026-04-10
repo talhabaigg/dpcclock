@@ -1,5 +1,6 @@
 // useVoiceCall Hook - OpenAI Realtime API voice call management
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { csrfFetch } from './csrf-fetch';
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'processing' | 'error' | 'disconnected';
 
@@ -75,7 +76,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         if (!voiceSessionIdRef.current) return;
 
         try {
-            await fetch('/voice/transcript', {
+            await csrfFetch('/voice/transcript', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -161,7 +162,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
                         // Execute tool via server
                         try {
-                            const toolResponse = await fetch('/voice/tool', {
+                            const toolResponse = await csrfFetch('/voice/tool', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -236,7 +237,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
             aiResponseAccRef.current = '';
 
             // Step 1: Get ephemeral token from server
-            const sessionResponse = await fetch('/voice/session', {
+            const sessionResponse = await csrfFetch('/voice/session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -406,7 +407,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
         // Report session end to server first
         if (voiceSessionIdRef.current) {
             try {
-                const response = await fetch('/voice/session/end', {
+                const response = await csrfFetch('/voice/session/end', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

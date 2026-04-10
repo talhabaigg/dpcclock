@@ -1,5 +1,6 @@
 // Chat Service - API abstraction layer for AI chat
 import type { ConversationSummary, StreamEvent } from './types';
+import { csrfFetch } from './csrf-fetch';
 
 // Using web routes (not api) for session-based authentication
 const API_BASE = '';
@@ -52,7 +53,7 @@ export class ChatService {
                 });
             }
 
-            const response = await fetch(`${API_BASE}/chat/stream`, {
+            const response = await csrfFetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
                 headers,
                 credentials: 'same-origin',
@@ -183,7 +184,7 @@ export class ChatService {
      * Send a non-streaming message (fallback)
      */
     async sendMessage(message: string, conversationId: string | null): Promise<{ reply: string; conversationId: string }> {
-        const response = await fetch(`${API_BASE}/chat`, {
+        const response = await csrfFetch(`${API_BASE}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -212,7 +213,7 @@ export class ChatService {
      * Get all conversations for the current user
      */
     async getConversations(): Promise<ConversationSummary[]> {
-        const response = await fetch(`${API_BASE}/chat/conversations`, {
+        const response = await csrfFetch(`${API_BASE}/chat/conversations`, {
             headers: {
                 Accept: 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
@@ -232,7 +233,7 @@ export class ChatService {
         conversation_id: string;
         messages: Array<{ id: number; role: string; content: string; created_at: string }>;
     }> {
-        const response = await fetch(`${API_BASE}/chat/conversations/${conversationId}`, {
+        const response = await csrfFetch(`${API_BASE}/chat/conversations/${conversationId}`, {
             headers: {
                 Accept: 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
@@ -249,7 +250,7 @@ export class ChatService {
      * Delete a conversation
      */
     async deleteConversation(conversationId: string): Promise<void> {
-        const response = await fetch(`${API_BASE}/chat/conversations/${conversationId}`, {
+        const response = await csrfFetch(`${API_BASE}/chat/conversations/${conversationId}`, {
             method: 'DELETE',
             headers: {
                 Accept: 'application/json',
