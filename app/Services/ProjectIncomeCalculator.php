@@ -56,7 +56,7 @@ class ProjectIncomeCalculator
             : 0;
 
         // Calculate previous month values
-        $previousMonthDate = $asOfDate->copy()->subMonth()->endOfMonth();
+        $previousMonthDate = $asOfDate->copy()->startOfMonth()->subDay();
         $prevMonthCost = $this->calculateMonthCost($location, $previousMonthDate);
         $prevMonthIncome = $this->calculateMonthIncome($location, $previousMonthDate);
         $prevMonthProfit = $prevMonthIncome - $prevMonthCost;

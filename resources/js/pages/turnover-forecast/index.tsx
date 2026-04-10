@@ -517,35 +517,35 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                             )}
                         </div>
 
-                        {/* 3 key metrics — widths aligned with progress bar sections */}
-                        <div className="flex">
-                            <div className="shrink-0 space-y-0.5" style={{ width: `${Math.max(parseFloat(formatPercent(completedTurnoverYTD, targetBaseline)), 15)}%` }}>
+                        {/* 3 key metrics — stacked on mobile, aligned with progress bar on sm+ */}
+                        <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-0">
+                            <div className="space-y-0.5 sm:shrink-0 sm:[width:var(--completed-w)]" style={{ '--completed-w': `${Math.max(parseFloat(formatPercent(completedTurnoverYTD, targetBaseline)), 15)}%` } as React.CSSProperties}>
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
                                     Completed YTD
                                 </div>
-                                <div className="text-xl font-bold tracking-tight sm:text-2xl">
+                                <div className="text-lg font-bold tracking-tight sm:text-2xl">
                                     {formatCurrency(completedTurnoverYTD)}
                                 </div>
                                 <div className="text-muted-foreground text-[11px] sm:text-xs">Actual billed revenue</div>
                             </div>
-                            <div className="flex-1 space-y-0.5">
+                            <div className="space-y-0.5 sm:flex-1">
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 dark:bg-sky-500" />
                                     Work in Hand
                                 </div>
-                                <div className="text-muted-foreground text-xl font-bold tracking-tight sm:text-2xl">
+                                <div className="text-muted-foreground text-lg font-bold tracking-tight sm:text-2xl">
                                     {formatCurrency(workInHandFY)}
                                 </div>
                                 <div className="text-muted-foreground text-[11px] sm:text-xs">Forecasted revenue</div>
                             </div>
                             {remainingTargetToAchieve > 0 && (
-                                <div className="shrink-0 space-y-0.5 text-right">
-                                    <div className="text-muted-foreground flex items-center justify-end gap-1.5 text-xs font-medium">
+                                <div className="col-span-2 space-y-0.5 sm:shrink-0 sm:text-right">
+                                    <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium sm:justify-end">
                                         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 dark:bg-amber-500" />
                                         Remaining Budget
                                     </div>
-                                    <div className="text-xl font-bold tracking-tight sm:text-2xl">
+                                    <div className="text-lg font-bold tracking-tight sm:text-2xl">
                                         {formatCurrency(remainingTargetToAchieve)}
                                     </div>
                                     <div className="text-muted-foreground text-[11px] sm:text-xs">Remaining to FY budget</div>
@@ -625,8 +625,8 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 )}
                             </div>
                             {/* Compact legend */}
-                            <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] sm:text-xs">
-                                <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:gap-x-4 sm:text-xs">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                                     <span className="flex items-center gap-1">
                                         <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-500" />
                                         Completed
