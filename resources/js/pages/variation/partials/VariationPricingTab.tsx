@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, fmtCurrency, round2 } from '@/lib/utils';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Pencil, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -110,7 +110,7 @@ export default function VariationPricingTab({
         setLoading(true);
         try {
             if (variationId) {
-                const { data } = await axios.post(`/variations/${variationId}/pricing-items`, {
+                const data = await api.post<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items`, {
                     takeoff_condition_id: condition.id,
                     description,
                     qty,
@@ -118,7 +118,7 @@ export default function VariationPricingTab({
                 });
                 onPricingItemsChange([...pricingItems, data.pricing_item]);
             } else {
-                const { data } = await axios.post(`/locations/${locationId}/variation-preview`, {
+                const data = await api.post<{ preview: any }>(`/locations/${locationId}/variation-preview`, {
                     condition_id: condition.id,
                     qty,
                 });
@@ -150,8 +150,8 @@ export default function VariationPricingTab({
             toast.success('Pricing item added');
             setSelectedConditionId('');
             setConditionQty('');
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to add pricing item');
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? err.message : 'Failed to add pricing item');
         } finally {
             setLoading(false);
         }
@@ -170,7 +170,7 @@ export default function VariationPricingTab({
         setLoading(true);
         try {
             if (variationId) {
-                const { data } = await axios.post(`/variations/${variationId}/pricing-items`, {
+                const data = await api.post<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items`, {
                     description: manualDescription,
                     qty,
                     unit: manualUnit,
@@ -205,7 +205,7 @@ export default function VariationPricingTab({
     const handleDelete = async (item: PricingItem, index: number) => {
         if (item.id && variationId) {
             try {
-                await axios.delete(`/variations/${variationId}/pricing-items/${item.id}`);
+                await api.delete(`/variations/${variationId}/pricing-items/${item.id}`);
                 onPricingItemsChange(pricingItems.filter((p) => p.id !== item.id));
                 toast.success('Item removed');
             } catch {
@@ -244,7 +244,7 @@ export default function VariationPricingTab({
 
         if (item.id && variationId) {
             try {
-                const { data } = await axios.put(`/variations/${variationId}/pricing-items/${item.id}`, {
+                const data = await api.put<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items/${item.id}`, {
                     description: editValues.description,
                     qty: newQty,
                     labour_cost: newLabour,
@@ -254,8 +254,8 @@ export default function VariationPricingTab({
                 updated[editingIdx] = data.pricing_item;
                 onPricingItemsChange(updated);
                 toast.success('Item updated');
-            } catch (err: any) {
-                toast.error(err.response?.data?.message || 'Failed to update item');
+            } catch (err: unknown) {
+                toast.error(err instanceof ApiError ? err.message : 'Failed to update item');
             }
         } else {
             const updated = [...pricingItems];

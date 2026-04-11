@@ -25,7 +25,7 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+            <PopoverTrigger asChild className="w-full">
                 <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between overflow-hidden">
                     <span className="truncate">{selectedOption ? options.find((option) => option.value === selectedOption)?.label : `Select ${optionName}`}</span>
                     <ChevronsUpDown className="shrink-0 opacity-50" />
@@ -33,7 +33,7 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
             </PopoverTrigger>
             <PopoverContent
                 align="start"
-                className="w-[var(--radix-popover-trigger-width)] p-0"
+                className="w-(--anchor-width) p-0"
                 onOpenAutoFocus={(e) => e.preventDefault()}
                 onInteractOutside={(e) => e.preventDefault()}
             >
@@ -46,6 +46,7 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                                 <CommandItem
                                     key={option.value}
                                     value={option.label}
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onValueChange(option.value);
                                         setOpen(false);

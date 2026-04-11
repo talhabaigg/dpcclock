@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { fmtCurrency } from '@/lib/utils';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { Download, ExternalLink, Loader2, Send, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -67,7 +67,7 @@ export default function PremierVariationTab({
 
             if (variationId) {
                 // Saved variation: generate and persist to DB
-                const { data } = await axios.post(`/variations/${variationId}/generate-premier`);
+                const data = await api.post<{ variation: { line_items: LineItem[] }; summary: { line_count: number } }>(`/variations/${variationId}/generate-premier`);
                 lineItemsResult = data.variation.line_items;
                 summary = data.summary;
             } else {
@@ -76,7 +76,7 @@ export default function PremierVariationTab({
                     toast.error('Please select a location first');
                     return;
                 }
-                const { data } = await axios.post('/variations/preview-premier-lines', {
+                const data = await api.post<{ line_items: LineItem[]; summary: { line_count: number } }>('/variations/preview-premier-lines', {
                     location_id: Number(locationId),
                     pricing_items: pricingItems.map((i) => ({
                         labour_cost: i.labour_cost,
@@ -91,8 +91,8 @@ export default function PremierVariationTab({
 
             onLineItemsChange(lineItemsResult);
             toast.success(`Generated ${summary.line_count} Premier lines`);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to generate Premier lines');
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? err.message : 'Failed to generate Premier lines');
         } finally {
             setGenerating(false);
             setConfirmRegenerate(false);
@@ -111,13 +111,10 @@ export default function PremierVariationTab({
         if (!variationId) return;
         setSending(true);
         try {
-            await axios.get(`/variations/${variationId}/send-to-premier`, {
-                headers: { Accept: 'application/json' },
-            });
+            await api.get(`/variations/${variationId}/send-to-premier`);
             toast.success('Variation sent to Premier successfully');
-        } catch (err: any) {
-            const message = err.response?.data?.message || err.response?.data?.error || 'Failed to send variation to Premier';
-            toast.error(message);
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? err.message : 'Failed to send variation to Premier');
         } finally {
             setSending(false);
             setConfirmSend(false);

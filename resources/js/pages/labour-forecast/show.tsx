@@ -32,7 +32,7 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
 import type { CellValueChangedEvent } from 'ag-grid-community';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CostBreakdownDialog } from './CostBreakdownDialog';
@@ -472,8 +472,8 @@ const LabourForecastShow = ({
 
             try {
                 setIsCalculatingCosts(true);
-                const response = await axios.post(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, { weeks: weeksWithData });
-                setWeeklyCosts({ ...newCosts, ...response.data.costs });
+                const result = await api.post<{ costs: Record<string, number> }>(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, { weeks: weeksWithData });
+                setWeeklyCosts({ ...newCosts, ...result.costs });
             } catch (error) {
                 console.error('Failed to calculate costs batch', error);
                 setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
@@ -494,8 +494,8 @@ const LabourForecastShow = ({
         const fetchBudgetData = async () => {
             setIsBudgetLoading(true);
             try {
-                const response = await axios.get(`/location/${location.id}/labour-forecast/budget-summary`);
-                setBudgetData(response.data);
+                const data = await api.get(`/location/${location.id}/labour-forecast/budget-summary`);
+                setBudgetData(data);
             } catch (error) {
                 console.error('Failed to fetch budget data', error);
                 setBudgetData(null);

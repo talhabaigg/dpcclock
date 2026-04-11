@@ -67,53 +67,52 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
             <Button onClick={goToPrevious} variant="outline" className="rounded-r-none">
                 <ChevronLeft />
             </Button>
-            <div className="flex flex-col items-center space-y-2">
-                <Popover open={open} onOpenChange={handleOpenChange}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={open}
-                            className="w-full min-w-72 justify-between rounded-none sm:min-w-[250px]"
-                        >
-                            {value ? employees.find((emp) => emp.value === value)?.label : 'Select an Employee'}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="min-w-72 p-0 sm:min-w-[250px]">
-                        <Command>
-                            <CommandInput placeholder="Search employee..." />
-                            <CommandList className="max-h-60 overflow-auto">
-                                {loading ? (
-                                    <div className="text-muted-foreground flex items-center gap-2 p-4 text-sm">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Loading...
-                                    </div>
-                                ) : employees.length === 0 ? (
-                                    <CommandEmpty>No employee found.</CommandEmpty>
-                                ) : (
-                                    <CommandGroup>
-                                        {employees.map((emp) => (
-                                            <CommandItem
-                                                key={emp.value}
-                                                value={emp.label.toLowerCase()} // ✅ This lets filtering match the text shown
-                                                onSelect={() => {
-                                                    setValue(emp.value);
-                                                    setOpen(false);
-                                                    onEmployeeChange(emp.value);
-                                                }}
-                                            >
-                                                <Check className={cn('mr-2 h-4 w-4', value === emp.value ? 'opacity-100' : 'opacity-0')} />
-                                                {emp.label}
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                )}
-                            </CommandList>
-                        </Command>
-                    </PopoverContent>
-                </Popover>
-            </div>
+            <Popover open={open} onOpenChange={handleOpenChange}>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className="w-full min-w-72 justify-between rounded-none sm:min-w-[250px]"
+                    >
+                        {value ? employees.find((emp) => emp.value === value)?.label : 'Select an Employee'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="min-w-72 p-0 sm:min-w-[250px]">
+                    <Command>
+                        <CommandInput placeholder="Search employee..." />
+                        <CommandList className="max-h-60 overflow-auto">
+                            {loading ? (
+                                <div className="text-muted-foreground flex items-center gap-2 p-4 text-sm">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Loading...
+                                </div>
+                            ) : employees.length === 0 ? (
+                                <CommandEmpty>No employee found.</CommandEmpty>
+                            ) : (
+                                <CommandGroup>
+                                    {employees.map((emp) => (
+                                        <CommandItem
+                                            key={emp.value}
+                                            value={emp.label.toLowerCase()}
+                                            className="data-selected:bg-transparent"
+                                            onSelect={() => {
+                                                setValue(emp.value);
+                                                setOpen(false);
+                                                onEmployeeChange(emp.value);
+                                            }}
+                                        >
+                                            <Check className={cn('mr-2 h-4 w-4', value === emp.value ? 'opacity-100' : 'opacity-0')} />
+                                            {emp.label}
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            )}
+                        </CommandList>
+                    </Command>
+                </PopoverContent>
+            </Popover>
             <Button onClick={goToNext} variant="outline" className="rounded-l-none">
                 <ChevronRight />
             </Button>

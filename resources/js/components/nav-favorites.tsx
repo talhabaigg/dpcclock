@@ -25,11 +25,9 @@ export function NavFavorites({ allItems }: { allItems: FavoriteEntry[] }) {
             <SidebarMenu>
                 {favoriteItems.map((item) => (
                     <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isNavItemActive(item.url, page.url)} tooltip={{ children: item.title }}>
-                            <Link href={item.url} prefetch>
-                                <item.icon />
-                                <span>{item.title}</span>
-                            </Link>
+                        <SidebarMenuButton render={<Link href={item.url} prefetch />} isActive={isNavItemActive(item.url, page.url)} tooltip={{ children: item.title }}>
+                            <item.icon />
+                            <span>{item.title}</span>
                         </SidebarMenuButton>
                         <SidebarMenuAction
                             onClick={() => toggleFavorite(item.url)}

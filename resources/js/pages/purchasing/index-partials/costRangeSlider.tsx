@@ -1,8 +1,7 @@
 'use client';
 
-import { Input } from '@/components/ui/input'; // assuming you're using shadcn/ui
-import * as SliderPrimitive from '@radix-ui/react-slider';
-import clsx from 'clsx';
+import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 
 type Props = {
     min: number;
@@ -53,28 +52,13 @@ export default function CostRangeSlider({ min, max, value, onChange }: Props) {
                 </div>
             </div>
 
-            <SliderPrimitive.Root
-                className="relative flex w-full touch-none items-center select-none"
+            <Slider
                 min={min}
                 max={max}
                 step={10}
                 value={value}
                 onValueChange={(v) => onChange(v as [number, number])}
-                minStepsBetweenThumbs={1}
-            >
-                <SliderPrimitive.Track className="bg-muted relative h-2 w-full grow overflow-hidden rounded-full">
-                    <SliderPrimitive.Range className="bg-primary absolute h-full" />
-                </SliderPrimitive.Track>
-                {value.map((_, i) => (
-                    <SliderPrimitive.Thumb
-                        key={i}
-                        className={clsx(
-                            'border-primary bg-background block h-5 w-5 rounded-full border shadow-sm transition-colors',
-                            'focus:ring-ring focus:ring-2 focus:ring-offset-2 focus:outline-none',
-                        )}
-                    />
-                ))}
-            </SliderPrimitive.Root>
+            />
         </div>
     );
 }

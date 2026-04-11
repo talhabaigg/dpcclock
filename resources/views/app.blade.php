@@ -32,7 +32,7 @@
         }
     </style>
 
-    <title inertia>{{ config('app.name', 'Laravel') }}</title>
+    <title data-inertia>{{ config('app.name', 'Laravel') }}</title>
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ asset('manifest.json') }}">
     <link rel="preconnect" href="https://fonts.bunny.net">

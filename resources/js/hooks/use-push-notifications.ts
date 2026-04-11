@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { useCallback, useEffect, useState } from 'react';
 
 interface PushNotificationState {
@@ -116,7 +116,7 @@ export function usePushNotifications() {
 
             // Send subscription to server
             const subscriptionJson = subscription.toJSON();
-            await axios.post('/push-subscriptions', {
+            await api.post('/push-subscriptions', {
                 endpoint: subscriptionJson.endpoint,
                 keys: {
                     p256dh: subscriptionJson.keys?.p256dh,
@@ -161,9 +161,7 @@ export function usePushNotifications() {
             await subscription.unsubscribe();
 
             // Remove subscription from server
-            await axios.delete('/push-subscriptions', {
-                data: { endpoint: subscription.endpoint },
-            });
+            await api.delete('/push-subscriptions', { endpoint: subscription.endpoint });
 
             setState((prev) => ({
                 ...prev,

@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { Bar, BarChart, LabelList, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -288,10 +287,10 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
                                         <Filter className="h-3.5 w-3.5" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverPrimitive.Content
+                                <PopoverContent
                                     align="end"
                                     sideOffset={4}
-                                    className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[10002] w-72 origin-(--radix-popover-content-transform-origin) rounded-md border shadow-md outline-hidden p-0"
+                                    className="w-72 p-0"
                                 >
                                     <div className="flex items-center justify-between border-b px-3 py-2">
                                         <span className="text-xs font-medium">Cost Items</span>
@@ -339,7 +338,7 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
                                             ))
                                         )}
                                     </div>
-                                </PopoverPrimitive.Content>
+                                </PopoverContent>
                             </Popover>
                         </div>
                     </DialogHeader>

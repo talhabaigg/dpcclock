@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, BarChart3, CalendarIcon, Check, Eye, Loader2, Trash2, Upload } from 'lucide-react';
@@ -344,8 +344,8 @@ export default function ProductionData() {
                         <div className="mx-auto grid w-full max-w-sm gap-4 py-2 self-start">
                                 <div className="grid gap-1.5">
                                     <Label>Report Date</Label>
-                                    <PopoverPrimitive.Root open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                                        <PopoverPrimitive.Trigger asChild>
+                                    <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                                        <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 className={cn('justify-start text-left font-normal', !reportDate && 'text-muted-foreground')}
@@ -353,11 +353,11 @@ export default function ProductionData() {
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                                 {reportDate ? format(reportDate, 'dd MMM yyyy') : 'Pick a date'}
                                             </Button>
-                                        </PopoverPrimitive.Trigger>
-                                        <PopoverPrimitive.Content
+                                        </PopoverTrigger>
+                                        <PopoverContent
                                             align="start"
                                             sideOffset={4}
-                                            className="bg-popover text-popover-foreground z-[10002] w-auto rounded-md border p-0 shadow-md outline-hidden"
+                                            className="w-auto p-0"
                                         >
                                             <Calendar
                                                 mode="single"
@@ -368,8 +368,8 @@ export default function ProductionData() {
                                                 }}
                                                 autoFocus
                                             />
-                                        </PopoverPrimitive.Content>
-                                    </PopoverPrimitive.Root>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label>CSV File</Label>

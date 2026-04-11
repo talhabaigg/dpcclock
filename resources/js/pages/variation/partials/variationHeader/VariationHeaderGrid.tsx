@@ -156,7 +156,7 @@ const VariationHeaderGrid = forwardRef<VariationHeaderGridRef, VariationHeaderGr
     }));
 
     return (
-        <div className="ag-theme-shadcn w-full" style={{ height: '96px' }}>
+        <div className="w-full" style={{ height: '96px' }}>
             <AgGridReact ref={gridRef} rowData={[headerData]} columnDefs={columnDefs} {...gridOptions} />
         </div>
     );

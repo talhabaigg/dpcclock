@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { router } from '@inertiajs/react';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { Check, Copy, Link2, Monitor, Plus, Power, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
@@ -35,10 +35,10 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
         setGenerating(true);
 
         try {
-            const response = await axios.post(route('kiosk-devices.generate-token', kioskId), {
+            const data = await api.post<{ url: string }>(route('kiosk-devices.generate-token', kioskId), {
                 device_name: deviceName.trim(),
             });
-            setGeneratedUrl(response.data.url);
+            setGeneratedUrl(data.url);
         } catch {
             // Error handled by Inertia
         } finally {

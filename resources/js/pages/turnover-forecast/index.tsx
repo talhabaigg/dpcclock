@@ -364,7 +364,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                             return (
                                                 <label
                                                     key={mode}
-                                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 ${isOnly ? 'opacity-60' : ''}`}
+                                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted ${isOnly ? 'opacity-60' : ''}`}
                                                     onClick={() => toggleView(mode)}
                                                 >
                                                     {isActive ? (
@@ -403,7 +403,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 <PopoverContent className="w-56 p-2" align="start">
                                     <div className="space-y-1">
                                         <label
-                                            className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
                                             onClick={() => setSelectedFYs([])}
                                         >
                                             <Checkbox checked={isAllTime} onCheckedChange={() => setSelectedFYs([])} />
@@ -417,7 +417,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                                 return (
                                                     <label
                                                         key={fy.value}
-                                                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
                                                     >
                                                         <Checkbox checked={isChecked} onCheckedChange={() => toggleFY(fy.value)} />
                                                         <span className="flex-1">{fy.label}</span>
@@ -556,7 +556,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                         {/* Single unified progress bar with budget marker */}
                         <div className="space-y-2">
                             <div className="relative">
-                                <div className="flex h-3.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                <div className="flex h-3.5 overflow-hidden rounded-full bg-muted">
                                     <HoverCard openDelay={100}>
                                         <HoverCardTrigger asChild>
                                             <div
@@ -677,7 +677,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 </span>
                             </div>
                         ) : (
-                            <div className="text-muted-foreground flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs sm:py-2.5 sm:text-sm dark:bg-slate-800/50">
+                            <div className="text-muted-foreground flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs sm:py-2.5 sm:text-sm">
                                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" />
                                 <span>Set up monthly targets to track budget variance</span>
                             </div>

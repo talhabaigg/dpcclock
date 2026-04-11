@@ -34,7 +34,7 @@ export default function LocationSelector({ listLocations, allLocations, selected
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+            <PopoverContent align="start" className="w-(--anchor-width) p-0">
                 <Command>
                     <CommandInput placeholder="Search location..." className="h-9" />
                     <CommandList>
@@ -44,6 +44,7 @@ export default function LocationSelector({ listLocations, allLocations, selected
                                 <CommandItem
                                     key={opt}
                                     value={opt} // makes it searchable by this string
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onChange(opt); // lift selection to parent
                                         setOpen(false);

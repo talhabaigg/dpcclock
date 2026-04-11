@@ -174,7 +174,7 @@ export function UnifiedForecastGrid({
                 field: 'jobNumber',
                 width: 160,
                 pinned: 'left',
-                cellClass: 'font-semibold text-slate-700 dark:text-slate-300',
+                cellClass: 'font-semibold text-foreground',
             });
 
             staticCols.push({
@@ -230,7 +230,7 @@ export function UnifiedForecastGrid({
                     cellClass: (params) => {
                         const rowType = (params.data as UnifiedRow)?.rowType;
                         if (rowType === 'cost' || rowType === 'profit') {
-                            return 'pl-4 text-slate-500 dark:text-slate-400 text-sm italic';
+                            return 'pl-4 text-muted-foreground text-sm italic';
                         }
                         return 'font-medium';
                     },
@@ -609,7 +609,7 @@ export function UnifiedForecastGrid({
         <div className="space-y-2">
             {/* Toolbar */}
             <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <div className="text-sm font-semibold text-foreground">
                     {viewMode === 'targets' ? 'Revenue Targets' : viewMode === 'expanded' ? 'Revenue, Cost & Profit' : 'Revenue Forecast'}
                 </div>
                 <div className="flex items-center gap-2">
@@ -651,7 +651,7 @@ export function UnifiedForecastGrid({
 
             {/* Grid */}
             <div
-                className="ag-theme-shadcn bg-card overflow-hidden rounded-xl border shadow-sm"
+                className="bg-card overflow-hidden rounded-xl border shadow-sm"
                 style={viewMode === 'expanded' ? { height: `${height}px` } : undefined}
             >
                 <AgGridReact

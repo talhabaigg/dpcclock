@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
@@ -54,12 +54,12 @@ export default function Notifications() {
         setTestMessage(null);
 
         try {
-            const response = await axios.post('/settings/notifications/test');
-            setTestMessage({ type: 'success', text: response.data.message });
-        } catch (err: any) {
+            const data = await api.post<{ message: string }>('/settings/notifications/test');
+            setTestMessage({ type: 'success', text: data.message });
+        } catch (err: unknown) {
             setTestMessage({
                 type: 'error',
-                text: err.response?.data?.message || 'Failed to send test notification',
+                text: err instanceof ApiError ? err.message : 'Failed to send test notification',
             });
         } finally {
             setIsSendingTest(false);

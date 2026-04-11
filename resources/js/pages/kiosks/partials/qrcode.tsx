@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { Copy, ExternalLink, Loader2, QrCode, ShieldAlert } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import React, { useEffect, useState } from 'react';
@@ -21,8 +21,8 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get(`/retrieve-kiosk-token?kioskId=${kioskId}`);
-            const newToken = response.data.token;
+            const data = await api.get<{ token: string }>(`/retrieve-kiosk-token?kioskId=${kioskId}`);
+            const newToken = data.token;
 
             if (newToken !== token) {
                 setToken(newToken);

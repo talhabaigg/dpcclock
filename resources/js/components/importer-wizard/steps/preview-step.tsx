@@ -148,7 +148,7 @@ export function PreviewStep({ columns, mappedRows, validCount, warningCount, err
             </div>
 
             {/* AG Grid */}
-            <div className="ag-theme-shadcn flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden">
                 <AgGridReact
                     ref={gridRef}
                     theme={isDarkMode ? shadcnDarkTheme : shadcnLightTheme}

@@ -13,7 +13,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn, fmtCurrency } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/react';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { format } from 'date-fns';
 import {
     AlertCircle,
@@ -208,7 +208,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                 if (item.sell_rate != null && item.sell_rate > 0) {
                     payload.sell_rate = item.sell_rate;
                 }
-                const { data: resp } = await axios.post(`/variations/${varId}/pricing-items`, payload);
+                const resp = await api.post<{ pricing_item: any }>(`/variations/${varId}/pricing-items`, payload);
                 persisted.push(resp.pricing_item);
             } catch {
                 failCount++;
@@ -274,7 +274,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                     return;
                 }
                 try {
-                    const { data: response } = await axios.post('/variations/quick-store', {
+                    const response = await api.post<{ variation: { id: number } }>('/variations/quick-store', {
                         location_id: parseInt(data.location_id),
                         co_number: data.co_number,
                         description: data.description,
@@ -283,8 +283,8 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                     varId = response.variation.id;
                     setSavedVariationId(varId);
                     window.history.replaceState({}, '', `/variations/${varId}/edit`);
-                } catch (err: any) {
-                    toast.error(err.response?.data?.message || 'Failed to save variation');
+                } catch (err: unknown) {
+                    toast.error(err instanceof ApiError ? err.message : 'Failed to save variation');
                     setSaving(false);
                     return;
                 }
@@ -495,7 +495,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                            <PopoverContent className="w-(--anchor-width) p-0" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search locations..." />
                                                     <CommandList>
@@ -505,6 +505,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                                 <CommandItem
                                                                     key={loc.id}
                                                                     value={loc.name}
+                                                                    className="data-selected:bg-transparent"
                                                                     onSelect={() => {
                                                                         setData('location_id', String(loc.id));
                                                                         setLocationOpen(false);

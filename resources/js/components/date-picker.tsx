@@ -34,12 +34,12 @@ export function DatePickerDemo({
 }: DatePickerProps) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
+      <PopoverTrigger asChild className="w-full">
         <Button
           variant="outline"
           data-empty={!value}
           className={cn(
-            "data-[empty=true]:text-muted-foreground w-[212px] justify-between text-left font-normal overflow-hidden",
+            "data-[empty=true]:text-muted-foreground w-full justify-between text-left font-normal overflow-hidden",
             className,
           )}
         >

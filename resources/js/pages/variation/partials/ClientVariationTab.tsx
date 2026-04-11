@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { fmtCurrency, fmtPercent, round2 } from '@/lib/utils';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { ArrowDown, ArrowLeftRight, ExternalLink, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -231,7 +231,7 @@ export default function ClientVariationTab({
                     sell_rate: parseFloat(sellRate) || 0,
                 }));
 
-            const { data } = await axios.post(`/variations/${variationId}/sell-rates`, { rates });
+            const data = await api.post<{ pricing_items: PricingItem[] }>(`/variations/${variationId}/sell-rates`, { rates });
             onPricingItemsChange(data.pricing_items);
             toast.success('Sell rates saved');
         } catch {

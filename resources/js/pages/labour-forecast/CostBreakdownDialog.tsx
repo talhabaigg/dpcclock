@@ -20,7 +20,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { DollarSign, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -63,12 +63,11 @@ export const CostBreakdownDialog = ({
             if (aggregate) params.append('aggregate', aggregate);
             const queryString = params.toString();
             const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
-            const response = await axios.get(url);
-            console.log('Cost breakdown response:', response.data);
-            setData(response.data);
-            console.log(response.data);
-        } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to fetch cost breakdown');
+            const result = await api.get(url);
+            console.log('Cost breakdown response:', result);
+            setData(result);
+        } catch (err: unknown) {
+            setError(err instanceof ApiError ? (err.data?.error as string) || err.message : 'Failed to fetch cost breakdown');
         } finally {
             setLoading(false);
         }

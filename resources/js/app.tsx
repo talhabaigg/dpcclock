@@ -2,22 +2,7 @@ import '../css/app.css';
 import './echo';
 
 import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser';
-import axios from 'axios';
-
-// On 419 (CSRF mismatch), refresh the token and retry once.
-// This prevents PWA users from seeing stale-token errors after deployments.
-axios.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-        if (error.response?.status === 419 && !originalRequest._retried) {
-            originalRequest._retried = true;
-            await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' });
-            return axios(originalRequest);
-        }
-        return Promise.reject(error);
-    },
-);
+import './lib/api'; // CSRF retry + visibility refresh (replaces axios interceptor)
 
 declare global {
     interface Window {

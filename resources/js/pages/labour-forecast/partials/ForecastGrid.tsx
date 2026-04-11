@@ -212,7 +212,7 @@ export const ForecastGrid = ({
             )}
 
             {/* AG Grid */}
-            <div className="ag-theme-shadcn" style={{ height: 350, width: '100%' }}>
+            <div className="" style={{ height: 350, width: '100%' }}>
                 <AgGridReact
                     rowData={rowData}
                     columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth, {

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CostCodeSelector } from '@/pages/purchasing/costCodeSelector';
-import axios from 'axios';
+import { api, ApiError } from '@/lib/api';
 import { Check, ChevronDown, ChevronUp, Edit3, Loader2, Lock, Save, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -193,12 +193,11 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
 
         setApplying(item.id);
         try {
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
+            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
             setEditingId(null);
             onResolved();
-        } catch (err: any) {
-            const message = err?.response?.data?.error || err?.response?.data?.message || 'Failed to apply resolution';
-            toast.error(message);
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to apply resolution');
         } finally {
             setApplying(null);
         }
@@ -248,11 +247,10 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
 
         setApplying(item.id);
         try {
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
+            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
             onResolved();
-        } catch (err: any) {
-            const message = err?.response?.data?.error || err?.response?.data?.message || 'Failed to apply pricing';
-            toast.error(message);
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to apply pricing');
         } finally {
             setApplying(null);
         }
@@ -261,7 +259,7 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
     const dismissItem = async (item: LineItem) => {
         setApplying(item.id);
         try {
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
+            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
                 line_item_id: item.id,
                 resolution_type: 'direct_price',
                 new_code: item.code ?? '',
@@ -271,9 +269,8 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
                 cost_code: item.cost_code ?? '',
             });
             onResolved();
-        } catch (err: any) {
-            const message = err?.response?.data?.error || err?.response?.data?.message || 'Failed to dismiss item';
-            toast.error(message);
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to dismiss item');
         } finally {
             setApplying(null);
         }

@@ -82,7 +82,7 @@ export const getValueCellClass = (params: CellClassParams): string => {
     const rowType = getRowType(params);
 
     if (isTotalRow(params)) {
-        classes.push('font-bold', 'bg-slate-100', 'dark:bg-slate-800');
+        classes.push('font-bold', 'bg-muted');
     } else if (isLabourRow(params)) {
         classes.push('bg-purple-50', 'dark:bg-purple-900/30');
     } else if (rowType === 'profit') {
@@ -115,7 +115,7 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
         const data = params.data as UnifiedRow;
 
         if (isTotalRow(params)) {
-            classes.push('font-bold', 'bg-slate-100', 'dark:bg-slate-800');
+            classes.push('font-bold', 'bg-muted');
         } else if (isLabourRow(params)) {
             classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
         } else if (rowType === 'cost') {
@@ -141,7 +141,7 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
             if (hasActualData) {
                 classes.push('bg-emerald-50', 'dark:bg-emerald-950/30', 'font-medium');
             } else if (params.value) {
-                classes.push('bg-blue-50', 'dark:bg-blue-950/30', 'italic', 'text-slate-600', 'dark:text-slate-400');
+                classes.push('bg-blue-50', 'dark:bg-blue-950/30', 'italic', 'text-muted-foreground');
             }
         }
 
@@ -213,7 +213,7 @@ export const getPinnedCellClass = (params: CellClassParams): string => {
     const rowType = getRowType(params);
 
     if (isTotalRow(params)) {
-        classes.push('font-bold', 'bg-slate-100', 'dark:bg-slate-800');
+        classes.push('font-bold', 'bg-muted');
     } else if (isLabourRow(params)) {
         classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
     } else if (rowType === 'cost') {

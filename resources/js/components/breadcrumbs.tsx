@@ -17,13 +17,11 @@ export function Breadcrumbs({ breadcrumbs }: { breadcrumbs: BreadcrumbItemType[]
                                         {isLast ? (
                                             <BreadcrumbPage>{item.title}</BreadcrumbPage>
                                         ) : (
-                                            <BreadcrumbLink asChild>
-                                                <Link href={item.href}>
-                                                    <span className="hidden sm:inline">{item.title}</span>
-                                                    <span className="sm:hidden">
-                                                        {item.title.length > 20 ? `${item.title.slice(0, 10)}...` : item.title}
-                                                    </span>
-                                                </Link>
+                                            <BreadcrumbLink render={<Link href={item.href} />}>
+                                                <span className="hidden sm:inline">{item.title}</span>
+                                                <span className="sm:hidden">
+                                                    {item.title.length > 20 ? `${item.title.slice(0, 10)}...` : item.title}
+                                                </span>
                                             </BreadcrumbLink>
                                         )}
                                     </BreadcrumbItem>

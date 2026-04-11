@@ -40,7 +40,7 @@ const SearchSelectWithBadgeItem = ({ options, value, onValueChange, optionName }
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+            <PopoverContent className="w-(--anchor-width) p-0">
                 <Command>
                     <CommandInput placeholder={`Search ${optionName}...`} />
                     <CommandList>
@@ -50,6 +50,7 @@ const SearchSelectWithBadgeItem = ({ options, value, onValueChange, optionName }
                                 <CommandItem
                                     key={option.code}
                                     value={option.code + option.description} // <- search uses this + inner text
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onValueChange(option.code); // toggle off if re-selected
                                         setOpen(false);

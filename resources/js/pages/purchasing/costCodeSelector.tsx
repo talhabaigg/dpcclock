@@ -55,6 +55,7 @@ export function CostCodeSelector({ value, onValueChange, costCodes, useIdAsValue
                                 <CommandItem
                                     key={costCode.id}
                                     value={`${costCode.code} ${costCode.description}`}
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onValueChange(getValueKey(costCode));
                                         setSearch('');
@@ -63,7 +64,7 @@ export function CostCodeSelector({ value, onValueChange, costCodes, useIdAsValue
                                 >
                                     <div className="flex flex-col">
                                         <span className="font-medium">{costCode.code}</span>
-                                        <span className="text-muted-foreground text-xs text-wrap">{costCode.description}</span>
+                                        <span className="text-xs text-wrap">{costCode.description}</span>
                                     </div>
                                     <Check className={cn('ml-auto', value === getValueKey(costCode) ? 'opacity-100' : 'opacity-0')} />
                                 </CommandItem>

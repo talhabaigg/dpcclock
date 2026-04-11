@@ -2297,7 +2297,7 @@ const ShowJobForecastPage = ({
                                 </TooltipProvider>
                             </div>
                         )}
-                        <div className="ag-theme-shadcn flex-1">
+                        <div className="flex-1">
                             <AgGridReact
                                 theme={gridTheme}
                                 ref={gridOne}
@@ -2379,7 +2379,7 @@ const ShowJobForecastPage = ({
                                 </TooltipProvider>
                             </div>
                         )}
-                        <div className="ag-theme-shadcn flex-1">
+                        <div className="flex-1">
                             <AgGridReact
                                 theme={gridTheme}
                                 ref={gridTwo}

@@ -4,16 +4,11 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ReactNode, RefObject } from 'react';
 import GridSizeSelector from './gridSizeSelector';
 import { GridStateToolbar } from './gridStateToolbar';
-import PasteTableButton from './pasteTableButton';
 
 interface GridToolbarProps {
     onAddRow: () => void;
     onDeleteRow: () => void;
     gridRef: RefObject<AgGridReact | null>;
-    rowData: any[];
-    setRowData: (data: any[]) => void;
-    projectId: number;
-    setPastingItems: (value: boolean) => void;
     onGridSizeChange: (size: string) => void;
     extraActions?: ReactNode;
 }
@@ -22,10 +17,6 @@ export function GridToolbar({
     onAddRow,
     onDeleteRow,
     gridRef,
-    rowData,
-    setRowData,
-    projectId,
-    setPastingItems,
     onGridSizeChange,
     extraActions,
 }: GridToolbarProps) {
@@ -56,7 +47,6 @@ export function GridToolbar({
             <div className="flex items-center gap-1.5">
                 <div className="hidden items-center gap-1 sm:flex">
                     <GridStateToolbar gridRef={gridRef} />
-                    <PasteTableButton rowData={rowData} setRowData={setRowData} projectId={projectId} setPastingItems={setPastingItems} />
                 </div>
                 <GridSizeSelector onChange={onGridSizeChange} />
             </div>

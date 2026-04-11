@@ -114,11 +114,9 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                    <Link className="block w-full" href={route('profile.edit')} as="button" prefetch onClick={cleanup}>
-                        <Settings className="mr-2" />
-                        Settings
-                    </Link>
+                <DropdownMenuItem render={<Link className="block w-full" href={route('profile.edit')} as="button" prefetch onClick={cleanup} />}>
+                    <Settings className="mr-2" />
+                    Settings
                 </DropdownMenuItem>
             </DropdownMenuGroup>
             {(canManageUsers || canManageRoles) && (
@@ -126,26 +124,20 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                         {canManageUsers && (
-                            <DropdownMenuItem asChild>
-                                <Link className="block w-full" href="/users" as="button" prefetch onClick={cleanup}>
-                                    <UsersRound className="mr-2" />
-                                    Users
-                                </Link>
+                            <DropdownMenuItem render={<Link className="block w-full" href="/users" as="button" prefetch onClick={cleanup} />}>
+                                <UsersRound className="mr-2" />
+                                Users
                             </DropdownMenuItem>
                         )}
                         {canManageRoles && (
                             <>
-                                <DropdownMenuItem asChild>
-                                    <Link className="block w-full" href="/admin/roles" as="button" prefetch onClick={cleanup}>
-                                        <Shield className="mr-2" />
-                                        Roles & Permissions
-                                    </Link>
+                                <DropdownMenuItem render={<Link className="block w-full" href="/admin/roles" as="button" prefetch onClick={cleanup} />}>
+                                    <Shield className="mr-2" />
+                                    Roles & Permissions
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                    <Link className="block w-full" href="/admin/permissions" as="button" prefetch onClick={cleanup}>
-                                        <Key className="mr-2" />
-                                        All Permissions
-                                    </Link>
+                                <DropdownMenuItem render={<Link className="block w-full" href="/admin/permissions" as="button" prefetch onClick={cleanup} />}>
+                                    <Key className="mr-2" />
+                                    All Permissions
                                 </DropdownMenuItem>
                             </>
                         )}
@@ -153,11 +145,9 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                 </>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-                <Link className="block w-full" method="post" href={route('logout')} as="button" onClick={cleanup}>
-                    <LogOut className="mr-2" />
-                    Log out
-                </Link>
+            <DropdownMenuItem render={<Link className="block w-full" method="post" href={route('logout')} as="button" onClick={cleanup} />}>
+                <LogOut className="mr-2" />
+                Log out
             </DropdownMenuItem>
         </>
     );

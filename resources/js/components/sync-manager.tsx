@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { CheckCircle2, Clock, Loader2, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -40,8 +40,8 @@ export default function SyncManager() {
     const fetchStatus = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/locations/sync-status');
-            setJobs(res.data);
+            const data = await api.get<SyncJob[]>('/locations/sync-status');
+            setJobs(data);
         } catch {
             // silently fail
         } finally {
@@ -78,11 +78,11 @@ export default function SyncManager() {
         setDispatching(true);
         setResult(null);
         try {
-            const res = await axios.post('/locations/sync-jobs', {
+            const data = await api.post<{ message: string }>('/locations/sync-jobs', {
                 jobs: Array.from(selected),
                 force_full: forceFullSync,
             });
-            setResult(res.data.message);
+            setResult(data.message);
             setSelected(new Set());
             fetchStatus();
         } catch {

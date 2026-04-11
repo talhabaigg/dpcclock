@@ -707,7 +707,7 @@ export default function RequisitionShow() {
                                 <TabsList className="dark:border-border dark:bg-muted/50 mb-3 inline-flex h-auto w-full max-w-full justify-start overflow-x-auto rounded-lg border border-slate-200/50 bg-slate-100/80 p-1 sm:mb-4 sm:w-auto">
                                     <TabsTrigger
                                         value="items"
-                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
+                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <Cuboid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Items
@@ -717,21 +717,21 @@ export default function RequisitionShow() {
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="log"
-                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
+                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <History className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Activity
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="compare"
-                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
+                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <GitCompare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Compare
                                     </TabsTrigger>
                                     <TabsTrigger
                                         value="delivery"
-                                        className="dark:data-[state=active]:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
+                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Delivery

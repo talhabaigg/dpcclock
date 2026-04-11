@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/alert-dialog';
 // Badge removed - not used in compact design
 import { Button } from '@/components/ui/button';
-import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 // HoverCard removed - simplified form
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,13 +22,11 @@ import AppLayout from '@/layouts/app-layout';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Dialog } from '@radix-ui/react-dialog';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { format } from 'date-fns';
 import {
     AlertCircleIcon,
-    Building2,
     Calendar,
     FileText,
     Loader2,
@@ -50,10 +49,8 @@ import { toast } from 'sonner';
 import { ComboboxDemo } from './AutcompleteCellEditor';
 import { CostCodeSelector } from './costCodeSelector';
 import { AiImageExtractor } from './create-partials/aiImageExtractor';
-import { ChatDock } from './create-partials/chatDock';
 import GridSizeSelector from './create-partials/gridSizeSelector';
 import { GridStateToolbar } from './create-partials/gridStateToolbar';
-import PasteTableButton from './create-partials/pasteTableButton';
 import { CostCode } from './types';
 ModuleRegistry.registerModules([AllCommunityModule]);
 const breadcrumbs: BreadcrumbItem[] = [
@@ -290,6 +287,7 @@ export default function Create() {
     //     wrapperBorder: false,
     // });
     const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
+    console.log('AG GRID DEBUG - isDarkMode:', isDarkMode, 'theme:', isDarkMode ? 'DARK' : 'LIGHT');
     // const rowSelection = useMemo(() => {
     //     return {
     //         mode: 'multiRow',
@@ -673,40 +671,24 @@ export default function Create() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Requisition" />
-            {permissions.includes('ai.chat') && <ChatDock enableVoice={permissions.includes('ai.voice')} />}
 
-            {/* HEADER - Compact but polished */}
-            <div className="border-border/60 from-muted/40 via-background to-muted/30 relative overflow-hidden border-b bg-gradient-to-r">
-                <div className="flex items-center justify-between px-4 py-4 md:px-6">
-                    {/* Left - Icon + Title */}
-                    <div className="flex items-center gap-3">
-                        <div className="from-primary to-primary/80 shadow-primary/25 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br shadow-md">
-                            <FileText className="text-primary-foreground h-5 w-5" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold tracking-tight">{requisition ? 'Edit Requisition' : 'New Requisition'}</h1>
-                            {requisition && <p className="text-muted-foreground text-xs">Requisition #{requisition.id}</p>}
-                        </div>
-                    </div>
-
-                    {/* Right - Stats pills */}
-                    <div className="flex items-center gap-3">
-                        <div className="bg-muted/60 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm">
-                            <span className="font-medium tabular-nums">{rowData.length}</span>
-                            <span className="text-muted-foreground">items</span>
-                        </div>
-                        <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1.5 text-sm ring-1 ring-emerald-500/20">
-                            <span className="font-bold text-emerald-600 tabular-nums dark:text-emerald-400">
-                                ${totalAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
+            {/* HEADER */}
+            <div className="border-border/60 relative overflow-hidden border-b">
+                <div className="flex items-center justify-between px-4 py-3 md:px-6">
+                    {requisition && (
+                        <p className="text-muted-foreground text-sm">Requisition #{requisition.id}</p>
+                    )}
+                    <div className="text-muted-foreground flex items-center gap-3 text-sm">
+                        <span><span className="font-medium tabular-nums">{rowData.length}</span> items</span>
+                        <span className="text-border">|</span>
+                        <span className="font-medium tabular-nums">${totalAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
 
                 {/* Restored Draft Alert - inside header */}
                 {orderRestored && (
                     <div className="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm md:px-6 dark:border-amber-900 dark:bg-amber-950/40">
-                        <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <Sparkles className="text-muted-foreground h-4 w-4" />
                         <span className="font-medium text-amber-800 dark:text-amber-200">Draft restored from memory</span>
                         <Button
                             variant="ghost"
@@ -751,8 +733,8 @@ export default function Create() {
                 {/* Price Changes Alert */}
                 {priceChangesAlert.length > 0 && (
                     <Alert className="mx-2 mt-4 border-amber-300 bg-amber-50 sm:mx-4 md:mx-6 dark:border-amber-900 dark:bg-amber-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
-                        <AlertCircleIcon className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                        <AlertTitle className="text-amber-800 dark:text-amber-200">Prices Updated</AlertTitle>
+                        <AlertCircleIcon className="h-4 w-4 shrink-0" />
+                        <AlertTitle>Prices Updated</AlertTitle>
                         <AlertDescription className="min-w-0 overflow-hidden">
                             <p className="mb-2 text-xs text-amber-700 sm:text-sm dark:text-amber-300">Items with updated prices:</p>
                             {/* Mobile: Card layout */}
@@ -838,8 +820,8 @@ export default function Create() {
                 {/* Cost Code Changes Alert */}
                 {costCodeChangesAlert.length > 0 && (
                     <Alert className="mx-2 mt-4 border-blue-300 bg-blue-50 sm:mx-4 md:mx-6 dark:border-blue-900 dark:bg-blue-950/50 [&>svg+div]:min-w-0 [&>svg+div]:overflow-hidden">
-                        <AlertCircleIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                        <AlertTitle className="text-blue-800 dark:text-blue-200">Cost Codes Updated</AlertTitle>
+                        <AlertCircleIcon className="h-4 w-4 shrink-0" />
+                        <AlertTitle>Cost Codes Updated</AlertTitle>
                         <AlertDescription className="min-w-0 overflow-hidden">
                             <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">Items with updated cost codes:</p>
                             <div className="space-y-2">
@@ -1008,14 +990,7 @@ export default function Create() {
                         <div
                             className={`group bg-card rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${errors.project_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}
                         >
-                            <div className="mb-3 flex items-center gap-2">
-                                <div
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.project_id ? 'bg-destructive/10' : 'bg-blue-500/10'}`}
-                                >
-                                    <MapPin className={`h-4 w-4 ${errors.project_id ? 'text-destructive' : 'text-blue-600 dark:text-blue-400'}`} />
-                                </div>
-                                <Label className="text-sm font-semibold">Project / Location</Label>
-                            </div>
+                            <Label className="text-muted-foreground mb-2 block text-xs font-medium">Project / Location</Label>
                             <SearchSelect
                                 optionName="Project"
                                 selectedOption={data.project_id}
@@ -1037,18 +1012,9 @@ export default function Create() {
                         <div
                             className={`group bg-card rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${errors.supplier_id ? 'border-destructive/60 hover:border-destructive' : 'border-border/60 hover:border-primary/30'}`}
                         >
-                            <div className="mb-3 flex items-center gap-2">
-                                <div
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${errors.supplier_id ? 'bg-destructive/10' : 'bg-violet-500/10'}`}
-                                >
-                                    <Building2
-                                        className={`h-4 w-4 ${errors.supplier_id ? 'text-destructive' : 'text-violet-600 dark:text-violet-400'}`}
-                                    />
-                                </div>
-                                <Label className="text-sm font-semibold">Supplier</Label>
-                                <span className="ml-auto rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
-                                    Required
-                                </span>
+                            <div className="mb-2 flex items-center justify-between">
+                                <Label className="text-muted-foreground text-xs font-medium">Supplier</Label>
+                                <span className="text-muted-foreground text-[10px]">Required</span>
                             </div>
                             <SearchSelect
                                 optionName="supplier"
@@ -1227,7 +1193,14 @@ export default function Create() {
                 </div>
 
                 {/* LINE ITEMS GRID */}
-                <div className="ag-theme-shadcn mt-4" style={{ height: gridSize }}>
+                <Card className="mt-4">
+                    <CardHeader className="pb-2">
+                        <CardTitle>Line Items</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                <div
+                    style={{ height: gridSize }}
+                >
                     <AgGridReact
                         ref={gridRef}
                         rowData={rowData}
@@ -1313,6 +1286,8 @@ export default function Create() {
                         }}
                     />
                 </div>
+                    </CardContent>
+                </Card>
                 {/* AI Image Extractor */}
                 {permissions.includes('requisitions.view-all') && (
                     <div className="mt-4">
@@ -1344,13 +1319,6 @@ export default function Create() {
                     <div className="flex items-center gap-3">
                         <div className="border-border/50 bg-background/80 hidden items-center gap-1 rounded-lg border p-1 shadow-sm backdrop-blur-sm sm:flex">
                             <GridStateToolbar gridRef={gridRef} />
-                            <div className="bg-border/50 mx-1 h-5 w-px" />
-                            <PasteTableButton
-                                rowData={rowData}
-                                setRowData={setRowData}
-                                projectId={Number(data.project_id)}
-                                setPastingItems={setPastingItems}
-                            />
                         </div>
 
                         <div className="hidden sm:block">

@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { ICellEditorParams } from 'ag-grid-community';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { Loader2, Package, Star } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
@@ -56,7 +56,7 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
             setLoading(true);
             try {
-                const response = await axios.get('/material-items', {
+                const data = await api.get<any[]>('/material-items', {
                     params: {
                         search,
                         supplier_id: selectedSupplier,
@@ -64,7 +64,7 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
                     },
                 });
 
-                const mapped = response.data.map((item: any) => ({
+                const mapped = data.map((item: any) => ({
                     value: item.id.toString(),
                     label: item.code,
                     description: item.description,

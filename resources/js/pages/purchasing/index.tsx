@@ -650,7 +650,7 @@ function ComboboxFilter({
                     <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <PopoverContent className="w-(--anchor-width) p-0" align="start">
                 <Command>
                     <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
                     <CommandList>
@@ -662,7 +662,7 @@ function ComboboxFilter({
                                         onChange('');
                                         setOpen(false);
                                     }}
-                                    className="text-muted-foreground justify-center text-xs"
+                                    className="text-muted-foreground justify-center text-xs data-selected:bg-transparent"
                                 >
                                     <X className="mr-1 h-3 w-3" />
                                     Clear
@@ -671,6 +671,7 @@ function ComboboxFilter({
                             {options.map((option) => (
                                 <CommandItem
                                     key={option}
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onChange(option === value ? '' : option);
                                         setOpen(false);

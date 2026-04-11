@@ -94,11 +94,9 @@ function renderGroupedSubItems(subItems: SubItem[], currentUrl: string, isFavori
             {groupIndex > 0 && <hr className="border-sidebar-border my-1" />}
             {group.items.map((subItem) => (
                 <SidebarMenuSubItem key={subItem.name}>
-                    <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, currentUrl)}>
-                        <Link href={subItem.url} prefetch>
+                    <SidebarMenuSubButton render={<Link href={subItem.url} prefetch />} isActive={isNavItemActive(subItem.url, currentUrl)}>
                             <span className="truncate">{subItem.name}</span>
                             <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                        </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
             ))}
@@ -109,12 +107,10 @@ function renderGroupedSubItems(subItems: SubItem[], currentUrl: string, isFavori
 function renderDropdownSubItems(subItems: SubItem[], groupByAlpha: boolean, currentUrl: string, isFavorite: (url: string) => boolean, toggleFavorite: (url: string) => void) {
     if (!groupByAlpha) {
         return subItems.map((subItem) => (
-            <DropdownMenuItem key={subItem.name} asChild className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
-                <Link href={subItem.url} prefetch>
+            <DropdownMenuItem key={subItem.name} render={<Link href={subItem.url} prefetch />} className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
                     <subItem.icon className="mr-2 size-4 shrink-0" />
                     {subItem.name}
                     <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                </Link>
             </DropdownMenuItem>
         ));
     }
@@ -124,12 +120,10 @@ function renderDropdownSubItems(subItems: SubItem[], groupByAlpha: boolean, curr
             {groupIndex > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel className="px-2 py-1 text-[10px] text-muted-foreground">{group.letter}</DropdownMenuLabel>
             {group.items.map((subItem) => (
-                <DropdownMenuItem key={subItem.name} asChild className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
-                    <Link href={subItem.url} prefetch>
-                        <subItem.icon className="mr-2 size-4 shrink-0" />
-                        {subItem.name}
-                        <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                    </Link>
+                <DropdownMenuItem key={subItem.name} render={<Link href={subItem.url} prefetch />} className={isNavItemActive(subItem.url, currentUrl) ? 'bg-accent' : ''}>
+                    <subItem.icon className="mr-2 size-4 shrink-0" />
+                    {subItem.name}
+                    <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
                 </DropdownMenuItem>
             ))}
         </div>
@@ -167,12 +161,10 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                         return (
                             <SidebarMenuItem key={item.name}>
                                 <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <SidebarMenuButton tooltip={item.name} className={hasActiveChild ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}>
+                                    <SidebarMenuButton render={<DropdownMenuTrigger />} tooltip={item.name} className={hasActiveChild ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}>
                                             <item.icon />
                                             <span>{item.name}</span>
-                                        </SidebarMenuButton>
-                                    </DropdownMenuTrigger>
+                                    </SidebarMenuButton>
                                     <DropdownMenuContent side="right" align="start" className="min-w-48 max-h-96 overflow-y-auto">
                                         <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">{item.name}</DropdownMenuLabel>
                                         <DropdownMenuSeparator />
@@ -185,8 +177,8 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
 
                     // Expanded sidebar: standard collapsible
                     return (
-                        <Collapsible key={item.name} asChild open={isOpen} onOpenChange={(open) => handleOpenChange(item.name, open)}>
-                            <SidebarMenuItem>
+                        <SidebarMenuItem key={item.name}>
+                            <Collapsible open={isOpen} onOpenChange={(open) => handleOpenChange(item.name, open)}>
                                 <SidebarMenuButton tooltip={item.name}>
                                     <item.icon />
                                     <span>{item.name}</span>
@@ -194,12 +186,10 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
 
                                 {visibleSubItems?.length ? (
                                     <>
-                                        <CollapsibleTrigger asChild>
-                                            <SidebarMenuAction className="data-[state=open]:rotate-90">
-                                                <ChevronRight />
-                                                <span className="sr-only">Toggle</span>
-                                            </SidebarMenuAction>
-                                        </CollapsibleTrigger>
+                                        <SidebarMenuAction render={<CollapsibleTrigger />} className="data-[panel-open]:rotate-90">
+                                            <ChevronRight />
+                                            <span className="sr-only">Toggle</span>
+                                        </SidebarMenuAction>
 
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
@@ -207,11 +197,9 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                                                     ? renderGroupedSubItems(visibleSubItems, page.url, isFavorite, toggleFavorite)
                                                     : visibleSubItems.map((subItem) => (
                                                           <SidebarMenuSubItem key={subItem.name}>
-                                                              <SidebarMenuSubButton asChild isActive={isNavItemActive(subItem.url, page.url)}>
-                                                                  <Link href={subItem.url} prefetch>
-                                                                      <span className="truncate">{subItem.name}</span>
-                                                                      <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                                                                  </Link>
+                                                              <SidebarMenuSubButton render={<Link href={subItem.url} prefetch />} isActive={isNavItemActive(subItem.url, page.url)}>
+                                                                  <span className="truncate">{subItem.name}</span>
+                                                                  <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
                                                               </SidebarMenuSubButton>
                                                           </SidebarMenuSubItem>
                                                       ))}
@@ -219,8 +207,8 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                                         </CollapsibleContent>
                                     </>
                                 ) : null}
-                            </SidebarMenuItem>
-                        </Collapsible>
+                            </Collapsible>
+                        </SidebarMenuItem>
                     );
                 })}
             </SidebarMenu>

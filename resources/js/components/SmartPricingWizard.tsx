@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { ArrowRight, Check, ChevronLeft, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -162,10 +162,9 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
         const fetchAssessment = async () => {
             setLoadingAI(true);
             try {
-                const res = await axios.post(`/requisition/${requisitionId}/smart-pricing-assess`, {
+                const data = await api.post<AIAssessment>(`/requisition/${requisitionId}/smart-pricing-assess`, {
                     line_item_id: currentProblem.line_item_id, reasons: currentProblem.reasons,
                 });
-                const data = res.data as AIAssessment;
                 setAiResults((prev) => ({ ...prev, [currentProblem.line_item_id]: data }));
                 if (data.success) {
                     if (data.path === 'not_in_price_list') {
@@ -267,7 +266,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
         if (!currentProblem || !currentAnswer) return;
         setSaving(true);
         try {
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-context`, {
+            await api.post(`/requisition/${requisitionId}/smart-pricing-context`, {
                 line_item_id: currentProblem.line_item_id, ...currentAnswer, item_exists_in_db: currentProblem.item_exists_in_db,
             });
             advanceOrComplete();
@@ -279,7 +278,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
         if (!currentProblem) return;
         setSaving(true);
         try {
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-remove-item`, { line_item_id: currentProblem.line_item_id });
+            await api.post(`/requisition/${requisitionId}/smart-pricing-remove-item`, { line_item_id: currentProblem.line_item_id });
             setRemovedItems((prev) => new Set(prev).add(currentProblem.line_item_id));
             const remaining = activeProblems.filter((p) => p.line_item_id !== currentProblem.line_item_id);
             if (remaining.length === 0 || currentIndex >= remaining.length) { setCompleting(true); onComplete(); }
@@ -292,7 +291,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
         setSaving(true);
         try {
             const path = effectivePath ?? 'custom_length';
-            await axios.post(`/requisition/${requisitionId}/smart-pricing-context`, {
+            await api.post(`/requisition/${requisitionId}/smart-pricing-context`, {
                 line_item_id: currentProblem.line_item_id, path,
                 field_worker_choice: path === 'not_in_price_list' ? 'keep_for_office' : undefined,
                 field_worker_notes: '', ai_assessment: currentAI?.assessment ?? '',

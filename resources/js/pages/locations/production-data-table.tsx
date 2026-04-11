@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -455,9 +455,9 @@ export function ColumnFilter<TData>({ column }: { column: Column<TData, unknown>
     const isActive = filterValue.length > 0;
 
     return (
-        <PopoverPrimitive.Root>
+        <Popover>
             <div className="relative">
-                <PopoverPrimitive.Trigger asChild>
+                <PopoverTrigger asChild>
                     <Button variant="ghost" size="icon" className={`relative h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
                         <Filter className="h-3.5 w-3.5" />
                         {isActive && (
@@ -466,11 +466,11 @@ export function ColumnFilter<TData>({ column }: { column: Column<TData, unknown>
                             </span>
                         )}
                     </Button>
-                </PopoverPrimitive.Trigger>
-                <PopoverPrimitive.Content
+                </PopoverTrigger>
+                <PopoverContent
                     align="start"
                     sideOffset={4}
-                    className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 absolute left-0 top-full z-[10002] mt-1 w-56 rounded-md border p-2 shadow-md outline-hidden"
+                    className="w-56 p-2"
                 >
                     <Input
                         placeholder="Search..."
@@ -506,8 +506,8 @@ export function ColumnFilter<TData>({ column }: { column: Column<TData, unknown>
                             Clear
                         </Button>
                     )}
-                </PopoverPrimitive.Content>
+                </PopoverContent>
             </div>
-        </PopoverPrimitive.Root>
+        </Popover>
     );
 }

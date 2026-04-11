@@ -226,7 +226,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
         }));
 
         return (
-            <div className="ag-theme-shadcn w-full" style={{ height: height || '500px', minHeight: '300px' }}>
+            <div className="w-full" style={{ height: height || '500px', minHeight: '300px' }}>
                 <AgGridReact ref={gridRef} theme={appliedTheme} rowData={internalRowData} columnDefs={columnDefs} {...gridOptions} />
             </div>
         );

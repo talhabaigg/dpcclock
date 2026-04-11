@@ -90,11 +90,21 @@ async function requestWithCsrfRetry(url: string, init: RequestInit): Promise<Res
 }
 
 export const api = {
-    get: <T = unknown>(url: string): Promise<T> =>
-        fetch(url, {
-            headers: { Accept: 'application/json' },
+    get: <T = unknown>(url: string, options?: { params?: Record<string, string | number | boolean | undefined>; headers?: Record<string, string> }): Promise<T> => {
+        let fullUrl = url;
+        if (options?.params) {
+            const params = new URLSearchParams();
+            for (const [key, value] of Object.entries(options.params)) {
+                if (value !== undefined) params.append(key, String(value));
+            }
+            const qs = params.toString();
+            if (qs) fullUrl += (url.includes('?') ? '&' : '?') + qs;
+        }
+        return fetch(fullUrl, {
+            headers: { Accept: 'application/json', ...options?.headers },
             credentials: 'same-origin',
-        }).then((r) => handleResponse<T>(r)),
+        }).then((r) => handleResponse<T>(r));
+    },
 
     post: <T = unknown>(url: string, body?: unknown): Promise<T> => {
         const isFormData = body instanceof FormData;
@@ -122,10 +132,11 @@ export const api = {
             body: JSON.stringify(body),
         }).then((r) => handleResponse<T>(r)),
 
-    delete: <T = unknown>(url: string): Promise<T> =>
+    delete: <T = unknown>(url: string, body?: unknown): Promise<T> =>
         requestWithCsrfRetry(url, {
             method: 'DELETE',
             headers: buildHeaders(),
             credentials: 'same-origin',
+            body: body !== undefined ? JSON.stringify(body) : undefined,
         }).then((r) => handleResponse<T>(r)),
 };

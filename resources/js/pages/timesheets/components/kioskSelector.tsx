@@ -33,7 +33,7 @@ export default function KioskSelector({
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+            <PopoverContent align="start" className="w-(--anchor-width) p-0">
                 <Command>
                     <CommandInput placeholder="Search kiosk..." className="h-9" />
                     <CommandList>
@@ -43,6 +43,7 @@ export default function KioskSelector({
                                 <CommandItem
                                     key={kiosk.eh_kiosk_id}
                                     value={`${kiosk.name} ${kiosk.eh_kiosk_id}`} // searchable by name or id
+                                    className="data-selected:bg-transparent"
                                     onSelect={() => {
                                         onChange(String(kiosk.eh_kiosk_id));
                                         setOpen(false);

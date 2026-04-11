@@ -130,26 +130,34 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                             </div>
                             <Tabs defaultValue={String(kiosk.id)} className="w-full">
                                 <TabsList className="h-auto w-full flex-wrap gap-1 bg-transparent p-0">
-                                    {allKiosks.map((k) => (
-                                        <TabsTrigger
-                                            key={k.id}
-                                            value={String(k.id)}
-                                            asChild={k.id !== kiosk.id}
-                                            className={cn(
-                                                'flex-1 truncate rounded-md border px-3 py-1.5 text-xs font-medium transition-all',
-                                                'data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground',
-                                                'data-[state=inactive]:border-border data-[state=inactive]:bg-background data-[state=inactive]:hover:bg-muted',
-                                            )}
-                                        >
-                                            {k.id === kiosk.id ? (
+                                    {allKiosks.map((k) =>
+                                        k.id === kiosk.id ? (
+                                            <TabsTrigger
+                                                key={k.id}
+                                                value={String(k.id)}
+                                                className={cn(
+                                                    'flex-1 truncate rounded-md border px-3 py-1.5 text-xs font-medium transition-all',
+                                                    'data-active:border-primary data-active:bg-primary data-active:text-primary-foreground',
+                                                    'not-data-active:border-border not-data-active:bg-background not-data-active:hover:bg-muted',
+                                                )}
+                                            >
                                                 <span title={k.name}>{k.name}</span>
-                                            ) : (
-                                                <Link href={`/kiosks/${k.id}`} title={k.name}>
-                                                    {k.name}
-                                                </Link>
-                                            )}
-                                        </TabsTrigger>
-                                    ))}
+                                            </TabsTrigger>
+                                        ) : (
+                                            <TabsTrigger
+                                                key={k.id}
+                                                value={String(k.id)}
+                                                render={<Link href={`/kiosks/${k.id}`} title={k.name} />}
+                                                className={cn(
+                                                    'flex-1 truncate rounded-md border px-3 py-1.5 text-xs font-medium transition-all',
+                                                    'data-active:border-primary data-active:bg-primary data-active:text-primary-foreground',
+                                                    'not-data-active:border-border not-data-active:bg-background not-data-active:hover:bg-muted',
+                                                )}
+                                            >
+                                                {k.name}
+                                            </TabsTrigger>
+                                        ),
+                                    )}
                                 </TabsList>
                             </Tabs>
                         </div>

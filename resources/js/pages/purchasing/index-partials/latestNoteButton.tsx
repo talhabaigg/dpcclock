@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useInitials } from '@/hooks/use-initials';
-import { DialogTrigger } from '@radix-ui/react-dialog';
 import NotesDialog from './notesDialog';
 const LatestNoteButton = ({ requisition }) => {
     const getInitials = useInitials();
