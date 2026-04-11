@@ -15,6 +15,7 @@ import AnnualLeaveTrend, { type AnnualLeaveTrendPoint } from './annual-leave-tre
 import HoursMatrixTable, { type HoursMatrixRow } from './hours-matrix-table';
 import LeaveBalanceTable, { type LeaveBalanceRow } from './leave-balance-table';
 import SickLeaveEmployees, { type SickLeaveEmployee } from './sick-leave-employees';
+import SickLeaveIndicators, { type SickLeaveIndicatorRow } from './sick-leave-indicators';
 import SickLeaveTrend from './sick-leave-trend';
 import TimeRatiosBar from './time-ratios-bar';
 import WorkforceStats, { type WorkforceStatsData } from './workforce-stats';
@@ -81,6 +82,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
     const [annualLeaveData, setAnnualLeaveData] = useState<AnnualLeaveTrendPoint[]>([]);
     const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceRow[]>([]);
     const [workforceStats, setWorkforceStats] = useState<WorkforceStatsData | null>(null);
+    const [sickIndicators, setSickIndicators] = useState<SickLeaveIndicatorRow[]>([]);
     const [locationSearch, setLocationSearch] = useState('');
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
     const [syncing, setSyncing] = useState(false);
@@ -142,18 +144,20 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         };
 
         try {
-            const [matrixResponse, sickLeaveResponse, annualLeaveResponse, leaveBalancesResponse, workforceStatsResponse] = await Promise.all([
+            const [matrixResponse, sickLeaveResponse, annualLeaveResponse, leaveBalancesResponse, workforceStatsResponse, sickIndicatorsResponse] = await Promise.all([
                 form.post('/labour-dashboard/data'),
                 api.post<typeof sickLeaveData>('/labour-dashboard/sick-leave-trend', payload),
                 api.post<AnnualLeaveTrendPoint[]>('/labour-dashboard/annual-leave-trend', payload),
                 api.post<LeaveBalanceRow[]>('/labour-dashboard/leave-balances', payload),
                 api.post<WorkforceStatsData>('/labour-dashboard/workforce-stats', payload),
+                api.post<SickLeaveIndicatorRow[]>('/labour-dashboard/sick-leave-indicators', payload),
             ]);
             if (matrixResponse) setData(matrixResponse);
             if (sickLeaveResponse) setSickLeaveData(sickLeaveResponse);
             if (annualLeaveResponse) setAnnualLeaveData(annualLeaveResponse);
             if (leaveBalancesResponse) setLeaveBalances(leaveBalancesResponse);
             if (workforceStatsResponse) setWorkforceStats(workforceStatsResponse);
+            if (sickIndicatorsResponse) setSickIndicators(sickIndicatorsResponse);
         } catch {
             // errors handled by useHttp
         }
@@ -286,6 +290,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
                 <SickLeaveTrend weeklyTrend={sickLeaveData.weekly_trend} projectTrend={sickLeaveData.project_trend} projectNames={sickLeaveData.project_names}>
                     <SickLeaveEmployees data={sickLeaveData.employee_summary} />
                 </SickLeaveTrend>
+                <SickLeaveIndicators data={sickIndicators} />
                 <AnnualLeaveTrend data={annualLeaveData} />
                 <div className="grid gap-6 lg:grid-cols-2">
                     <LeaveBalanceTable data={leaveBalances} />

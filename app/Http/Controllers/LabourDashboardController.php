@@ -617,6 +617,201 @@ class LabourDashboardController extends Controller
         ]);
     }
 
+    public function getSickLeaveIndicators(Request $request)
+    {
+        $request->validate([
+            'location_ids' => 'required|array|min:1',
+            'location_ids.*' => 'integer|exists:locations,id',
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+        ]);
+
+        $locationIds = $request->input('location_ids');
+        $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
+
+        // Get all eh_location_ids
+        $selectedLocations = Location::whereIn('id', $locationIds)->get();
+        $allEhLocationIds = [];
+        foreach ($selectedLocations as $location) {
+            $allEhLocationIds[] = $location->eh_location_id;
+            $subIds = Location::where('eh_parent_id', $location->eh_location_id)
+                ->pluck('eh_location_id')->toArray();
+            $allEhLocationIds = array_merge($allEhLocationIds, $subIds);
+        }
+        $allEhLocationIds = array_unique($allEhLocationIds);
+
+        $excludedWorkTypeIds = Worktype::where('name', 'like', '%Workcover%')
+            ->pluck('eh_worktype_id')->toArray();
+
+        $sickLeaveWorkTypeIds = Worktype::where('name', 'like', '%Personal%Carer%Leave%')
+            ->pluck('eh_worktype_id')->toArray();
+
+        $rdoWorkTypeIds = Worktype::where(function ($q) {
+            $q->where('name', 'like', '%RDO Taken%')
+              ->orWhere('name', 'like', '%Rostered Day Off Taken%');
+        })->pluck('eh_worktype_id')->toArray();
+
+        $publicHolidayWorkTypeIds = Worktype::where('name', 'like', '%Public Holiday%')
+            ->pluck('eh_worktype_id')->toArray();
+
+        // Fetch all relevant clocks
+        $clocks = Clock::whereIn('eh_location_id', $allEhLocationIds)
+            ->where('clock_in', '>=', $dateFrom)
+            ->where('clock_in', '<=', $dateTo)
+            ->whereIn('status', ['Processed', 'Approved'])
+            ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
+            ->whereNotNull('hours_worked')
+            ->where('hours_worked', '>', 0)
+            ->select('eh_employee_id', 'eh_worktype_id', 'clock_in')
+            ->get();
+
+        // Group by employee
+        $employeeClocks = $clocks->groupBy('eh_employee_id');
+
+        $results = [];
+
+        foreach ($employeeClocks as $employeeId => $empClocks) {
+            // Get unique dates by type
+            $sickDates = $empClocks->whereIn('eh_worktype_id', $sickLeaveWorkTypeIds)
+                ->map(fn ($c) => Carbon::parse($c->clock_in)->toDateString())
+                ->unique()->values()->toArray();
+
+            if (empty($sickDates)) continue;
+
+            $rdoDates = $empClocks->whereIn('eh_worktype_id', $rdoWorkTypeIds)
+                ->map(fn ($c) => Carbon::parse($c->clock_in)->toDateString())
+                ->unique()->values()->toArray();
+
+            $phDates = $empClocks->whereIn('eh_worktype_id', $publicHolidayWorkTypeIds)
+                ->map(fn ($c) => Carbon::parse($c->clock_in)->toDateString())
+                ->unique()->values()->toArray();
+
+            $rdoSet = array_flip($rdoDates);
+            $phSet = array_flip($phDates);
+
+            sort($sickDates);
+            $sickDaysTaken = count($sickDates);
+
+            // Build consecutive streaks and tag each date with its streak length
+            $streaks = []; // array of arrays
+            $currentStreak = [$sickDates[0]];
+            for ($i = 1; $i < count($sickDates); $i++) {
+                $prev = Carbon::parse($sickDates[$i - 1]);
+                $nextExpected = $prev->copy()->addDay();
+                while ($nextExpected->isWeekend()) $nextExpected->addDay();
+                if ($nextExpected->toDateString() === $sickDates[$i]) {
+                    $currentStreak[] = $sickDates[$i];
+                } else {
+                    $streaks[] = $currentStreak;
+                    $currentStreak = [$sickDates[$i]];
+                }
+            }
+            $streaks[] = $currentStreak;
+
+            // Map each date to its streak length
+            $dateStreakLength = [];
+            $maxStreak = 0;
+            foreach ($streaks as $streak) {
+                $len = count($streak);
+                $maxStreak = max($maxStreak, $len);
+                foreach ($streak as $d) {
+                    $dateStreakLength[$d] = $len;
+                }
+            }
+
+            // Count indicators — both raw (all days) and adjusted (only days in short streaks ≤2)
+            $sickOnMonday = 0;
+            $sickOnFriday = 0;
+            $sickBeforeRdo = 0;
+            $sickAfterRdo = 0;
+            $sickBeforePh = 0;
+            $sickAfterPh = 0;
+            $adjustedScore = 0;
+
+            foreach ($sickDates as $dateStr) {
+                $date = Carbon::parse($dateStr);
+                $dow = $date->dayOfWeek;
+                $isShort = $dateStreakLength[$dateStr] <= 2;
+
+                $nextWorkDay = $date->copy()->addDay();
+                while ($nextWorkDay->isWeekend()) $nextWorkDay->addDay();
+                $prevWorkDay = $date->copy()->subDay();
+                while ($prevWorkDay->isWeekend()) $prevWorkDay->subDay();
+
+                $nextStr = $nextWorkDay->toDateString();
+                $prevStr = $prevWorkDay->toDateString();
+
+                // Hierarchy: PH > RDO > Mon/Fri
+                $isBeforePh = isset($phSet[$nextStr]);
+                $isAfterPh = isset($phSet[$prevStr]);
+                $isBeforeRdo = isset($rdoSet[$nextStr]);
+                $isAfterRdo = isset($rdoSet[$prevStr]);
+
+                $dayScore = 0;
+                if ($isBeforePh || $isAfterPh) {
+                    if ($isBeforePh) { $sickBeforePh++; $dayScore++; }
+                    if ($isAfterPh) { $sickAfterPh++; $dayScore++; }
+                } elseif ($isBeforeRdo || $isAfterRdo) {
+                    if ($isBeforeRdo) { $sickBeforeRdo++; $dayScore++; }
+                    if ($isAfterRdo) { $sickAfterRdo++; $dayScore++; }
+                } else {
+                    if ($dow === Carbon::MONDAY) { $sickOnMonday++; $dayScore++; }
+                    if ($dow === Carbon::FRIDAY) { $sickOnFriday++; $dayScore++; }
+                }
+
+                if ($isShort && $dayScore > 0) {
+                    $adjustedScore += $dayScore;
+                }
+            }
+
+            $sensitiveScore = $sickOnMonday + $sickOnFriday + $sickBeforeRdo + $sickAfterRdo + $sickBeforePh + $sickAfterPh;
+
+            // Build notes
+            $notes = [];
+            if ($maxStreak >= 3 && $sensitiveScore > $adjustedScore) {
+                $longDays = $sensitiveScore - $adjustedScore;
+                $notes[] = "Sick streak ({$maxStreak}d) contributing {$longDays} to score";
+            }
+
+            if ($sensitiveScore === 0 && empty($notes)) continue;
+
+            $results[] = [
+                'employee_id' => $employeeId,
+                'sick_days_taken' => $sickDaysTaken,
+                'sick_on_monday' => $sickOnMonday,
+                'sick_on_friday' => $sickOnFriday,
+                'sick_before_rdo' => $sickBeforeRdo,
+                'sick_after_rdo' => $sickAfterRdo,
+                'sick_before_ph' => $sickBeforePh,
+                'sick_after_ph' => $sickAfterPh,
+                'sensitive_score' => $sensitiveScore,
+                'adjusted_score' => $adjustedScore,
+                'max_streak' => $maxStreak,
+                'notes' => implode('; ', $notes),
+            ];
+        }
+
+        // Sort by sensitive score descending
+        usort($results, fn ($a, $b) => $b['sensitive_score'] <=> $a['sensitive_score']);
+
+        // Resolve employee names
+        $employeeIds = array_column($results, 'employee_id');
+        $employees = Employee::withTrashed()
+            ->whereIn('eh_employee_id', $employeeIds)
+            ->get(['eh_employee_id', 'name', 'preferred_name', 'external_id', 'deleted_at'])
+            ->keyBy('eh_employee_id');
+
+        foreach ($results as &$row) {
+            $emp = $employees->get($row['employee_id']);
+            $row['name'] = $emp?->display_name ?? "Unknown ({$row['employee_id']})";
+            $row['external_id'] = $emp?->external_id;
+            $row['archived'] = $emp?->trashed() ?? false;
+        }
+
+        return response()->json($results);
+    }
+
     public function syncLeaveAccruals(Request $request, EmploymentHeroService $ehService)
     {
         $request->validate([

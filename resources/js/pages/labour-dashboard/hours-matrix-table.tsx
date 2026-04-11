@@ -171,9 +171,9 @@ export default function HoursMatrixTable({ data }: HoursMatrixTableProps) {
                 <CardTitle>Hours Matrix</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="rounded-md border">
+                <div className="overflow-hidden rounded-md border">
                     <Table className="text-xs">
-                        <TableHeader>
+                        <TableHeader className="bg-muted/30">
                             {table.getHeaderGroups().map((headerGroup) => (
                                 <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => (
