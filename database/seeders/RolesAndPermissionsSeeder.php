@@ -301,6 +301,14 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // LABOUR DASHBOARD
+        // ============================================
+        'Labour Dashboard' => [
+            'labour-dashboard.view' => 'View labour dashboard (scoped to managed locations)',
+            'labour-dashboard.view-all' => 'View labour dashboard for all locations',
+        ],
+
+        // ============================================
         // AI FEATURES
         // ============================================
         'AI' => [
@@ -496,6 +504,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'injury-register.view',
             'injury-register.view-all',
             'injury-register.export',
+            // Labour Dashboard
+            'labour-dashboard.view',
+            'labour-dashboard.view-all',
         ],
 
         'kiosk' => [

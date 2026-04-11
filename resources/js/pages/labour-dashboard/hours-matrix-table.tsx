@@ -57,8 +57,8 @@ function EfficiencyBattery({ value }: { value: number }) {
     const fill = Math.min(value, 100);
     const color = fill >= 85 ? 'bg-green-500' : fill >= 65 ? 'bg-yellow-500' : fill >= 40 ? 'bg-orange-500' : 'bg-red-500';
     return (
-        <div className="flex items-center justify-end gap-1.5">
-            <div className="relative h-4 w-10 rounded-sm border border-border">
+        <div className="flex w-full items-center justify-between gap-2">
+            <div className="relative h-4 w-12 rounded-sm border border-border">
                 <div className={cn('absolute inset-y-0 left-0 rounded-sm transition-all', color)} style={{ width: `${fill}%` }} />
                 <div className="absolute -right-[3px] top-1/2 h-1.5 w-[3px] -translate-y-1/2 rounded-r-sm bg-border" />
             </div>

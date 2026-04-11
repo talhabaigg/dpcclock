@@ -837,14 +837,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Labour Dashboard
-    Route::get('/labour-dashboard', [LabourDashboardController::class, 'index'])->name('labour-dashboard.index');
-    Route::post('/labour-dashboard/data', [LabourDashboardController::class, 'getData'])->name('labour-dashboard.data');
-    Route::post('/labour-dashboard/sick-leave-trend', [LabourDashboardController::class, 'getSickLeaveTrend'])->name('labour-dashboard.sick-leave-trend');
-    Route::post('/labour-dashboard/annual-leave-trend', [LabourDashboardController::class, 'getAnnualLeaveTrend'])->name('labour-dashboard.annual-leave-trend');
-    Route::post('/labour-dashboard/leave-balances', [LabourDashboardController::class, 'getLeaveBalances'])->name('labour-dashboard.leave-balances');
-    Route::post('/labour-dashboard/workforce-stats', [LabourDashboardController::class, 'getWorkforceStats'])->name('labour-dashboard.workforce-stats');
-    Route::post('/labour-dashboard/sync-leave-accruals', [LabourDashboardController::class, 'syncLeaveAccruals'])->name('labour-dashboard.sync-leave-accruals');
-    Route::get('/labour-dashboard/sync-status', [LabourDashboardController::class, 'syncStatus'])->name('labour-dashboard.sync-status');
+    Route::middleware('permission:labour-dashboard.view')->group(function () {
+        Route::get('/labour-dashboard', [LabourDashboardController::class, 'index'])->name('labour-dashboard.index');
+        Route::post('/labour-dashboard/data', [LabourDashboardController::class, 'getData'])->name('labour-dashboard.data');
+        Route::post('/labour-dashboard/sick-leave-trend', [LabourDashboardController::class, 'getSickLeaveTrend'])->name('labour-dashboard.sick-leave-trend');
+        Route::post('/labour-dashboard/annual-leave-trend', [LabourDashboardController::class, 'getAnnualLeaveTrend'])->name('labour-dashboard.annual-leave-trend');
+        Route::post('/labour-dashboard/leave-balances', [LabourDashboardController::class, 'getLeaveBalances'])->name('labour-dashboard.leave-balances');
+        Route::post('/labour-dashboard/workforce-stats', [LabourDashboardController::class, 'getWorkforceStats'])->name('labour-dashboard.workforce-stats');
+        Route::post('/labour-dashboard/sync-leave-accruals', [LabourDashboardController::class, 'syncLeaveAccruals'])->name('labour-dashboard.sync-leave-accruals');
+        Route::get('/labour-dashboard/sync-status', [LabourDashboardController::class, 'syncStatus'])->name('labour-dashboard.sync-status');
+    });
 
     // Labour Forecast
     Route::get('/labour-forecast', [LabourForecastController::class, 'index'])->name('labour-forecast.index');

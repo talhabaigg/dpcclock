@@ -26,10 +26,25 @@ class LabourDashboardController extends Controller
 
     public function index(Request $request)
     {
-        $locations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+        $user = $request->user();
+
+        $query = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
             ->open()
-            ->orderBy('name')
-            ->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'external_id']);
+            ->orderBy('name');
+
+        // Scope locations if user doesn't have view-all permission
+        if (!$user->can('labour-dashboard.view-all')) {
+            $managedEhLocationIds = $user->managedKiosks()
+                ->with('location')
+                ->get()
+                ->pluck('location.eh_location_id')
+                ->filter()
+                ->unique();
+
+            $query->whereIn('eh_location_id', $managedEhLocationIds);
+        }
+
+        $locations = $query->get(['id', 'name', 'eh_location_id', 'eh_parent_id', 'external_id']);
 
         return Inertia::render('labour-dashboard/index', [
             'locations' => $locations,
