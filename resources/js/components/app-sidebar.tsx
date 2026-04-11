@@ -97,6 +97,12 @@ const projects = [
                 icon: HardHat,
                 permission: 'turnover-forecast.view',
             },
+            {
+                name: 'Labour Dashboard',
+                url: '/labour-dashboard',
+                icon: TableProperties,
+                permission: 'turnover-forecast.view',
+            },
         ],
     },
 ];

@@ -21,6 +21,7 @@ class Employee extends Model
         'employment_type',
         'employment_agreement',
         'start_date',
+        'date_of_birth',
     ];
 
     protected $appends = ['display_name'];

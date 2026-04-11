@@ -90,6 +90,82 @@ class EmploymentHeroService
         return $response->json();
     }
 
+    /**
+     * List pay runs for the business, optionally filtered by date range.
+     */
+    public function getPayRuns(?string $fromDate = null, ?string $toDate = null): array
+    {
+        $query = [];
+        if ($fromDate) {
+            $query['filter.fromDate'] = $fromDate;
+        }
+        if ($toDate) {
+            $query['filter.toDate'] = $toDate;
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->get("{$this->baseUrl}/business/{$this->businessId}/payrun", $query);
+
+        if ($response->failed()) {
+            Log::error('Failed to get pay runs from Employment Hero', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get pay runs: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Get leave accruals for a specific pay run.
+     */
+    public function getLeaveAccruals(int $payRunId, bool $includeLeaveTaken = true): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->get("{$this->baseUrl}/business/{$this->businessId}/payrun/{$payRunId}/leaveaccrued", [
+            'includeLeaveTaken' => $includeLeaveTaken ? 'true' : 'false',
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Failed to get leave accruals from Employment Hero', [
+                'payRunId' => $payRunId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get leave accruals: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Get leave balances report as at a given date.
+     */
+    public function getLeaveBalances(string $asAtDate): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->timeout(60)->get("{$this->baseUrl}/business/{$this->businessId}/report/leavebalances", [
+            'asAtDate' => $asAtDate,
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Failed to get leave balances from Employment Hero', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get leave balances: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
     public function initiateSelfServiceOnboarding(array $data): array
     {
         $response = Http::withHeaders([

@@ -214,6 +214,7 @@ class EmployeeController extends Controller
                     'employment_type' => $employeeInfo['employmentType'] ?? null,
                     'employment_agreement' => $employeeInfo['employmentAgreement'] ?? null,
                     'start_date' => isset($employeeInfo['startDate']) ? substr($employeeInfo['startDate'], 0, 10) : null,
+                    'date_of_birth' => isset($employeeInfo['dateOfBirth']) ? substr($employeeInfo['dateOfBirth'], 0, 10) : null,
                     'pin' => 1234,
                 ]
             );
