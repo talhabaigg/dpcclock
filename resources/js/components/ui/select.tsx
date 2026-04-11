@@ -6,7 +6,45 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+type ItemsMap = Record<string, React.ReactNode>
+
+function extractItems(children: React.ReactNode): ItemsMap {
+  const items: ItemsMap = {}
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as Record<string, any>
+    if ((child.type as any)?.displayName === 'SelectItem' && props.value != null) {
+      items[String(props.value)] = props.children
+    }
+    if (props.children) {
+      Object.assign(items, extractItems(props.children))
+    }
+  })
+  return items
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const collected = React.useMemo(() => extractItems(children), [children])
+
+  const mergedItems = React.useMemo(() => {
+    const explicit = props.items
+    if (explicit && typeof explicit === 'object' && !Array.isArray(explicit)) {
+      return { ...collected, ...(explicit as ItemsMap) }
+    }
+    if (explicit) return explicit
+    if (Object.keys(collected).length > 0) return collected
+    return undefined
+  }, [collected, props.items])
+
+  return (
+    <SelectPrimitive.Root {...props} items={mergedItems as any}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -135,6 +173,8 @@ function SelectItem({
     </SelectPrimitive.Item>
   )
 }
+
+SelectItem.displayName = 'SelectItem'
 
 function SelectSeparator({
   className,

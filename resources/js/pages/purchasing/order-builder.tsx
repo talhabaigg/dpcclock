@@ -18,7 +18,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, parseISO } from 'date-fns';
 import {
-    AlertTriangle,
     ArrowRight,
     ArrowUp,
     Bot,
@@ -28,7 +27,6 @@ import {
     FileUp,
     Loader2,
     Lock,
-    MapPin,
     Package,
     Paperclip,
     Plus,
@@ -38,11 +36,11 @@ import {
     Square,
     Star,
     Trash2,
-    Truck,
     User,
     X,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -229,7 +227,7 @@ async function* streamChat(
     }
 }
 
-async function extractFileFromServer(file: File): Promise<{ supplier_name?: string; items: any[]; notes?: string }> {
+async function extractFileFromServer(file: File): Promise<{ supplier_name?: string; project_name?: string; items: any[]; grand_total?: number; notes?: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch('/api/requisition-agent/extract-file', {
@@ -392,7 +390,7 @@ function useOrderBuilderAgent(onDraftUpdate: (draft: { header: DraftHeader; item
 
 // ─── Chat Message Components ──────────────────────────────────────────────────
 
-function ToolResultCards({ toolResults, onSelect }: { toolResults: ToolResultData[]; onSelect: (text: string) => void }) {
+function ToolResultCards({ toolResults }: { toolResults: ToolResultData[] }) {
     return (
         <div className="mt-2 space-y-2">
             {toolResults.map((tr, i) => {
@@ -404,119 +402,8 @@ function ToolResultCards({ toolResults, onSelect }: { toolResults: ToolResultDat
                         </div>
                     );
                 }
-                if (tr.tool_name === 'SearchLocations' && tr.result.locations?.length) {
-                    return <LocationCards key={i} locations={tr.result.locations} onSelect={onSelect} />;
-                }
-                if (tr.tool_name === 'ListSuppliers' && tr.result.suppliers?.length) {
-                    return <SupplierCards key={i} suppliers={tr.result.suppliers} onSelect={onSelect} />;
-                }
-                if (tr.tool_name === 'SearchMaterials' && tr.result.materials?.length) {
-                    return <MaterialCards key={i} materials={tr.result.materials} warning={tr.result.warning} onSelect={onSelect} />;
-                }
                 return null;
             })}
-        </div>
-    );
-}
-
-function LocationCards({
-    locations,
-    onSelect,
-}: {
-    locations: Array<{ id: number; name: string; external_id?: string; state?: string; is_deprecated?: boolean }>;
-    onSelect: (text: string) => void;
-}) {
-    if (locations.length > 8) return null;
-    return (
-        <div className="grid grid-cols-1 gap-1">
-            {locations.map((loc) => (
-                <button
-                    key={loc.id}
-                    onClick={() => onSelect(`Use location: ${loc.name} (ID ${loc.id})`)}
-                    className={cn(
-                        'flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-accent',
-                        loc.is_deprecated && 'border-dashed opacity-60',
-                    )}
-                >
-                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
-                    <div className="min-w-0">
-                        <div className="font-medium leading-tight">{loc.name}</div>
-                        <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[10px]">
-                            {loc.state && <span>{loc.state}</span>}
-                            {loc.external_id && <span>({loc.external_id})</span>}
-                        </div>
-                    </div>
-                </button>
-            ))}
-        </div>
-    );
-}
-
-function SupplierCards({
-    suppliers,
-    onSelect,
-}: {
-    suppliers: Array<{ id: number; name: string; code?: string }>;
-    onSelect: (text: string) => void;
-}) {
-    if (suppliers.length > 8) return null;
-    return (
-        <div className="grid grid-cols-1 gap-1">
-            {suppliers.map((sup) => (
-                <button
-                    key={sup.id}
-                    onClick={() => onSelect(`Use supplier: ${sup.name} (ID ${sup.id})`)}
-                    className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-accent"
-                >
-                    <Truck className="size-3.5 shrink-0 text-blue-500" />
-                    <div className="min-w-0">
-                        <div className="font-medium leading-tight">{sup.name}</div>
-                        {sup.code && <div className="text-muted-foreground text-[10px]">{sup.code}</div>}
-                    </div>
-                </button>
-            ))}
-        </div>
-    );
-}
-
-function MaterialCards({
-    materials,
-    warning,
-    onSelect,
-}: {
-    materials: Array<{ id: number; code: string; description: string; unit_cost: number; price_source: string; cost_code?: string }>;
-    warning?: string;
-    onSelect: (text: string) => void;
-}) {
-    if (materials.length > 8) return null;
-    return (
-        <div className="space-y-1">
-            {warning && (
-                <div className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1 text-[10px] text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="size-3 shrink-0" />
-                    {warning}
-                </div>
-            )}
-            <div className="grid grid-cols-1 gap-1">
-                {materials.map((mat) => (
-                    <button
-                        key={mat.id}
-                        onClick={() => onSelect(`Add material ${mat.code} - ${mat.description}`)}
-                        className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-accent"
-                    >
-                        <div className="flex min-w-0 items-center gap-2">
-                            <Package className="size-3.5 shrink-0 text-emerald-500" />
-                            <div className="min-w-0">
-                                <div className="truncate font-medium leading-tight">{mat.description}</div>
-                                <div className="text-muted-foreground text-[10px]">{mat.code}</div>
-                            </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                            <div className="font-semibold">${mat.unit_cost.toFixed(2)}</div>
-                        </div>
-                    </button>
-                ))}
-            </div>
         </div>
     );
 }
@@ -654,57 +541,275 @@ function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }
     );
 }
 
-// Extract clickable options from assistant messages.
-// Detects markdown list items with bold text like:
-//   - **COAST** — Coastal Development
-//   - **HD Supply** (HDS003)
-// and renders them as clickable buttons below the message.
-function ClickableOptions({ content, onSelect }: { content: string; onSelect: (text: string) => void }) {
-    const options = useMemo(() => {
-        const lines = content.split('\n');
-        const opts: { label: string; detail: string; fullText: string }[] = [];
+// Extract selectable options from the last assistant message.
+// Sources: markdown bold list items + tool result cards (locations, suppliers, materials).
+interface PendingOption {
+    icon?: 'location' | 'supplier' | 'material';
+    label: string;
+    detail: string;
+    sendText: string;
+}
 
-        for (const line of lines) {
-            // Match list items like: - **Bold Text** — description  OR  - **Bold Text** (detail)
+function extractPendingOptions(message: AgentMessage | undefined): { question: string; options: PendingOption[] } {
+    if (!message || message.role !== 'assistant' || message.status !== 'complete') return { question: '', options: [] };
+
+    const opts: PendingOption[] = [];
+
+    // From tool results
+    if (message.toolResults) {
+        for (const tr of message.toolResults) {
+            if (tr.tool_name === 'SearchLocations' && tr.result.locations?.length && tr.result.locations.length <= 8) {
+                for (const loc of tr.result.locations) {
+                    opts.push({
+                        icon: 'location',
+                        label: loc.name,
+                        detail: [loc.state, loc.external_id ? `(${loc.external_id})` : ''].filter(Boolean).join(' '),
+                        sendText: `Use location: ${loc.name} (ID ${loc.id})`,
+                    });
+                }
+            }
+            if (tr.tool_name === 'ListSuppliers' && tr.result.suppliers?.length && tr.result.suppliers.length <= 8) {
+                for (const sup of tr.result.suppliers) {
+                    opts.push({
+                        icon: 'supplier',
+                        label: sup.name,
+                        detail: sup.code || '',
+                        sendText: `Use supplier: ${sup.name} (ID ${sup.id})`,
+                    });
+                }
+            }
+            if (tr.tool_name === 'SearchMaterials' && tr.result.materials?.length && tr.result.materials.length <= 8) {
+                for (const mat of tr.result.materials) {
+                    opts.push({
+                        icon: 'material',
+                        label: mat.description,
+                        detail: `${mat.code} — $${mat.unit_cost}`,
+                        sendText: `Add material ${mat.code} - ${mat.description}`,
+                    });
+                }
+            }
+        }
+    }
+
+    // From markdown bold list items (fallback if no tool results produced options)
+    if (opts.length === 0 && message.content) {
+        for (const line of message.content.split('\n')) {
             const match = line.match(/^[-*]\s+\*\*(.+?)\*\*\s*[—–\-:]?\s*(.*)/);
             if (match) {
                 const label = match[1].trim();
                 const detail = match[2].trim();
-                // Skip generic "other" / "none" options
                 if (/^(other|none|skip|cancel)$/i.test(label)) continue;
-                opts.push({ label, detail, fullText: label });
+                opts.push({ label, detail, sendText: label });
             }
         }
+    }
 
-        return opts;
-    }, [content]);
+    // Extract question from message content — text before the first list item or a reasonable fallback
+    let question = 'Select an option';
+    if (message.content) {
+        const lines = message.content.split('\n').filter((l) => l.trim());
+        const firstNonList = lines.find((l) => !l.match(/^[-*]\s+\*\*/));
+        if (firstNonList) {
+            // Strip markdown formatting
+            question = firstNonList.replace(/\*\*/g, '').replace(/[#>]/g, '').trim();
+            if (question.length > 80) question = question.slice(0, 80) + '...';
+        }
+    }
+
+    return { question, options: opts };
+}
+
+function OptionsPicker({ options, onSelect, question }: { options: PendingOption[]; onSelect: (text: string) => void; question: string }) {
+    const OTHER_INDEX = options.length; // virtual index for "Other"
+    const [selected, setSelected] = useState<number | null>(null);
+    const [otherText, setOtherText] = useState('');
+    const otherInputRef = useRef<HTMLInputElement>(null);
+    const isOther = selected === OTHER_INDEX;
 
     if (options.length === 0) return null;
 
+    const canSubmit = selected !== null && (!isOther || otherText.trim().length > 0);
+
+    const handleSubmit = () => {
+        if (!canSubmit) return;
+        if (isOther) {
+            onSelect(otherText.trim());
+        } else {
+            onSelect(options[selected!].sendText);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            setSelected(null);
+            setOtherText('');
+        } else if (e.key === 'Enter' && canSubmit && !(isOther && document.activeElement === otherInputRef.current)) {
+            e.preventDefault();
+            handleSubmit();
+        }
+    };
+
     return (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-            {options.map((opt, i) => (
+        <div className="border-border/60 bg-card mx-3 mb-2 flex max-h-[50vh] flex-col overflow-hidden rounded-xl border shadow-lg" onKeyDown={handleKeyDown}>
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+                <span className="text-xs font-medium">Select</span>
                 <button
-                    key={i}
-                    onClick={() => onSelect(opt.fullText)}
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent hover:border-accent-foreground/20"
+                    onClick={() => { setSelected(null); setOtherText(''); }}
+                    className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
                 >
-                    <span>{opt.label}</span>
-                    {opt.detail && (
-                        <span className="text-muted-foreground text-[10px] font-normal">{opt.detail.length > 30 ? opt.detail.slice(0, 30) + '...' : opt.detail}</span>
-                    )}
+                    <X className="size-3.5" />
                 </button>
-            ))}
+            </div>
+
+            {/* Question */}
+            <div className="shrink-0 px-4 pt-3 pb-2">
+                <p className="text-sm font-semibold">{question}</p>
+            </div>
+
+            {/* Radio options — scrollable */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+                {options.map((opt, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setSelected(i)}
+                        className={cn(
+                            'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                            selected === i ? 'bg-accent' : 'hover:bg-accent/50',
+                        )}
+                    >
+                        {/* Radio circle */}
+                        <div className={cn(
+                            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                            selected === i ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                        )}>
+                            {selected === i && <div className="size-1.5 rounded-full bg-primary-foreground" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium leading-tight">{opt.label}</div>
+                            {opt.detail && (
+                                <div className="text-muted-foreground mt-0.5 text-xs">{opt.detail}</div>
+                            )}
+                        </div>
+                    </button>
+                ))}
+
+                {/* Other (specify) option */}
+                <button
+                    onClick={() => {
+                        setSelected(OTHER_INDEX);
+                        setTimeout(() => otherInputRef.current?.focus(), 0);
+                    }}
+                    className={cn(
+                        'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                        isOther ? 'bg-accent' : 'hover:bg-accent/50',
+                    )}
+                >
+                    <div className={cn(
+                        'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        isOther ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                    )}>
+                        {isOther && <div className="size-1.5 rounded-full bg-primary-foreground" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-tight">Other (specify)</div>
+                    </div>
+                </button>
+
+                {/* Free text input for "Other" */}
+                {isOther && (
+                    <div className="mt-1 pl-10 pr-3">
+                        <input
+                            ref={otherInputRef}
+                            type="text"
+                            value={otherText}
+                            onChange={(e) => setOtherText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && otherText.trim()) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSubmit();
+                                }
+                            }}
+                            placeholder="Type your answer..."
+                            className="bg-background border-border w-full rounded-md border px-3 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                            autoFocus
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 border-t px-4 py-2.5">
+                <div className="flex items-center justify-between">
+                    <button
+                        onClick={handleSubmit}
+                        disabled={!canSubmit}
+                        className={cn(
+                            'flex items-center gap-1.5 text-xs font-medium transition-colors',
+                            canSubmit ? 'text-foreground' : 'text-muted-foreground/50 cursor-not-allowed',
+                        )}
+                    >
+                        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px]">↵</span>
+                        Submit answer
+                    </button>
+                    <span className="text-muted-foreground text-[10px]">Esc to dismiss</span>
+                </div>
+            </div>
         </div>
+    );
+}
+
+function OptionsPickerPortal({
+    inputAreaRef,
+    options,
+    onSelect,
+    question,
+}: {
+    inputAreaRef: React.RefObject<HTMLDivElement | null>;
+    options: PendingOption[];
+    onSelect: (text: string) => void;
+    question: string;
+}) {
+    const [pos, setPos] = useState<{ bottom: number; left: number; width: number } | null>(null);
+
+    useEffect(() => {
+        const update = () => {
+            const el = inputAreaRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            setPos({
+                bottom: window.innerHeight - rect.top,
+                left: rect.left,
+                width: rect.width,
+            });
+        };
+        update();
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [inputAreaRef]);
+
+    if (!pos) return null;
+
+    return createPortal(
+        <div
+            className="fixed z-50"
+            style={{ bottom: `${pos.bottom}px`, left: `${pos.left}px`, width: `${pos.width}px` }}
+        >
+            <OptionsPicker options={options} onSelect={onSelect} question={question} />
+        </div>,
+        document.body,
     );
 }
 
 const ChatBubble = memo(function ChatBubble({
     message,
-    onSendMessage,
 }: {
     message: AgentMessage;
-    onSendMessage: (text: string) => void;
 }) {
     const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
@@ -803,15 +908,10 @@ const ChatBubble = memo(function ChatBubble({
                     )}
                 </div>
 
-                {/* Tool result cards */}
+                {/* Tool result status indicators (non-interactive) */}
                 {!isUser && message.toolResults?.length && message.status === 'complete' ? (
-                    <ToolResultCards toolResults={message.toolResults} onSelect={onSendMessage} />
+                    <ToolResultCards toolResults={message.toolResults} />
                 ) : null}
-
-                {/* Clickable option buttons parsed from markdown lists */}
-                {!isUser && message.status === 'complete' && message.content && (
-                    <ClickableOptions content={message.content} onSelect={onSendMessage} />
-                )}
 
                 {/* Copy button on hover */}
                 {!isUser && message.status === 'complete' && message.content && (
@@ -868,6 +968,7 @@ function ChatPanel({
     const bottomRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const inputAreaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -886,15 +987,21 @@ function ChatPanel({
         setExtracting(true);
         try {
             const extracted = await extractFileFromServer(file);
+            const ambiguousItems = extracted.items?.filter((item: any) => item.ambiguous) || [];
             const itemSummary = extracted.items
-                ?.map((item: any) => `${item.description} (qty: ${item.qty}, $${item.unit_cost})`)
+                ?.map((item: any) => `${item.description} (qty: ${item.qty}, $${item.unit_cost}, total: $${item.line_total ?? 'N/A'})`)
                 .join(', ');
             const prompt = [
                 `I've uploaded a quote from ${extracted.supplier_name || 'a supplier'}.`,
+                extracted.project_name ? `Project/job name on the quote: ${extracted.project_name}` : '',
                 extracted.items?.length ? `Extracted ${extracted.items.length} items: ${itemSummary}` : '',
+                ambiguousItems.length > 0 ? `\nWARNING: ${ambiguousItems.length} item(s) flagged as ambiguous — the qty/unit_cost/length may be confused. Please review these with the user before adding to the form.` : '',
                 extracted.notes ? `Notes: ${extracted.notes}` : '',
                 `\nExtracted data: ${JSON.stringify(extracted)}`,
-                '\nPlease add these items to the order form. Look up proper material codes and pricing.',
+                extracted.grand_total ? `\nQuote grand total (ex-GST): $${extracted.grand_total}` : '',
+                '\nPlease add these items to the order form using the exact quoted prices and line totals. Look up material codes and cost codes, but keep the prices from the quote. Flag any price differences with the system.',
+                '\nIMPORTANT: Use line_total as total_cost for each item — do NOT recalculate from qty * unit_cost. The document totals must match exactly to the cent.',
+                extracted.project_name ? 'The project name was detected from the quote — use it to match the correct project without asking.' : '',
             ]
                 .filter(Boolean)
                 .join('\n');
@@ -943,6 +1050,14 @@ function ChatPanel({
     };
 
     const isEmpty = messages.length === 0;
+
+    // Extract pending options from the last assistant message
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+    const { question: optionsQuestion, options: pendingOptions } = useMemo(() => extractPendingOptions(lastAssistantMsg), [lastAssistantMsg]);
+
+    const handleOptionSelect = (text: string) => {
+        sendMessage(text);
+    };
 
     const suggestedPrompts = [
         { icon: ShoppingCart, label: 'Order materials', prompt: 'I need to order materials for a project' },
@@ -1011,16 +1126,20 @@ function ChatPanel({
                 ) : (
                     <div className="pb-2">
                         {messages.map((msg) => (
-                            <ChatBubble key={msg.id} message={msg} onSendMessage={sendMessage} />
+                            <ChatBubble key={msg.id} message={msg} />
                         ))}
                         <div ref={bottomRef} />
                     </div>
                 )}
             </ScrollArea>
 
+            {/* Options picker — portal to body with high z-index */}
+            {!isLoading && pendingOptions.length > 0 && <OptionsPickerPortal inputAreaRef={inputAreaRef} options={pendingOptions} onSelect={handleOptionSelect} question={optionsQuestion} />}
+
             {/* Gemini-style input area */}
             <div
-                className="p-3"
+                ref={inputAreaRef}
+                className="relative p-3"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
             >
@@ -1315,10 +1434,12 @@ function CostCodeSelect({
     value,
     onValueChange,
     costCodes,
+    hasError,
 }: {
     value: string;
     onValueChange: (val: string) => void;
     costCodes: CostCode[];
+    hasError?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -1332,7 +1453,7 @@ function CostCodeSelect({
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" className="h-7 w-full justify-between text-xs">
+                <Button variant="outline" role="combobox" className={cn('h-7 w-full justify-between text-xs', hasError && 'border-destructive text-destructive')}>
                     <span className="truncate">{selected ? `${selected.code} - ${selected.description}` : 'Select cost code...'}</span>
                     <ChevronsUpDown className="ml-1 size-3 shrink-0 opacity-50" />
                 </Button>
@@ -1684,11 +1805,14 @@ function OrderFormPanel({
 
                                         {/* Cost Code selector */}
                                         <div>
-                                            <Label className="text-[10px]">Cost Code</Label>
+                                            <Label className={cn('text-[10px]', !item.cost_code && 'text-destructive font-medium')}>
+                                                Cost Code {!item.cost_code && '*'}
+                                            </Label>
                                             <CostCodeSelect
                                                 value={item.cost_code}
                                                 onValueChange={(val) => updateLineItem(index, 'cost_code', val)}
                                                 costCodes={costCodes}
+                                                hasError={!item.cost_code}
                                             />
                                         </div>
                                     </div>
@@ -1707,6 +1831,25 @@ function OrderFormPanel({
                         ${totalAmount.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                 </div>
+                {/* Validation warnings */}
+                {(() => {
+                    const issues: string[] = [];
+                    if (!header.location_id) issues.push('No project selected');
+                    if (!header.supplier_id) issues.push('No supplier selected');
+                    if (lineItems.length === 0) issues.push('No line items');
+                    const missingCostCodes = lineItems.filter((li) => !li.cost_code).length;
+                    if (missingCostCodes > 0) issues.push(`${missingCostCodes} item${missingCostCodes > 1 ? 's' : ''} missing cost code`);
+                    return issues.length > 0 ? (
+                        <div className="mb-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                            {issues.map((issue, i) => (
+                                <div key={i} className="flex items-center gap-1.5">
+                                    <span className="size-1 shrink-0 rounded-full bg-destructive" />
+                                    {issue}
+                                </div>
+                            ))}
+                        </div>
+                    ) : null;
+                })()}
                 <Button
                     className="w-full gap-2"
                     onClick={onSubmit}

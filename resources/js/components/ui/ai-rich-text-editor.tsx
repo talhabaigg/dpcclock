@@ -429,7 +429,7 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
                                         <SpellCheck className="mr-2 h-4 w-4" />
                                         Proof read
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setPromptMode('rephrase'); }}>
+                                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); setPromptMode('rephrase'); }}>
                                         <RefreshCw className="mr-2 h-4 w-4" />
                                         Rephrase...
                                     </DropdownMenuItem>

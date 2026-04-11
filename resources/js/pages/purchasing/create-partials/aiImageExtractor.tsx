@@ -37,6 +37,24 @@ const extractLineItems = async (
             dangerouslyAllowBrowser: true,
         });
 
+        const isPdf = file.type === 'application/pdf';
+        const mimeType = file.type || 'image/jpeg';
+
+        const fileContent: any = isPdf
+            ? {
+                  type: 'file',
+                  file: {
+                      filename: file.name,
+                      file_data: `data:${mimeType};base64,${base64}`,
+                  },
+              }
+            : {
+                  type: 'image_url',
+                  image_url: {
+                      url: `data:${mimeType};base64,${base64}`,
+                  },
+              };
+
         const response = await openai.chat.completions.create({
             model: 'gpt-4o',
             messages: [
@@ -45,14 +63,9 @@ const extractLineItems = async (
                     content: [
                         {
                             type: 'text',
-                            text: 'Please extract all line items from this quotation image. Return the result as a JSON array of objects, even if only a single line item is found. Each object must include the following fields: code, description, qty, and unit_cost (without a $ sign). Prioritise ex-GST pricing over incl-GST where both are available. If a non-standard unit of measure is used, calculate unit_cost by dividing the total cost by the quantity.',
+                            text: 'Please extract all line items from this quotation. Return the result as a JSON array of objects, even if only a single line item is found. Each object must include the following fields: code, description, qty, and unit_cost (without a $ sign). Prioritise ex-GST pricing over incl-GST where both are available. If a non-standard unit of measure is used, calculate unit_cost by dividing the total cost by the quantity.',
                         },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:image/jpeg;base64,${base64}`,
-                            },
-                        },
+                        fileContent,
                     ],
                 },
             ],
@@ -117,12 +130,11 @@ const extractLineItems = async (
 interface AiImageExtractorProps {
     setFile: (file: File | null) => void;
     file: File | null;
-    setPastingItems: (pasting: boolean) => void;
     projectId: string;
     setRowData: (data: any[]) => void;
 }
 
-const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowData }: AiImageExtractorProps) => {
+const AiImageExtractor = ({ setFile, file, projectId, setRowData }: AiImageExtractorProps) => {
     const [loading, setLoading] = useState(false);
     const loadingMessages = [
         'Reading your image...',
@@ -191,7 +203,7 @@ const AiImageExtractor = ({ setFile, file, setPastingItems, projectId, setRowDat
                                 <div>
                                     <p className="font-medium">Upload the image</p>
                                     <p className="text-muted-foreground mt-0.5 text-xs">
-                                        Drag and drop into the upload area, or click to browse. Supports PNG, JPG, JPEG.
+                                        Drag and drop into the upload area, or click to browse. Supports PNG, JPG, JPEG, and PDF.
                                     </p>
                                 </div>
                             </li>

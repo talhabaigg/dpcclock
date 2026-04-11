@@ -919,16 +919,16 @@ const ShowCashForecast = ({
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowGeneralCosts(true), 100)}>
+                                <DropdownMenuItem onClick={() => setTimeout(() => setShowGeneralCosts(true), 100)}>
                                     <Plus className="mr-2 h-4 w-4" />
                                     General Transactions
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowGstBreakdown(true), 100)}>
+                                <DropdownMenuItem onClick={() => setTimeout(() => setShowGstBreakdown(true), 100)}>
                                     <Receipt className="mr-2 h-4 w-4" />
                                     GST Breakdown
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowRetention(true), 100)}>
+                                <DropdownMenuItem onClick={() => setTimeout(() => setShowRetention(true), 100)}>
                                     <Shield className="mr-2 h-4 w-4" />
                                     Retention
                                 </DropdownMenuItem>
@@ -940,7 +940,7 @@ const ShowCashForecast = ({
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
                                         {vendorDelayHook.getVendors().map((vendor) => (
-                                            <DropdownMenuItem key={vendor} onSelect={() => setTimeout(() => vendorDelayHook.openModal(vendor), 100)}>
+                                            <DropdownMenuItem key={vendor} onClick={() => setTimeout(() => vendorDelayHook.openModal(vendor), 100)}>
                                                 {vendor}
                                             </DropdownMenuItem>
                                         ))}
@@ -948,11 +948,11 @@ const ShowCashForecast = ({
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowPaymentRules(true), 100)}>
+                                <DropdownMenuItem onClick={() => setTimeout(() => setShowPaymentRules(true), 100)}>
                                     <HelpCircle className="mr-2 h-4 w-4" />
                                     Payment Timing Rules
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => setTimeout(() => setShowSettings(true), 100)}>
+                                <DropdownMenuItem onClick={() => setTimeout(() => setShowSettings(true), 100)}>
                                     <Settings className="mr-2 h-4 w-4" />
                                     Settings
                                 </DropdownMenuItem>

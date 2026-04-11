@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,11 +10,7 @@ import { ChevronsUpDown, Download, X } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import { AgGridReact } from 'ag-grid-react';
-import { AllCommunityModule, ModuleRegistry, type ColDef, type ColGroupDef, type ValueFormatterParams, type CellClassParams } from 'ag-grid-community';
-import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface WipRow {
     id: number;
@@ -46,6 +42,7 @@ interface WipProps {
     filters: {
         company: string | null;
         location_ids: number[];
+        location_ids_none: boolean;
         month_end: string;
     };
     availableLocations: AvailableLocation[];
@@ -58,15 +55,13 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'WIP', href: '/reports/wip' },
 ];
 
-const currencyFormatter = (params: ValueFormatterParams) => {
-    if (params.value == null) return '';
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(params.value);
-};
+function formatCurrency(value: number): string {
+    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}
 
-const percentFormatter = (params: ValueFormatterParams) => {
-    if (params.value == null) return '';
-    return `${Number(params.value).toFixed(1)}%`;
-};
+function formatPercent(value: number): string {
+    return `${Number(value).toFixed(1)}%`;
+}
 
 function formatMonthEnd(dateStr: string): string {
     const d = new Date(dateStr + 'T00:00:00');
@@ -75,195 +70,19 @@ function formatMonthEnd(dateStr: string): string {
 
 function profitMatrix(claimedPct: number): number {
     const r = claimedPct / 100;
-    if (r === 1) return 1;
-    if (r >= 0.91 && r < 1) return 0.9;
-    if (r >= 0.81 && r <= 0.9) return 0.8;
-    if (r >= 0.61 && r <= 0.8) return 0.7;
-    if (r >= 0.51 && r <= 0.6) return 0.5;
-    if (r <= 0.5) return 0;
+    if (r >= 1) return 1;
+    if (r >= 0.91) return 0.9;
+    if (r >= 0.81) return 0.8;
+    if (r >= 0.61) return 0.7;
+    if (r >= 0.51) return 0.5;
     return 0;
 }
 
-const profitCellStyle = (params: CellClassParams) => {
-    if (params.value == null || params.node.rowPinned) return undefined;
-    return { color: params.value < 0 ? '#ef4444' : '#22c55e', fontWeight: 500 };
-};
-
-const pinnedProfitCellStyle = (params: CellClassParams) => {
-    if (params.value == null) return undefined;
-    return { color: params.value < 0 ? '#ef4444' : '#22c55e', fontWeight: 700 };
-};
-
-function buildColumnDefs(monthLabel: string): (ColDef<WipRow> | ColGroupDef<WipRow>)[] {
-    return [
-        {
-            field: 'job_number',
-            headerName: 'Job #',
-            pinned: 'left',
-            width: 110,
-            filter: true,
-            cellStyle: { fontWeight: 600 },
-        },
-        {
-            field: 'job_name',
-            headerName: 'Job Name',
-            pinned: 'left',
-            width: 220,
-            filter: true,
-            tooltipField: 'job_name',
-        },
-        {
-            field: 'total_contract_value',
-            headerName: 'Total Contract Value',
-            type: 'rightAligned',
-            valueFormatter: currencyFormatter,
-            minWidth: 150,
-            flex: 1,
-            filter: 'agNumberColumnFilter',
-        },
-        {
-            headerName: 'Variations',
-            children: [
-                {
-                    field: 'pending_variations',
-                    headerName: 'Pending',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'approved_variations',
-                    headerName: 'Approved',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'var_to_contract_percent',
-                    headerName: '% to Contract',
-                    type: 'rightAligned',
-                    valueFormatter: percentFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                },
-            ],
-        },
-        {
-            field: 'revised_contract',
-            headerName: 'Revised Contract',
-            type: 'rightAligned',
-            valueFormatter: currencyFormatter,
-            minWidth: 140,
-            flex: 1,
-            filter: 'agNumberColumnFilter',
-        },
-        {
-            headerName: 'To Date',
-            children: [
-                {
-                    field: 'claimed_to_date',
-                    headerName: 'Claimed $',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'claimed_percent',
-                    headerName: 'Claimed %',
-                    type: 'rightAligned',
-                    valueFormatter: percentFormatter,
-                    minWidth: 100,
-                    flex: 1,
-                },
-                {
-                    field: 'cost_to_date',
-                    headerName: 'Cost $',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'available_profit',
-                    headerName: 'Available Profit',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 130,
-                    flex: 1,
-                    cellStyle: profitCellStyle,
-                },
-                {
-                    colId: 'profit_matrix',
-                    headerName: 'Profit Matrix',
-                    type: 'rightAligned',
-                    valueGetter: (params) => {
-                        if (!params.data) return null;
-                        return profitMatrix(params.data.claimed_percent) * 100;
-                    },
-                    valueFormatter: percentFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    headerTooltip: 'Based on Claimed %: =100%→100%, 91-99%→90%, 81-90%→80%, 61-80%→70%, 51-60%→50%, ≤50%→0%',
-                },
-                {
-                    colId: 'matrix_profit_recognised',
-                    headerName: 'Matrix Profit Recognised',
-                    type: 'rightAligned',
-                    valueGetter: (params) => {
-                        if (!params.data) return null;
-                        return params.data.available_profit * profitMatrix(params.data.claimed_percent);
-                    },
-                    valueFormatter: currencyFormatter,
-                    minWidth: 160,
-                    flex: 1.2,
-                    cellStyle: profitCellStyle,
-                    headerTooltip: 'Available Profit × Profit Matrix',
-                },
-            ],
-        },
-        {
-            headerName: monthLabel,
-            children: [
-                {
-                    field: 'claimed_this_month',
-                    headerName: 'Claimed',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'cost_this_month',
-                    headerName: 'Cost',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 100,
-                    flex: 1,
-                    filter: 'agNumberColumnFilter',
-                },
-                {
-                    field: 'profit_this_month',
-                    headerName: 'Profit',
-                    type: 'rightAligned',
-                    valueFormatter: currencyFormatter,
-                    minWidth: 110,
-                    flex: 1,
-                    cellStyle: profitCellStyle,
-                },
-            ],
-        },
-    ];
+function profitColor(value: number): string {
+    return value < 0 ? 'text-red-500' : 'text-green-500';
 }
 
-function computeTotals(wipData: WipRow[]): Record<string, any> {
+function computeTotals(wipData: WipRow[]): Record<string, number> {
     const t: Record<string, number> = {
         total_contract_value: 0, pending_variations: 0, approved_variations: 0,
         revised_contract: 0, claimed_to_date: 0, cost_to_date: 0, available_profit: 0,
@@ -290,48 +109,30 @@ function computeTotals(wipData: WipRow[]): Record<string, any> {
     t.claimed_percent = t.revised_contract > 0
         ? (t.claimed_to_date / t.revised_contract) * 100 : 0;
     t.profit_matrix = wipData.length > 0 ? (t.weighted_pm / wipData.length) * 100 : 0;
-
-    return {
-        id: -1,
-        job_number: '',
-        job_name: 'GRAND TOTAL',
-        ...t,
-    };
+    return t;
 }
 
 export default function WipReport({ wipData, filters, availableLocations, monthEnds, companies }: WipProps) {
     const [jobSelectorOpen, setJobSelectorOpen] = useState(false);
-    const gridRef = useRef<AgGridReact>(null);
-
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        if (typeof document !== 'undefined') {
-            return document.documentElement.classList.contains('dark');
-        }
-        return false;
-    });
-
-    useEffect(() => {
-        const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.attributeName === 'class') {
-                    setIsDarkMode(document.documentElement.classList.contains('dark'));
-                }
-            }
-        });
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-        return () => observer.disconnect();
-    }, []);
 
     const navigate = useCallback((overrides: Record<string, string | string[] | null>) => {
         const params: Record<string, string | string[]> = {};
         if (filters.company) params.company = filters.company;
         if (filters.location_ids.length) params['location_ids[]'] = filters.location_ids.map(String);
+        if (filters.location_ids_none) params.location_ids_none = '1';
         if (filters.month_end) params.month_end = filters.month_end;
 
         for (const [key, val] of Object.entries(overrides)) {
             if (val === null) {
                 delete params[key];
+            } else if (Array.isArray(val) && val.length === 0) {
+                delete params['location_ids[]'];
+                params.location_ids_none = '1';
             } else {
+                // When setting location_ids, clear the none flag
+                if (key === 'location_ids[]') {
+                    delete params.location_ids_none;
+                }
                 params[key] = val;
             }
         }
@@ -344,7 +145,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
         const next = current.includes(id)
             ? current.filter(x => x !== id)
             : [...current, id];
-        navigate({ 'location_ids[]': next.length ? next.map(String) : null });
+        navigate({ 'location_ids[]': next.length ? next.map(String) : [] });
     }, [filters.location_ids, navigate]);
 
     const monthLabel = useMemo(() => {
@@ -352,34 +153,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
         return d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
     }, [filters.month_end]);
 
-    const columnDefs = useMemo(() => buildColumnDefs(monthLabel), [monthLabel]);
-
-    const defaultColDef = useMemo<ColDef>(() => ({
-        sortable: true,
-        resizable: true,
-        suppressMovable: true,
-    }), []);
-
-    const pinnedBottomRowData = useMemo(() => {
-        if (wipData.length === 0) return [];
-        return [computeTotals(wipData)];
-    }, [wipData]);
-
-    const getRowStyle = useCallback((params: any) => {
-        if (params.node.rowPinned) {
-            return { fontWeight: 700 };
-        }
-        return undefined;
-    }, []);
-
-    const pinnedBottomCellStyle = useCallback((params: any) => {
-        if (!params.node.rowPinned) return undefined;
-        const colId = params.column.getColId();
-        if (['available_profit', 'matrix_profit_recognised', 'profit_this_month'].includes(colId)) {
-            return pinnedProfitCellStyle(params);
-        }
-        return { fontWeight: 700 };
-    }, []);
+    const totals = useMemo(() => wipData.length > 0 ? computeTotals(wipData) : null, [wipData]);
 
     const exportToExcel = useCallback(async () => {
         const wb = new ExcelJS.Workbook();
@@ -452,41 +226,42 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
             });
         }
 
-        const totals = computeTotals(wipData);
-        const totalPm = wipData.length > 0 ? totals.weighted_pm / wipData.length : 0;
-        const totalsRowData = ws.addRow([
-            '', 'GRAND TOTAL', totals.total_contract_value,
-            totals.pending_variations, totals.approved_variations, totals.var_to_contract_percent / 100,
-            totals.revised_contract, totals.claimed_to_date, totals.claimed_percent / 100,
-            totals.cost_to_date, totals.available_profit, totalPm, totals.matrix_profit_recognised,
-            totals.claimed_this_month, totals.cost_this_month, totals.profit_this_month,
-        ]);
-        totalsRowData.height = 22;
-        totalsRowData.eachCell((cell, colNumber) => {
-            cell.font = { bold: true, size: 11 };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F4F5' } };
-            cell.alignment = { horizontal: colNumber >= 3 ? 'right' : 'left', vertical: 'middle' };
-            cell.border = { ...thinBorder, top: { style: 'medium', color: { argb: 'FF71717A' } } };
-            if (currencyCols.includes(colNumber)) cell.numFmt = '$#,##0';
-            if (percentCols.includes(colNumber)) cell.numFmt = '0.0%';
-            if (coloredProfitCols.includes(colNumber) && typeof cell.value === 'number') {
-                cell.font = { bold: true, size: 11, color: { argb: cell.value < 0 ? 'FFEF4444' : 'FF22C55E' } };
-            }
-            if ([4, 8, 14].includes(colNumber)) cell.border = { ...cell.border, left: groupSeparatorLeft };
-            if ([6, 7, 13, 16].includes(colNumber)) cell.border = { ...cell.border, right: groupSeparatorRight };
-        });
+        if (totals) {
+            const totalPm = wipData.length > 0 ? totals.weighted_pm / wipData.length : 0;
+            const totalsRowData = ws.addRow([
+                '', 'GRAND TOTAL', totals.total_contract_value,
+                totals.pending_variations, totals.approved_variations, totals.var_to_contract_percent / 100,
+                totals.revised_contract, totals.claimed_to_date, totals.claimed_percent / 100,
+                totals.cost_to_date, totals.available_profit, totalPm, totals.matrix_profit_recognised,
+                totals.claimed_this_month, totals.cost_this_month, totals.profit_this_month,
+            ]);
+            totalsRowData.height = 22;
+            totalsRowData.eachCell((cell, colNumber) => {
+                cell.font = { bold: true, size: 11 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F4F5' } };
+                cell.alignment = { horizontal: colNumber >= 3 ? 'right' : 'left', vertical: 'middle' };
+                cell.border = { ...thinBorder, top: { style: 'medium', color: { argb: 'FF71717A' } } };
+                if (currencyCols.includes(colNumber)) cell.numFmt = '$#,##0';
+                if (percentCols.includes(colNumber)) cell.numFmt = '0.0%';
+                if (coloredProfitCols.includes(colNumber) && typeof cell.value === 'number') {
+                    cell.font = { bold: true, size: 11, color: { argb: cell.value < 0 ? 'FFEF4444' : 'FF22C55E' } };
+                }
+                if ([4, 8, 14].includes(colNumber)) cell.border = { ...cell.border, left: groupSeparatorLeft };
+                if ([6, 7, 13, 16].includes(colNumber)) cell.border = { ...cell.border, right: groupSeparatorRight };
+            });
+        }
 
         ws.views = [{ state: 'frozen', ySplit: 2 }];
 
         const buf = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `WIP_Report_${filters.month_end}.xlsx`);
-    }, [wipData, monthLabel, filters.month_end]);
+    }, [wipData, monthLabel, filters.month_end, totals]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="WIP" />
 
-            <div className="flex flex-col gap-4 p-4 h-[calc(100vh-4rem)]">
+            <div className="flex flex-col gap-4 p-4 max-h-[calc(100vh-4rem)]">
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Company Filter */}
@@ -519,7 +294,9 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                     aria-expanded={jobSelectorOpen}
                                     className="w-[280px] justify-between font-normal"
                                 >
-                                    {filters.location_ids.length === 0
+                                    {filters.location_ids_none
+                                        ? 'No Projects'
+                                        : filters.location_ids.length === 0
                                         ? 'All Projects'
                                         : filters.location_ids.length === 1
                                             ? (() => { const loc = availableLocations.find(l => l.id === filters.location_ids[0]); return loc ? `${loc.external_id} - ${loc.name}` : '1 selected'; })()
@@ -528,26 +305,24 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[350px] p-0" align="start">
+                                <div className="flex items-center gap-2 border-b px-3 py-2">
+                                    <button
+                                        type="button"
+                                        className="h-7 rounded-md px-2 text-xs hover:bg-muted"
+                                        onClick={() => navigate({ 'location_ids[]': availableLocations.map(l => String(l.id)) })}
+                                    >
+                                        Select All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="h-7 rounded-md px-2 text-xs hover:bg-muted"
+                                        onClick={() => navigate({ 'location_ids[]': [] })}
+                                    >
+                                        Select None
+                                    </button>
+                                </div>
                                 <Command>
                                     <CommandInput placeholder="Search projects..." />
-                                    <div className="flex items-center gap-2 border-b px-3 py-2" onPointerDown={(e) => e.stopPropagation()}>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 text-xs"
-                                            onClick={(e) => { e.preventDefault(); navigate({ 'location_ids[]': availableLocations.map(l => String(l.id)) }); }}
-                                        >
-                                            Select All
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 text-xs"
-                                            onClick={(e) => { e.preventDefault(); navigate({ 'location_ids[]': null }); }}
-                                        >
-                                            Select None
-                                        </Button>
-                                    </div>
                                     <CommandList>
                                         <CommandEmpty>No project found.</CommandEmpty>
                                         <CommandGroup>
@@ -606,26 +381,97 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                     </span>
                 </div>
 
-                {/* AG Grid */}
-                <div className="flex-1 min-h-0 rounded-lg border overflow-hidden" style={{ width: '100%' }}>
-                    <AgGridReact
-                        ref={gridRef}
-                        theme={isDarkMode ? shadcnDarkTheme : shadcnLightTheme}
-                        rowData={wipData}
-                        columnDefs={columnDefs}
-                        defaultColDef={defaultColDef}
-                        pinnedBottomRowData={pinnedBottomRowData}
-                        getRowStyle={getRowStyle}
-                        autoSizeStrategy={{ type: 'fitGridWidth' }}
-                        tooltipShowDelay={300}
-                        animateRows={false}
-                        suppressCellFocus={true}
-                        noRowsOverlayComponent={() => (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
-                                No data found.
-                            </div>
-                        )}
-                    />
+                {/* Table */}
+                <div className="flex-1 min-h-0 rounded-lg border overflow-auto">
+                    <Table>
+                        <TableHeader className="sticky top-0 z-10">
+                            {/* Group header row */}
+                            <TableRow className="bg-muted/50">
+                                <TableHead colSpan={2} className="border-r" />
+                                <TableHead className="border-r text-center" />
+                                <TableHead colSpan={3} className="border-r text-center font-bold">Variations</TableHead>
+                                <TableHead className="border-r text-center" />
+                                <TableHead colSpan={6} className="border-r text-center font-bold">To Date</TableHead>
+                                <TableHead colSpan={3} className="text-center font-bold">{monthLabel}</TableHead>
+                            </TableRow>
+                            {/* Column header row */}
+                            <TableRow className="bg-muted/30">
+                                <TableHead className="sticky left-0 z-20 bg-muted/30 min-w-[100px]">Job #</TableHead>
+                                <TableHead className="sticky left-[100px] z-20 bg-muted/30 border-r min-w-[200px]">Job Name</TableHead>
+                                <TableHead className="text-right border-r min-w-[140px]">Total Contract</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Pending</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Approved</TableHead>
+                                <TableHead className="text-right border-r min-w-[100px]">% to Contract</TableHead>
+                                <TableHead className="text-right border-r min-w-[130px]">Revised Contract</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Claimed $</TableHead>
+                                <TableHead className="text-right min-w-[90px]">Claimed %</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Cost $</TableHead>
+                                <TableHead className="text-right min-w-[120px]">Avail. Profit</TableHead>
+                                <TableHead className="text-right min-w-[100px]" title="Based on Claimed %: =100%->100%, 91-99%->90%, 81-90%->80%, 61-80%->70%, 51-60%->50%, <=50%->0%">Profit Matrix</TableHead>
+                                <TableHead className="text-right border-r min-w-[150px]" title="Available Profit x Profit Matrix">Matrix Profit Rec.</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Claimed</TableHead>
+                                <TableHead className="text-right min-w-[90px]">Cost</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Profit</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {wipData.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={16} className="h-32 text-center text-muted-foreground">
+                                        No data found.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                <>
+                                    {wipData.map((row) => {
+                                        const pm = profitMatrix(row.claimed_percent);
+                                        const mpr = row.available_profit * pm;
+                                        return (
+                                            <TableRow key={row.id} className="hover:bg-muted/30">
+                                                <TableCell className="sticky left-0 z-10 bg-background font-semibold min-w-[100px]">{row.job_number}</TableCell>
+                                                <TableCell className="sticky left-[100px] z-10 bg-background border-r min-w-[200px] max-w-[250px] truncate" title={row.job_name}>{row.job_name}</TableCell>
+                                                <TableCell className="text-right border-r">{formatCurrency(row.total_contract_value)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.pending_variations)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.approved_variations)}</TableCell>
+                                                <TableCell className="text-right border-r">{formatPercent(row.var_to_contract_percent)}</TableCell>
+                                                <TableCell className="text-right border-r">{formatCurrency(row.revised_contract)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.claimed_to_date)}</TableCell>
+                                                <TableCell className="text-right">{formatPercent(row.claimed_percent)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.cost_to_date)}</TableCell>
+                                                <TableCell className={`text-right font-medium ${profitColor(row.available_profit)}`}>{formatCurrency(row.available_profit)}</TableCell>
+                                                <TableCell className="text-right">{formatPercent(pm * 100)}</TableCell>
+                                                <TableCell className={`text-right border-r font-medium ${profitColor(mpr)}`}>{formatCurrency(mpr)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.claimed_this_month)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(row.cost_this_month)}</TableCell>
+                                                <TableCell className={`text-right font-medium ${profitColor(row.profit_this_month)}`}>{formatCurrency(row.profit_this_month)}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {/* Totals row */}
+                                    {totals && (
+                                        <TableRow className="bg-muted/50 font-bold border-t-2">
+                                            <TableCell className="sticky left-0 z-10 bg-muted/50 min-w-[100px]" />
+                                            <TableCell className="sticky left-[100px] z-10 bg-muted/50 border-r min-w-[200px]">GRAND TOTAL</TableCell>
+                                            <TableCell className="text-right border-r">{formatCurrency(totals.total_contract_value)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.pending_variations)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.approved_variations)}</TableCell>
+                                            <TableCell className="text-right border-r">{formatPercent(totals.var_to_contract_percent)}</TableCell>
+                                            <TableCell className="text-right border-r">{formatCurrency(totals.revised_contract)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.claimed_to_date)}</TableCell>
+                                            <TableCell className="text-right">{formatPercent(totals.claimed_percent)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.cost_to_date)}</TableCell>
+                                            <TableCell className={`text-right ${profitColor(totals.available_profit)}`}>{formatCurrency(totals.available_profit)}</TableCell>
+                                            <TableCell className="text-right">{formatPercent(totals.profit_matrix)}</TableCell>
+                                            <TableCell className={`text-right border-r ${profitColor(totals.matrix_profit_recognised)}`}>{formatCurrency(totals.matrix_profit_recognised)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.claimed_this_month)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totals.cost_this_month)}</TableCell>
+                                            <TableCell className={`text-right ${profitColor(totals.profit_this_month)}`}>{formatCurrency(totals.profit_this_month)}</TableCell>
+                                        </TableRow>
+                                    )}
+                                </>
+                            )}
+                        </TableBody>
+                    </Table>
                 </div>
             </div>
         </AppLayout>

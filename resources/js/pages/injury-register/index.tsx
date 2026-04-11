@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -16,7 +15,8 @@ import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/ty
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown, Download, Loader2, Lock, MoreHorizontal, Plus, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Check, ChevronsUpDown, Download, ListFilter, Loader2, Lock, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
@@ -140,7 +140,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
         router.get('/injury-register', {}, { preserveState: true });
     };
 
-    const hasFilters = Object.values(filters).some(Boolean);
+    const totalActiveFilters = [filters.location_id, filters.incident, filters.report_type, filters.work_cover_claim, filters.status].filter(Boolean).length;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -152,13 +152,13 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
             <div className="space-y-4 p-4">
                 {/* Filters + Report Button */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
+                    <div className="relative w-72">
                         <Search className="text-muted-foreground absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2" />
                         <Input
                             placeholder="Search worker, location, incident..."
                             value={searchValue}
                             onChange={(e) => setSearchValue(e.target.value)}
-                            className="w-64 pl-9"
+                            className="pl-9"
                         />
                         {searchValue && (
                             <button
@@ -169,105 +169,202 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                             </button>
                         )}
                     </div>
-                    <Popover open={locationOpen} onOpenChange={setLocationOpen}>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" role="combobox" aria-expanded={locationOpen} className="w-48 justify-between font-normal">
-                                <span className="truncate">
-                                    {filters.location_id
-                                        ? locations.find((l) => String(l.id) === filters.location_id)?.name ?? 'All Locations'
-                                        : 'All Locations'}
-                                </span>
-                                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                Filters
+                                {totalActiveFilters > 0 && (
+                                    <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">
+                                        {totalActiveFilters}
+                                    </Badge>
+                                )}
                             </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-0" align="start">
-                            <Command>
-                                <CommandInput placeholder="Search locations..." />
-                                <CommandList>
-                                    <CommandEmpty>No location found.</CommandEmpty>
-                                    <CommandGroup>
-                                        <CommandItem
-                                            onSelect={() => { setFilter('location_id', 'all'); setLocationOpen(false); }}
-                                        >
-                                            <Check className={`mr-2 h-3.5 w-3.5 ${!filters.location_id ? 'opacity-100' : 'opacity-0'}`} />
-                                            All Locations
-                                        </CommandItem>
-                                        {locations.map((loc) => (
-                                            <CommandItem
-                                                key={loc.id}
-                                                onSelect={() => { setFilter('location_id', String(loc.id)); setLocationOpen(false); }}
-                                            >
-                                                <Check className={`mr-2 h-3.5 w-3.5 ${filters.location_id === String(loc.id) ? 'opacity-100' : 'opacity-0'}`} />
-                                                {loc.name}
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                            </Command>
-                        </PopoverContent>
-                    </Popover>
+                        </SheetTrigger>
+                        <SheetContent className="w-full overflow-y-auto sm:max-w-sm">
+                            <SheetHeader>
+                                <div className="flex items-center justify-between">
+                                    <SheetTitle>Filters</SheetTitle>
+                                    {totalActiveFilters > 0 && (
+                                        <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground h-auto px-2 py-1 text-xs">
+                                            Clear all
+                                        </Button>
+                                    )}
+                                </div>
+                            </SheetHeader>
 
-                    <Select value={filters.incident ?? 'all'} onValueChange={(v) => setFilter('incident', v)}>
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="All Incidents" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Incidents</SelectItem>
-                            {Object.entries(incidentOptions).map(([key, label]) => (
-                                <SelectItem key={key} value={key}>
-                                    {label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                            <div className="flex flex-col gap-5 px-4 pb-6">
+                                {/* Location */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Location</Label>
+                                        {filters.location_id && (
+                                            <button onClick={() => setFilter('location_id', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                    <Popover open={locationOpen} onOpenChange={setLocationOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" role="combobox" aria-expanded={locationOpen} className="w-full justify-between font-normal">
+                                                <span className="truncate">
+                                                    {filters.location_id
+                                                        ? locations.find((l) => String(l.id) === filters.location_id)?.name ?? 'All'
+                                                        : 'All'}
+                                                </span>
+                                                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-56 p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Search locations..." />
+                                                <CommandList>
+                                                    <CommandEmpty>No location found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        <CommandItem onSelect={() => { setFilter('location_id', 'all'); setLocationOpen(false); }}>
+                                                            <Check className={`mr-2 h-3.5 w-3.5 ${!filters.location_id ? 'opacity-100' : 'opacity-0'}`} />
+                                                            All
+                                                        </CommandItem>
+                                                        {locations.map((loc) => (
+                                                            <CommandItem key={loc.id} onSelect={() => { setFilter('location_id', String(loc.id)); setLocationOpen(false); }}>
+                                                                <Check className={`mr-2 h-3.5 w-3.5 ${filters.location_id === String(loc.id) ? 'opacity-100' : 'opacity-0'}`} />
+                                                                {loc.name}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
 
-                    <Select value={filters.report_type ?? 'all'} onValueChange={(v) => setFilter('report_type', v)}>
-                        <SelectTrigger className="w-40">
-                            <SelectValue placeholder="All Types" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
-                            {Object.entries(reportTypeOptions).map(([key, label]) => (
-                                <SelectItem key={key} value={key}>
-                                    {label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                                {/* Incident */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Incident</Label>
+                                        {filters.incident && (
+                                            <button onClick={() => setFilter('incident', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                    <Select value={filters.incident ?? 'all'} onValueChange={(v) => setFilter('incident', v)}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            {Object.entries(incidentOptions).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                    <div className="inline-flex items-center rounded-md border text-sm">
-                        <span className="text-muted-foreground border-r px-2.5 py-1.5 text-xs font-medium">WorkCover</span>
-                        {(['all', '1', '0'] as const).map((val) => (
-                            <button
-                                key={val}
-                                onClick={() => setFilter('work_cover_claim', val)}
-                                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                                    (filters.work_cover_claim ?? 'all') === val
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'hover:bg-muted'
-                                }`}
-                            >
-                                {val === 'all' ? 'All' : val === '1' ? 'Yes' : 'No'}
-                            </button>
-                        ))}
-                    </div>
+                                {/* Report Type */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Report Type</Label>
+                                        {filters.report_type && (
+                                            <button onClick={() => setFilter('report_type', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                    <Select value={filters.report_type ?? 'all'} onValueChange={(v) => setFilter('report_type', v)}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            {Object.entries(reportTypeOptions).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                    <Select value={filters.status ?? 'all'} onValueChange={(v) => setFilter('status', v)}>
-                        <SelectTrigger className="w-36">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Status</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="locked">Locked</SelectItem>
-                        </SelectContent>
-                    </Select>
+                                {/* WorkCover */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">WorkCover</Label>
+                                        {filters.work_cover_claim && (
+                                            <button onClick={() => setFilter('work_cover_claim', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                    <Select
+                                        value={filters.work_cover_claim === '1' ? 'yes' : filters.work_cover_claim === '0' ? 'no' : 'all'}
+                                        onValueChange={(v) => setFilter('work_cover_claim', v === 'yes' ? '1' : v === 'no' ? '0' : 'all')}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="yes">Yes</SelectItem>
+                                            <SelectItem value="no">No</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                    {hasFilters && (
-                        <Button variant="ghost" size="sm" onClick={resetFilters}>
-                            <RotateCcw className="mr-1 h-3 w-3" />
-                            Reset
-                        </Button>
+                                {/* Status */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Status</Label>
+                                        {filters.status && (
+                                            <button onClick={() => setFilter('status', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                    <Select value={filters.status ?? 'all'} onValueChange={(v) => setFilter('status', v)}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="active">Active</SelectItem>
+                                            <SelectItem value="locked">Locked</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+
+                    {/* Active filter badges */}
+                    {totalActiveFilters > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <ListFilter className="text-muted-foreground h-3.5 w-3.5" />
+                            {filters.location_id && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">Location:</span>
+                                    <span className="max-w-28 truncate text-xs">{locations.find((l) => String(l.id) === filters.location_id)?.name ?? filters.location_id}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('location_id', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.incident && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">Incident:</span>
+                                    <span className="max-w-28 truncate text-xs">{incidentOptions[filters.incident] ?? filters.incident}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('incident', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.report_type && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">Type:</span>
+                                    <span className="max-w-28 truncate text-xs">{reportTypeOptions[filters.report_type] ?? filters.report_type}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('report_type', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.work_cover_claim && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">WorkCover:</span>
+                                    <span className="text-xs">{filters.work_cover_claim === '1' ? 'Yes' : 'No'}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('work_cover_claim', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.status && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">Status:</span>
+                                    <span className="text-xs">{filters.status === 'active' ? 'Active' : 'Locked'}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('status', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                        </div>
                     )}
 
                     <div className="ml-auto flex gap-2">
@@ -318,60 +415,6 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                         </DropdownMenu>
                     </div>
                 </div>
-
-                {/* Filter chips */}
-                {hasFilters && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        {filters.search && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                Search: {filters.search}
-                                <button onClick={() => setSearchValue('')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                        {filters.location_id && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                {locations.find((l) => String(l.id) === filters.location_id)?.name ?? filters.location_id}
-                                <button onClick={() => setFilter('location_id', 'all')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                        {filters.incident && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                {incidentOptions[filters.incident] ?? filters.incident}
-                                <button onClick={() => setFilter('incident', 'all')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                        {filters.report_type && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                {reportTypeOptions[filters.report_type] ?? filters.report_type}
-                                <button onClick={() => setFilter('report_type', 'all')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                        {filters.work_cover_claim && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                WorkCover: {filters.work_cover_claim === '1' ? 'Yes' : 'No'}
-                                <button onClick={() => setFilter('work_cover_claim', 'all')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                        {filters.status && (
-                            <Badge variant="secondary" className="gap-1 pr-1">
-                                {filters.status === 'active' ? 'Active' : 'Locked'}
-                                <button onClick={() => setFilter('status', 'all')} className="hover:bg-muted rounded-full p-0.5">
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )}
-                    </div>
-                )}
 
                 {/* Table */}
                 <div className="rounded-md border">
@@ -576,12 +619,20 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                         <DialogTitle>Classification — {classifyInjury?.id_formal}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
-                        <div className="flex items-center gap-3">
-                            <Switch
-                                checked={classForm.work_cover_claim}
-                                onCheckedChange={(v) => setClassForm({ ...classForm, work_cover_claim: v })}
-                            />
+                        <div className="space-y-2">
                             <Label>Was a WorkCover claim submitted?</Label>
+                            <Select
+                                value={classForm.work_cover_claim ? 'yes' : 'no'}
+                                onValueChange={(v) => setClassForm({ ...classForm, work_cover_claim: v === 'yes' })}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="yes">Yes</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-2">
                             <Label>Number of Days Lost</Label>

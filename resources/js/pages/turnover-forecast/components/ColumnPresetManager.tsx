@@ -189,7 +189,7 @@ export function ColumnPresetManager({
                     </DropdownMenuItem>
 
                     {activePresetId && (
-                        <DropdownMenuItem onSelect={() => onActivePresetChange(null)} className="text-muted-foreground">
+                        <DropdownMenuItem onClick={() => onActivePresetChange(null)} className="text-muted-foreground">
                             Clear Active View
                         </DropdownMenuItem>
                     )}

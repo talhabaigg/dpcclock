@@ -66,7 +66,9 @@ class WipReportController extends Controller
         }
 
         // Filter by specific locations
-        if (!empty($locationIds)) {
+        if ($request->input('location_ids_none')) {
+            $locationsQuery->whereRaw('0 = 1');
+        } elseif (!empty($locationIds)) {
             $locationsQuery->whereIn('id', $locationIds);
         }
 
@@ -206,6 +208,7 @@ class WipReportController extends Controller
             'filters' => [
                 'company' => $company,
                 'location_ids' => collect($locationIds)->map(fn($id) => (int) $id)->values()->toArray(),
+                'location_ids_none' => (bool) $request->input('location_ids_none'),
                 'month_end' => $asOfDate->format('Y-m-d'),
             ],
             'availableLocations' => $availableLocations,

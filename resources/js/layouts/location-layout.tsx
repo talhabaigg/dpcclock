@@ -251,7 +251,7 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                         </a>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="gap-2" onSelect={() => setOpenDialog(true)}>
+                                    <DropdownMenuItem className="gap-2" onClick={() => setOpenDialog(true)}>
                                         <CirclePlus className="h-4 w-4" />
                                         Create Sub-location
                                     </DropdownMenuItem>

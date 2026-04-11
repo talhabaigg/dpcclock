@@ -13,8 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, Download, FileText, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { Activity, CalendarIcon, Download, FileText, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 interface Attachment {
@@ -562,19 +564,43 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">From</Label>
-                                    <Input
-                                        type="date"
-                                        value={classForm.suitable_duties_from}
-                                        onChange={(e) => setClassForm({ ...classForm, suitable_duties_from: e.target.value })}
-                                    />
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className={`w-full justify-start text-left font-normal ${!classForm.suitable_duties_from ? 'text-muted-foreground' : ''}`}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {classForm.suitable_duties_from
+                                                    ? new Date(classForm.suitable_duties_from + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                    : 'Pick a date'}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar
+                                                mode="single"
+                                                selected={classForm.suitable_duties_from ? new Date(classForm.suitable_duties_from + 'T00:00:00') : undefined}
+                                                onSelect={(date) => setClassForm({ ...classForm, suitable_duties_from: date ? date.toLocaleDateString('en-CA') : '' })}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">To (empty = ongoing)</Label>
-                                    <Input
-                                        type="date"
-                                        value={classForm.suitable_duties_to}
-                                        onChange={(e) => setClassForm({ ...classForm, suitable_duties_to: e.target.value })}
-                                    />
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className={`w-full justify-start text-left font-normal ${!classForm.suitable_duties_to ? 'text-muted-foreground' : ''}`}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {classForm.suitable_duties_to
+                                                    ? new Date(classForm.suitable_duties_to + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                    : 'Pick a date'}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar
+                                                mode="single"
+                                                selected={classForm.suitable_duties_to ? new Date(classForm.suitable_duties_to + 'T00:00:00') : undefined}
+                                                onSelect={(date) => setClassForm({ ...classForm, suitable_duties_to: date ? date.toLocaleDateString('en-CA') : '' })}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
                         </div>

@@ -130,14 +130,50 @@ class RequisitionAgentController extends Controller
 
         try {
             $apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY');
-            $extractionPrompt = 'Extract all line items from this supplier quotation/invoice/order document. Return a JSON object with: {"supplier_name": "detected supplier name or null", "items": [{"code": "item code if visible", "description": "item description", "qty": number, "unit_cost": number}], "notes": "any other relevant info"}. Prioritise ex-GST pricing. Return ONLY valid JSON - no markdown fences, no explanation.';
+            $extractionPrompt = <<<'EXTRACTION'
+Extract all line items from this supplier quotation/invoice/order document.
+
+Return a JSON object with:
+{
+  "supplier_name": "detected supplier name or null",
+  "project_name": "detected project/job name or null",
+  "items": [
+    {
+      "code": "item code if visible",
+      "description": "item description (include size/length/spec in description, NOT in qty)",
+      "qty": number,
+      "unit_cost": number,
+      "line_total": number,
+      "ambiguous": false
+    }
+  ],
+  "grand_total": number or null,
+  "notes": "any other relevant info"
+}
+
+CRITICAL RULES for qty and unit_cost:
+- qty is the NUMBER OF UNITS being ordered (e.g. 42 panels, 100 tracks). It is NOT a length or measurement.
+- unit_cost is the PRICE PER SINGLE UNIT (e.g. price per panel, price per track).
+- If the document has columns like "Length", "Size", "UOM" (unit of measure) — these describe the product spec, NOT the order quantity. Include them in the description field.
+- If you cannot confidently determine which value is qty vs unit_cost vs length/size, set "ambiguous": true and include all candidate values in the description so the user can clarify.
+- Prioritise ex-GST pricing over incl-GST where both are available.
+
+CRITICAL RULES for totals and rounding:
+- line_total MUST be copied exactly as shown in the document — do NOT recalculate it. The document's line total is the source of truth.
+- unit_cost MUST be copied exactly as shown in the document — do NOT round or truncate.
+- If qty * unit_cost does not exactly equal the line_total shown in the document, adjust qty slightly so that qty * unit_cost = line_total to the cent. The line_total from the document always wins.
+- grand_total MUST be copied exactly as shown in the document (ex-GST subtotal). The sum of all line_total values should equal grand_total. If it does not, flag the discrepancy in notes.
+- NEVER round unit_cost or line_total. Preserve exact decimal values from the document.
+
+Return ONLY valid JSON - no markdown fences, no explanation.
+EXTRACTION;
             $base64 = base64_encode(file_get_contents($file->getRealPath()));
 
             $fileInput = $extension === 'pdf'
                 ? [
                     'type' => 'input_file',
                     'filename' => $normalizedFilename,
-                    'file_data' => $base64,
+                    'file_data' => "data:{$mimeType};base64,{$base64}",
                 ]
                 : [
                     'type' => 'input_image',

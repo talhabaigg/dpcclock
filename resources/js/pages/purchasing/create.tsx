@@ -1294,7 +1294,6 @@ export default function Create() {
                         <AiImageExtractor
                             setFile={setFile}
                             file={file}
-                            setPastingItems={setPastingItems}
                             projectId={data.project_id}
                             setRowData={setRowData}
                         />
