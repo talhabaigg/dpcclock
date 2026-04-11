@@ -1,6 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -110,8 +109,20 @@ export default function TimesheetManagement() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Timesheets" />
             <div className="m-4 flex flex-col gap-2">
-                <div className="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-start">
-                    <Label className="text-3xl">Timesheet Management</Label>
+                {safetyConcernCount > 0 && (
+                    <Alert variant="destructive" className="max-w-5xl">
+                        <ShieldAlert className="h-4 w-4" />
+                        <AlertTitle>Safety Declaration</AlertTitle>
+                        <AlertDescription>
+                            {safetyConcernCount} clock {safetyConcernCount === 1 ? 'entry has' : 'entries have'} a safety
+                            concern reported at clock-out. Review flagged entries below.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                <div className="flex w-full max-w-5xl flex-col items-center gap-2 sm:flex-row">
+                    <SearchEmployee onEmployeeChange={handleEmployeeChange} initialEmployeeId={selectedEmployeeId} initialEmployeeName={employeeName} />
+                    <DatePickerDemo onDateChange={handleWeekEndingDateChange} initialDate={selectedWeekEndingDate} />
                     <div className="flex gap-2 sm:ml-auto">
                         <Link href={`/timesheets/${selectedEmployeeId}/${selectedWeekEnding}/sync/eh`}>
                             <Button size="sm" variant="outline">
@@ -126,27 +137,12 @@ export default function TimesheetManagement() {
                     </div>
                 </div>
 
-                {safetyConcernCount > 0 && (
-                    <Alert variant="destructive" className="max-w-2xl">
-                        <ShieldAlert className="h-4 w-4" />
-                        <AlertTitle>Safety Declaration</AlertTitle>
-                        <AlertDescription>
-                            {safetyConcernCount} clock {safetyConcernCount === 1 ? 'entry has' : 'entries have'} a safety
-                            concern reported at clock-out. Review flagged entries below.
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                <div className="flex flex-col items-center space-y-2 sm:flex-row sm:gap-2 sm:space-y-0">
-                    <SearchEmployee onEmployeeChange={handleEmployeeChange} initialEmployeeId={selectedEmployeeId} />
-                    <DatePickerDemo onDateChange={handleWeekEndingDateChange} initialDate={selectedWeekEndingDate} />
-                </div>
-
                 {timesheets.length > 0 ? (
                     <>
                         <TimesheetSummaryCard
                             name={employeeName}
                             timesheet_qty={timesheets.length}
+                            timesheets={timesheets}
                             expandAll={expandAll}
                             collapseAll={collapseAll}
                         />
@@ -162,6 +158,7 @@ export default function TimesheetManagement() {
                     <TimesheetSummaryCard
                         name={employeeName}
                         timesheet_qty={timesheets.length}
+                        timesheets={timesheets}
                         expandAll={expandAll}
                         collapseAll={collapseAll}
                     />

@@ -43,6 +43,7 @@ export default function TimesheetTable({ timesheets, expandedRows, toggleRow, ki
             const earliestStart = new Date(Math.min(...startTimes.map((d) => d.getTime())));
             const latestEnd = endTimes.length > 0 ? new Date(Math.max(...endTimes.map((d) => d.getTime()))) : null;
             const hasSafetyConcern = typedEntries.some((ts) => ts.safety_concern);
+            const kioskName = typedEntries[0]?.kiosk?.name || '';
 
             return {
                 date,
@@ -52,20 +53,20 @@ export default function TimesheetTable({ timesheets, expandedRows, toggleRow, ki
                 eh_employee_id: typedEntries[0].eh_employee_id,
                 entries: typedEntries,
                 hasSafetyConcern,
+                kioskName,
             };
         });
     }, [groupedTimesheets]);
 
     return (
-        <div className="overflow-x-auto">
-            <Table className="border border-gray-200">
+        <div className="max-w-5xl overflow-x-auto rounded-lg border border-border">
+            <Table>
                 <TableHeader>
-                    <TableRow className="border border-gray-200 bg-gray-100 dark:bg-black">
-                        <TableHead className="w-[100px] text-center">Date</TableHead>
-                        <TableHead className="hidden border border-gray-200 text-center sm:table-cell">Start Time</TableHead>
-                        <TableHead className="hidden border border-gray-200 text-center sm:table-cell">End Time</TableHead>
-                        <TableHead className="border border-gray-200 text-center">Units</TableHead>
-                        <TableHead className="border border-gray-200 text-center">Action</TableHead>
+                    <TableRow className="bg-muted">
+                        <TableHead className="w-[140px]">Date</TableHead>
+                        <TableHead className="hidden text-center sm:table-cell">Start</TableHead>
+                        <TableHead className="hidden text-center sm:table-cell">End</TableHead>
+                        <TableHead className="text-center">Hours</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -90,14 +91,16 @@ export default function TimesheetTable({ timesheets, expandedRows, toggleRow, ki
                                     />
 
                                     {isExpanded && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="p-0">
-                                                <InlineTimesheetEdit
-                                                    entries={groupedTimesheets[dateKey]}
-                                                    kiosks={kiosks}
-                                                    locations={locations}
-                                                    date={dateKey}
-                                                />
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableCell colSpan={4} className="p-0">
+                                                <div className="mx-2 my-2 rounded-lg border border-border bg-muted/30 sm:ml-6">
+                                                    <InlineTimesheetEdit
+                                                        entries={groupedTimesheets[dateKey]}
+                                                        kiosks={kiosks}
+                                                        locations={locations}
+                                                        date={dateKey}
+                                                    />
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     )}

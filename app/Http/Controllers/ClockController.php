@@ -870,7 +870,7 @@ class ClockController extends Controller
         $startDate = $endDate->copy()->subDays(6)->startOfDay();
         $employeeName = Employee::where('eh_employee_id', $employeeId)->value('name');
         $timesheets = Clock::where('eh_employee_id', $employeeId)
-            ->with('location', 'kiosk', 'worktype')
+            ->with('location.parentLocation.kiosk', 'kiosk', 'worktype')
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
 

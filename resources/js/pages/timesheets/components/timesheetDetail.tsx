@@ -438,7 +438,7 @@ export default function InlineTimesheetEdit({ entries, kiosks, locations, date }
 
                             if (isEditing && editState) {
                                 return (
-                                    <tr key={entry.id} className="border-b bg-blue-50/60 dark:bg-blue-950/20">
+                                    <tr key={entry.id} className="border-b border-border bg-blue-500/10 dark:bg-blue-500/15">
                                         <td className="px-2 py-1.5">
                                             <span className="text-blue-600">Editing</span>
                                         </td>
@@ -466,7 +466,7 @@ export default function InlineTimesheetEdit({ entries, kiosks, locations, date }
                             }
 
                             return (
-                                <tr key={entry.id ?? i} className={cn('border-b transition-colors hover:bg-muted/30', isSynced && 'opacity-60')}>
+                                <tr key={entry.id ?? i} className={cn('border-b border-border transition-colors hover:bg-muted/30', isSynced && 'opacity-60')}>
                                     <td className="px-2 py-1.5">
                                         {entry.status === 'synced' ? (
                                             <span className="text-green-600">Synced</span>
@@ -486,7 +486,7 @@ export default function InlineTimesheetEdit({ entries, kiosks, locations, date }
                                             <span className="text-yellow-600">Clocked in</span>
                                         )}
                                     </td>
-                                    <td className="hidden px-2 py-1.5 md:table-cell">{entry.kiosk?.name}</td>
+                                    <td className="hidden px-2 py-1.5 md:table-cell">{entry.kiosk?.name || entry.location?.parent_location?.kiosk?.name || <span className="text-muted-foreground">—</span>}</td>
                                     <td className="px-2 py-1.5">{entry.location?.external_id}</td>
                                     <td className="px-2 py-1.5 text-right tabular-nums">{entry.hours_worked}</td>
                                     <td className="px-2 py-1.5 text-center">{renderSafety(entry.safety_concern)}</td>
@@ -503,7 +503,7 @@ export default function InlineTimesheetEdit({ entries, kiosks, locations, date }
                         })}
 
                         {newEditState && (
-                            <tr className="border-b bg-green-50/60 dark:bg-green-950/20">
+                            <tr className="border-b border-border bg-green-500/10 dark:bg-green-500/15">
                                 <td className="px-2 py-1.5">
                                     <span className="text-green-600">New</span>
                                 </td>

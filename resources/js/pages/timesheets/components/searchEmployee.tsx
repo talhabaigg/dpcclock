@@ -7,10 +7,11 @@ import { useEffect, useState } from 'react';
 
 interface SearchEmployeeProps {
     onEmployeeChange: (employeeId: string) => void;
-    initialEmployeeId: string; // Added prop to receive the initial employeeId
+    initialEmployeeId: string;
+    initialEmployeeName?: string;
 }
 
-export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEmployeeProps) {
+export function SearchEmployee({ onEmployeeChange, initialEmployeeId, initialEmployeeName }: SearchEmployeeProps) {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialEmployeeId); // Initialize with initialEmployeeId
     const [employees, setEmployees] = useState<any[]>([]);
@@ -63,7 +64,7 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
     };
 
     return (
-        <div className="flex max-w-96 min-w-96 items-center justify-start sm:min-w-[250px]">
+        <div className="flex w-full items-center justify-start sm:w-auto sm:min-w-[250px]">
             <Button onClick={goToPrevious} variant="outline" className="rounded-r-none">
                 <ChevronLeft />
             </Button>
@@ -73,13 +74,13 @@ export function SearchEmployee({ onEmployeeChange, initialEmployeeId }: SearchEm
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
-                        className="w-full min-w-72 justify-between rounded-none sm:min-w-[250px]"
+                        className="w-full min-w-0 flex-1 justify-between rounded-none sm:min-w-[200px]"
                     >
-                        {value ? employees.find((emp) => emp.value === value)?.label : 'Select an Employee'}
+                        {(value && employees.find((emp) => emp.value === value)?.label) || initialEmployeeName || 'Select an Employee'}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="min-w-72 p-0 sm:min-w-[250px]">
+                <PopoverContent className="w-[var(--anchor-width)] p-0">
                     <Command>
                         <CommandInput placeholder="Search employee..." />
                         <CommandList className="max-h-60 overflow-auto">

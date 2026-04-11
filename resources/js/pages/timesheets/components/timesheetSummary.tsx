@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ShieldAlert } from 'lucide-react';
 
 type TimesheetSummaryRowProps = {
     timesheet: any;
@@ -25,41 +25,58 @@ export default function TimesheetSummaryRow({
     return (
         <TableRow
             className={cn(
-                'cursor-pointer',
-                hasSick && 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-700 dark:hover:bg-yellow-500',
-                hasAL && 'bg-green-100 hover:bg-green-200 dark:bg-green-700 dark:hover:bg-green-500',
+                'cursor-pointer transition-colors',
+                hasSick && 'border-l-2 border-l-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/15',
+                hasAL && 'border-l-2 border-l-green-500 bg-green-500/10 hover:bg-green-500/15',
+                !hasSick && !hasAL && 'hover:bg-muted/50',
             )}
             onClick={() => toggleRow(dateKey)}
         >
-            <TableCell className="border border-gray-200">
-                <div className="flex items-center gap-1">
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    {new Date(timesheet.clock_in)
-                        .toLocaleDateString('en-GB', {
-                            weekday: 'short',
-                            day: '2-digit',
-                            month: 'short',
-                        })
-                        .replace(',', '')}
+            <TableCell>
+                <div className="flex items-center gap-2">
+                    <ChevronDown
+                        className={cn(
+                            'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                            isExpanded && 'rotate-180',
+                        )}
+                    />
+                    <span className="font-medium">
+                        {new Date(timesheet.clock_in)
+                            .toLocaleDateString('en-GB', {
+                                weekday: 'short',
+                                day: '2-digit',
+                                month: 'short',
+                            })
+                            .replace(',', '')}
+                    </span>
                     {hasSafetyConcern && (
-                        <Badge variant="destructive" className="ml-1 gap-0.5 px-1.5 py-0.5 text-xs">
+                        <Badge variant="destructive" className="gap-0.5 px-1.5 py-0.5 text-xs">
                             <ShieldAlert className="h-3 w-3" />
                             <span className="hidden sm:inline">Safety</span>
                         </Badge>
                     )}
+                    {hasSick && (
+                        <Badge variant="outline" className="border-yellow-500/50 text-[10px] text-yellow-600 dark:text-yellow-400">
+                            Sick
+                        </Badge>
+                    )}
+                    {hasAL && (
+                        <Badge variant="outline" className="border-green-500/50 text-[10px] text-green-600 dark:text-green-400">
+                            Leave
+                        </Badge>
+                    )}
                 </div>
             </TableCell>
-            <TableCell className="hidden border border-gray-200 text-center sm:table-cell">
+            <TableCell className="hidden text-center tabular-nums sm:table-cell">
                 {new Date(timesheet.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </TableCell>
-            <TableCell className="hidden border border-gray-200 text-center sm:table-cell">
+            <TableCell className="hidden text-center tabular-nums sm:table-cell">
                 {timesheet.clock_out
                     ? new Date(timesheet.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : 'N/A'}
+                    : <span className="text-yellow-600 dark:text-yellow-400">Active</span>}
             </TableCell>
-            <TableCell className="border border-gray-200 text-center">{timesheet.hours_worked}</TableCell>
-            <TableCell className="border border-gray-200 text-center">
-                <span className="text-muted-foreground text-xs">{isExpanded ? 'Collapse' : 'Expand'}</span>
+            <TableCell className={cn('text-center tabular-nums font-medium', parseFloat(timesheet.hours_worked) > 8 && 'text-amber-500')}>
+                {timesheet.hours_worked}
             </TableCell>
         </TableRow>
     );
