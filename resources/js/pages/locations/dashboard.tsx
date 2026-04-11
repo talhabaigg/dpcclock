@@ -1,29 +1,28 @@
-import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, JobSummary, Location } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
 import DashboardGrid from '@/components/dashboard/dashboard-grid';
 import { type LabourBudgetRow } from '@/components/dashboard/labour-budget-card';
-import { type ProductionCostCode } from '@/components/dashboard/budget-safety-card';
-import { ProductionDataTable, type RowSelection } from './production-data-table';
-import { productionColumns, type ProductionRow, type GroupByMode } from './production-data-columns';
-import { useMemo, useState } from 'react';
+import LayoutManager from '@/components/dashboard/layout-manager';
+import { ManagementReportDialog } from '@/components/dashboard/management-report-dialog';
+import { useDashboardLayout, type ActiveLayout } from '@/components/dashboard/use-dashboard-layout';
+import { WIDGET_REGISTRY } from '@/components/dashboard/widget-registry';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Printer, X } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { format } from 'date-fns';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
+import { JobSummary, Location, type BreadcrumbItem } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import { format } from 'date-fns';
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Eye, EyeOff, Pencil, Printer, RotateCcw, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CartesianGrid, Line, LineChart, Tooltip as RechartsTooltip, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import ProductionAnalysis from './production-analysis';
-import { useDashboardLayout, type ActiveLayout } from '@/components/dashboard/use-dashboard-layout';
-import LayoutManager from '@/components/dashboard/layout-manager';
-import { WIDGET_REGISTRY } from '@/components/dashboard/widget-registry';
-import { Eye, EyeOff, RotateCcw, Pencil } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
-import { ManagementReportDialog } from '@/components/dashboard/management-report-dialog';
+import { productionColumns, type GroupByMode, type ProductionRow } from './production-data-columns';
+import { ProductionDataTable, type RowSelection } from './production-data-table';
 
 interface TimelineData {
     start_date: string;
@@ -82,7 +81,17 @@ interface DashboardProps {
     labourBudgetData: LabourBudgetRow[];
     vendorCommitmentsSummary: {
         po_outstanding: number;
-        po_lines?: { vendor: string; po_no: string; approval_status: string | null; original_commitment: number; approved_changes: number; current_commitment: number; total_billed: number; os_commitment: number; updated_at: string | null }[];
+        po_lines?: {
+            vendor: string;
+            po_no: string;
+            approval_status: string | null;
+            original_commitment: number;
+            approved_changes: number;
+            current_commitment: number;
+            total_billed: number;
+            os_commitment: number;
+            updated_at: string | null;
+        }[];
         sc_outstanding: number;
         sc_summary: { value: number; variations: number; invoiced_to_date: number; remaining_balance: number };
     } | null;
@@ -120,7 +129,32 @@ function shortDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
 }
 
-export default function Dashboard({ location, timelineData, asOfDate, claimedToDate, cashRetention, projectIncomeData, variationsSummary, labourBudgetData, vendorCommitmentsSummary, pendingPos, employeesOnSite, availableLocations, productionCostCodes, productionUploads, selectedUploadId, productionLines, industrialActionHours, varianceTrend, premierCostByCategory, premierLatestDate, payrollHoursByWorktype, dpcPercentComplete, activeLayout, allLayouts }: DashboardProps) {
+export default function Dashboard({
+    location,
+    timelineData,
+    asOfDate,
+    claimedToDate,
+    cashRetention,
+    projectIncomeData,
+    variationsSummary,
+    labourBudgetData,
+    vendorCommitmentsSummary,
+    pendingPos,
+    employeesOnSite,
+    availableLocations,
+    productionCostCodes,
+    productionUploads,
+    selectedUploadId,
+    productionLines,
+    industrialActionHours,
+    varianceTrend,
+    premierCostByCategory,
+    premierLatestDate,
+    payrollHoursByWorktype,
+    dpcPercentComplete,
+    activeLayout,
+    allLayouts,
+}: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
     const [activeTab, setActiveTab] = useState('dashboard');
     const [groupBy, setGroupBy] = useState<GroupByMode>('area');
@@ -155,7 +189,10 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     const handleDateChange = (newDate: Date | undefined) => {
         if (!newDate) return;
         setDate(newDate);
-        router.get(`/locations/${location.id}/dashboard`, buildQueryParams({ as_of_date: format(newDate, 'yyyy-MM-dd') }), { preserveState: true, preserveScroll: true });
+        router.get(`/locations/${location.id}/dashboard`, buildQueryParams({ as_of_date: format(newDate, 'yyyy-MM-dd') }), {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const handleLocationChange = (locationId: string) => {
@@ -163,7 +200,10 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
     };
 
     const handleUploadChange = (uploadId: string) => {
-        router.get(`/locations/${location.id}/dashboard`, buildQueryParams({ production_upload_id: uploadId }), { preserveState: true, preserveScroll: true });
+        router.get(`/locations/${location.id}/dashboard`, buildQueryParams({ production_upload_id: uploadId }), {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const handlePreviousMonth = () => {
@@ -182,8 +222,13 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (!date) return;
-        if (e.key === 'ArrowRight') { e.preventDefault(); handleNextMonth(); }
-        else if (e.key === 'ArrowLeft') { e.preventDefault(); handlePreviousMonth(); }
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            handleNextMonth();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            handlePreviousMonth();
+        }
     };
 
     // Clear selection when grouping changes
@@ -235,29 +280,39 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${location.name} - Dashboard`} />
 
-            <div className="p-1.5 sm:p-2 flex flex-col gap-1.5 sm:gap-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden min-w-0">
-
+            <div className="flex min-w-0 flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
                 {/* ── Top bar with tabs + filters ── */}
-                <div className="shrink-0 bg-card rounded-lg border p-1.5 sm:p-2">
+                <div className="bg-card shrink-0 rounded-lg border p-1.5 sm:p-2">
                     {/* Row 1: Tabs + Job selector (always visible) */}
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-2">
                         <Tabs value={activeTab} onValueChange={setActiveTab}>
                             <TabsList className="h-9 sm:h-8">
-                                <TabsTrigger value="dashboard" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">Dashboard</TabsTrigger>
-                                <TabsTrigger value="production-data" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">DPC</TabsTrigger>
-                                <TabsTrigger value="analysis" className="text-xs h-7 sm:h-6 px-2.5 sm:px-3">Analysis</TabsTrigger>
+                                <TabsTrigger value="dashboard" className="h-7 px-2.5 text-xs sm:h-6 sm:px-3">
+                                    Dashboard
+                                </TabsTrigger>
+                                <TabsTrigger value="production-data" className="h-7 px-2.5 text-xs sm:h-6 sm:px-3">
+                                    DPC
+                                </TabsTrigger>
+                                <TabsTrigger value="analysis" className="h-7 px-2.5 text-xs sm:h-6 sm:px-3">
+                                    Analysis
+                                </TabsTrigger>
                             </TabsList>
                         </Tabs>
 
-                        <div className="hidden sm:block h-6 w-px bg-border" />
+                        <div className="bg-border hidden h-6 w-px sm:block" />
 
-                        <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0">
-                            <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">Job:</span>
+                        <div className="ml-auto flex items-center gap-1.5 sm:ml-0 sm:gap-2">
+                            <span className="text-muted-foreground hidden text-xs font-medium whitespace-nowrap sm:inline">Job:</span>
                             <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" role="combobox" aria-expanded={jobSelectorOpen} className="h-9 sm:h-8 w-auto sm:w-[180px] justify-between text-xs font-medium px-2.5 sm:px-3">
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={jobSelectorOpen}
+                                        className="h-9 w-auto justify-between px-2.5 text-xs font-medium sm:h-8 sm:w-[180px] sm:px-3"
+                                    >
                                         {location.external_id}
-                                        <ChevronsUpDown className="ml-1.5 sm:ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                        <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50 sm:ml-2" />
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[250px] p-0" align="start">
@@ -276,10 +331,12 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                                         }}
                                                         className="text-xs"
                                                     >
-                                                        <Check className={cn('mr-2 h-3.5 w-3.5', location.id === loc.id ? 'opacity-100' : 'opacity-0')} />
+                                                        <Check
+                                                            className={cn('mr-2 h-3.5 w-3.5', location.id === loc.id ? 'opacity-100' : 'opacity-0')}
+                                                        />
                                                         <div className="flex flex-col">
                                                             <span className="font-medium">{loc.external_id}</span>
-                                                            <span className="text-[10px] text-muted-foreground truncate">{loc.name}</span>
+                                                            <span className="text-muted-foreground truncate text-[10px]">{loc.name}</span>
                                                         </div>
                                                     </CommandItem>
                                                 ))}
@@ -290,16 +347,14 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                             </Popover>
                         </div>
 
-                        <div className="hidden sm:block flex-1" />
+                        <div className="hidden flex-1 sm:block" />
 
                         {/* Desktop-only: layout editing controls inline */}
                         {activeTab === 'dashboard' && !isFixedLayout && isAdmin && (
                             <>
-                                <div className="hidden sm:block h-6 w-px bg-border" />
+                                <div className="bg-border hidden h-6 w-px sm:block" />
 
-                                {allLayouts && (
-                                    <LayoutManager allLayouts={allLayouts} activeLayoutId={activeLayout?.id ?? null} />
-                                )}
+                                {allLayouts && <LayoutManager allLayouts={allLayouts} activeLayoutId={activeLayout?.id ?? null} />}
 
                                 <TooltipProvider>
                                     <Tooltip>
@@ -323,18 +378,18 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                     <>
                                         <Popover open={widgetsOpen} onOpenChange={setWidgetsOpen}>
                                             <PopoverTrigger asChild>
-                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs px-2">
+                                                <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
                                                     {hiddenWidgets.length > 0 ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                                                     Widgets
                                                     {hiddenWidgets.length > 0 && (
-                                                        <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
+                                                        <span className="bg-muted ml-0.5 rounded-full px-1.5 text-[10px] font-medium">
                                                             {WIDGET_REGISTRY.length - hiddenWidgets.length}/{WIDGET_REGISTRY.length}
                                                         </span>
                                                     )}
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-[240px] p-2" align="end">
-                                                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Toggle widget visibility</p>
+                                                <p className="text-muted-foreground mb-2 px-1 text-xs font-medium">Toggle widget visibility</p>
                                                 <div className="space-y-1">
                                                     {WIDGET_REGISTRY.map((w) => {
                                                         const isHidden = hiddenWidgets.includes(w.id);
@@ -344,7 +399,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                                                 type="button"
                                                                 onClick={() => toggleWidget(w.id)}
                                                                 className={cn(
-                                                                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent',
+                                                                    'hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
                                                                     isHidden && 'opacity-50',
                                                                 )}
                                                             >
@@ -357,13 +412,13 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                             </PopoverContent>
                                         </Popover>
 
-                                        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs px-2" onClick={resetLayout}>
+                                        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={resetLayout}>
                                             <RotateCcw className="h-3 w-3" />
                                             Reset
                                         </Button>
 
                                         {selectedWidgets.size > 1 && (
-                                            <span className="text-[10px] text-muted-foreground">
+                                            <span className="text-muted-foreground text-[10px]">
                                                 {selectedWidgets.size} selected — drag to move together
                                             </span>
                                         )}
@@ -373,18 +428,24 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                         )}
                         {/* Date picker: stacked on mobile, inline in this row on desktop */}
                         {activeTab !== 'production-data' && (
-                            <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t w-full sm:contents">
-                                <span className="text-[10px] font-medium text-muted-foreground sm:hidden">As of Date</span>
-                                <div className="hidden sm:block h-6 w-px bg-border" />
-                                <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">As of Date:</span>
+                            <div className="mt-1.5 flex w-full flex-col gap-1 border-t pt-1.5 sm:contents">
+                                <span className="text-muted-foreground text-[10px] font-medium sm:hidden">As of Date</span>
+                                <div className="bg-border hidden h-6 w-px sm:block" />
+                                <span className="text-muted-foreground hidden text-xs font-medium whitespace-nowrap sm:inline">As of Date:</span>
                                 <div className="flex items-center gap-1.5">
-                                    <Button variant="outline" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" onClick={handlePreviousMonth}>
-                                        <ChevronLeft className="h-4 sm:h-3.5 w-4 sm:w-3.5" />
+                                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={handlePreviousMonth}>
+                                        <ChevronLeft className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                     </Button>
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                            <Button variant="outline" className={cn('h-9 sm:h-8 flex-1 sm:flex-none sm:w-[140px] justify-start text-left text-xs font-normal', !date && 'text-muted-foreground')}>
-                                                <CalendarIcon className="mr-1.5 sm:mr-2 h-3.5 w-3.5" />
+                                            <Button
+                                                variant="outline"
+                                                className={cn(
+                                                    'h-9 flex-1 justify-start text-left text-xs font-normal sm:h-8 sm:w-[140px] sm:flex-none',
+                                                    !date && 'text-muted-foreground',
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-1.5 h-3.5 w-3.5 sm:mr-2" />
                                                 {date ? format(date, 'dd/MM/yyyy') : 'Pick a date'}
                                             </Button>
                                         </PopoverTrigger>
@@ -392,8 +453,8 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                             <Calendar mode="single" selected={date} onSelect={handleDateChange} />
                                         </PopoverContent>
                                     </Popover>
-                                    <Button variant="outline" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" onClick={handleNextMonth}>
-                                        <ChevronRight className="h-4 sm:h-3.5 w-4 sm:w-3.5" />
+                                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={handleNextMonth}>
+                                        <ChevronRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                     </Button>
                                 </div>
                             </div>
@@ -401,13 +462,18 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                         {/* Report selector: stacked on mobile, inline in this row on desktop */}
                         {productionUploads.length > 0 && (
-                            <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t w-full sm:contents">
-                                <span className="text-[10px] font-medium text-muted-foreground sm:hidden">DPC Report Date</span>
-                                <div className="hidden sm:block h-6 w-px bg-border" />
-                                <span className="hidden sm:inline text-xs font-medium text-muted-foreground whitespace-nowrap">Report:</span>
+                            <div className="mt-1.5 flex w-full flex-col gap-1 border-t pt-1.5 sm:contents">
+                                <span className="text-muted-foreground text-[10px] font-medium sm:hidden">DPC Report Date</span>
+                                <div className="bg-border hidden h-6 w-px sm:block" />
+                                <span className="text-muted-foreground hidden text-xs font-medium whitespace-nowrap sm:inline">Report:</span>
                                 <Popover open={reportOpen} onOpenChange={setReportOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" role="combobox" aria-expanded={reportOpen} className="h-9 sm:h-8 w-full sm:w-[160px] justify-between text-xs font-normal">
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={reportOpen}
+                                            className="h-9 w-full justify-between text-xs font-normal sm:h-8 sm:w-[160px]"
+                                        >
                                             {selectedUploadId
                                                 ? formatReportDate(productionUploads.find((u) => u.id === selectedUploadId)?.report_date ?? '')
                                                 : 'Select report'}
@@ -430,7 +496,12 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                                             }}
                                                             className="text-xs"
                                                         >
-                                                            <Check className={cn('mr-2 h-3.5 w-3.5', selectedUploadId === u.id ? 'opacity-100' : 'opacity-0')} />
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 h-3.5 w-3.5',
+                                                                    selectedUploadId === u.id ? 'opacity-100' : 'opacity-0',
+                                                                )}
+                                                            />
                                                             {formatReportDate(u.report_date)}
                                                         </CommandItem>
                                                     ))}
@@ -441,15 +512,22 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                 </Popover>
                             </div>
                         )}
-                        <div className="hidden sm:block h-6 w-px bg-border" />
+                        <div className="bg-border hidden h-6 w-px sm:block" />
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button variant="outline" size="icon" className="h-9 sm:h-8 w-9 sm:w-8 shrink-0 mr-2" onClick={() => setPrintReportOpen(true)}>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="mr-2 h-9 w-9 shrink-0 sm:h-8 sm:w-8"
+                                        onClick={() => setPrintReportOpen(true)}
+                                    >
                                         <Printer className="h-3.5 w-3.5" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent><p className="text-xs">Monthly Report</p></TooltipContent>
+                                <TooltipContent>
+                                    <p className="text-xs">Monthly Report</p>
+                                </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     </div>
@@ -483,14 +561,14 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                 {/* ── Production Data tab ── */}
                 {activeTab === 'production-data' && (
-                    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-1.5 sm:gap-2 overflow-hidden">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden sm:gap-2">
                         {/* Variance trend chart */}
                         {varianceTrend.length > 0 && (
-                            <div className="shrink-0 rounded-md border bg-background p-2 sm:p-3">
-                                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                                    <p className="text-[10px] sm:text-xs font-medium truncate mr-2">{chartLabel}</p>
+                            <div className="bg-background shrink-0 rounded-md border p-2 sm:p-3">
+                                <div className="mb-1 flex items-center justify-between sm:mb-2">
+                                    <p className="mr-2 truncate text-[10px] font-medium sm:text-xs">{chartLabel}</p>
                                     {selectedRow && (
-                                        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs px-1.5" onClick={() => setSelectedRow(null)}>
+                                        <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-xs" onClick={() => setSelectedRow(null)}>
                                             <X className="h-3 w-3" />
                                             Clear
                                         </Button>
@@ -504,7 +582,10 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
                                         <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                                         <RechartsTooltip
                                             contentStyle={{ fontSize: 11, borderRadius: 6 }}
-                                            formatter={(value: number) => [value.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }), 'Variance']}
+                                            formatter={(value: number) => [
+                                                value.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+                                                'Variance',
+                                            ]}
                                             labelFormatter={(label) => `Report: ${label}`}
                                         />
                                         <Line
@@ -522,7 +603,7 @@ export default function Dashboard({ location, timelineData, asOfDate, claimedToD
 
                         {/* Data table */}
                         {productionLines.length === 0 ? (
-                            <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
+                            <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
                                 No DPC data available. Upload a CSV from the DPC Data tab.
                             </div>
                         ) : (

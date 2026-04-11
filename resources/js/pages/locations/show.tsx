@@ -63,15 +63,15 @@ export default function LocationShow() {
 
     return (
         <LocationLayout location={location} activeTab="sublocations">
-            <Tabs defaultValue="sublocations">
+            <Tabs defaultValue="sublocations" className="flex flex-col">
                 <TabsList>
-                    <TabsTrigger value="sublocations" className="gap-1.5">
+                    <TabsTrigger value="sublocations">
                         <FolderTree className="h-3.5 w-3.5" />
                         Sub-locations
                     </TabsTrigger>
-                    <TabsTrigger value="dpc-validation" className="gap-1.5">
+                    <TabsTrigger value="code">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        DPC Validation
+                        DPC Validation{' '}
                         {dpcValidation && dpcValidation.issues.length > 0 && (
                             <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-[10px]">
                                 {dpcValidation.issues.length}
@@ -79,8 +79,6 @@ export default function LocationShow() {
                         )}
                     </TabsTrigger>
                 </TabsList>
-
-                {/* Sub-locations Tab */}
                 <TabsContent value="sublocations">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
@@ -151,9 +149,7 @@ export default function LocationShow() {
                         </CardContent>
                     </Card>
                 </TabsContent>
-
-                {/* DPC Validation Tab */}
-                <TabsContent value="dpc-validation">
+                <TabsContent value="code">
                     <Card>
                         <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                             <div className="flex items-center justify-between">
@@ -184,7 +180,9 @@ export default function LocationShow() {
                             {!dpcValidation ? (
                                 <div className="flex flex-col items-center gap-2 py-12 text-center">
                                     <ShieldCheck className="text-muted-foreground h-8 w-8 opacity-40" />
-                                    <p className="text-muted-foreground text-sm">No DPC data uploaded yet. Upload a DPC CSV in the DPC Data tab to enable validation.</p>
+                                    <p className="text-muted-foreground text-sm">
+                                        No DPC data uploaded yet. Upload a DPC CSV in the DPC Data tab to enable validation.
+                                    </p>
                                 </div>
                             ) : dpcValidation.issues.length === 0 ? (
                                 <div className="flex flex-col items-center gap-2 py-12 text-center">
@@ -207,18 +205,14 @@ export default function LocationShow() {
                                                 <TableRow key={issue.id}>
                                                     <TableCell className="pl-3 font-medium sm:pl-6">{issue.name}</TableCell>
                                                     <TableCell>
-                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                                            {issue.external_id}
-                                                        </code>
+                                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">{issue.external_id}</code>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant="destructive" className="font-mono text-xs">
                                                             {issue.suffix}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-muted-foreground pr-3 text-sm sm:pr-6">
-                                                        {issue.issue}
-                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground pr-3 text-sm sm:pr-6">{issue.issue}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>

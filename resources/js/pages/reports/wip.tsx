@@ -1,19 +1,20 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { useMemo, useCallback, useState } from 'react';
-import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronsUpDown, Download, X } from 'lucide-react';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ChevronsUpDown, Download, X } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import { cn } from '@/lib/utils';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry, type ColDef, type ColGroupDef, type ValueFormatterParams, type CellClassParams } from 'ag-grid-community';
+import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 interface WipRow {
     id: number;
@@ -57,10 +58,15 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'WIP', href: '/reports/wip' },
 ];
 
-const fmt = (value: number) =>
-    new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+const currencyFormatter = (params: ValueFormatterParams) => {
+    if (params.value == null) return '';
+    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(params.value);
+};
 
-const pct = (value: number) => `${value.toFixed(1)}%`;
+const percentFormatter = (params: ValueFormatterParams) => {
+    if (params.value == null) return '';
+    return `${Number(params.value).toFixed(1)}%`;
+};
 
 function formatMonthEnd(dateStr: string): string {
     const d = new Date(dateStr + 'T00:00:00');
@@ -78,168 +84,243 @@ function profitMatrix(claimedPct: number): number {
     return 0;
 }
 
-const columnHelper = createColumnHelper<WipRow>();
+const profitCellStyle = (params: CellClassParams) => {
+    if (params.value == null || params.node.rowPinned) return undefined;
+    return { color: params.value < 0 ? '#ef4444' : '#22c55e', fontWeight: 500 };
+};
 
-const borderColor = '#e4e4e7';
-const groupBorderStyle = { borderLeft: `2px solid ${borderColor}` } as const;
-const groupBorderRStyle = { borderRight: `2px solid ${borderColor}` } as const;
-const groupBorderLRStyle = { borderLeft: `2px solid ${borderColor}`, borderRight: `2px solid ${borderColor}` } as const;
+const pinnedProfitCellStyle = (params: CellClassParams) => {
+    if (params.value == null) return undefined;
+    return { color: params.value < 0 ? '#ef4444' : '#22c55e', fontWeight: 700 };
+};
 
-function SortHeader({ label, column }: { label: string; column: any }) {
-    const sorted = column.getIsSorted();
-    return (
-        <button className="flex items-center gap-1" onClick={() => column.toggleSorting()}>
-            {label}
-            {sorted === 'asc' ? <ArrowUp className="h-3 w-3" /> : sorted === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-30" />}
-        </button>
-    );
+function buildColumnDefs(monthLabel: string): (ColDef<WipRow> | ColGroupDef<WipRow>)[] {
+    return [
+        {
+            field: 'job_number',
+            headerName: 'Job #',
+            pinned: 'left',
+            width: 110,
+            filter: true,
+            cellStyle: { fontWeight: 600 },
+        },
+        {
+            field: 'job_name',
+            headerName: 'Job Name',
+            pinned: 'left',
+            width: 220,
+            filter: true,
+            tooltipField: 'job_name',
+        },
+        {
+            field: 'total_contract_value',
+            headerName: 'Total Contract Value',
+            type: 'rightAligned',
+            valueFormatter: currencyFormatter,
+            minWidth: 150,
+            flex: 1,
+            filter: 'agNumberColumnFilter',
+        },
+        {
+            headerName: 'Variations',
+            children: [
+                {
+                    field: 'pending_variations',
+                    headerName: 'Pending',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'approved_variations',
+                    headerName: 'Approved',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'var_to_contract_percent',
+                    headerName: '% to Contract',
+                    type: 'rightAligned',
+                    valueFormatter: percentFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                },
+            ],
+        },
+        {
+            field: 'revised_contract',
+            headerName: 'Revised Contract',
+            type: 'rightAligned',
+            valueFormatter: currencyFormatter,
+            minWidth: 140,
+            flex: 1,
+            filter: 'agNumberColumnFilter',
+        },
+        {
+            headerName: 'To Date',
+            children: [
+                {
+                    field: 'claimed_to_date',
+                    headerName: 'Claimed $',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'claimed_percent',
+                    headerName: 'Claimed %',
+                    type: 'rightAligned',
+                    valueFormatter: percentFormatter,
+                    minWidth: 100,
+                    flex: 1,
+                },
+                {
+                    field: 'cost_to_date',
+                    headerName: 'Cost $',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'available_profit',
+                    headerName: 'Available Profit',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 130,
+                    flex: 1,
+                    cellStyle: profitCellStyle,
+                },
+                {
+                    colId: 'profit_matrix',
+                    headerName: 'Profit Matrix',
+                    type: 'rightAligned',
+                    valueGetter: (params) => {
+                        if (!params.data) return null;
+                        return profitMatrix(params.data.claimed_percent) * 100;
+                    },
+                    valueFormatter: percentFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    headerTooltip: 'Based on Claimed %: =100%→100%, 91-99%→90%, 81-90%→80%, 61-80%→70%, 51-60%→50%, ≤50%→0%',
+                },
+                {
+                    colId: 'matrix_profit_recognised',
+                    headerName: 'Matrix Profit Recognised',
+                    type: 'rightAligned',
+                    valueGetter: (params) => {
+                        if (!params.data) return null;
+                        return params.data.available_profit * profitMatrix(params.data.claimed_percent);
+                    },
+                    valueFormatter: currencyFormatter,
+                    minWidth: 160,
+                    flex: 1.2,
+                    cellStyle: profitCellStyle,
+                    headerTooltip: 'Available Profit × Profit Matrix',
+                },
+            ],
+        },
+        {
+            headerName: monthLabel,
+            children: [
+                {
+                    field: 'claimed_this_month',
+                    headerName: 'Claimed',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'cost_this_month',
+                    headerName: 'Cost',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 100,
+                    flex: 1,
+                    filter: 'agNumberColumnFilter',
+                },
+                {
+                    field: 'profit_this_month',
+                    headerName: 'Profit',
+                    type: 'rightAligned',
+                    valueFormatter: currencyFormatter,
+                    minWidth: 110,
+                    flex: 1,
+                    cellStyle: profitCellStyle,
+                },
+            ],
+        },
+    ];
 }
 
-function buildColumns(monthLabel: string) {
-    return [
-        columnHelper.accessor('job_number', {
-            header: ({ column }) => <SortHeader label="Job Number" column={column} />,
-            cell: (info) => <span className="font-medium">{info.getValue()}</span>,
-            size: 110,
-        }),
-        columnHelper.accessor('job_name', {
-            header: ({ column }) => <SortHeader label="Job Name" column={column} />,
-            size: 250,
-        }),
-        columnHelper.accessor('total_contract_value', {
-            header: ({ column }) => <SortHeader label="Total Contract Value" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right' },
-            size: 160,
-        }),
+function computeTotals(wipData: WipRow[]): Record<string, any> {
+    const t: Record<string, number> = {
+        total_contract_value: 0, pending_variations: 0, approved_variations: 0,
+        revised_contract: 0, claimed_to_date: 0, cost_to_date: 0, available_profit: 0,
+        claimed_this_month: 0, cost_this_month: 0, profit_this_month: 0,
+        matrix_profit_recognised: 0, weighted_pm: 0,
+    };
+    for (const row of wipData) {
+        t.total_contract_value += row.total_contract_value;
+        t.pending_variations += row.pending_variations;
+        t.approved_variations += row.approved_variations;
+        t.revised_contract += row.revised_contract;
+        t.claimed_to_date += row.claimed_to_date;
+        t.cost_to_date += row.cost_to_date;
+        t.available_profit += row.available_profit;
+        t.claimed_this_month += row.claimed_this_month;
+        t.cost_this_month += row.cost_this_month;
+        t.profit_this_month += row.profit_this_month;
+        const pm = profitMatrix(row.claimed_percent);
+        t.matrix_profit_recognised += row.available_profit * pm;
+        t.weighted_pm += pm;
+    }
+    t.var_to_contract_percent = t.total_contract_value > 0
+        ? ((t.pending_variations + t.approved_variations) / t.total_contract_value) * 100 : 0;
+    t.claimed_percent = t.revised_contract > 0
+        ? (t.claimed_to_date / t.revised_contract) * 100 : 0;
+    t.profit_matrix = wipData.length > 0 ? (t.weighted_pm / wipData.length) * 100 : 0;
 
-        // Variations group
-        columnHelper.accessor('pending_variations', {
-            header: ({ column }) => <SortHeader label="Pending" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', style: groupBorderStyle, group: 'Variations' },
-            size: 130,
-        }),
-        columnHelper.accessor('approved_variations', {
-            header: ({ column }) => <SortHeader label="Approved" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', group: 'Variations' },
-            size: 130,
-        }),
-        columnHelper.accessor('var_to_contract_percent', {
-            header: ({ column }) => <SortHeader label="% to Contract" column={column} />,
-            cell: (info) => pct(info.getValue()),
-            meta: { className: 'text-right', style: groupBorderRStyle, group: 'Variations' },
-            size: 120,
-        }),
-
-        columnHelper.accessor('revised_contract', {
-            header: ({ column }) => <SortHeader label="Revised Contract" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', style: groupBorderRStyle },
-            size: 150,
-        }),
-
-        // To Date group
-        columnHelper.accessor('claimed_to_date', {
-            header: ({ column }) => <SortHeader label="Claimed $" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', style: groupBorderStyle, group: 'To Date' },
-            size: 130,
-        }),
-        columnHelper.accessor('claimed_percent', {
-            header: ({ column }) => <SortHeader label="Claimed %" column={column} />,
-            cell: (info) => pct(info.getValue()),
-            meta: { className: 'text-right', group: 'To Date' },
-            size: 110,
-        }),
-        columnHelper.accessor('cost_to_date', {
-            header: ({ column }) => <SortHeader label="Cost $" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', group: 'To Date' },
-            size: 130,
-        }),
-        columnHelper.accessor('available_profit', {
-            header: ({ column }) => <SortHeader label="Available Profit" column={column} />,
-            cell: (info) => {
-                const v = info.getValue();
-                return <span className={v < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(v)}</span>;
-            },
-            meta: { className: 'text-right', group: 'To Date' },
-            size: 140,
-        }),
-        columnHelper.display({
-            id: 'profit_matrix',
-            header: () => (
-                <HoverCard>
-                    <HoverCardTrigger asChild>
-                        <span className="cursor-help decoration-dotted hover:underline underline-offset-4">Profit Matrix</span>
-                    </HoverCardTrigger>
-                    <HoverCardContent side="top" className="w-auto text-xs">
-                        <p className="font-semibold mb-1">Based on Claimed %:</p>
-                        <ul className="space-y-0.5">
-                            <li>= 100% → 100%</li>
-                            <li>91–99% → 90%</li>
-                            <li>81–90% → 80%</li>
-                            <li>61–80% → 70%</li>
-                            <li>51–60% → 50%</li>
-                            <li>≤ 50% → 0%</li>
-                        </ul>
-                    </HoverCardContent>
-                </HoverCard>
-            ),
-            cell: (info) => pct(profitMatrix(info.row.original.claimed_percent) * 100),
-            meta: { className: 'text-right', group: 'To Date' },
-            size: 120,
-        }),
-        columnHelper.display({
-            id: 'matrix_profit_recognised',
-            header: () => (
-                <HoverCard>
-                    <HoverCardTrigger asChild>
-                        <span className="cursor-help decoration-dotted hover:underline underline-offset-4">Matrix Profit Recognised</span>
-                    </HoverCardTrigger>
-                    <HoverCardContent side="top" className="w-auto text-xs">
-                        <p>Available Profit × Profit Matrix</p>
-                    </HoverCardContent>
-                </HoverCard>
-            ),
-            cell: (info) => {
-                const v = info.row.original.available_profit * profitMatrix(info.row.original.claimed_percent);
-                return <span className={v < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(v)}</span>;
-            },
-            meta: { className: 'text-right', style: groupBorderRStyle, group: 'To Date' },
-            size: 170,
-        }),
-
-        // Monthly group
-        columnHelper.accessor('claimed_this_month', {
-            header: ({ column }) => <SortHeader label="Claimed" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', style: groupBorderStyle, group: monthLabel },
-            size: 130,
-        }),
-        columnHelper.accessor('cost_this_month', {
-            header: ({ column }) => <SortHeader label="Cost" column={column} />,
-            cell: (info) => fmt(info.getValue()),
-            meta: { className: 'text-right', group: monthLabel },
-            size: 120,
-        }),
-        columnHelper.accessor('profit_this_month', {
-            header: ({ column }) => <SortHeader label="Profit" column={column} />,
-            cell: (info) => {
-                const v = info.getValue();
-                return <span className={v < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(v)}</span>;
-            },
-            meta: { className: 'text-right', style: groupBorderRStyle, group: monthLabel },
-            size: 130,
-        }),
-    ];
+    return {
+        id: -1,
+        job_number: '',
+        job_name: 'GRAND TOTAL',
+        ...t,
+    };
 }
 
 export default function WipReport({ wipData, filters, availableLocations, monthEnds, companies }: WipProps) {
     const [jobSelectorOpen, setJobSelectorOpen] = useState(false);
-    const [sorting, setSorting] = useState<SortingState>([]);
+    const gridRef = useRef<AgGridReact>(null);
+
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        if (typeof document !== 'undefined') {
+            return document.documentElement.classList.contains('dark');
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.attributeName === 'class') {
+                    setIsDarkMode(document.documentElement.classList.contains('dark'));
+                }
+            }
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
 
     const navigate = useCallback((overrides: Record<string, string | string[] | null>) => {
         const params: Record<string, string | string[]> = {};
@@ -271,76 +352,39 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
         return d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
     }, [filters.month_end]);
 
-    const columns = useMemo(() => buildColumns(monthLabel), [monthLabel]);
+    const columnDefs = useMemo(() => buildColumnDefs(monthLabel), [monthLabel]);
 
-    const table = useReactTable({
-        data: wipData,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getSortedRowModel: getSortedRowModel(),
-        state: { sorting },
-        onSortingChange: setSorting,
-    });
+    const defaultColDef = useMemo<ColDef>(() => ({
+        sortable: true,
+        resizable: true,
+        suppressMovable: true,
+    }), []);
 
-    // Grand totals
-    const totals = useMemo(() => {
-        const t: Record<string, number> = {
-            total_contract_value: 0, pending_variations: 0, approved_variations: 0,
-            revised_contract: 0, claimed_to_date: 0, cost_to_date: 0, available_profit: 0,
-            claimed_this_month: 0, cost_this_month: 0, profit_this_month: 0,
-            matrix_profit_recognised: 0,
-            weighted_pm: 0,
-        };
-        for (const row of wipData) {
-            for (const key of ['total_contract_value', 'pending_variations', 'approved_variations', 'revised_contract', 'claimed_to_date', 'cost_to_date', 'available_profit', 'claimed_this_month', 'cost_this_month', 'profit_this_month']) {
-                t[key] += (row as any)[key];
-            }
-            const pm = profitMatrix(row.claimed_percent);
-            t.matrix_profit_recognised += row.available_profit * pm;
-            t.weighted_pm += pm;
-        }
-        t.var_to_contract_percent = t.total_contract_value > 0
-            ? ((t.pending_variations + t.approved_variations) / t.total_contract_value) * 100 : 0;
-        t.claimed_percent = t.revised_contract > 0
-            ? (t.claimed_to_date / t.revised_contract) * 100 : 0;
-        return t;
+    const pinnedBottomRowData = useMemo(() => {
+        if (wipData.length === 0) return [];
+        return [computeTotals(wipData)];
     }, [wipData]);
 
-    // Build group header spans
-    const headerGroups = useMemo(() => {
-        const groups: { label: string | null; colSpan: number }[] = [];
-        for (const col of columns) {
-            const meta = (col as any).meta as { group?: string } | undefined;
-            const g = meta?.group ?? null;
-            if (groups.length > 0 && groups[groups.length - 1].label === g) {
-                groups[groups.length - 1].colSpan++;
-            } else {
-                groups.push({ label: g, colSpan: 1 });
-            }
+    const getRowStyle = useCallback((params: any) => {
+        if (params.node.rowPinned) {
+            return { fontWeight: 700 };
         }
-        return groups;
-    }, [columns]);
+        return undefined;
+    }, []);
 
-    // Map column index to group border styles for group header row
-    const groupHeaderCells = useMemo(() => {
-        const cells: { label: string | null; colSpan: number; className: string; style?: React.CSSProperties }[] = [];
-        for (const g of headerGroups) {
-            const cls = 'text-center font-semibold';
-            cells.push({
-                label: g.label,
-                colSpan: g.colSpan,
-                className: cls,
-                style: g.label ? groupBorderLRStyle : undefined,
-            });
+    const pinnedBottomCellStyle = useCallback((params: any) => {
+        if (!params.node.rowPinned) return undefined;
+        const colId = params.column.getColId();
+        if (['available_profit', 'matrix_profit_recognised', 'profit_this_month'].includes(colId)) {
+            return pinnedProfitCellStyle(params);
         }
-        return cells;
-    }, [headerGroups]);
+        return { fontWeight: 700 };
+    }, []);
 
     const exportToExcel = useCallback(async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('WIP');
 
-        // Column widths (16 columns)
         ws.columns = [
             { width: 14 }, { width: 32 }, { width: 20 }, { width: 16 }, { width: 16 }, { width: 15 },
             { width: 18 }, { width: 16 }, { width: 13 }, { width: 16 }, { width: 18 }, { width: 14 }, { width: 22 }, { width: 16 }, { width: 14 }, { width: 16 },
@@ -356,8 +400,6 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
         const groupSeparatorLeft: Partial<ExcelJS.Border> = { style: 'medium', color: { argb: 'FFE4E4E7' } };
         const groupSeparatorRight: Partial<ExcelJS.Border> = { style: 'medium', color: { argb: 'FFE4E4E7' } };
 
-        // Row 1: Group headers
-        // Cols: A=Job#, B=Name, C=TCV, D-F=Variations, G=Revised, H-M=ToDate, N-P=Monthly
         const groupRow = ws.addRow(['', '', '', 'Variations', '', '', '', 'To Date', '', '', '', '', '', monthLabel, '', '']);
         groupRow.height = 22;
         groupRow.eachCell((cell) => {
@@ -366,11 +408,10 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
             cell.border = thinBorder;
         });
-        ws.mergeCells('D1:F1');  // Variations
-        ws.mergeCells('H1:M1');  // To Date (6 cols)
-        ws.mergeCells('N1:P1');  // Monthly
+        ws.mergeCells('D1:F1');
+        ws.mergeCells('H1:M1');
+        ws.mergeCells('N1:P1');
 
-        // Row 2: Column headers
         const headerRow = ws.addRow(['Job Number', 'Job Name', 'Total Contract Value', 'Pending', 'Approved', '% to Contract', 'Revised Contract', 'Claimed $', 'Claimed %', 'Cost $', 'Available Profit', 'Profit Matrix', 'Matrix Profit Recognised', 'Claimed', 'Cost', 'Profit']);
         headerRow.height = 20;
         headerRow.eachCell((cell, colNumber) => {
@@ -378,17 +419,14 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F4F5' } };
             cell.alignment = { horizontal: colNumber >= 3 ? 'right' : 'left', vertical: 'middle' };
             cell.border = { ...thinBorder };
-            // Group separator borders (1-based)
             if ([4, 8, 14].includes(colNumber)) cell.border = { ...thinBorder, left: groupSeparatorLeft };
             if ([6, 7, 13, 16].includes(colNumber)) cell.border = { ...thinBorder, right: groupSeparatorRight };
         });
 
-        // Column indices (1-based): currency, percent, profit-colored
         const currencyCols = [3, 4, 5, 7, 8, 10, 11, 13, 14, 15, 16];
-        const percentCols = [6, 9, 12]; // % to Contract, Claimed %, Profit Matrix
-        const coloredProfitCols = [11, 13, 16]; // available_profit, matrix_profit_recognised, profit_this_month
+        const percentCols = [6, 9, 12];
+        const coloredProfitCols = [11, 13, 16];
 
-        // Data rows
         for (const row of wipData) {
             const pm = profitMatrix(row.claimed_percent);
             const mpr = row.available_profit * pm;
@@ -404,20 +442,17 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                 cell.font = { size: 11 };
                 cell.alignment = { horizontal: colNumber >= 3 ? 'right' : 'left', vertical: 'middle' };
                 cell.border = { ...thinBorder };
-
                 if (currencyCols.includes(colNumber)) cell.numFmt = '$#,##0';
                 if (percentCols.includes(colNumber)) cell.numFmt = '0.0%';
-
                 if (coloredProfitCols.includes(colNumber) && typeof cell.value === 'number') {
                     cell.font = { size: 11, color: { argb: cell.value < 0 ? 'FFEF4444' : 'FF22C55E' } };
                 }
-
                 if ([4, 8, 14].includes(colNumber)) cell.border = { ...thinBorder, left: groupSeparatorLeft };
                 if ([6, 7, 13, 16].includes(colNumber)) cell.border = { ...thinBorder, right: groupSeparatorRight };
             });
         }
 
-        // Totals row
+        const totals = computeTotals(wipData);
         const totalPm = wipData.length > 0 ? totals.weighted_pm / wipData.length : 0;
         const totalsRowData = ws.addRow([
             '', 'GRAND TOTAL', totals.total_contract_value,
@@ -432,30 +467,26 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F4F5' } };
             cell.alignment = { horizontal: colNumber >= 3 ? 'right' : 'left', vertical: 'middle' };
             cell.border = { ...thinBorder, top: { style: 'medium', color: { argb: 'FF71717A' } } };
-
             if (currencyCols.includes(colNumber)) cell.numFmt = '$#,##0';
             if (percentCols.includes(colNumber)) cell.numFmt = '0.0%';
-
             if (coloredProfitCols.includes(colNumber) && typeof cell.value === 'number') {
                 cell.font = { bold: true, size: 11, color: { argb: cell.value < 0 ? 'FFEF4444' : 'FF22C55E' } };
             }
-
             if ([4, 8, 14].includes(colNumber)) cell.border = { ...cell.border, left: groupSeparatorLeft };
             if ([6, 7, 13, 16].includes(colNumber)) cell.border = { ...cell.border, right: groupSeparatorRight };
         });
 
-        // Freeze top 2 rows
         ws.views = [{ state: 'frozen', ySplit: 2 }];
 
         const buf = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `WIP_Report_${filters.month_end}.xlsx`);
-    }, [wipData, totals, monthLabel, filters.month_end]);
+    }, [wipData, monthLabel, filters.month_end]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="WIP" />
 
-            <div className="flex flex-col gap-4 p-4">
+            <div className="flex flex-col gap-4 p-4 h-[calc(100vh-4rem)]">
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Company Filter */}
@@ -477,7 +508,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                         </Select>
                     </div>
 
-                    {/* Project / Job Selector (Multi-select with checkboxes) */}
+                    {/* Project / Job Selector */}
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-muted-foreground">Projects</span>
                         <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
@@ -568,87 +599,33 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                         <Download className="mr-2 h-4 w-4" />
                         Export Excel
                     </Button>
+
+                    {/* Row count */}
+                    <span className="text-sm text-muted-foreground ml-auto">
+                        {wipData.length} {wipData.length === 1 ? 'job' : 'jobs'}
+                    </span>
                 </div>
 
-                {/* Table */}
-                <div className="overflow-auto rounded-xl border shadow-sm bg-card">
-                    <Table>
-                        <TableHeader className="sticky top-0 z-10 bg-muted">
-                            {/* Group header row */}
-                            <TableRow className="border-b-0">
-                                {groupHeaderCells.map((cell, i) => (
-                                    <TableHead key={i} colSpan={cell.colSpan} className={cell.className} style={cell.style}>
-                                        {cell.label ?? ''}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                            {/* Column header row */}
-                            {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id}>
-                                    {headerGroup.headers.map((header) => {
-                                        const meta = header.column.columnDef.meta as { className?: string; style?: React.CSSProperties } | undefined;
-                                        return (
-                                            <TableHead
-                                                key={header.id}
-                                                className={cn('cursor-pointer select-none', meta?.className)}
-                                                style={meta?.style}
-                                            >
-                                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                            </TableHead>
-                                        );
-                                    })}
-                                </TableRow>
-                            ))}
-                        </TableHeader>
-                        <TableBody>
-                            {table.getRowModel().rows.length ? (
-                                table.getRowModel().rows.map((row) => (
-                                    <TableRow key={row.id}>
-                                        {row.getVisibleCells().map((cell) => {
-                                            const meta = cell.column.columnDef.meta as { className?: string; style?: React.CSSProperties } | undefined;
-                                            return (
-                                                <TableCell key={cell.id} className={meta?.className} style={meta?.style}>
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </TableCell>
-                                            );
-                                        })}
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                                        No data found.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                        <TableFooter className="sticky bottom-0">
-                            <TableRow className="font-bold">
-                                <TableCell />
-                                <TableCell>GRAND TOTAL</TableCell>
-                                <TableCell className="text-right">{fmt(totals.total_contract_value)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderStyle}>{fmt(totals.pending_variations)}</TableCell>
-                                <TableCell className="text-right">{fmt(totals.approved_variations)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderRStyle}>{pct(totals.var_to_contract_percent)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderRStyle}>{fmt(totals.revised_contract)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderStyle}>{fmt(totals.claimed_to_date)}</TableCell>
-                                <TableCell className="text-right">{pct(totals.claimed_percent)}</TableCell>
-                                <TableCell className="text-right">{fmt(totals.cost_to_date)}</TableCell>
-                                <TableCell className="text-right">
-                                    <span className={totals.available_profit < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(totals.available_profit)}</span>
-                                </TableCell>
-                                <TableCell className="text-right">{pct(wipData.length > 0 ? (totals.weighted_pm / wipData.length) * 100 : 0)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderRStyle}>
-                                    <span className={totals.matrix_profit_recognised < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(totals.matrix_profit_recognised)}</span>
-                                </TableCell>
-                                <TableCell className="text-right" style={groupBorderStyle}>{fmt(totals.claimed_this_month)}</TableCell>
-                                <TableCell className="text-right">{fmt(totals.cost_this_month)}</TableCell>
-                                <TableCell className="text-right" style={groupBorderRStyle}>
-                                    <span className={totals.profit_this_month < 0 ? 'text-red-500' : 'text-green-500'}>{fmt(totals.profit_this_month)}</span>
-                                </TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
+                {/* AG Grid */}
+                <div className="flex-1 min-h-0 rounded-lg border overflow-hidden" style={{ width: '100%' }}>
+                    <AgGridReact
+                        ref={gridRef}
+                        theme={isDarkMode ? shadcnDarkTheme : shadcnLightTheme}
+                        rowData={wipData}
+                        columnDefs={columnDefs}
+                        defaultColDef={defaultColDef}
+                        pinnedBottomRowData={pinnedBottomRowData}
+                        getRowStyle={getRowStyle}
+                        autoSizeStrategy={{ type: 'fitGridWidth' }}
+                        tooltipShowDelay={300}
+                        animateRows={false}
+                        suppressCellFocus={true}
+                        noRowsOverlayComponent={() => (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                No data found.
+                            </div>
+                        )}
+                    />
                 </div>
             </div>
         </AppLayout>

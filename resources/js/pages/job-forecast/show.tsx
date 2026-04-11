@@ -3,6 +3,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -2067,16 +2068,10 @@ const ShowJobForecastPage = ({
                                     </Tooltip>
                                 </TooltipProvider>
                             )}
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
-                                            <Save className="h-5 w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                            <Button onClick={saveForecast} disabled={isSaving || isEditingLocked}>
+                                <Save className="h-4 w-4" />
+                                {isEditingLocked ? 'Locked' : 'Save'}
+                            </Button>
                         </div>
 
                         {/* Workflow Action Buttons */}
@@ -2269,78 +2264,80 @@ const ShowJobForecastPage = ({
                     </div>
                 )}
 
-                <div className="flex h-full flex-col space-y-2">
+                <div className="mx-2 flex h-full flex-col gap-3">
                     {/* Cost Grid */}
-                    <div className="flex flex-col px-2" style={{ height: `${topGridHeight}%` }}>
-                        {isForecastProject && (
-                            <div className="flex items-center gap-1 pb-2">
-                                <span className="text-sm font-semibold text-gray-700">Cost</span>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('cost')}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Add Cost Item</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedCostItems()}>
-                                                <Trash2 className="h-4 w-4 text-red-600" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Delete Selected Cost Items</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                    <Card className="flex flex-col py-0" style={{ height: `${topGridHeight}%` }}>
+                        <CardContent className="flex h-full flex-col p-2">
+                            {isForecastProject && (
+                                <div className="flex items-center gap-1 pb-2">
+                                    <span className="text-sm font-semibold text-gray-700">Cost</span>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('cost')}>
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Add Cost Item</TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedCostItems()}>
+                                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Delete Selected Cost Items</TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}
+                            <div className="flex-1">
+                                <AgGridReact
+                                    theme={gridTheme}
+                                    ref={gridOne}
+                                    alignedGrids={[gridTwo]}
+                                    rowData={costGridData}
+                                    columnDefs={costColDefs}
+                                    defaultColDef={defaultColDef}
+                                    pinnedBottomRowData={pinnedBottomRowData}
+                                    stopEditingWhenCellsLoseFocus
+                                    suppressColumnVirtualisation={true}
+                                    rowSelection={isForecastProject ? 'multiple' : undefined}
+                                    getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
+                                    onFirstDataRendered={(params) => {
+                                        restoreColState(params.api, LS_COST_COL_STATE);
+                                        restoreGroupShowState(params.api);
+                                    }}
+                                    onColumnVisible={(params) => {
+                                        saveColState(params.api, LS_COST_COL_STATE);
+                                    }}
+                                    onColumnMoved={(params) => saveColState(params.api, LS_COST_COL_STATE)}
+                                    onCellEditingStarted={() => {
+                                        // Clear any pending timeout
+                                        if (editingStopTimeoutRef.current) {
+                                            clearTimeout(editingStopTimeoutRef.current);
+                                        }
+                                        isEditingRef.current = true;
+                                    }}
+                                    onCellEditingStopped={() => {
+                                        // Delay resetting the editing flag to prevent column group events from firing
+                                        if (editingStopTimeoutRef.current) {
+                                            clearTimeout(editingStopTimeoutRef.current);
+                                        }
+                                        editingStopTimeoutRef.current = setTimeout(() => {
+                                            isEditingRef.current = false;
+                                        }, 200);
+                                    }}
+                                />
                             </div>
-                        )}
-                        <div className="flex-1">
-                            <AgGridReact
-                                theme={gridTheme}
-                                ref={gridOne}
-                                alignedGrids={[gridTwo]}
-                                rowData={costGridData}
-                                columnDefs={costColDefs}
-                                defaultColDef={defaultColDef}
-                                pinnedBottomRowData={pinnedBottomRowData}
-                                stopEditingWhenCellsLoseFocus
-                                suppressColumnVirtualisation={true}
-                                rowSelection={isForecastProject ? 'multiple' : undefined}
-                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
-                                onFirstDataRendered={(params) => {
-                                    restoreColState(params.api, LS_COST_COL_STATE);
-                                    restoreGroupShowState(params.api);
-                                }}
-                                onColumnVisible={(params) => {
-                                    saveColState(params.api, LS_COST_COL_STATE);
-                                }}
-                                onColumnMoved={(params) => saveColState(params.api, LS_COST_COL_STATE)}
-                                onCellEditingStarted={() => {
-                                    // Clear any pending timeout
-                                    if (editingStopTimeoutRef.current) {
-                                        clearTimeout(editingStopTimeoutRef.current);
-                                    }
-                                    isEditingRef.current = true;
-                                }}
-                                onCellEditingStopped={() => {
-                                    // Delay resetting the editing flag to prevent column group events from firing
-                                    if (editingStopTimeoutRef.current) {
-                                        clearTimeout(editingStopTimeoutRef.current);
-                                    }
-                                    editingStopTimeoutRef.current = setTimeout(() => {
-                                        isEditingRef.current = false;
-                                    }, 200);
-                                }}
-                            />
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Drag Handle */}
                     <div
-                        className="group relative flex h-2 cursor-row-resize items-center justify-center hover:bg-blue-100"
+                        className="group relative flex h-2 shrink-0 cursor-row-resize items-center justify-center hover:bg-blue-100"
                         onMouseDown={handleDragStart}
                         title="Drag to resize grids"
                     >
@@ -2348,84 +2345,86 @@ const ShowJobForecastPage = ({
                     </div>
 
                     {/* Revenue Grid */}
-                    <div className="flex flex-col px-2" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
-                        {isForecastProject && (
-                            <div className="flex items-center gap-1 pb-2">
-                                <span className="text-sm font-semibold text-gray-700">Revenue</span>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('revenue')}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Add Revenue Item</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7"
-                                                onClick={() => handleDeleteSelectedRevenueItems()}
-                                            >
-                                                <Trash2 className="h-4 w-4 text-red-600" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Delete Selected Revenue Items</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                    <Card className="flex flex-col py-0" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
+                        <CardContent className="flex h-full flex-col p-2">
+                            {isForecastProject && (
+                                <div className="flex items-center gap-1 pb-2">
+                                    <span className="text-sm font-semibold text-gray-700">Revenue</span>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddItem('revenue')}>
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Add Revenue Item</TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7"
+                                                    onClick={() => handleDeleteSelectedRevenueItems()}
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Delete Selected Revenue Items</TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )}
+                            <div className="flex-1">
+                                <AgGridReact
+                                    theme={gridTheme}
+                                    ref={gridTwo}
+                                    headerHeight={0}
+                                    groupHeaderHeight={0}
+                                    floatingFiltersHeight={0}
+                                    alignedGrids={[gridOne]}
+                                    rowData={revenueGridData}
+                                    columnDefs={revenueColDefs}
+                                    defaultColDef={defaultColDef}
+                                    pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
+                                    stopEditingWhenCellsLoseFocus
+                                    suppressColumnVirtualisation={true}
+                                    rowSelection={isForecastProject ? 'multiple' : undefined}
+                                    getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
+                                    onFirstDataRendered={(params) => {
+                                        restoreColState(params.api, LS_REV_COL_STATE);
+                                        // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
+                                    }}
+                                    onColumnVisible={(params) => {
+                                        saveColState(params.api, LS_REV_COL_STATE);
+                                    }}
+                                    onColumnMoved={(params) => saveColState(params.api, LS_REV_COL_STATE)}
+                                    onCellClicked={() => {
+                                        // Set editing flag on cell click to prevent column group events
+                                        isEditingRef.current = true;
+                                        // Clear any pending timeout
+                                        if (editingStopTimeoutRef.current) {
+                                            clearTimeout(editingStopTimeoutRef.current);
+                                        }
+                                    }}
+                                    onCellEditingStarted={() => {
+                                        isEditingRef.current = true;
+                                    }}
+                                    onCellEditingStopped={() => {
+                                        // Delay resetting the editing flag to prevent column group events from firing
+                                        if (editingStopTimeoutRef.current) {
+                                            clearTimeout(editingStopTimeoutRef.current);
+                                        }
+                                        editingStopTimeoutRef.current = setTimeout(() => {
+                                            isEditingRef.current = false;
+                                        }, 200);
+                                    }}
+                                />
                             </div>
-                        )}
-                        <div className="flex-1">
-                            <AgGridReact
-                                theme={gridTheme}
-                                ref={gridTwo}
-                                headerHeight={0}
-                                groupHeaderHeight={0}
-                                floatingFiltersHeight={0}
-                                alignedGrids={[gridOne]}
-                                rowData={revenueGridData}
-                                columnDefs={revenueColDefs}
-                                defaultColDef={defaultColDef}
-                                pinnedBottomRowData={[...pinnedBottomRevenueRowData, ...pinnedBottomProfitRowData]}
-                                stopEditingWhenCellsLoseFocus
-                                suppressColumnVirtualisation={true}
-                                rowSelection={isForecastProject ? 'multiple' : undefined}
-                                getRowClass={(params) => (params.node.rowPinned ? 'ag-row-total' : '')}
-                                onFirstDataRendered={(params) => {
-                                    restoreColState(params.api, LS_REV_COL_STATE);
-                                    // Don't restore group show state on revenue grid - it should follow cost grid via alignedGrids
-                                }}
-                                onColumnVisible={(params) => {
-                                    saveColState(params.api, LS_REV_COL_STATE);
-                                }}
-                                onColumnMoved={(params) => saveColState(params.api, LS_REV_COL_STATE)}
-                                onCellClicked={() => {
-                                    // Set editing flag on cell click to prevent column group events
-                                    isEditingRef.current = true;
-                                    // Clear any pending timeout
-                                    if (editingStopTimeoutRef.current) {
-                                        clearTimeout(editingStopTimeoutRef.current);
-                                    }
-                                }}
-                                onCellEditingStarted={() => {
-                                    isEditingRef.current = true;
-                                }}
-                                onCellEditingStopped={() => {
-                                    // Delay resetting the editing flag to prevent column group events from firing
-                                    if (editingStopTimeoutRef.current) {
-                                        clearTimeout(editingStopTimeoutRef.current);
-                                    }
-                                    editingStopTimeoutRef.current = setTimeout(() => {
-                                        isEditingRef.current = false;
-                                    }, 200);
-                                }}
-                            />
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </AppLayout>

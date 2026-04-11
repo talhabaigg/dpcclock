@@ -1,12 +1,18 @@
 'use client';
 
-import { Check, ChevronsUpDown } from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxTrigger,
+    ComboboxValue,
+} from '@/components/ui/combobox';
 
 interface Option {
     value: string;
@@ -22,44 +28,53 @@ interface SearchSelectProps {
 
 export function SearchSelect({ options, optionName, selectedOption, onValueChange }: SearchSelectProps) {
     const [open, setOpen] = React.useState(false);
+    const [inputValue, setInputValue] = React.useState('');
+
+    const selectedItem = React.useMemo(() => options.find((option) => option.value === selectedOption) ?? null, [options, selectedOption]);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild className="w-full">
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between overflow-hidden">
-                    <span className="truncate">{selectedOption ? options.find((option) => option.value === selectedOption)?.label : `Select ${optionName}`}</span>
-                    <ChevronsUpDown className="shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="start"
-                className="w-(--anchor-width) p-0"
-                onOpenAutoFocus={(e) => e.preventDefault()}
-                onInteractOutside={(e) => e.preventDefault()}
+        <Combobox<Option>
+            items={options}
+            open={open}
+            value={selectedItem}
+            inputValue={inputValue}
+            itemToStringLabel={(item) => item.label}
+            itemToStringValue={(item) => item.value}
+            isItemEqualToValue={(item, value) => item.value === value.value}
+            onOpenChange={(nextOpen) => {
+                setOpen(nextOpen);
+
+                if (!nextOpen) {
+                    setInputValue('');
+                }
+            }}
+            onInputValueChange={setInputValue}
+            onValueChange={(value) => {
+                onValueChange(value?.value ?? '');
+                setOpen(false);
+                setInputValue('');
+            }}
+        >
+            <ComboboxTrigger
+                render={<Button variant="outline" className="w-full justify-between overflow-hidden" />}
+                aria-label={`Select ${optionName}`}
             >
-                <Command>
-                    <CommandInput placeholder={`Search ${optionName}...`} className="h-9" />
-                    <CommandList>
-                        <CommandEmpty>No {optionName.toLowerCase()} found.</CommandEmpty>
-                        <CommandGroup>
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option.value}
-                                    value={option.label}
-                                    className="data-selected:bg-transparent"
-                                    onSelect={() => {
-                                        onValueChange(option.value);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    {option.label}
-                                    <Check className={cn('ml-auto', selectedOption === option.value ? 'opacity-100' : 'opacity-0')} />
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                <span className="truncate">
+                    <ComboboxValue placeholder={`Select ${optionName}`} />
+                </span>
+            </ComboboxTrigger>
+
+            <ComboboxContent className="w-(--anchor-width) p-0">
+                <ComboboxInput placeholder={`Search ${optionName}...`} className="h-9" showTrigger={false} />
+                <ComboboxEmpty>No {optionName.toLowerCase()} found.</ComboboxEmpty>
+                <ComboboxList>
+                    {(option: Option) => (
+                        <ComboboxItem key={option.value} value={option}>
+                            <span className="truncate">{option.label}</span>
+                        </ComboboxItem>
+                    )}
+                </ComboboxList>
+            </ComboboxContent>
+        </Combobox>
     );
 }

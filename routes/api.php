@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\SiteWalkController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\RequisitionAgentController;
 
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -54,6 +55,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/chat', [ChatController::class, 'handle'])->name('api.chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream']);
+
+    // Requisition AI Agent
+    Route::get('/requisition-agent/models', [RequisitionAgentController::class, 'models']);
+    Route::post('/requisition-agent/chat', [RequisitionAgentController::class, 'chat']);
+    Route::post('/requisition-agent/stream', [RequisitionAgentController::class, 'stream']);
+    Route::post('/requisition-agent/extract-file', [RequisitionAgentController::class, 'extractFile']);
 
 
 

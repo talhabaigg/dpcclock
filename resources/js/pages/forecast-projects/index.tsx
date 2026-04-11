@@ -1,5 +1,6 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Eye, Pencil, PlusCircle, Trash2 } from 'lucide-react';
+import { ArrowRight, Pencil, PlusCircle, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -170,19 +171,17 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
             {showFlash && flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
             <div className="m-4">
-                <div className="mb-4 flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Forecast Projects</h1>
-                    <Button onClick={handleCreate}>
+                <div className="mb-2 w-full">
+                    <Button onClick={handleCreate} className="ml-auto flex">
                         <PlusCircle className="mr-2 h-4 w-4" />
                         New Forecast Project
                     </Button>
                 </div>
-
-                <div className="rounded-md border bg-white dark:bg-gray-900">
+                <div className="hidden overflow-hidden rounded-lg border sm:block">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>Project Number</TableHead>
+                            <TableRow className="bg-muted/50">
+                                <TableHead className="px-3">Project Number</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Start Date</TableHead>
@@ -200,19 +199,25 @@ export default function ForecastProjectsIndex({ projects = [] }: { projects: For
                             ) : (
                                 validProjects.map((project) => (
                                     <TableRow key={project.id}>
-                                        <TableCell className="font-medium">{String(project.project_number)}</TableCell>
-                                        <TableCell>{String(project.name)}</TableCell>
+                                        <TableCell className="text-muted-foreground px-3 font-mono text-sm">
+                                            <Badge variant="secondary">{String(project.project_number)}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground px-3 text-sm">{String(project.name)}</TableCell>
                                         <TableCell>
                                             <span className={`rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadgeColor(project.status)}`}>
                                                 {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
                                             </span>
                                         </TableCell>
-                                        <TableCell>{project.start_date ? new Date(project.start_date).toLocaleDateString() : '-'}</TableCell>
-                                        <TableCell>{project.end_date ? new Date(project.end_date).toLocaleDateString() : '-'}</TableCell>
+                                        <TableCell className="text-xs">
+                                            {project.start_date ? new Date(project.start_date).toLocaleDateString() : '-'}
+                                        </TableCell>
+                                        <TableCell className="text-xs">
+                                            {project.end_date ? new Date(project.end_date).toLocaleDateString() : '-'}
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
                                                 <Button variant="outline" size="sm" onClick={() => router.visit(`/forecast-projects/${project.id}`)}>
-                                                    <Eye className="h-4 w-4" />
+                                                    <ArrowRight /> Open Job Forecast
                                                 </Button>
                                                 <Button variant="outline" size="sm" onClick={() => handleEdit(project)}>
                                                     <Pencil className="h-4 w-4" />

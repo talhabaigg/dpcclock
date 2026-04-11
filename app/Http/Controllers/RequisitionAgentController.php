@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Ai\Agents\RequisitionAgent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 
 class RequisitionAgentController extends Controller
@@ -27,7 +29,6 @@ class RequisitionAgentController extends Controller
 
     /**
      * GET /api/requisition-agent/models
-     * Returns available models for the dropdown selector.
      */
     public function models(): JsonResponse
     {
@@ -44,7 +45,7 @@ class RequisitionAgentController extends Controller
     public function chat(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'message' => 'required|string|max:5000',
+            'message' => 'required|string|max:10000',
             'conversation_id' => 'nullable|string|max:100',
             'model' => 'nullable|string|max:50',
         ]);
@@ -52,7 +53,6 @@ class RequisitionAgentController extends Controller
         $agent = new RequisitionAgent;
         [$provider, $model] = $this->resolveModel($validated['model'] ?? null);
 
-        // Continue existing conversation or start new one
         if (! empty($validated['conversation_id'])) {
             $agent = $agent->continue($validated['conversation_id'], as: auth()->user());
         } else {
@@ -65,7 +65,7 @@ class RequisitionAgentController extends Controller
             model: $model,
         );
 
-        $displayableTools = ['SearchLocations', 'ListSuppliers', 'SearchMaterials'];
+        $displayableTools = ['SearchLocations', 'ListSuppliers', 'SearchMaterials', 'UpdateRequisitionDraft'];
         $toolResults = $response->toolResults
             ->filter(fn ($tr) => in_array($tr->name, $displayableTools))
             ->map(fn ($tr) => [
@@ -88,7 +88,7 @@ class RequisitionAgentController extends Controller
     public function stream(Request $request)
     {
         $validated = $request->validate([
-            'message' => 'required|string|max:5000',
+            'message' => 'required|string|max:10000',
             'conversation_id' => 'nullable|string|max:100',
             'model' => 'nullable|string|max:50',
         ]);
@@ -107,6 +107,105 @@ class RequisitionAgentController extends Controller
             provider: $provider,
             model: $model,
         );
+    }
+
+    /**
+     * POST /api/requisition-agent/extract-file
+     * Extract text/line items from uploaded PDF or image using OpenAI file/image input.
+     */
+    public function extractFile(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:jpg,jpeg,png,pdf,webp|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $mimeType = $file->getMimeType();
+        $extension = strtolower($file->getClientOriginalExtension());
+        $originalName = $file->getClientOriginalName();
+        $normalizedFilename = pathinfo($originalName, PATHINFO_FILENAME);
+        if ($extension !== '') {
+            $normalizedFilename .= '.'.$extension;
+        }
+
+        try {
+            $apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY');
+            $extractionPrompt = 'Extract all line items from this supplier quotation/invoice/order document. Return a JSON object with: {"supplier_name": "detected supplier name or null", "items": [{"code": "item code if visible", "description": "item description", "qty": number, "unit_cost": number}], "notes": "any other relevant info"}. Prioritise ex-GST pricing. Return ONLY valid JSON - no markdown fences, no explanation.';
+            $base64 = base64_encode(file_get_contents($file->getRealPath()));
+
+            $fileInput = $extension === 'pdf'
+                ? [
+                    'type' => 'input_file',
+                    'filename' => $normalizedFilename,
+                    'file_data' => $base64,
+                ]
+                : [
+                    'type' => 'input_image',
+                    'image_url' => "data:{$mimeType};base64,{$base64}",
+                ];
+
+            $response = Http::withToken($apiKey)
+                ->timeout($extension === 'pdf' ? 120 : 60)
+                ->post('https://api.openai.com/v1/responses', [
+                    'model' => 'gpt-4o',
+                    'input' => [
+                        [
+                            'role' => 'user',
+                            'content' => [
+                                [
+                                    'type' => 'input_text',
+                                    'text' => $extractionPrompt,
+                                ],
+                                $fileInput,
+                            ],
+                        ],
+                    ],
+                ]);
+
+            if (! $response->successful()) {
+                Log::error('OpenAI Responses API failed for requisition file extraction', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'mime_type' => $mimeType,
+                    'extension' => $extension,
+                ]);
+
+                throw new \RuntimeException('OpenAI API error: '.$response->status().' - '.$response->json('error.message', 'Unknown error'));
+            }
+
+            $content = collect($response->json('output', []))
+                ->where('type', 'message')
+                ->pluck('content')
+                ->flatten(1)
+                ->where('type', 'output_text')
+                ->pluck('text')
+                ->implode('');
+
+            $content = trim($content);
+            $content = preg_replace('/^```(?:json)?\s*/', '', $content);
+            $content = preg_replace('/\s*```$/', '', $content);
+
+            $parsed = json_decode($content, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Log::warning('File extraction returned non-JSON', ['raw' => substr($content, 0, 500)]);
+
+                return response()->json([
+                    'error' => 'Failed to parse extracted data. The AI response was not valid JSON.',
+                    'raw' => substr($content, 0, 500),
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'extracted' => $parsed,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('File extraction failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'error' => 'Failed to extract data from file: '.$e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

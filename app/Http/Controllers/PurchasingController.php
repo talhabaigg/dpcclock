@@ -60,6 +60,33 @@ class PurchasingController extends Controller
         ]);
     }
 
+    public function orderBuilder()
+    {
+        $user = auth()->user();
+
+        $suppliers = Supplier::all();
+        $costCodes = CostCode::select('id', 'code', 'description')->ordered()->get();
+
+        $locationsQuery = Location::open()->where(function ($query) {
+            $query->where('eh_parent_id', 1149031)
+                ->orWhere('eh_parent_id', 1249093)
+                ->orWhere('eh_parent_id', 1198645);
+        })->with('worktypes', 'header');
+
+        if ($user->hasRole('site-supervisor')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
+        return Inertia::render('purchasing/order-builder', [
+            'suppliers' => $suppliers,
+            'locations' => $locations,
+            'costCodes' => $costCodes,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

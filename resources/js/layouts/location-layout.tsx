@@ -2,7 +2,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -120,14 +127,18 @@ export default function LocationLayout({ location, activeTab, children }: Locati
         }
         setSavingVarStart(true);
         try {
-            await router.patch(`/locations/${location.id}/variation-number-start`, { variation_number_start: num }, {
-                onSuccess: () => {
-                    setEditingVarStart(false);
-                    toast.success('Variation number start updated');
+            await router.patch(
+                `/locations/${location.id}/variation-number-start`,
+                { variation_number_start: num },
+                {
+                    onSuccess: () => {
+                        setEditingVarStart(false);
+                        toast.success('Variation number start updated');
+                    },
+                    onError: () => toast.error('Failed to update'),
+                    onFinish: () => setSavingVarStart(false),
                 },
-                onError: () => toast.error('Failed to update'),
-                onFinish: () => setSavingVarStart(false),
-            });
+            );
         } catch {
             setSavingVarStart(false);
         }
@@ -153,8 +164,8 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                     <DialogHeader>
                         <DialogTitle>Create Sub-location</DialogTitle>
                         <DialogDescription>
-                            Create a new sub-location for <span className="font-medium">{location.name}</span>. This will be synced to
-                            Employment Hero.
+                            Create a new sub-location for <span className="font-medium">{location.name}</span>. This will be synced to Employment
+                            Hero.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleFormSubmit}>
@@ -196,11 +207,11 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                             <CardTitle className="text-base">Location Details</CardTitle>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                                         <EllipsisVertical className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" className="min-w-48">
                                     <DropdownMenuItem asChild>
                                         <Link href={`/locations/${location.id}/dashboard`} className="gap-2">
                                             <ChartColumnIncreasing className="h-4 w-4" />
@@ -319,15 +330,26 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                             {location.variation_number_start != null ? (
                                                 <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
                                                     VA-{String(location.variation_number_start).padStart(3, '0')}
-                                                    {location.variation_next_number != null && location.variation_next_number !== location.variation_number_start && (
-                                                        <span className="text-muted-foreground ml-1 text-xs">(next: VA-{String(location.variation_next_number).padStart(3, '0')})</span>
-                                                    )}
+                                                    {location.variation_next_number != null &&
+                                                        location.variation_next_number !== location.variation_number_start && (
+                                                            <span className="text-muted-foreground ml-1 text-xs">
+                                                                (next: VA-{String(location.variation_next_number).padStart(3, '0')})
+                                                            </span>
+                                                        )}
                                                 </code>
                                             ) : (
                                                 <span className="text-muted-foreground text-sm italic">Not set</span>
                                             )}
                                             {auth.isAdmin && (
-                                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setVarStartInput(String(location.variation_number_start ?? '')); setEditingVarStart(true); }}>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 w-6 p-0"
+                                                    onClick={() => {
+                                                        setVarStartInput(String(location.variation_number_start ?? ''));
+                                                        setEditingVarStart(true);
+                                                    }}
+                                                >
                                                     <Pencil className="h-3.5 w-3.5" />
                                                 </Button>
                                             )}
@@ -394,9 +416,7 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                     href={getTabHref(tab.key)}
                                     className={cn(
                                         'inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium whitespace-nowrap transition-all sm:gap-2 sm:px-3',
-                                        isActive
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground',
+                                        isActive ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     <Icon className="h-4 w-4" />
