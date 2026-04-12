@@ -1,12 +1,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { router } from '@inertiajs/react';
 import { api } from '@/lib/api';
-import { Check, Copy, Link2, Monitor, Plus, Power, Trash2 } from 'lucide-react';
+import { Check, Copy, Link2, Plus, Power, Trash2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
 
@@ -86,20 +86,18 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
 
     return (
         <>
-            <Card className="m-2 w-full">
-                <CardHeader className="flex items-center justify-between text-lg font-bold">
-                    <div className="flex w-full justify-between">
-                        <div className="flex flex-row items-center space-x-2 rounded-md border border-gray-200 p-2 text-gray-600 dark:border-gray-700 dark:text-gray-200">
-                            <Monitor size={20} />
-                            <div className="text-xs">Registered Devices</div>
-                        </div>
+            <Card>
+                <CardHeader className="border-b">
+                    <CardTitle>Registered Devices</CardTitle>
+                    <CardDescription>Lock a browser to this kiosk via a registration link.</CardDescription>
+                    <CardAction>
                         <Button variant="outline" size="sm" onClick={() => setGenerateDialogOpen(true)}>
                             <Plus className="mr-1 h-4 w-4" />
                             Register Device
                         </Button>
-                    </div>
+                    </CardAction>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-4">
                     {devices.length === 0 && (
                         <p className="text-muted-foreground text-sm">No devices registered. Generate a registration link to lock a device to this kiosk.</p>
                     )}
