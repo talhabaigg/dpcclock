@@ -15,12 +15,57 @@ class ForecastProjectController extends Controller
     /**
      * Display a listing of forecast projects
      */
-    public function index()
+    public function index(Request $request)
     {
-        $projects = ForecastProject::orderBy('created_at', 'desc')->get();
+        $includeArchived = $request->boolean('archived');
+        $view = $request->string('view')->toString() ?: 'board';
+        if (! in_array($view, ['board', 'list'], true)) {
+            $view = 'board';
+        }
+
+        $query = ForecastProject::with(['creator:id,name', 'updater:id,name', 'archiver:id,name'])
+            ->orderBy('created_at', 'desc');
+
+        if (! $includeArchived) {
+            $query->notArchived();
+        }
+
+        $projectsRaw = $query->get();
+
+        // Revenue budget is derived from the forecast data (sum of monthly revenue
+        // forecast entries) rather than the static total_revenue_budget column, so
+        // cards reflect the latest planning work without requiring a manual column
+        // update. One aggregate query keyed by project id avoids an N+1.
+        $revenueByProject = JobForecastData::whereIn('forecast_project_id', $projectsRaw->pluck('id'))
+            ->where('grid_type', 'revenue')
+            ->groupBy('forecast_project_id')
+            ->selectRaw('forecast_project_id, SUM(forecast_amount) AS total')
+            ->pluck('total', 'forecast_project_id');
+
+        $projects = $projectsRaw->map(function (ForecastProject $p) use ($revenueByProject) {
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'project_number' => $p->project_number,
+                'company' => $p->company,
+                'description' => $p->description,
+                'total_cost_budget' => (float) $p->total_cost_budget,
+                'total_revenue_budget' => (float) ($revenueByProject[$p->id] ?? 0),
+                'start_date' => optional($p->start_date)->format('Y-m-d'),
+                'end_date' => optional($p->end_date)->format('Y-m-d'),
+                'status' => $p->status,
+                'created_at' => $p->created_at,
+                'created_by_name' => $p->creator?->name,
+                'updated_by_name' => $p->updater?->name,
+                'archived_at' => $p->archived_at,
+                'archived_by_name' => $p->archiver?->name,
+            ];
+        });
 
         return Inertia::render('forecast-projects/index', [
             'projects' => $projects,
+            'includeArchived' => $includeArchived,
+            'view' => $view,
         ]);
     }
 
@@ -31,8 +76,9 @@ class ForecastProjectController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'project_number' => 'required|string|max:255|unique:forecast_projects,project_number',
+            'project_number' => ['required', 'string', 'size:5', 'regex:/^[A-Za-z]{3}\d{2}$/', 'unique:forecast_projects,project_number'],
             'description' => 'nullable|string',
+            'company' => 'required|string|in:SWCP,GRE',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'nullable|in:potential,likely,confirmed,cancelled',
@@ -44,9 +90,79 @@ class ForecastProjectController extends Controller
     }
 
     /**
-     * Display the forecast view for a specific project
+     * Details page — summary, audit info, comments & activity. Separate from the
+     * forecast data grid (which lives at /forecast-projects/{id}/forecast).
      */
     public function show($id)
+    {
+        $project = ForecastProject::with(['creator:id,name', 'updater:id,name', 'archiver:id,name'])
+            ->findOrFail($id);
+
+        $comments = $project->comments()
+            ->with(['user:id,name', 'media', 'replies.user:id,name', 'replies.media'])
+            ->whereNull('parent_id')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'body' => $c->body,
+                'metadata' => $c->metadata,
+                'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
+                'created_at' => $c->created_at->toISOString(),
+                'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
+                    'id' => $m->id,
+                    'file_name' => $m->file_name,
+                    'url' => $m->getUrl(),
+                    'mime_type' => $m->mime_type,
+                ]),
+                'replies' => $c->replies->map(fn ($r) => [
+                    'id' => $r->id,
+                    'body' => $r->body,
+                    'metadata' => $r->metadata,
+                    'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name] : null,
+                    'created_at' => $r->created_at->toISOString(),
+                    'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
+                        'id' => $m->id,
+                        'file_name' => $m->file_name,
+                        'url' => $m->getUrl(),
+                        'mime_type' => $m->mime_type,
+                    ]),
+                ]),
+            ]);
+
+        // Revenue budget mirrors the list view: sum of forecast entries, not the
+        // static column, so details stay in sync with the latest planning work.
+        $totalRevenueForecast = JobForecastData::where('forecast_project_id', $project->id)
+            ->where('grid_type', 'revenue')
+            ->sum('forecast_amount');
+
+        return Inertia::render('forecast-projects/show', [
+            'project' => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'project_number' => $project->project_number,
+                'company' => $project->company,
+                'description' => $project->description,
+                'status' => $project->status,
+                'start_date' => optional($project->start_date)->format('Y-m-d'),
+                'end_date' => optional($project->end_date)->format('Y-m-d'),
+                'total_revenue_forecast' => (float) $totalRevenueForecast,
+                'total_cost_budget' => (float) $project->total_cost_budget,
+                'created_at' => $project->created_at,
+                'updated_at' => $project->updated_at,
+                'created_by_name' => $project->creator?->name,
+                'updated_by_name' => $project->updater?->name,
+                'archived_at' => $project->archived_at,
+                'archived_by_name' => $project->archiver?->name,
+            ],
+            'comments' => $comments,
+        ]);
+    }
+
+    /**
+     * Display the forecast view for a specific project
+     */
+    public function showForecast($id)
     {
         $project = ForecastProject::with(['costItems', 'revenueItems'])->findOrFail($id);
 
@@ -255,8 +371,9 @@ class ForecastProjectController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'project_number' => 'sometimes|required|string|max:255|unique:forecast_projects,project_number,'.$id,
+            'project_number' => ['sometimes', 'required', 'string', 'size:5', 'regex:/^[A-Za-z]{3}\d{2}$/', 'unique:forecast_projects,project_number,'.$id],
             'description' => 'nullable|string',
+            'company' => 'required|string|in:SWCP,GRE',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'nullable|in:potential,likely,confirmed,cancelled',
@@ -276,6 +393,63 @@ class ForecastProjectController extends Controller
         $project->delete();
 
         return redirect()->back()->with('success', 'Forecast project deleted successfully');
+    }
+
+    /**
+     * Kanban drag-drop target: update only the status (lighter validation than the
+     * full update endpoint, so the drag interaction doesn't require the rest of the
+     * project payload).
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:potential,likely,confirmed,cancelled',
+        ]);
+
+        $project = ForecastProject::findOrFail($id);
+        $project->update($validated);
+
+        return redirect()->back()->with('success', 'Status updated');
+    }
+
+    public function archive($id)
+    {
+        $project = ForecastProject::findOrFail($id);
+        $project->archive();
+
+        return redirect()->back()->with('success', 'Forecast project archived');
+    }
+
+    public function unarchive($id)
+    {
+        $project = ForecastProject::withTrashed()->findOrFail($id);
+        $project->unarchive();
+
+        return redirect()->back()->with('success', 'Forecast project restored from archive');
+    }
+
+    /**
+     * Return the spatie activity log for a project (used by the show page viewer).
+     */
+    public function activityLog($id)
+    {
+        $project = ForecastProject::findOrFail($id);
+
+        $activities = $project->activities()
+            ->with('causer:id,name')
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'event' => $a->event,
+                'description' => $a->description,
+                'causer_name' => $a->causer?->name,
+                'properties' => $a->properties,
+                'created_at' => $a->created_at,
+            ]);
+
+        return response()->json(['activities' => $activities]);
     }
 
     /**

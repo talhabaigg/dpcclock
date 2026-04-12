@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart3, Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgGridReact } from 'ag-grid-react';
 import { TurnoverPrintReport } from './TurnoverPrintReport';
@@ -54,13 +54,13 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const targetsGridRef = useRef<AgGridReact>(null);
     const alignWithTargets = useCallback(() => (targetsGridRef.current ? [targetsGridRef.current] : []), []);
     const alignWithRevenue = useCallback(() => (revenueGridRef.current ? [revenueGridRef.current] : []), []);
+    const ALL_SECTIONS: ViewMode[] = ['revenue-only', 'targets'];
     const [activeViews, setActiveViews] = useState<Set<ViewMode>>(() => {
         try {
             const stored = localStorage.getItem(ACTIVE_VIEWS_KEY);
             if (stored) {
                 const parsed = JSON.parse(stored) as string[];
                 if (Array.isArray(parsed)) {
-                    // Migrate old 'expanded' value (now folded into the revenue grid)
                     const validViews = parsed.filter((v): v is ViewMode => v === 'revenue-only' || v === 'targets');
                     if (validViews.length > 0) return new Set(validViews);
                 }
@@ -83,7 +83,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
         });
     };
     const viewNames: Record<ViewMode, string> = { 'revenue-only': 'P&L Forecast', targets: 'Budget' };
-    const viewSummary = (['revenue-only', 'targets'] as ViewMode[]).filter((v) => activeViews.has(v)).map((v) => viewNames[v]).join(', ');
+    const viewSummary = ALL_SECTIONS.filter((v) => activeViews.has(v)).map((v) => viewNames[v]).join(', ');
     const [gridHeight, setGridHeight] = useState(() => {
         try {
             const stored = localStorage.getItem(GRID_HEIGHT_KEY);
@@ -371,7 +371,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 </PopoverTrigger>
                                 <PopoverContent className="w-52 p-1.5" align="start">
                                     <div className="space-y-0.5">
-                                        {(['revenue-only', 'targets'] as ViewMode[]).map((mode) => {
+                                        {ALL_SECTIONS.map((mode) => {
                                             const isActive = activeViews.has(mode);
                                             const isOnly = isActive && activeViews.size === 1;
                                             return (
@@ -463,6 +463,13 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
+                            <Button asChild variant="outline" size="sm">
+                                <Link href="/turnover-forecast/timeline">
+                                    <BarChart3 className="mr-2 h-4 w-4" />
+                                    <span className="hidden sm:inline">Timeline</span>
+                                    <span className="sm:hidden">Timeline</span>
+                                </Link>
+                            </Button>
                             <Button onClick={() => setPrintReportOpen(true)} variant="default" size="sm">
                                 <Printer className="mr-2 h-4 w-4" />
                                 <span className="hidden sm:inline">Print Report</span>
@@ -699,27 +706,24 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                     </CardContent>
                 </Card>
 
-                {/* Grids — one per active view. Refs are wired bidirectionally so AG Grid's
-                    alignedGrids feature keeps column widths and horizontal scroll in sync
-                    between the revenue forecast and targets grids. */}
-                {(['revenue-only', 'targets'] as ViewMode[])
-                    .filter((v) => activeViews.has(v))
-                    .map((mode) => (
-                        <div key={mode} className="space-y-1">
-                            <UnifiedForecastGrid
-                                data={filteredData}
-                                months={filteredMonths}
-                                lastActualMonth={lastActualMonth}
-                                fyLabel={selectedFYLabel}
-                                monthlyTargets={monthlyTargets}
-                                viewMode={mode}
-                                height={gridHeight}
-                                onHeightChange={handleHeightChange}
-                                gridRef={mode === 'revenue-only' ? revenueGridRef : targetsGridRef}
-                                alignedGrids={mode === 'revenue-only' ? alignWithTargets : alignWithRevenue}
-                            />
-                        </div>
-                    ))}
+                {/* Grids — refs wired bidirectionally so AG Grid's alignedGrids keeps
+                    column widths and horizontal scroll in sync across active grids. */}
+                {ALL_SECTIONS.filter((v) => activeViews.has(v)).map((mode) => (
+                    <div key={mode} className="space-y-1">
+                        <UnifiedForecastGrid
+                            data={filteredData}
+                            months={filteredMonths}
+                            lastActualMonth={lastActualMonth}
+                            fyLabel={selectedFYLabel}
+                            monthlyTargets={monthlyTargets}
+                            viewMode={mode}
+                            height={gridHeight}
+                            onHeightChange={handleHeightChange}
+                            gridRef={mode === 'revenue-only' ? revenueGridRef : targetsGridRef}
+                            alignedGrids={mode === 'revenue-only' ? alignWithTargets : alignWithRevenue}
+                        />
+                    </div>
+                ))}
             </div>
 
             {/* Filter Dialog */}

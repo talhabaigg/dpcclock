@@ -274,6 +274,15 @@
     font-weight: 700 !important;
 }
 
+.forecast-row-company {
+    font-weight: 600 !important;
+    background-color: rgba(100, 116, 139, 0.06) !important;
+}
+
+.dark .forecast-row-company {
+    background-color: rgba(148, 163, 184, 0.08) !important;
+}
+
 /* Header styling for actual vs forecast months — actuals are neutral (gray) so
    green can stay reserved for "positive" semantics in profit/variance cells. */
 .forecast-header-actual {

@@ -21,6 +21,8 @@ export type TurnoverRow = {
     over_under_billing?: number;
     forecast_status: 'not_started' | 'draft' | 'submitted' | 'finalized';
     last_submitted_at: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
     // Revenue fields
     claimed_to_date: number;
     revenue_contract_fy: number;
@@ -60,6 +62,9 @@ export type UnifiedRow = {
     // still reflects the value semantics ('revenue'/'cost'/'profit') so formatters keep
     // working; isTotal layers bold/background styling on top.
     isTotal?: boolean;
+    // True for company-level aggregate rows (one per company — e.g. SWCP, GRE). Used
+    // for bold styling and to differentiate from summary rows like Work in Hand.
+    isCompanyGroup?: boolean;
     // Summary columns - context-dependent values
     totalValue: number | null;
     toDate: number | null;
@@ -108,8 +113,65 @@ function getMonthlyValue(actuals: MonthlyData | undefined, forecast: MonthlyData
 export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): UnifiedRow[] {
     const rows: UnifiedRow[] = [];
 
+    // Build per-company aggregate rows so the company group level shows meaningful
+    // totals before the user expands it. Each company row lives at path [companyKey],
+    // matching the filler group node AG Grid would otherwise synthesize.
+    const companyBuckets = new Map<string, TurnoverRow[]>();
+    data.forEach((job) => {
+        const key = job.company || 'Other';
+        const bucket = companyBuckets.get(key);
+        if (bucket) bucket.push(job);
+        else companyBuckets.set(key, [job]);
+    });
+
+    companyBuckets.forEach((jobs, companyKey) => {
+        let totalValue = 0;
+        let toDate = 0;
+        let remainingTotal = 0;
+        let contractFY = 0;
+        let fyToDate = 0;
+        jobs.forEach((j) => {
+            totalValue += safeNumber(j.total_contract_value);
+            toDate += safeNumber(j.claimed_to_date);
+            remainingTotal += safeNumber(j.remaining_order_book);
+            months.forEach((month) => {
+                contractFY += getMonthlyValue(j.revenue_actuals, j.revenue_forecast, month).value;
+                fyToDate += safeNumber(j.revenue_actuals?.[month]);
+            });
+        });
+
+        const companyRow: UnifiedRow = {
+            id: `company-${companyKey}`,
+            rowType: 'revenue',
+            jobId: 0,
+            jobNumber: companyKey,
+            jobName: '',
+            projectType: 'summary',
+            path: [companyKey],
+            isCompanyGroup: true,
+            totalValue,
+            toDate,
+            remainingTotal,
+            contractFY,
+            fyToDate,
+            remainingFY: contractFY - fyToDate,
+            isActualMonth: {},
+        };
+
+        months.forEach((month) => {
+            let monthSum = 0;
+            jobs.forEach((j) => {
+                monthSum += getMonthlyValue(j.revenue_actuals, j.revenue_forecast, month).value;
+            });
+            (companyRow as any)[`month_${month}`] = monthSum;
+        });
+
+        rows.push(companyRow);
+    });
+
     data.forEach((job) => {
         const parentKey = `${job.type}-${job.id}`;
+        const companyKey = job.company || 'Other';
 
         const isActualMonth: Record<string, boolean> = {};
 
@@ -132,7 +194,7 @@ export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): U
             overUnderBilling: job.over_under_billing,
             forecastStatus: job.forecast_status,
             lastSubmittedAt: job.last_submitted_at,
-            path: [parentKey],
+            path: [companyKey, parentKey],
             totalValue: job.total_contract_value,
             toDate: job.claimed_to_date,
             remainingTotal: job.remaining_order_book,
@@ -165,7 +227,7 @@ export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): U
             jobNumber: '',
             jobName: '',
             projectType: job.type,
-            path: [parentKey, 'cost'],
+            path: [companyKey, parentKey, 'cost'],
             totalValue: job.budget,
             toDate: job.cost_to_date,
             remainingTotal: job.remaining_budget,
@@ -190,7 +252,7 @@ export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): U
             jobNumber: '',
             jobName: '',
             projectType: job.type,
-            path: [parentKey, 'profit'],
+            path: [companyKey, parentKey, 'profit'],
             totalValue: safeNumber(job.total_contract_value) - safeNumber(job.budget),
             toDate: safeNumber(job.claimed_to_date) - safeNumber(job.cost_to_date),
             remainingTotal: null,
@@ -227,7 +289,8 @@ export function calculateTotalRow(
     label: string,
     treeRole: 'root' | 'child' | 'standalone' = 'standalone',
 ): UnifiedRow {
-    const filteredRows = rows.filter((r) => r.rowType === rowType);
+    // Exclude aggregate rows (company summaries, grand totals) to avoid double counting.
+    const filteredRows = rows.filter((r) => r.rowType === rowType && !r.isCompanyGroup && !r.isTotal);
 
     const path =
         treeRole === 'child'

@@ -29,6 +29,8 @@ class CommentController extends Controller
             'employment_application' => \App\Models\EmploymentApplication::class,
             'injury' => \App\Models\Injury::class,
             'employee' => \App\Models\Employee::class,
+            'forecast_project' => \App\Models\ForecastProject::class,
+            'App\\Models\\ForecastProject' => \App\Models\ForecastProject::class,
         ];
 
         $class = $allowedModels[$modelClass] ?? null;

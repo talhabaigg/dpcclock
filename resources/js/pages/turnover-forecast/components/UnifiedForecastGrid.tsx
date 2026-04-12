@@ -156,7 +156,7 @@ export function UnifiedForecastGrid({
         }
         const revenueTotal = calculateTotalRow(rowData, 'revenue', months, 'Total Revenue', 'root');
         const labourRow = calculateLabourRow(
-            rowData.filter((r) => r.rowType === 'revenue' && !r.isTotal),
+            rowData.filter((r) => r.rowType === 'revenue' && !r.isTotal && !r.isCompanyGroup),
             data,
             months,
         );
@@ -453,7 +453,7 @@ export function UnifiedForecastGrid({
                     </span>
                 );
             }
-            if (d.isTotal) return <span className="pl-5 font-bold">{d.jobNumber}</span>;
+            if (d.isTotal) return <span className="pl-8 font-bold">{d.jobNumber}</span>;
             if (d.rowType === 'labour') return d.jobNumber;
             return d.jobNumber;
         },
@@ -481,7 +481,10 @@ export function UnifiedForecastGrid({
                 suppressCount: true,
                 innerRenderer: (params: ICellRendererParams<UnifiedRow>) => {
                     const d = params.data;
-                    if (!d) return null;
+                    // Filler group node fallback (shouldn't hit now that we emit company
+                    // rows explicitly, but retained defensively).
+                    if (!d) return <span className="font-semibold">{params.node.key}</span>;
+                    if (d.isCompanyGroup) return <span className="font-semibold">{d.jobNumber}</span>;
                     if (d.rowType === 'cost') return <span className="text-muted-foreground text-xs">Cost</span>;
                     if (d.rowType === 'profit') return <span className="text-xs">Profit</span>;
                     return d.jobNumber;
@@ -501,7 +504,7 @@ export function UnifiedForecastGrid({
                     rowData.jobNumber
                 ) {
                     const url = rowData.projectType === 'forecast_project'
-                        ? `/forecast-projects/${rowData.jobId}`
+                        ? `/forecast-projects/${rowData.jobId}/forecast`
                         : `/location/${rowData.jobId}/job-forecast`;
                     router.visit(url);
                 }
@@ -811,7 +814,7 @@ export function UnifiedForecastGrid({
                     autoGroupColumnDef={viewMode !== 'targets' ? autoGroupColumnDef : undefined}
                     treeData={viewMode !== 'targets'}
                     getDataPath={viewMode !== 'targets' ? (getDataPath as any) : undefined}
-                    groupDefaultExpanded={0}
+                    groupDefaultExpanded={1}
                     domLayout="normal"
                     theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
                     getRowId={getRowId}

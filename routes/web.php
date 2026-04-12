@@ -801,10 +801,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:forecast-projects.view');
     Route::get('/forecast-projects/{id}', [ForecastProjectController::class, 'show'])->name('forecastProjects.show')
         ->middleware('permission:forecast-projects.view');
+    Route::get('/forecast-projects/{id}/forecast', [ForecastProjectController::class, 'showForecast'])->name('forecastProjects.showForecast')
+        ->middleware('permission:forecast-projects.view');
     Route::post('/forecast-projects', [ForecastProjectController::class, 'store'])->name('forecastProjects.store')
         ->middleware('permission:forecast-projects.create');
+    Route::get('/forecast-projects/{id}/activity-log', [ForecastProjectController::class, 'activityLog'])->name('forecastProjects.activityLog')
+        ->middleware('permission:forecast-projects.view');
     Route::middleware('permission:forecast-projects.edit')->group(function () {
         Route::put('/forecast-projects/{id}', [ForecastProjectController::class, 'update'])->name('forecastProjects.update');
+        Route::patch('/forecast-projects/{id}/status', [ForecastProjectController::class, 'updateStatus'])->name('forecastProjects.updateStatus');
+        Route::post('/forecast-projects/{id}/archive', [ForecastProjectController::class, 'archive'])->name('forecastProjects.archive');
+        Route::post('/forecast-projects/{id}/unarchive', [ForecastProjectController::class, 'unarchive'])->name('forecastProjects.unarchive');
         Route::post('/forecast-projects/{id}/items', [ForecastProjectController::class, 'saveItems'])->name('forecastProjects.saveItems');
         Route::post('/forecast-projects/{id}/cost-items', [ForecastProjectController::class, 'addCostItem'])->name('forecastProjects.addCostItem');
         Route::put('/forecast-projects/{projectId}/cost-items/{itemId}', [ForecastProjectController::class, 'updateCostItem'])->name('forecastProjects.updateCostItem');
@@ -819,6 +826,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Turnover & Cash Forecast
     Route::get('/turnover-forecast', [TurnoverForecastController::class, 'index'])->name('turnoverForecast.index')
+        ->middleware('permission:turnover-forecast.view');
+    Route::get('/turnover-forecast/timeline', [TurnoverForecastController::class, 'timeline'])->name('turnoverForecast.timeline')
         ->middleware('permission:turnover-forecast.view');
     Route::get('/cash-forecast', CashForecastController::class)->name('cashForecast.show')
         ->middleware('permission:cash-forecast.view');

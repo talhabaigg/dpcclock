@@ -180,6 +180,10 @@ export const getRowClass = (params: { data: UnifiedRow }): string => {
         classes.push('forecast-row-total');
         return classes.join(' ');
     }
+    if (params.data?.isCompanyGroup) {
+        classes.push('forecast-row-company');
+        return classes.join(' ');
+    }
     const rowType = params.data?.rowType;
 
     switch (rowType) {

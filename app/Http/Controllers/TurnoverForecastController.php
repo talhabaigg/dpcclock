@@ -33,6 +33,21 @@ class TurnoverForecastController extends Controller
 
     public function index()
     {
+        return Inertia::render('turnover-forecast/index', $this->buildTurnoverProps());
+    }
+
+    /**
+     * Standalone timeline page — reuses the same combined-data payload as the index,
+     * just renders a different React page. Kept as its own URL so users can bookmark
+     * / share the timeline view directly.
+     */
+    public function timeline()
+    {
+        return Inertia::render('turnover-forecast/timeline', $this->buildTurnoverProps());
+    }
+
+    protected function buildTurnoverProps(): array
+    {
         // Get the current financial year (July to June)
         $now = now();
         $currentMonth = $now->month;
@@ -86,13 +101,17 @@ class TurnoverForecastController extends Controller
             ->select('job_number', DB::raw('MIN(project_manager) as project_manager'))
             ->pluck('project_manager', 'job_number');
 
-        // JobSummary: current_estimate_revenue (max) and over_under_billing (max) per job
+        // JobSummary: current_estimate_revenue + over_under_billing + project date span
+        // per job. Dates drive the timeline's bars (falling back to forecast months
+        // only when the job has no explicit schedule).
         $jobSummariesByJob = JobSummary::whereIn('job_number', $jobNumbers)
             ->groupBy('job_number')
             ->select(
                 'job_number',
                 DB::raw('MAX(current_estimate_revenue) as current_estimate_revenue'),
-                DB::raw('MAX(over_under_billing) as over_under_billing')
+                DB::raw('MAX(over_under_billing) as over_under_billing'),
+                DB::raw('MIN(start_date) as start_date'),
+                DB::raw('MAX(COALESCE(actual_end_date, estimated_end_date)) as end_date')
             )
             ->get()
             ->keyBy('job_number');
@@ -365,6 +384,8 @@ class TurnoverForecastController extends Controller
                 'over_under_billing' => $over_under_billing,
                 'forecast_status' => $forecastStatus,
                 'last_submitted_at' => $lastSubmittedAt,
+                'start_date' => $jobSummary?->start_date ? date('Y-m-d', strtotime((string) $jobSummary->start_date)) : null,
+                'end_date' => $jobSummary?->end_date ? date('Y-m-d', strtotime((string) $jobSummary->end_date)) : null,
                 'current_estimate_revenue' => $currentEstimateRevenue,
                 'current_estimate_cost' => $budget,
                 'claimed_to_date' => $claimedToDate,
@@ -445,11 +466,13 @@ class TurnoverForecastController extends Controller
             $combinedData[] = [
                 'id' => $project->id,
                 'type' => 'forecast_project',
-                'company' => 'Forecast',
+                'company' => $project->company ?: 'Forecast',
                 'job_name' => $project->name,
                 'job_number' => $project->project_number,
                 'forecast_status' => $forecastProjectStatus,
                 'last_submitted_at' => null,
+                'start_date' => optional($project->start_date)->format('Y-m-d'),
+                'end_date' => optional($project->end_date)->format('Y-m-d'),
                 'claimed_to_date' => 0,
                 'current_estimate_revenue' => 0,
                 'revenue_contract_fy' => (float) $revenueContractFY,
@@ -504,7 +527,7 @@ class TurnoverForecastController extends Controller
             }
         }
 
-        return Inertia::render('turnover-forecast/index', [
+        return [
             'data' => $combinedData,
             'months' => $allMonths,
             'earliestMonth' => $earliestActualMonth,
@@ -514,6 +537,6 @@ class TurnoverForecastController extends Controller
             'fyEndDate' => $fyEndDate,
             'fyLabel' => "FY{$fyStartYear}-".substr($fyEndYear, 2, 2),
             'monthlyTargets' => $monthlyTargets,
-        ]);
+        ];
     }
 }
