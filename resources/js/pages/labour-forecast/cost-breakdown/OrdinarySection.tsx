@@ -107,7 +107,7 @@ export const OrdinarySection = ({ breakdown }: OrdinarySectionProps) => {
                         label="Ordinary Total (Marked Up)"
                         amount={ordinary.marked_up}
                         variant="marked-up"
-                        colorClass="text-green-600 dark:text-green-400"
+                        colorClass="text-emerald-700 dark:text-emerald-400"
                     />
                 </div>
             )}

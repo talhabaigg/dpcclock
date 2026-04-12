@@ -21,14 +21,18 @@
  * - locationId: Location ID for API calls
  */
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { router } from '@inertiajs/react';
 import { Check, Info, Loader2, Plus, X } from 'lucide-react';
+import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import type { AllowanceType, ConfiguredTemplate } from '../types';
 import { calculateAllowanceWeeklyCost, formatCurrency } from './utils';
@@ -49,36 +53,73 @@ interface AllowanceConfigDialogProps {
     locationId: number;
 }
 
-// Category display names and colors
-const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-    fares_travel: {
-        label: 'Fares & Travel',
-        color: 'text-blue-700 dark:text-blue-400',
-        bgColor: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-    },
-    site: {
-        label: 'Site Allowance',
-        color: 'text-amber-700 dark:text-amber-400',
-        bgColor: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
-    },
-    multistorey: {
-        label: 'Multi-storey',
-        color: 'text-purple-700 dark:text-purple-400',
-        bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
-    },
-    custom: {
-        label: 'Other Allowances',
-        color: 'text-slate-700 dark:text-slate-400',
-        bgColor: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
-    },
+// Category display names
+const CATEGORY_LABELS: Record<string, string> = {
+    fares_travel: 'Fares & Travel',
+    site: 'Site Allowance',
+    multistorey: 'Multi-storey',
+    custom: 'Other Allowances',
+};
+
+// Searchable combobox for picking an allowance to add
+type AllowanceOptionItem = AllowanceType & { label: string };
+
+const AllowanceCombobox = ({ items, onSelect }: { items: AllowanceOptionItem[]; onSelect: (item: AllowanceOptionItem) => void }) => {
+    const [open, setOpen] = React.useState(false);
+    const [inputValue, setInputValue] = React.useState('');
+
+    return (
+        <Combobox<AllowanceOptionItem>
+            items={items}
+            open={open}
+            value={null}
+            inputValue={inputValue}
+            itemToStringLabel={(item) => item.name}
+            itemToStringValue={(item) => String(item.id)}
+            onOpenChange={(nextOpen) => {
+                setOpen(nextOpen);
+                if (!nextOpen) setInputValue('');
+            }}
+            onInputValueChange={setInputValue}
+            onValueChange={(value) => {
+                if (value) {
+                    onSelect(value);
+                    setOpen(false);
+                    setInputValue('');
+                }
+            }}
+        >
+            <ComboboxTrigger
+                render={<Button variant="outline" className="w-full justify-between overflow-hidden" />}
+                aria-label="Select allowance"
+            >
+                <span className="truncate text-muted-foreground">Search allowances...</span>
+            </ComboboxTrigger>
+
+            <ComboboxContent className="w-(--anchor-width) p-0">
+                <ComboboxInput placeholder="Search allowances..." className="h-9" showTrigger={false} />
+                <ComboboxEmpty>No allowances found.</ComboboxEmpty>
+                <ComboboxList>
+                    {(option: AllowanceOptionItem) => (
+                        <ComboboxItem key={option.id} value={option}>
+                            <span className="truncate">{option.name}</span>
+                            {option.default_rate != null && (
+                                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                                    {formatCurrency(option.default_rate)}/{option.default_rate_type}
+                                </span>
+                            )}
+                        </ComboboxItem>
+                    )}
+                </ComboboxList>
+            </ComboboxContent>
+        </Combobox>
+    );
 };
 
 export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceTypes, locationId }: AllowanceConfigDialogProps) => {
-    // Local state
     const [allowanceConfig, setAllowanceConfig] = useState<LocalAllowanceConfigItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Initialize state when template changes
     useEffect(() => {
         if (template) {
             setAllowanceConfig(
@@ -91,30 +132,6 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
             );
         }
     }, [template]);
-
-    // Group allowance types by category
-    const allowancesByCategory = useMemo(() => {
-        const configuredIds = allowanceConfig.map((a) => a.allowance_type_id);
-        const available = allowanceTypes.filter((t) => !configuredIds.includes(t.id));
-
-        const grouped: Record<string, AllowanceType[]> = {
-            fares_travel: [],
-            site: [],
-            multistorey: [],
-            custom: [],
-        };
-
-        available.forEach((type) => {
-            const category = type.category || 'custom';
-            if (grouped[category]) {
-                grouped[category].push(type);
-            } else {
-                grouped.custom.push(type);
-            }
-        });
-
-        return grouped;
-    }, [allowanceTypes, allowanceConfig]);
 
     // Group configured allowances by category
     const configuredByCategory = useMemo(() => {
@@ -140,12 +157,17 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
         return grouped;
     }, [allowanceConfig, allowanceTypes]);
 
-    // Check if any allowances are available to add
-    const hasAvailableAllowances = useMemo(() => {
-        return Object.values(allowancesByCategory).some((arr) => arr.length > 0);
-    }, [allowancesByCategory]);
+    // Flat list of available allowances for the combobox
+    const availableAllowancesList = useMemo(() => {
+        const configuredIds = allowanceConfig.map((a) => a.allowance_type_id);
+        return allowanceTypes
+            .filter((t) => !configuredIds.includes(t.id))
+            .map((t) => ({
+                ...t,
+                label: t.name + (t.default_rate != null ? ` (${formatCurrency(t.default_rate)}/${t.default_rate_type})` : ''),
+            }));
+    }, [allowanceTypes, allowanceConfig]);
 
-    // Check if any allowances are incomplete (missing rate_type)
     const hasIncompleteAllowances = useMemo(() => {
         return allowanceConfig.some((a) => !a.rate_type);
     }, [allowanceConfig]);
@@ -155,7 +177,6 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
         const allowanceType = allowanceTypes.find((t) => t.id === allowanceTypeId);
         if (!allowanceType) return;
 
-        // Fares/travel allowances default to paid_to_rdo = true
         const defaultPaidToRdo = allowanceType.category === 'fares_travel';
 
         setAllowanceConfig((prev) => [
@@ -163,7 +184,7 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
             {
                 allowance_type_id: allowanceTypeId,
                 rate: allowanceType.default_rate || 0,
-                rate_type: '', // Require user to select rate type
+                rate_type: '',
                 paid_to_rdo: defaultPaidToRdo,
             },
         ]);
@@ -213,27 +234,29 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
         const weeklyCost = config.rate_type ? calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly') : null;
 
         return (
-            <div key={config.allowance_type_id} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                {/* Header row - Name and Remove button */}
+            <div key={config.allowance_type_id} className="rounded-lg border bg-card p-3">
+                {/* Header row */}
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                        <div className="font-medium">{config.allowanceType.name}</div>
-                        {config.allowanceType.description && <div className="text-xs text-slate-500">{config.allowanceType.description}</div>}
+                        <div className="text-sm font-medium">{config.allowanceType.name}</div>
+                        {config.allowanceType.description && (
+                            <div className="text-xs text-muted-foreground">{config.allowanceType.description}</div>
+                        )}
                     </div>
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 shrink-0 p-0 text-red-500 hover:text-red-700"
+                        className="h-7 w-7 shrink-0 p-0"
                         onClick={() => handleRemoveAllowance(config.allowance_type_id)}
                     >
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
 
-                {/* Rate controls - responsive row */}
+                {/* Rate controls */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1">
-                        <span className="text-sm text-slate-500">$</span>
+                        <span className="text-sm text-muted-foreground">$</span>
                         <Input
                             type="number"
                             step="0.01"
@@ -248,7 +271,7 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
                         value={config.rate_type || undefined}
                         onValueChange={(value) => handleUpdateAllowanceRateType(config.allowance_type_id, value as 'hourly' | 'daily' | 'weekly')}
                     >
-                        <SelectTrigger className={`h-8 w-28 ${!config.rate_type ? 'border-amber-400 dark:border-amber-600' : ''}`}>
+                        <SelectTrigger className={`h-8 w-28 ${!config.rate_type ? 'border-destructive' : ''}`}>
                             <SelectValue placeholder="Select..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -261,9 +284,11 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
                     {weeklyCost !== null ? (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="rounded bg-green-100 px-2 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                    {formatCurrency(weeklyCost)}/wk
-                                </div>
+                                <span>
+                                    <Badge variant="secondary" className="cursor-help">
+                                        {formatCurrency(weeklyCost)}/wk
+                                    </Badge>
+                                </span>
                             </TooltipTrigger>
                             <TooltipContent>
                                 Weekly cost: {formatCurrency(config.rate)} x{' '}
@@ -271,25 +296,25 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
                             </TooltipContent>
                         </Tooltip>
                     ) : (
-                        <div className="rounded bg-amber-100 px-2 py-1 text-sm font-medium text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <Badge variant="outline" className="text-muted-foreground">
                             Select rate type
-                        </div>
+                        </Badge>
                     )}
                 </div>
 
                 {/* RDO Option */}
-                <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+                <div className="mt-3 flex items-center gap-2 border-t pt-3">
                     <Checkbox
                         id={`rdo-${config.allowance_type_id}`}
                         checked={config.paid_to_rdo}
                         onCheckedChange={(checked) => handleUpdateAllowancePaidToRdo(config.allowance_type_id, checked as boolean)}
                     />
-                    <label htmlFor={`rdo-${config.allowance_type_id}`} className="cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                    <label htmlFor={`rdo-${config.allowance_type_id}`} className="cursor-pointer text-sm">
                         Pay during RDO hours
                     </label>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <Info className="h-4 w-4 text-slate-400" />
+                            <Info className="h-4 w-4 text-muted-foreground" />
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs">
                             <p className="text-xs">
@@ -304,171 +329,107 @@ export const AllowanceConfigDialog = ({ open, onOpenChange, template, allowanceT
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] min-w-[95vw] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Plus className="h-5 w-5 shrink-0" />
-                        <span className="truncate">Configure Allowances - {template.label}</span>
+                        Configure Allowances
                     </DialogTitle>
+                    <DialogDescription>
+                        Add and configure allowances for <span className="font-medium">{template.label}</span>.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">
                     {/* Base template info */}
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                                <h3 className="truncate font-medium">{template.name}</h3>
-                                <p className="text-sm text-slate-500">Base Rate: {formatCurrency(template.hourly_rate)}/hr</p>
+                    <Card size="sm">
+                        <CardContent>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <h3 className="truncate text-sm font-medium">{template.name}</h3>
+                                    <p className="text-sm text-muted-foreground">Base Rate: {formatCurrency(template.hourly_rate)}/hr</p>
+                                </div>
+                                <div className="sm:text-right">
+                                    <p className="text-xs text-muted-foreground">Base Weekly Cost</p>
+                                    <p className="text-lg font-semibold">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</p>
+                                </div>
                             </div>
-                            <div className="sm:text-right">
-                                <p className="text-sm text-slate-500">Base Weekly Cost</p>
-                                <p className="text-lg font-semibold text-green-600">{formatCurrency(template.cost_breakdown.base_weekly_wages)}</p>
-                            </div>
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
 
-                    {/* Add Allowance - Grouped by Category */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-medium">Add Allowance</h3>
-                        <div className="flex gap-2">
-                            <Select value="" onValueChange={(value) => handleAddAllowance(Number(value))}>
-                                <SelectTrigger className="flex-1">
-                                    <SelectValue placeholder="Select an allowance to add..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {!hasAvailableAllowances ? (
-                                        <SelectItem value="none" disabled>
-                                            All allowances added
-                                        </SelectItem>
-                                    ) : (
-                                        <>
-                                            {allowancesByCategory.fares_travel.length > 0 && (
-                                                <SelectGroup>
-                                                    <SelectLabel className="text-blue-700 dark:text-blue-400">Fares & Travel</SelectLabel>
-                                                    {allowancesByCategory.fares_travel.map((type) => (
-                                                        <SelectItem key={type.id} value={String(type.id)}>
-                                                            {type.name}
-                                                            {type.default_rate != null &&
-                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            )}
-                                            {allowancesByCategory.site.length > 0 && (
-                                                <SelectGroup>
-                                                    <SelectLabel className="text-amber-700 dark:text-amber-400">Site Allowance</SelectLabel>
-                                                    {allowancesByCategory.site.map((type) => (
-                                                        <SelectItem key={type.id} value={String(type.id)}>
-                                                            {type.name}
-                                                            {type.default_rate != null &&
-                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            )}
-                                            {allowancesByCategory.multistorey.length > 0 && (
-                                                <SelectGroup>
-                                                    <SelectLabel className="text-purple-700 dark:text-purple-400">Multi-storey</SelectLabel>
-                                                    {allowancesByCategory.multistorey.map((type) => (
-                                                        <SelectItem key={type.id} value={String(type.id)}>
-                                                            {type.name}
-                                                            {type.default_rate != null &&
-                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            )}
-                                            {allowancesByCategory.custom.length > 0 && (
-                                                <SelectGroup>
-                                                    <SelectLabel className="text-slate-700 dark:text-slate-400">Other Allowances</SelectLabel>
-                                                    {allowancesByCategory.custom.map((type) => (
-                                                        <SelectItem key={type.id} value={String(type.id)}>
-                                                            {type.name}
-                                                            {type.default_rate != null &&
-                                                                ` (${formatCurrency(type.default_rate)}/${type.default_rate_type})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            )}
-                                        </>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <p className="mt-2 text-xs text-slate-500">Select allowances to apply to this template for this job.</p>
-                    </div>
+                    {/* Add Allowance */}
+                    <Card size="sm">
+                        <CardHeader>
+                            <CardTitle>Add Allowance</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <AllowanceCombobox
+                                items={availableAllowancesList}
+                                onSelect={(item) => handleAddAllowance(item.id)}
+                            />
+                            <p className="mt-2 text-xs text-muted-foreground">Search and select allowances to apply to this template.</p>
+                        </CardContent>
+                    </Card>
 
                     {/* Configured Allowances - Grouped by Category */}
                     {allowanceConfig.length === 0 ? (
-                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                            <h3 className="mb-3 text-sm font-medium">Configured Allowances</h3>
-                            <p className="text-sm text-slate-500">No allowances configured. Add allowances above to customize this template.</p>
-                        </div>
+                        <Card size="sm">
+                            <CardHeader>
+                                <CardTitle>Configured Allowances</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground">No allowances configured. Add allowances above to customize this template.</p>
+                            </CardContent>
+                        </Card>
                     ) : (
                         <>
-                            {/* Fares & Travel */}
-                            {configuredByCategory.fares_travel.length > 0 && (
-                                <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.fares_travel.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.fares_travel.color}`}>Fares & Travel</h3>
-                                    <div className="space-y-3">{configuredByCategory.fares_travel.map(renderAllowanceItem)}</div>
-                                </div>
-                            )}
-
-                            {/* Site Allowance */}
-                            {configuredByCategory.site.length > 0 && (
-                                <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.site.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.site.color}`}>Site Allowance</h3>
-                                    <div className="space-y-3">{configuredByCategory.site.map(renderAllowanceItem)}</div>
-                                </div>
-                            )}
-
-                            {/* Multi-storey */}
-                            {configuredByCategory.multistorey.length > 0 && (
-                                <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.multistorey.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.multistorey.color}`}>Multi-storey</h3>
-                                    <div className="space-y-3">{configuredByCategory.multistorey.map(renderAllowanceItem)}</div>
-                                </div>
-                            )}
-
-                            {/* Other Allowances */}
-                            {configuredByCategory.custom.length > 0 && (
-                                <div className={`rounded-lg border p-4 ${CATEGORY_CONFIG.custom.bgColor}`}>
-                                    <h3 className={`mb-3 text-sm font-medium ${CATEGORY_CONFIG.custom.color}`}>Other Allowances</h3>
-                                    <div className="space-y-3">{configuredByCategory.custom.map(renderAllowanceItem)}</div>
-                                </div>
-                            )}
+                            {Object.entries(configuredByCategory).map(([category, items]) => {
+                                if (items.length === 0) return null;
+                                return (
+                                    <Card key={category} size="sm">
+                                        <CardHeader>
+                                            <CardTitle>{CATEGORY_LABELS[category] || category}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            {items.map(renderAllowanceItem)}
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
                         </>
                     )}
 
                     {/* Total Impact */}
                     {allowanceConfig.length > 0 && (
-                        <div className="rounded-lg border-2 border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h3 className="font-medium">Total Allowances</h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                                        {allowanceConfig.length} allowance{allowanceConfig.length !== 1 ? 's' : ''} configured
-                                    </p>
-                                </div>
-                                <div className="sm:text-right">
-                                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                                        +
-                                        {formatCurrency(
-                                            allowanceConfig.reduce((sum, config) => {
-                                                if (!config.rate_type) return sum;
-                                                return (
-                                                    sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly')
-                                                );
-                                            }, 0),
+                        <Card size="sm">
+                            <CardContent>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-medium">Total Allowances</h3>
+                                        <p className="text-sm text-muted-foreground">
+                                            {allowanceConfig.length} allowance{allowanceConfig.length !== 1 ? 's' : ''} configured
+                                        </p>
+                                    </div>
+                                    <div className="sm:text-right">
+                                        <p className="text-2xl font-bold">
+                                            +
+                                            {formatCurrency(
+                                                allowanceConfig.reduce((sum, config) => {
+                                                    if (!config.rate_type) return sum;
+                                                    return (
+                                                        sum + calculateAllowanceWeeklyCost(config.rate, config.rate_type as 'hourly' | 'daily' | 'weekly')
+                                                    );
+                                                }, 0),
+                                            )}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">per worker per week</p>
+                                        {hasIncompleteAllowances && (
+                                            <p className="mt-1 text-xs text-destructive">Select rate type for all allowances to save</p>
                                         )}
-                                    </p>
-                                    <p className="text-xs text-slate-500">per worker per week</p>
-                                    {hasIncompleteAllowances && (
-                                        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Select rate type for all allowances to save</p>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
                 </div>
 

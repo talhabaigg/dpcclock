@@ -35,7 +35,7 @@ export const RdoSection = ({ template }: RdoSectionProps) => {
             {!(template.rdo_hours > 0 && rdo) ? (
                 <p className="text-muted-foreground text-sm italic">None</p>
             ) : (
-                <div className="space-y-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+                <div className="bg-card border-border space-y-3 rounded-lg border border-l-4 border-l-purple-400/60 p-3">
                     {/* Hours/days summary */}
                     <p className="text-muted-foreground text-xs">
                         {template.rdo_hours.toFixed(1)} hrs / {rdo.days.toFixed(1)} days

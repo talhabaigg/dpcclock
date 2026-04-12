@@ -55,7 +55,6 @@ import {
     SettingsDialog,
     StatusBanners,
     SummaryCards,
-    TemplateCostBreakdownDialog,
     TIME_RANGE_OPTIONS,
 } from './partials';
 import type {
@@ -94,8 +93,6 @@ const LabourForecastShow = ({
     // STATE: Dialogs
     // ========================================================================
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
-    const [selectedTemplateForCost, setSelectedTemplateForCost] = useState<ConfiguredTemplate | null>(null);
     const [allowanceDialogOpen, setAllowanceDialogOpen] = useState(false);
     const [selectedTemplateForAllowances, setSelectedTemplateForAllowances] = useState<ConfiguredTemplate | null>(null);
     const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -982,17 +979,11 @@ const LabourForecastShow = ({
                 locationWorktypes={locationWorktypes}
                 locationId={location.id}
                 flash={flash}
-                onOpenCostBreakdown={(template) => {
-                    setSelectedTemplateForCost(template);
-                    setCostBreakdownOpen(true);
-                }}
                 onOpenAllowanceDialog={(template) => {
                     setSelectedTemplateForAllowances(template);
                     setAllowanceDialogOpen(true);
                 }}
             />
-
-            <TemplateCostBreakdownDialog open={costBreakdownOpen} onOpenChange={setCostBreakdownOpen} template={selectedTemplateForCost} />
 
             <AllowanceConfigDialog
                 open={allowanceDialogOpen}

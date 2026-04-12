@@ -21,8 +21,8 @@ export interface NonJobCostedWagesProps {
 }
 
 export const NonJobCostedWages = ({ label, amount }: NonJobCostedWagesProps) => (
-    <div className="flex justify-between rounded bg-slate-100 p-2 dark:bg-slate-800/50">
+    <div className="bg-muted flex justify-between rounded-md p-2">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium line-through decoration-red-500">{formatCurrency(amount)}</span>
+        <span className="decoration-destructive font-medium line-through">{formatCurrency(amount)}</span>
     </div>
 );

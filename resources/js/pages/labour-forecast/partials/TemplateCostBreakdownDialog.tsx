@@ -40,32 +40,37 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
 
     const breakdown = template.cost_breakdown;
 
+    const codeBadge = 'bg-muted text-muted-foreground border-border inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-xs';
+    const sectionCard = 'bg-card border-border rounded-lg border p-4';
+    const rowLabel = 'text-muted-foreground';
+    const totalLine = 'border-border flex justify-between border-t pt-2';
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-full max-w-5xl overflow-y-auto sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Calculator className="h-5 w-5" />
+                        <Calculator className="text-muted-foreground size-5" />
                         Job Cost Breakdown - {template.label}
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4">
                     {/* Base Wages */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Base Wages</h3>
+                    <div className={sectionCard}>
+                        <h3 className="text-foreground mb-3 text-sm font-semibold">Base Wages</h3>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Hourly Rate</span>
-                                <span className="font-medium">{formatCurrency(breakdown.base_hourly_rate)}/hr</span>
+                                <span className={rowLabel}>Hourly Rate</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.base_hourly_rate)}/hr</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Hours Per Week</span>
-                                <span className="font-medium">{breakdown.hours_per_week} hrs</span>
+                                <span className={rowLabel}>Hours Per Week</span>
+                                <span className="text-foreground font-medium tabular-nums">{breakdown.hours_per_week} hrs</span>
                             </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
-                                <span className="font-medium text-slate-700 dark:text-slate-300">Base Weekly Wages</span>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                            <div className={totalLine}>
+                                <span className="text-foreground font-medium">Base Weekly Wages</span>
+                                <span className="text-foreground font-semibold tabular-nums">
                                     {formatCurrency(breakdown.base_weekly_wages)}
                                 </span>
                             </div>
@@ -73,53 +78,53 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
                     </div>
 
                     {/* Allowances */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Allowances</h3>
+                    <div className={sectionCard}>
+                        <h3 className="text-foreground mb-3 text-sm font-semibold">Allowances</h3>
                         <div className="space-y-2 text-sm">
                             {breakdown.allowances.fares_travel.name && (
                                 <div className="flex justify-between">
-                                    <span className="text-slate-600 dark:text-slate-400">
+                                    <span className={rowLabel}>
                                         {breakdown.allowances.fares_travel.name}
-                                        <span className="ml-1 text-xs text-slate-400">
+                                        <span className="text-muted-foreground/70 ml-1 text-xs">
                                             ({formatCurrency(breakdown.allowances.fares_travel.rate)}/day x 5)
                                         </span>
                                     </span>
-                                    <span className="font-medium">{formatCurrency(breakdown.allowances.fares_travel.weekly)}</span>
+                                    <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.allowances.fares_travel.weekly)}</span>
                                 </div>
                             )}
                             {breakdown.allowances.site.name && (
                                 <div className="flex justify-between">
-                                    <span className="text-slate-600 dark:text-slate-400">
+                                    <span className={rowLabel}>
                                         {breakdown.allowances.site.name}
-                                        <span className="ml-1 text-xs text-slate-400">
+                                        <span className="text-muted-foreground/70 ml-1 text-xs">
                                             ({formatCurrency(breakdown.allowances.site.rate)}/hr x 40)
                                         </span>
                                     </span>
-                                    <span className="font-medium">{formatCurrency(breakdown.allowances.site.weekly)}</span>
+                                    <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.allowances.site.weekly)}</span>
                                 </div>
                             )}
                             {breakdown.allowances.multistorey.name && (
                                 <div className="flex justify-between">
-                                    <span className="text-slate-600 dark:text-slate-400">
+                                    <span className={rowLabel}>
                                         {breakdown.allowances.multistorey.name}
-                                        <span className="ml-1 text-xs text-slate-400">
+                                        <span className="text-muted-foreground/70 ml-1 text-xs">
                                             ({formatCurrency(breakdown.allowances.multistorey.rate)}/hr x 40)
                                         </span>
                                     </span>
-                                    <span className="font-medium">{formatCurrency(breakdown.allowances.multistorey.weekly)}</span>
+                                    <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.allowances.multistorey.weekly)}</span>
                                 </div>
                             )}
                             {/* Custom Allowances */}
                             {breakdown.allowances.custom && breakdown.allowances.custom.length > 0 && (
                                 <>
-                                    <div className="border-t border-slate-200 pt-2 dark:border-slate-600">
-                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Custom Allowances</span>
+                                    <div className="border-border border-t pt-2">
+                                        <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Custom Allowances</span>
                                     </div>
                                     {breakdown.allowances.custom.map((customAllowance) => (
                                         <div key={customAllowance.type_id} className="flex justify-between">
-                                            <span className="text-slate-600 dark:text-slate-400">
+                                            <span className={rowLabel}>
                                                 {customAllowance.name}
-                                                <span className="ml-1 text-xs text-slate-400">
+                                                <span className="text-muted-foreground/70 ml-1 text-xs">
                                                     ({formatCurrency(customAllowance.rate)}/
                                                     {customAllowance.rate_type === 'hourly'
                                                         ? 'hr x 40'
@@ -129,7 +134,7 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
                                                     )
                                                 </span>
                                             </span>
-                                            <span className="font-medium text-green-600 dark:text-green-400">
+                                            <span className="text-foreground font-medium tabular-nums">
                                                 {formatCurrency(customAllowance.weekly)}
                                             </span>
                                         </div>
@@ -137,13 +142,13 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
                                 </>
                             )}
                             {breakdown.allowances.total === 0 && (
-                                <p className="text-xs text-slate-500 italic">
+                                <p className="text-muted-foreground text-xs italic">
                                     No allowances applied. Configure shift conditions or add custom allowances.
                                 </p>
                             )}
-                            <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
-                                <span className="font-medium text-slate-700 dark:text-slate-300">Total Allowances</span>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                            <div className={totalLine}>
+                                <span className="text-foreground font-medium">Total Allowances</span>
+                                <span className="text-foreground font-semibold tabular-nums">
                                     {formatCurrency(breakdown.allowances.total)}
                                 </span>
                             </div>
@@ -151,39 +156,35 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
                     </div>
 
                     {/* Gross Wages */}
-                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
+                    <div className="bg-muted border-border rounded-lg border p-4">
                         <div className="flex justify-between text-sm">
-                            <span className="font-medium text-indigo-700 dark:text-indigo-300">Gross Wages (Base + Allowances)</span>
-                            <span className="font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(breakdown.gross_wages)}</span>
+                            <span className="text-foreground font-medium">Gross Wages (Base + Allowances)</span>
+                            <span className="text-foreground font-bold tabular-nums">{formatCurrency(breakdown.gross_wages)}</span>
                         </div>
                     </div>
 
                     {/* Leave Markups */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Leave Accrual Markups</h3>
+                    <div className={sectionCard}>
+                        <h3 className="text-foreground mb-3 text-sm font-semibold">Leave Accrual Markups</h3>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">
+                                <span className={rowLabel}>
                                     Annual Leave ({breakdown.leave_markups.annual_leave_rate}%)
                                 </span>
-                                <span className="font-medium">+{formatCurrency(breakdown.leave_markups.annual_leave_amount)}</span>
+                                <span className="text-foreground font-medium tabular-nums">+{formatCurrency(breakdown.leave_markups.annual_leave_amount)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">
+                                <span className={rowLabel}>
                                     Leave Loading ({breakdown.leave_markups.leave_loading_rate}%)
                                 </span>
-                                <span className="font-medium">+{formatCurrency(breakdown.leave_markups.leave_loading_amount)}</span>
+                                <span className="text-foreground font-medium tabular-nums">+{formatCurrency(breakdown.leave_markups.leave_loading_amount)}</span>
                             </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                            <div className={totalLine}>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-medium text-slate-700 dark:text-slate-300">Marked-Up Wages</span>
-                                    {breakdown.cost_codes.wages && (
-                                        <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                            {breakdown.cost_codes.wages}
-                                        </span>
-                                    )}
+                                    <span className="text-foreground font-medium">Marked-Up Wages</span>
+                                    {breakdown.cost_codes.wages && <span className={codeBadge}>{breakdown.cost_codes.wages}</span>}
                                 </div>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                <span className="text-foreground font-semibold tabular-nums">
                                     {formatCurrency(breakdown.marked_up_wages)}
                                 </span>
                             </div>
@@ -191,79 +192,67 @@ export const TemplateCostBreakdownDialog = ({ open, onOpenChange, template }: Te
                     </div>
 
                     {/* Super */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                    <div className={sectionCard}>
                         <div className="flex justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <span className="text-slate-600 dark:text-slate-400">Superannuation (Fixed Weekly)</span>
-                                <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                    {breakdown.cost_codes.super}
-                                </span>
+                                <span className={rowLabel}>Superannuation (Fixed Weekly)</span>
+                                <span className={codeBadge}>{breakdown.cost_codes.super}</span>
                             </div>
-                            <span className="font-medium">{formatCurrency(breakdown.super)}</span>
+                            <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.super)}</span>
                         </div>
                     </div>
 
                     {/* On-Costs */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">On-Costs</h3>
+                    <div className={sectionCard}>
+                        <h3 className="text-foreground mb-3 text-sm font-semibold">On-Costs</h3>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">BERT (Building Industry Redundancy)</span>
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                        {breakdown.cost_codes.bert}
-                                    </span>
+                                    <span className={rowLabel}>BERT (Building Industry Redundancy)</span>
+                                    <span className={codeBadge}>{breakdown.cost_codes.bert}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(breakdown.on_costs.bert)}</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.on_costs.bert)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">BEWT (Building Employees Withholding Tax)</span>
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                        {breakdown.cost_codes.bewt}
-                                    </span>
+                                    <span className={rowLabel}>BEWT (Building Employees Withholding Tax)</span>
+                                    <span className={codeBadge}>{breakdown.cost_codes.bewt}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(breakdown.on_costs.bewt)}</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.on_costs.bewt)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">CIPQ (Construction Induction)</span>
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                        {breakdown.cost_codes.cipq}
-                                    </span>
+                                    <span className={rowLabel}>CIPQ (Construction Induction)</span>
+                                    <span className={codeBadge}>{breakdown.cost_codes.cipq}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(breakdown.on_costs.cipq)}</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.on_costs.cipq)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">Payroll Tax ({breakdown.on_costs.payroll_tax_rate}%)</span>
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                        {breakdown.cost_codes.payroll_tax}
-                                    </span>
+                                    <span className={rowLabel}>Payroll Tax ({breakdown.on_costs.payroll_tax_rate}%)</span>
+                                    <span className={codeBadge}>{breakdown.cost_codes.payroll_tax}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(breakdown.on_costs.payroll_tax)}</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.on_costs.payroll_tax)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-slate-600 dark:text-slate-400">WorkCover ({breakdown.on_costs.workcover_rate}%)</span>
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                        {breakdown.cost_codes.workcover}
-                                    </span>
+                                    <span className={rowLabel}>WorkCover ({breakdown.on_costs.workcover_rate}%)</span>
+                                    <span className={codeBadge}>{breakdown.cost_codes.workcover}</span>
                                 </div>
-                                <span className="font-medium">{formatCurrency(breakdown.on_costs.workcover)}</span>
+                                <span className="text-foreground font-medium tabular-nums">{formatCurrency(breakdown.on_costs.workcover)}</span>
                             </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
-                                <span className="font-medium text-slate-700 dark:text-slate-300">Total On-Costs</span>
-                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatCurrency(breakdown.on_costs.total)}</span>
+                            <div className={totalLine}>
+                                <span className="text-foreground font-medium">Total On-Costs</span>
+                                <span className="text-foreground font-semibold tabular-nums">{formatCurrency(breakdown.on_costs.total)}</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Total Weekly Cost */}
-                    <div className="rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:border-green-600 dark:bg-green-900/20">
+                    <div className="bg-card border-border rounded-lg border-2 p-4 shadow-sm">
                         <div className="flex justify-between">
-                            <span className="text-lg font-bold text-green-700 dark:text-green-300">Total Weekly Job Cost</span>
-                            <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                            <span className="text-foreground text-lg font-bold">Total Weekly Job Cost</span>
+                            <span className="text-foreground text-lg font-bold tabular-nums">
                                 {formatCurrency(breakdown.total_weekly_cost)}
                             </span>
                         </div>

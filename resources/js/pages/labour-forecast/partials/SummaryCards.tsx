@@ -32,60 +32,45 @@ interface SummaryCardsProps {
 }
 
 export const SummaryCards = ({ grandTotalCost, remainingToForecast, isBudgetLoading, onCostClick }: SummaryCardsProps) => {
-    // Determine color based on remaining to forecast value
-    const getRemainingColor = (value: number) => {
-        if (value > 0) {
-            return {
-                border: 'border-blue-200 dark:border-blue-800',
-                bg: 'bg-blue-50 dark:bg-blue-900/20',
-                label: 'text-blue-600 dark:text-blue-400',
-                value: 'text-blue-700 dark:text-blue-300',
-            };
-        } else if (value < 0) {
-            return {
-                border: 'border-red-200 dark:border-red-800',
-                bg: 'bg-red-50 dark:bg-red-900/20',
-                label: 'text-red-600 dark:text-red-400',
-                value: 'text-red-700 dark:text-red-300',
-            };
-        }
-        return {
-            border: 'border-slate-200 dark:border-slate-700',
-            bg: 'bg-white dark:bg-slate-800',
-            label: 'text-slate-500 dark:text-slate-400',
-            value: 'text-slate-900 dark:text-white',
-        };
-    };
-
-    const remainingColors = remainingToForecast ? getRemainingColor(remainingToForecast.remainingToForecast) : getRemainingColor(0);
+    const overBudget = !!remainingToForecast && remainingToForecast.remainingToForecast < 0;
 
     return (
         <div className="mb-4 grid grid-cols-2 gap-4">
             <div
-                className={`rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20 ${onCostClick ? 'cursor-pointer transition-colors hover:bg-green-100 dark:hover:bg-green-900/30' : ''}`}
+                className={`bg-card text-card-foreground border-border rounded-xl border p-4 shadow-sm ${
+                    onCostClick ? 'hover:bg-accent/50 cursor-pointer transition-colors' : ''
+                }`}
                 onClick={onCostClick}
                 title={onCostClick ? 'Click to view cost breakdown' : undefined}
             >
-                <p className="text-xs font-medium text-green-600 dark:text-green-400">Total Labour Cost</p>
-                <p className={`mt-1 text-2xl font-bold text-green-700 dark:text-green-300 ${onCostClick ? 'hover:underline' : ''}`}>
+                <p className="text-muted-foreground text-xs font-medium">Total Labour Cost</p>
+                <p className={`text-foreground mt-1 text-2xl font-semibold tabular-nums ${onCostClick ? 'hover:underline' : ''}`}>
                     {formatCurrency(grandTotalCost)}
                 </p>
             </div>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <div className={`rounded-lg border p-4 ${remainingColors.border} ${remainingColors.bg} cursor-help`}>
-                        <p className={`text-xs font-medium ${remainingColors.label}`}>Remaining to Forecast</p>
+                    <div
+                        className={`bg-card text-card-foreground border-border cursor-help rounded-xl border p-4 shadow-sm ${
+                            overBudget ? 'border-destructive/30' : ''
+                        }`}
+                    >
+                        <p className="text-muted-foreground text-xs font-medium">Remaining to Forecast</p>
                         {isBudgetLoading ? (
                             <div className="mt-1 flex items-center gap-2">
-                                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-                                <span className="text-sm text-slate-400">Loading...</span>
+                                <Loader2 className="text-muted-foreground size-5 animate-spin" />
+                                <span className="text-muted-foreground text-sm">Loading...</span>
                             </div>
                         ) : remainingToForecast ? (
-                            <p className={`mt-1 text-2xl font-bold ${remainingColors.value}`}>
+                            <p
+                                className={`mt-1 text-2xl font-semibold tabular-nums ${
+                                    overBudget ? 'text-destructive' : 'text-foreground'
+                                }`}
+                            >
                                 {formatCurrency(remainingToForecast.remainingToForecast)}
                             </p>
                         ) : (
-                            <p className="mt-1 text-2xl font-bold text-slate-400">-</p>
+                            <p className="text-muted-foreground mt-1 text-2xl font-semibold">-</p>
                         )}
                     </div>
                 </TooltipTrigger>

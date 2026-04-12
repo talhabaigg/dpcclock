@@ -310,7 +310,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 if (params.data?.isTotal && params.data?.isRdoRow) return 'font-bold text-purple-700 dark:text-purple-300';
                 if (params.data?.isTotal && params.data?.isPublicHolidayRow) return 'font-bold text-indigo-700 dark:text-indigo-300';
                 if (params.data?.isTotal) return 'font-bold';
-                if (params.data?.isCostRow) return 'font-bold text-green-700 dark:text-green-300';
+                if (params.data?.isCostRow) return 'font-bold text-foreground';
                 if (params.data?.isOrdinaryRow) return 'text-emerald-600 dark:text-emerald-400';
                 if (params.data?.isOvertimeRow) return 'text-orange-600 dark:text-orange-400';
                 if (params.data?.isLeaveRow) return 'text-blue-600 dark:text-blue-400';
@@ -334,7 +334,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
                 if (params.data?.isTotal) return 'font-bold text-center';
                 if (params.data?.isCostRow)
-                    return 'font-bold text-center text-green-700 dark:text-green-300 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
+                    return 'font-bold text-center text-foreground cursor-pointer hover:underline';
                 if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 font-medium';
                 if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
                 if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 italic';
@@ -361,7 +361,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
                 if (params.data?.isCostRow && isCalculatingCosts) {
                     return (
                         <div className="flex h-full items-center justify-center">
-                            <div className="h-4 w-14 animate-pulse rounded bg-green-200 dark:bg-green-800" />
+                            <div className="bg-muted-foreground/20 h-4 w-14 animate-pulse rounded" />
                         </div>
                     );
                 }
@@ -396,25 +396,19 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
         width: 120,
         editable: false,
         cellClass: (params) => {
-            if (params.data?.isTotal && params.data?.isOrdinaryRow)
-                return 'font-bold text-center text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30';
-            if (params.data?.isTotal && params.data?.isOvertimeRow)
-                return 'font-bold text-center text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/30';
-            if (params.data?.isTotal && params.data?.isLeaveRow)
-                return 'font-bold text-center text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30';
-            if (params.data?.isTotal && params.data?.isRdoRow)
-                return 'font-bold text-center text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30';
-            if (params.data?.isTotal && params.data?.isPublicHolidayRow)
-                return 'font-bold text-center text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30';
-            if (params.data?.isTotal) return 'font-bold text-center bg-indigo-50 dark:bg-indigo-900/30';
-            if (params.data?.isCostRow) return 'font-bold text-center text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 cursor-pointer hover:underline hover:text-green-800 dark:hover:text-green-200';
-            if (params.data?.isOrdinaryRow)
-                return 'text-center text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 font-medium';
-            if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20';
-            if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20';
-            if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20';
-            if (params.data?.isPublicHolidayRow) return 'text-center text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20';
-            return 'text-center bg-slate-50 dark:bg-slate-800/50';
+            if (params.data?.isTotal && params.data?.isOrdinaryRow) return 'font-bold text-center text-emerald-700 dark:text-emerald-300';
+            if (params.data?.isTotal && params.data?.isOvertimeRow) return 'font-bold text-center text-orange-700 dark:text-orange-300';
+            if (params.data?.isTotal && params.data?.isLeaveRow) return 'font-bold text-center text-blue-700 dark:text-blue-300';
+            if (params.data?.isTotal && params.data?.isRdoRow) return 'font-bold text-center text-purple-700 dark:text-purple-300';
+            if (params.data?.isTotal && params.data?.isPublicHolidayRow) return 'font-bold text-center text-indigo-700 dark:text-indigo-300';
+            if (params.data?.isTotal) return 'font-bold text-center';
+            if (params.data?.isCostRow) return 'font-bold text-center text-foreground cursor-pointer hover:underline';
+            if (params.data?.isOrdinaryRow) return 'text-center text-emerald-600 dark:text-emerald-400 font-medium';
+            if (params.data?.isOvertimeRow) return 'text-center text-orange-600 dark:text-orange-400';
+            if (params.data?.isLeaveRow) return 'text-center text-blue-600 dark:text-blue-400';
+            if (params.data?.isRdoRow) return 'text-center text-purple-600 dark:text-purple-400';
+            if (params.data?.isPublicHolidayRow) return 'text-center text-indigo-600 dark:text-indigo-400';
+            return 'text-center';
         },
         headerClass: 'ag-right-aligned-header',
         valueGetter: (params) => {
@@ -458,7 +452,7 @@ export const buildLabourForecastShowColumnDefs = (weeks: Week[], selectedMonth?:
             if (params.data?.isCostRow && isCalculatingCosts) {
                 return (
                     <div className="flex h-full items-center justify-center">
-                        <div className="h-4 w-16 animate-pulse rounded bg-green-200 dark:bg-green-800" />
+                        <div className="bg-muted-foreground/20 h-4 w-16 animate-pulse rounded" />
                     </div>
                 );
             }

@@ -23,6 +23,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import type { CellClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
@@ -77,43 +78,44 @@ export const ForecastGrid = ({
         return true;
     }, []);
 
-    // Row class for total and cost row styling
+    // Row class for total and cost row styling.
+    // Row type identity is conveyed via a left border accent + muted tint; aggregate rows use bg-muted.
     const getRowClass = useCallback((params: { data: RowData }) => {
         if (params.data?.isTotal && params.data?.isOrdinaryRow) {
-            return 'bg-emerald-100 dark:bg-emerald-900/30 font-semibold text-emerald-700 dark:text-emerald-300';
+            return 'bg-muted font-semibold text-emerald-700 dark:text-emerald-400';
         }
         if (params.data?.isTotal && params.data?.isOvertimeRow) {
-            return 'bg-orange-100 dark:bg-orange-900/30 font-semibold text-orange-700 dark:text-orange-300';
+            return 'bg-muted font-semibold text-orange-700 dark:text-orange-400';
         }
         if (params.data?.isTotal && params.data?.isLeaveRow) {
-            return 'bg-blue-100 dark:bg-blue-900/30 font-semibold text-blue-700 dark:text-blue-300';
+            return 'bg-muted font-semibold text-blue-700 dark:text-blue-400';
         }
         if (params.data?.isTotal && params.data?.isRdoRow) {
-            return 'bg-purple-100 dark:bg-purple-900/30 font-semibold text-purple-700 dark:text-purple-300';
+            return 'bg-muted font-semibold text-purple-700 dark:text-purple-400';
         }
         if (params.data?.isTotal && params.data?.isPublicHolidayRow) {
-            return 'bg-indigo-100 dark:bg-indigo-900/30 font-semibold text-indigo-700 dark:text-indigo-300';
+            return 'bg-muted font-semibold text-indigo-700 dark:text-indigo-400';
         }
         if (params.data?.isTotal) {
-            return 'bg-gray-100 dark:bg-gray-700 font-semibold';
+            return 'bg-muted font-semibold';
         }
         if (params.data?.isCostRow) {
-            return 'bg-green-50 dark:bg-green-900/20 font-semibold text-green-700 dark:text-green-300';
+            return 'bg-muted text-foreground font-semibold';
         }
         if (params.data?.isOrdinaryRow) {
-            return 'bg-emerald-50/70 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 border-l-2 border-l-emerald-400';
+            return 'text-emerald-700 dark:text-emerald-400 border-l-2 border-l-emerald-400/60';
         }
         if (params.data?.isOvertimeRow) {
-            return 'bg-orange-50/70 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300 border-l-2 border-l-orange-400';
+            return 'text-orange-700 dark:text-orange-400 border-l-2 border-l-orange-400/60';
         }
         if (params.data?.isLeaveRow) {
-            return 'bg-blue-50/70 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300 border-l-2 border-l-blue-400';
+            return 'text-blue-700 dark:text-blue-400 border-l-2 border-l-blue-400/60';
         }
         if (params.data?.isRdoRow) {
-            return 'bg-purple-50/70 dark:bg-purple-900/10 text-purple-700 dark:text-purple-300 border-l-2 border-l-purple-400';
+            return 'text-purple-700 dark:text-purple-400 border-l-2 border-l-purple-400/60';
         }
         if (params.data?.isPublicHolidayRow) {
-            return 'bg-indigo-50/70 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300 border-l-2 border-l-indigo-400';
+            return 'text-indigo-700 dark:text-indigo-400 border-l-2 border-l-indigo-400/60';
         }
         return '';
     }, []);
@@ -162,19 +164,22 @@ export const ForecastGrid = ({
     );
 
     return (
-        <>
+        <Card className="gap-0 py-0">
             {/* Fill Toolbar */}
             {selectedCell && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-800 dark:bg-indigo-900/20">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                        <span className="font-medium text-slate-800 dark:text-slate-200">{selectedCell.workType}</span>
+                <div className="border-border bg-muted/30 flex items-center gap-2 border-b px-4 py-2">
+                    <span className="text-muted-foreground text-xs">
+                        <span className="text-foreground font-medium">{selectedCell.workType}</span>
                         {' \u00B7 '}
                         Week {selectedCell.weekIndex + 1}
                         {' \u00B7 '}
-                        Value: <span className="font-semibold">{rowData.find((r) => r.id === selectedCell.rowId)?.[selectedCell.field] ?? 0}</span>
+                        Value:{' '}
+                        <span className="text-foreground font-semibold">
+                            {rowData.find((r) => r.id === selectedCell.rowId)?.[selectedCell.field] ?? 0}
+                        </span>
                     </span>
-                    <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Fill:</span>
+                    <div className="bg-border mx-2 h-4 w-px" />
+                    <span className="text-muted-foreground text-xs">Fill:</span>
                     <Button
                         size="sm"
                         variant="outline"
@@ -205,40 +210,42 @@ export const ForecastGrid = ({
                     <Button size="sm" variant="default" className="h-6 px-2 text-xs" onClick={() => onFillRight('all')}>
                         To end
                     </Button>
-                    <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs text-slate-500" onClick={() => onCellSelected(null)}>
+                    <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs" onClick={() => onCellSelected(null)}>
                         Clear
                     </Button>
                 </div>
             )}
 
             {/* AG Grid */}
-            <div className="" style={{ height: 350, width: '100%' }}>
-                <AgGridReact
-                    rowData={rowData}
-                    columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth, {
-                        expandedParents,
-                        onToggleExpand,
-                        hasChildren: hasChildRows,
-                        isCalculatingCosts,
-                        onExpandAll,
-                        onCollapseAll,
-                        isAllExpanded: expandedParents.size > 0,
-                    })}
-                    theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
-                    onCellValueChanged={onCellValueChanged}
-                    onCellClicked={onCellClicked}
-                    defaultColDef={{
-                        resizable: true,
-                        sortable: false,
-                        filter: false,
-                    }}
-                    headerHeight={50}
-                    getRowId={(params) => params.data.id}
-                    getRowClass={getRowClass}
-                    singleClickEdit={true}
-                    stopEditingWhenCellsLoseFocus={true}
-                />
-            </div>
-        </>
+            <CardContent className="px-0">
+                <div style={{ height: 350, width: '100%' }}>
+                    <AgGridReact
+                        rowData={rowData}
+                        columnDefs={buildLabourForecastShowColumnDefs(weeks, selectedMonth, {
+                            expandedParents,
+                            onToggleExpand,
+                            hasChildren: hasChildRows,
+                            isCalculatingCosts,
+                            onExpandAll,
+                            onCollapseAll,
+                            isAllExpanded: expandedParents.size > 0,
+                        })}
+                        theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
+                        onCellValueChanged={onCellValueChanged}
+                        onCellClicked={onCellClicked}
+                        defaultColDef={{
+                            resizable: true,
+                            sortable: false,
+                            filter: false,
+                        }}
+                        headerHeight={50}
+                        getRowId={(params) => params.data.id}
+                        getRowClass={getRowClass}
+                        singleClickEdit={true}
+                        stopEditingWhenCellsLoseFocus={true}
+                    />
+                </div>
+            </CardContent>
+        </Card>
     );
 };

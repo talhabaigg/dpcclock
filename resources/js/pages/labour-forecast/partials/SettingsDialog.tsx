@@ -3,7 +3,8 @@
  *
  * PURPOSE:
  * Manages pay rate template configuration for a location/job.
- * Allows adding, removing, and customizing templates from KeyPay.
+ * Uses a sidebar layout: left panel lists configured templates,
+ * right panel shows detail/settings for the selected template.
  *
  * FEATURES:
  * - Search and add pay rate templates from KeyPay
@@ -13,28 +14,23 @@
  * - View active shift conditions
  *
  * PARENT COMPONENT: show.tsx (LabourForecastShow)
- *
- * PROPS:
- * - open: boolean - Controls dialog visibility
- * - onOpenChange: (open: boolean) => void - Callback when dialog state changes
- * - configuredTemplates: Templates currently configured for this location
- * - availableTemplates: All available templates from KeyPay
- * - locationWorktypes: Active shift conditions for the location
- * - locationId: Location ID for API calls
- * - flash: Flash messages from the server
- * - onOpenCostBreakdown: Callback to open cost breakdown dialog
- * - onOpenAllowanceDialog: Callback to open allowance configuration dialog
  */
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { Calculator, Check, ChevronDown, HelpCircle, Info, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Calculator, Check, CheckCircle2, ChevronDown, Info, Pencil, Plus, Search, Settings, Trash2, XCircle } from 'lucide-react';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
 import type { AvailableTemplate, ConfiguredTemplate, LocationWorktype } from '../types';
 import { formatCurrency } from './utils';
 
@@ -46,9 +42,221 @@ interface SettingsDialogProps {
     locationWorktypes: LocationWorktype[];
     locationId: number;
     flash?: { success?: string; error?: string };
-    onOpenCostBreakdown: (template: ConfiguredTemplate) => void;
     onOpenAllowanceDialog: (template: ConfiguredTemplate) => void;
 }
+
+// Inline, collapsible cost breakdown for the selected template
+const CostBreakdownSection = ({ template }: { template: ConfiguredTemplate }) => {
+    const [open, setOpen] = useState(false);
+    const breakdown = template.cost_breakdown;
+    if (!breakdown) return null;
+
+    const Row = ({ label, value, muted }: { label: React.ReactNode; value: React.ReactNode; muted?: boolean }) => (
+        <div className="flex justify-between text-sm">
+            <span className={muted ? 'text-muted-foreground' : ''}>{label}</span>
+            <span className="font-medium tabular-nums">{value}</span>
+        </div>
+    );
+
+    const SubTotalRow = ({ label, value }: { label: React.ReactNode; value: React.ReactNode }) => (
+        <div className="flex justify-between border-t pt-2 text-sm">
+            <span className="font-medium">{label}</span>
+            <span className="font-semibold tabular-nums">{value}</span>
+        </div>
+    );
+
+    return (
+        <Collapsible open={open} onOpenChange={setOpen}>
+            <CollapsibleTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full justify-between">
+                    <span className="flex items-center gap-2">
+                        <Calculator className="h-4 w-4" />
+                        Cost Breakdown
+                    </span>
+                    <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+                <div className="mt-3 space-y-3">
+                    {/* Base Wages */}
+                    <div className="rounded-lg border p-3">
+                        <h4 className="mb-2 text-sm font-medium">Base Wages</h4>
+                        <div className="space-y-1.5">
+                            <Row muted label="Hourly Rate" value={`${formatCurrency(breakdown.base_hourly_rate)}/hr`} />
+                            <Row muted label="Hours Per Week" value={`${breakdown.hours_per_week} hrs`} />
+                            <SubTotalRow label="Base Weekly Wages" value={formatCurrency(breakdown.base_weekly_wages)} />
+                        </div>
+                    </div>
+
+                    {/* Allowances */}
+                    <div className="rounded-lg border p-3">
+                        <h4 className="mb-2 text-sm font-medium">Allowances</h4>
+                        <div className="space-y-1.5">
+                            {breakdown.allowances.fares_travel.name && (
+                                <Row
+                                    muted
+                                    label={
+                                        <>
+                                            {breakdown.allowances.fares_travel.name}
+                                            <span className="ml-1 text-xs text-muted-foreground">
+                                                ({formatCurrency(breakdown.allowances.fares_travel.rate)}/day × 5)
+                                            </span>
+                                        </>
+                                    }
+                                    value={formatCurrency(breakdown.allowances.fares_travel.weekly)}
+                                />
+                            )}
+                            {breakdown.allowances.site.name && (
+                                <Row
+                                    muted
+                                    label={
+                                        <>
+                                            {breakdown.allowances.site.name}
+                                            <span className="ml-1 text-xs text-muted-foreground">
+                                                ({formatCurrency(breakdown.allowances.site.rate)}/hr × 40)
+                                            </span>
+                                        </>
+                                    }
+                                    value={formatCurrency(breakdown.allowances.site.weekly)}
+                                />
+                            )}
+                            {breakdown.allowances.multistorey.name && (
+                                <Row
+                                    muted
+                                    label={
+                                        <>
+                                            {breakdown.allowances.multistorey.name}
+                                            <span className="ml-1 text-xs text-muted-foreground">
+                                                ({formatCurrency(breakdown.allowances.multistorey.rate)}/hr × 40)
+                                            </span>
+                                        </>
+                                    }
+                                    value={formatCurrency(breakdown.allowances.multistorey.weekly)}
+                                />
+                            )}
+                            {breakdown.allowances.custom && breakdown.allowances.custom.length > 0 && (
+                                <>
+                                    {breakdown.allowances.custom.map((a) => (
+                                        <Row
+                                            key={a.type_id}
+                                            muted
+                                            label={
+                                                <>
+                                                    {a.name}
+                                                    <span className="ml-1 text-xs text-muted-foreground">
+                                                        ({formatCurrency(a.rate)}/
+                                                        {a.rate_type === 'hourly' ? 'hr × 40' : a.rate_type === 'daily' ? 'day × 5' : 'week'})
+                                                    </span>
+                                                </>
+                                            }
+                                            value={formatCurrency(a.weekly)}
+                                        />
+                                    ))}
+                                </>
+                            )}
+                            {breakdown.allowances.total === 0 && (
+                                <p className="text-xs italic text-muted-foreground">No allowances applied.</p>
+                            )}
+                            <SubTotalRow label="Total Allowances" value={formatCurrency(breakdown.allowances.total)} />
+                        </div>
+                    </div>
+
+                    {/* Gross Wages summary */}
+                    <div className="rounded-lg border bg-muted/50 p-3">
+                        <div className="flex justify-between text-sm">
+                            <span className="font-medium">Gross Wages (Base + Allowances)</span>
+                            <span className="font-semibold tabular-nums">{formatCurrency(breakdown.gross_wages)}</span>
+                        </div>
+                    </div>
+
+                    {/* Leave Markups */}
+                    <div className="rounded-lg border p-3">
+                        <h4 className="mb-2 text-sm font-medium">Leave Accrual Markups</h4>
+                        <div className="space-y-1.5">
+                            <Row
+                                muted
+                                label={`Annual Leave (${breakdown.leave_markups.annual_leave_rate}%)`}
+                                value={`+${formatCurrency(breakdown.leave_markups.annual_leave_amount)}`}
+                            />
+                            <Row
+                                muted
+                                label={`Leave Loading (${breakdown.leave_markups.leave_loading_rate}%)`}
+                                value={`+${formatCurrency(breakdown.leave_markups.leave_loading_amount)}`}
+                            />
+                            <div className="flex items-center justify-between border-t pt-2 text-sm">
+                                <div className="flex items-center gap-2">
+                                    <span className="font-medium">Marked-Up Wages</span>
+                                    {breakdown.cost_codes.wages && (
+                                        <Badge variant="secondary" className="font-mono">
+                                            {breakdown.cost_codes.wages}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <span className="font-semibold tabular-nums">{formatCurrency(breakdown.marked_up_wages)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Super */}
+                    <div className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <span>Superannuation (Fixed Weekly)</span>
+                                <Badge variant="secondary" className="font-mono">
+                                    {breakdown.cost_codes.super}
+                                </Badge>
+                            </div>
+                            <span className="font-medium tabular-nums">{formatCurrency(breakdown.super)}</span>
+                        </div>
+                    </div>
+
+                    {/* On-Costs */}
+                    <div className="rounded-lg border p-3">
+                        <h4 className="mb-2 text-sm font-medium">On-Costs</h4>
+                        <div className="space-y-1.5">
+                            {[
+                                { key: 'bert', label: 'BERT (Building Industry Redundancy)', code: breakdown.cost_codes.bert, value: breakdown.on_costs.bert },
+                                { key: 'bewt', label: 'BEWT (Building Employees Withholding Tax)', code: breakdown.cost_codes.bewt, value: breakdown.on_costs.bewt },
+                                { key: 'cipq', label: 'CIPQ (Construction Induction)', code: breakdown.cost_codes.cipq, value: breakdown.on_costs.cipq },
+                                {
+                                    key: 'payroll',
+                                    label: `Payroll Tax (${breakdown.on_costs.payroll_tax_rate}%)`,
+                                    code: breakdown.cost_codes.payroll_tax,
+                                    value: breakdown.on_costs.payroll_tax,
+                                },
+                                {
+                                    key: 'workcover',
+                                    label: `WorkCover (${breakdown.on_costs.workcover_rate}%)`,
+                                    code: breakdown.cost_codes.workcover,
+                                    value: breakdown.on_costs.workcover,
+                                },
+                            ].map((item) => (
+                                <div key={item.key} className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <span>{item.label}</span>
+                                        <Badge variant="secondary" className="font-mono">
+                                            {item.code}
+                                        </Badge>
+                                    </div>
+                                    <span className="font-medium tabular-nums">{formatCurrency(item.value)}</span>
+                                </div>
+                            ))}
+                            <SubTotalRow label="Total On-Costs" value={formatCurrency(breakdown.on_costs.total)} />
+                        </div>
+                    </div>
+
+                    {/* Total */}
+                    <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-base font-semibold">Total Weekly Job Cost</span>
+                            <span className="text-base font-bold tabular-nums">{formatCurrency(breakdown.total_weekly_cost)}</span>
+                        </div>
+                    </div>
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+    );
+};
 
 export const SettingsDialog = ({
     open,
@@ -58,31 +266,52 @@ export const SettingsDialog = ({
     locationWorktypes,
     locationId,
     flash,
-    onOpenCostBreakdown,
     onOpenAllowanceDialog,
 }: SettingsDialogProps) => {
-    // Local state for editing
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
     const [editingLabel, setEditingLabel] = useState<{ id: number; label: string } | null>(null);
     const [editingCostCode, setEditingCostCode] = useState<{ id: number; costCodePrefix: string } | null>(null);
     const [newTemplateId, setNewTemplateId] = useState<string>('');
     const [templateSearch, setTemplateSearch] = useState('');
-    const [showHelp, setShowHelp] = useState(false);
+    const [showAddTemplate, setShowAddTemplate] = useState(false);
+    // Mobile-only: track whether the detail pane is shown instead of the list
+    const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
-    // Handle adding a new template
+    // Reset mobile view state when the dialog closes
+    useEffect(() => {
+        if (!open) setMobileShowDetail(false);
+    }, [open]);
+
+    // Auto-select first template when list changes
+    useEffect(() => {
+        if (configuredTemplates.length > 0) {
+            const stillExists = configuredTemplates.find((t) => t.id === selectedTemplateId);
+            if (!stillExists) {
+                setSelectedTemplateId(configuredTemplates[0].id);
+            }
+        } else {
+            setSelectedTemplateId(null);
+        }
+    }, [configuredTemplates]);
+
+    const selectedTemplate = configuredTemplates.find((t) => t.id === selectedTemplateId) ?? null;
+
     const handleAddTemplate = () => {
         if (!newTemplateId) return;
-        router.post(route('labour-forecast.add-template', { location: locationId }), { template_id: newTemplateId }, { preserveScroll: true });
-        setNewTemplateId('');
-        setTemplateSearch('');
+        router.post(route('labour-forecast.add-template', { location: locationId }), { template_id: newTemplateId }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setNewTemplateId('');
+                setTemplateSearch('');
+            },
+        });
     };
 
-    // Handle removing a template
     const handleRemoveTemplate = (configId: number) => {
         if (!confirm('Are you sure you want to remove this template?')) return;
         router.delete(route('labour-forecast.remove-template', { location: locationId, template: configId }), { preserveScroll: true });
     };
 
-    // Handle updating a template label
     const handleUpdateLabel = () => {
         if (!editingLabel) return;
         router.put(
@@ -93,7 +322,6 @@ export const SettingsDialog = ({
         setEditingLabel(null);
     };
 
-    // Handle updating a template cost code prefix
     const handleUpdateCostCode = () => {
         if (!editingCostCode) return;
         router.put(
@@ -104,7 +332,6 @@ export const SettingsDialog = ({
         setEditingCostCode(null);
     };
 
-    // Handle toggling overtime for a template
     const handleToggleOvertime = (templateId: number, enabled: boolean) => {
         router.put(
             route('labour-forecast.update-template-label', { location: locationId, template: templateId }),
@@ -113,7 +340,6 @@ export const SettingsDialog = ({
         );
     };
 
-    // Handle toggling leave markups job costed for a template
     const handleToggleLeaveMarkupsJobCosted = (templateId: number, enabled: boolean) => {
         router.put(
             route('labour-forecast.update-template-label', { location: locationId, template: templateId }),
@@ -124,393 +350,354 @@ export const SettingsDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl md:max-w-3xl lg:max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Settings className="h-5 w-5 shrink-0" />
-                        <span className="truncate">Configure Pay Rate Templates</span>
-                    </DialogTitle>
-                </DialogHeader>
+            <DialogContent className="!flex !flex-col h-[95vh] max-h-[95vh] w-[calc(100%-1rem)] gap-0 overflow-hidden p-0 sm:h-[85vh] sm:max-h-[85vh] sm:max-w-4xl lg:max-w-5xl">
+                {/* Header */}
+                <div className="shrink-0 px-4 pb-3 pt-5 sm:px-6 sm:pt-6 sm:pb-4">
+                        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <DialogHeader className="flex-1 min-w-0">
+                                <DialogTitle className="flex items-center gap-2 pr-8">
+                                    <Settings className="h-5 w-5 shrink-0" />
+                                    <span className="truncate">Configure Pay Rate Templates</span>
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Manage pay rate templates, allowances, and cost settings for this location.
+                                </DialogDescription>
+                            </DialogHeader>
 
-                <div className="space-y-4">
-                    {/* Flash messages */}
-                    {flash?.success && (
-                        <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                            {flash.success}
-                        </div>
-                    )}
-                    {flash?.error && (
-                        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
-                    )}
-
-                    {/* How to Use Guide */}
-                    <Collapsible open={showHelp} onOpenChange={setShowHelp}>
-                        <CollapsibleTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between" size="sm">
-                                <span className="flex items-center gap-2">
-                                    <HelpCircle className="h-4 w-4 text-blue-500" />
-                                    How to Use This Dialog
-                                </span>
-                                <ChevronDown className={`h-4 w-4 transition-transform ${showHelp ? 'rotate-180' : ''}`} />
-                            </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                                <div className="space-y-4 text-sm">
-                                    {/* Step 1 */}
-                                    <div className="flex gap-3">
-                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                                            1
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-blue-800 dark:text-blue-300">Add Pay Rate Templates</p>
-                                            <p className="mt-1 text-blue-700 dark:text-blue-400">
-                                                Use the search box under "Add Template" to find templates from KeyPay. Click on a template to select
-                                                it, then click the <span className="font-semibold">Add</span> button.
-                                            </p>
-                                            <div className="mt-2 rounded bg-blue-100 p-2 text-xs dark:bg-blue-900/40">
-                                                <span className="font-medium">Tip:</span> Common templates include "CW3 - Carpenter", "CW1 -
-                                                Labourer", "Foreman", etc.
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Step 2 */}
-                                    <div className="flex gap-3">
-                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                                            2
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-blue-800 dark:text-blue-300">Configure Each Template</p>
-                                            <p className="mt-1 text-blue-700 dark:text-blue-400">For each configured template, you can:</p>
-                                            <ul className="mt-2 list-inside list-disc space-y-1 text-blue-700 dark:text-blue-400">
-                                                <li>
-                                                    <Pencil className="mr-1 inline h-3 w-3" /> <span className="font-medium">Edit label</span> - Click
-                                                    the pencil icon to give a custom name
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Set Cost Code</span> - Click the cost code button to assign a prefix
-                                                    (e.g., "03" for 03-01)
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Toggle Overtime</span> - Enable to show overtime hours row in the
-                                                    forecast grid
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Leave Markups Job Costed</span> - Enable if leave accruals are charged
-                                                    to the job, disable if they are absorbed as company overhead
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-
-                                    {/* Step 3 */}
-                                    <div className="flex gap-3">
-                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                                            3
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-blue-800 dark:text-blue-300">Add Allowances</p>
-                                            <p className="mt-1 text-blue-700 dark:text-blue-400">
-                                                Click the <Plus className="mx-1 inline h-3 w-3 text-green-600" /> (green plus) icon to configure
-                                                allowances for a template:
-                                            </p>
-                                            <ul className="mt-2 list-inside list-disc space-y-1 text-blue-700 dark:text-blue-400">
-                                                <li>
-                                                    <span className="font-medium">Fares & Travel</span> - Daily travel allowance
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Site Allowance</span> - Hourly site allowance based on project value
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Multistorey</span> - Height allowance for multi-level buildings
-                                                </li>
-                                                <li>
-                                                    <span className="font-medium">Custom</span> - Any additional allowances
-                                                </li>
-                                            </ul>
-                                            <div className="mt-2 rounded bg-blue-100 p-2 text-xs dark:bg-blue-900/40">
-                                                <span className="font-medium">Note:</span> Each allowance shows a green badge when configured. Hover
-                                                over badges to see rates.
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Step 4 */}
-                                    <div className="flex gap-3">
-                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                                            4
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-blue-800 dark:text-blue-300">View Cost Breakdown</p>
-                                            <p className="mt-1 text-blue-700 dark:text-blue-400">
-                                                Click the <Calculator className="mx-1 inline h-3 w-3 text-indigo-600" /> (calculator) icon to see a
-                                                detailed breakdown of how the weekly cost is calculated, including base wages, allowances, leave
-                                                markups, and oncosts.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Icon Legend */}
-                                    <div className="rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-700 dark:bg-blue-950/50">
-                                        <p className="mb-2 text-xs font-semibold text-blue-800 dark:text-blue-300">Icon Reference:</p>
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div className="flex items-center gap-2">
-                                                <Calculator className="h-4 w-4 text-indigo-500" />
-                                                <span className="text-blue-700 dark:text-blue-400">View cost breakdown</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Plus className="h-4 w-4 text-green-500" />
-                                                <span className="text-blue-700 dark:text-blue-400">Configure allowances</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Pencil className="h-4 w-4 text-slate-500" />
-                                                <span className="text-blue-700 dark:text-blue-400">Edit template label</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Trash2 className="h-4 w-4 text-red-500" />
-                                                <span className="text-blue-700 dark:text-blue-400">Remove template</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-
-                    {/* Add new template */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-medium">Add Template</h3>
-                        <div className="space-y-2">
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Search templates..."
-                                    value={templateSearch}
-                                    onChange={(e) => {
-                                        setTemplateSearch(e.target.value);
+                            <Popover
+                                open={showAddTemplate}
+                                onOpenChange={(open) => {
+                                    setShowAddTemplate(open);
+                                    if (!open) {
+                                        setTemplateSearch('');
                                         setNewTemplateId('');
-                                    }}
-                                    className="flex-1"
-                                />
-                                <Button onClick={handleAddTemplate} disabled={!newTemplateId}>
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add
-                                </Button>
-                            </div>
-                            <div className="max-h-[200px] overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700">
-                                {availableTemplates.filter(
-                                    (t) => t.hourly_rate && t.hourly_rate > 0 && t.name.toLowerCase().includes(templateSearch.toLowerCase()),
-                                ).length === 0 ? (
-                                    <div className="p-3 text-center text-sm text-slate-500">No templates found.</div>
+                                    }
+                                }}
+                            >
+                                <PopoverTrigger asChild>
+                                    <Button size="sm" className="w-full sm:mr-6 sm:w-auto">
+                                        <Plus className="mr-1.5 h-4 w-4" />
+                                        Add Template
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-3">
+                                    <div className="space-y-2">
+                                        <div>
+                                            <h4 className="text-sm font-medium">Add Pay Rate Template</h4>
+                                            <p className="text-xs text-muted-foreground">Search KeyPay templates to add to this location.</p>
+                                        </div>
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Search templates..."
+                                                value={templateSearch}
+                                                onChange={(e) => {
+                                                    setTemplateSearch(e.target.value);
+                                                    setNewTemplateId('');
+                                                }}
+                                                className="pl-8 h-9"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-[240px] overflow-y-auto rounded-md border">
+                                            {availableTemplates.filter(
+                                                (t) => t.hourly_rate && t.hourly_rate > 0 && t.name.toLowerCase().includes(templateSearch.toLowerCase()),
+                                            ).length === 0 ? (
+                                                <div className="p-3 text-center text-sm text-muted-foreground">No templates found.</div>
+                                            ) : (
+                                                availableTemplates
+                                                    .filter(
+                                                        (t) => t.hourly_rate && t.hourly_rate > 0 && t.name.toLowerCase().includes(templateSearch.toLowerCase()),
+                                                    )
+                                                    .map((template) => (
+                                                        <button
+                                                            key={template.id}
+                                                            type="button"
+                                                            className={cn(
+                                                                'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-accent',
+                                                                newTemplateId === String(template.id) && 'bg-accent',
+                                                            )}
+                                                            onClick={() => {
+                                                                setNewTemplateId(String(template.id));
+                                                                setTemplateSearch(template.name);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'h-4 w-4 shrink-0 text-primary',
+                                                                    newTemplateId === String(template.id) ? 'opacity-100' : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            <span className="flex-1 text-left font-medium break-words">{template.name}</span>
+                                                            <Badge variant="secondary" className="shrink-0 self-start">
+                                                                {formatCurrency(template.hourly_rate)}/hr
+                                                            </Badge>
+                                                        </button>
+                                                    ))
+                                            )}
+                                        </div>
+                                        <div className="flex justify-end gap-2 pt-1">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setShowAddTemplate(false);
+                                                    setTemplateSearch('');
+                                                    setNewTemplateId('');
+                                                }}
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button size="sm" onClick={handleAddTemplate} disabled={!newTemplateId}>
+                                                <Plus className="mr-1 h-4 w-4" />
+                                                Add
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        {flash?.success && (
+                            <Alert className="mt-3">
+                                <CheckCircle2 className="text-emerald-500" />
+                                <AlertDescription>{flash.success}</AlertDescription>
+                            </Alert>
+                        )}
+                        {flash?.error && (
+                            <Alert variant="destructive" className="mt-3">
+                                <XCircle />
+                                <AlertDescription>{flash.error}</AlertDescription>
+                            </Alert>
+                        )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Sidebar + Content */}
+                    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                        {/* Sidebar */}
+                        <div
+                            className={cn(
+                                'flex min-h-0 shrink-0 flex-col border-r md:w-64',
+                                // Mobile: fill when list view, hide when detail view
+                                mobileShowDetail ? 'hidden' : 'flex-1',
+                                'md:flex md:flex-none',
+                            )}
+                        >
+                            {/* Template list */}
+                            <div className="min-h-0 flex-1 overflow-y-auto">
+                                {configuredTemplates.length === 0 ? (
+                                    <div className="p-4 text-center text-xs text-muted-foreground">
+                                        No templates configured. Click "Add Template" above.
+                                    </div>
                                 ) : (
-                                    availableTemplates
-                                        .filter(
-                                            (t) => t.hourly_rate && t.hourly_rate > 0 && t.name.toLowerCase().includes(templateSearch.toLowerCase()),
-                                        )
-                                        .map((template) => (
+                                    <div className="py-1">
+                                        {configuredTemplates.map((template) => (
                                             <button
                                                 key={template.id}
                                                 type="button"
-                                                className={`flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 ${
-                                                    newTemplateId === String(template.id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''
-                                                }`}
                                                 onClick={() => {
-                                                    setNewTemplateId(String(template.id));
-                                                    setTemplateSearch(template.name);
+                                                    setSelectedTemplateId(template.id);
+                                                    setEditingLabel(null);
+                                                    setEditingCostCode(null);
+                                                    setMobileShowDetail(true);
                                                 }}
+                                                className={cn(
+                                                    'flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent',
+                                                    selectedTemplateId === template.id && 'md:bg-accent',
+                                                )}
                                             >
-                                                <Check
-                                                    className={`h-4 w-4 shrink-0 text-blue-600 ${
-                                                        newTemplateId === String(template.id) ? 'opacity-100' : 'opacity-0'
-                                                    }`}
-                                                />
-                                                <span className="flex-1 text-left font-medium">{template.name}</span>
-                                                <span className="shrink-0 rounded-md bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                                <span className="text-sm font-medium truncate w-full">{template.label}</span>
+                                                <span className="text-xs text-muted-foreground">
                                                     {formatCurrency(template.hourly_rate)}/hr
+                                                    {' \u00B7 '}
+                                                    {formatCurrency(template.cost_breakdown.total_weekly_cost)}/wk
                                                 </span>
                                             </button>
-                                        ))
+                                        ))}
+                                    </div>
                                 )}
                             </div>
+
+                            {/* Shift conditions footer */}
+                            {locationWorktypes.length > 0 && (
+                                <>
+                                    <Separator />
+                                    <div className="p-3">
+                                        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                            <Info className="h-3 w-3" />
+                                            Shift Conditions
+                                        </div>
+                                        <ul className="space-y-0.5">
+                                            {locationWorktypes.map((wt) => (
+                                                <li key={wt.id} className="text-xs leading-snug text-muted-foreground break-words">
+                                                    • {wt.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                    </div>
 
-                    {/* Configured templates list */}
-                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                        <h3 className="mb-3 text-sm font-medium">Configured Templates ({configuredTemplates.length})</h3>
-                        {configuredTemplates.length === 0 ? (
-                            <p className="text-sm text-slate-500">No templates configured. Add templates above to get started.</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {configuredTemplates.map((template) => (
-                                    <div
-                                        key={template.id}
-                                        className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                        {/* Detail panel */}
+                        <div
+                            className={cn(
+                                'min-h-0 flex-1 overflow-y-auto',
+                                // Mobile: hide when list view, show when detail view
+                                !mobileShowDetail && 'hidden md:block',
+                            )}
+                        >
+                            {!selectedTemplate ? (
+                                <div className="hidden h-full items-center justify-center p-6 text-center text-sm text-muted-foreground md:flex">
+                                    {configuredTemplates.length === 0
+                                        ? 'Add a template to get started'
+                                        : 'Select a template from the sidebar'}
+                                </div>
+                            ) : (
+                                <div className="space-y-6 p-4 sm:p-6">
+                                    {/* Mobile back button */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="-ml-2 md:hidden"
+                                        onClick={() => setMobileShowDetail(false)}
                                     >
-                                        {/* Header Row - Name and Actions */}
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0 flex-1">
-                                                {editingLabel?.id === template.id ? (
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <Input
-                                                            value={editingLabel.label}
-                                                            onChange={(e) => setEditingLabel({ ...editingLabel, label: e.target.value })}
-                                                            placeholder="Custom label"
-                                                            className="h-8 min-w-[120px] flex-1"
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') handleUpdateLabel();
-                                                                if (e.key === 'Escape') setEditingLabel(null);
-                                                            }}
-                                                            autoFocus
-                                                        />
-                                                        <Button size="sm" onClick={handleUpdateLabel}>
-                                                            Save
-                                                        </Button>
-                                                        <Button size="sm" variant="outline" onClick={() => setEditingLabel(null)}>
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                                                            {template.label}
-                                                        </h4>
-                                                        {template.label !== template.name && (
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400">{template.name}</p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                        <ArrowLeft className="mr-1.5 h-4 w-4" />
+                                        Back to list
+                                    </Button>
 
-                                            {/* Action Buttons - Always visible on right */}
-                                            {!editingLabel && !editingCostCode && (
-                                                <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-600 dark:bg-slate-700">
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 w-7 p-0 text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700"
-                                                                onClick={() => onOpenCostBreakdown(template)}
-                                                            >
-                                                                <Calculator className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>View cost breakdown</TooltipContent>
-                                                    </Tooltip>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 w-7 p-0 text-green-500 hover:bg-green-50 hover:text-green-700"
-                                                                onClick={() => onOpenAllowanceDialog(template)}
-                                                            >
-                                                                <Plus className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Configure allowances</TooltipContent>
-                                                    </Tooltip>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 w-7 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                                                                onClick={() => setEditingLabel({ id: template.id, label: template.label })}
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Edit label</TooltipContent>
-                                                    </Tooltip>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                                                onClick={() => handleRemoveTemplate(template.id)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Remove template</TooltipContent>
-                                                    </Tooltip>
+                                    {/* Template header */}
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0 flex-1">
+                                            {editingLabel?.id === selectedTemplate.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        value={editingLabel.label}
+                                                        onChange={(e) => setEditingLabel({ ...editingLabel, label: e.target.value })}
+                                                        placeholder="Custom label"
+                                                        className="h-9 flex-1"
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleUpdateLabel();
+                                                            if (e.key === 'Escape') setEditingLabel(null);
+                                                        }}
+                                                        autoFocus
+                                                    />
+                                                    <Button size="sm" onClick={handleUpdateLabel}>Save</Button>
+                                                    <Button size="sm" variant="outline" onClick={() => setEditingLabel(null)}>Cancel</Button>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="text-lg font-semibold">{selectedTemplate.label}</h3>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-7 w-7 p-0"
+                                                            onClick={() => setEditingLabel({ id: selectedTemplate.id, label: selectedTemplate.label })}
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                    {selectedTemplate.label !== selectedTemplate.name && (
+                                                        <p className="text-xs text-muted-foreground mt-0.5">{selectedTemplate.name}</p>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="shrink-0 text-destructive hover:text-destructive"
+                                            onClick={() => handleRemoveTemplate(selectedTemplate.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4 sm:mr-1.5" />
+                                            <span className="hidden sm:inline">Remove</span>
+                                        </Button>
+                                    </div>
 
-                                        {/* Rate & Cost Badges - Separate row for better mobile layout */}
-                                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                                            <div className="rounded-md bg-slate-100 px-2 py-1 dark:bg-slate-700">
-                                                <span className="text-xs text-slate-500 dark:text-slate-400">Rate: </span>
-                                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                                    {formatCurrency(template.hourly_rate)}/hr
-                                                </span>
-                                            </div>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <div className="cursor-help rounded-md bg-green-50 px-2 py-1 dark:bg-green-900/30">
-                                                        <span className="text-xs text-green-600 dark:text-green-400">Weekly: </span>
-                                                        <span className="text-sm font-bold text-green-700 dark:text-green-300">
-                                                            {formatCurrency(template.cost_breakdown.total_weekly_cost)}
+                                    {/* Rate info */}
+                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                        <div className="rounded-lg border p-3">
+                                            <p className="text-xs text-muted-foreground">Hourly Rate</p>
+                                            <p className="text-lg font-semibold">{formatCurrency(selectedTemplate.hourly_rate)}</p>
+                                        </div>
+                                        <div className="rounded-lg border p-3">
+                                            <p className="text-xs text-muted-foreground">Allowances</p>
+                                            <p className="text-lg font-semibold">{formatCurrency(selectedTemplate.cost_breakdown.allowances.total)}</p>
+                                        </div>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="rounded-lg border p-3 cursor-help">
+                                                    <p className="text-xs text-muted-foreground">Total Weekly</p>
+                                                    <p className="text-lg font-semibold">{formatCurrency(selectedTemplate.cost_breakdown.total_weekly_cost)}</p>
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-xs">
+                                                <div className="space-y-1 text-xs">
+                                                    <div className="flex justify-between gap-4">
+                                                        <span>Base Wages ({selectedTemplate.cost_breakdown.hours_per_week}hrs)</span>
+                                                        <span className="font-medium">{formatCurrency(selectedTemplate.cost_breakdown.base_weekly_wages)}</span>
+                                                    </div>
+                                                    {selectedTemplate.cost_breakdown.allowances.total > 0 && (
+                                                        <div className="flex justify-between gap-4">
+                                                            <span>+ Allowances</span>
+                                                            <span className="font-medium">{formatCurrency(selectedTemplate.cost_breakdown.allowances.total)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between gap-4">
+                                                        <span>+ Leave Accruals</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(
+                                                                selectedTemplate.cost_breakdown.leave_markups.annual_leave_amount +
+                                                                    selectedTemplate.cost_breakdown.leave_markups.leave_loading_amount,
+                                                            )}
                                                         </span>
                                                     </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="bottom" className="max-w-xs">
-                                                    <div className="space-y-1 text-xs">
-                                                        <div className="flex justify-between gap-4">
-                                                            <span>Base Wages ({template.cost_breakdown.hours_per_week}hrs)</span>
-                                                            <span className="font-medium">
-                                                                {formatCurrency(template.cost_breakdown.base_weekly_wages)}
-                                                            </span>
-                                                        </div>
-                                                        {template.cost_breakdown.allowances.total > 0 && (
-                                                            <div className="flex justify-between gap-4">
-                                                                <span>+ Allowances</span>
-                                                                <span className="font-medium">
-                                                                    {formatCurrency(template.cost_breakdown.allowances.total)}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                        <div className="flex justify-between gap-4">
-                                                            <span>+ Leave Accruals</span>
-                                                            <span className="font-medium">
-                                                                {formatCurrency(
-                                                                    template.cost_breakdown.leave_markups.annual_leave_amount +
-                                                                        template.cost_breakdown.leave_markups.leave_loading_amount,
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex justify-between gap-4">
-                                                            <span>+ Super</span>
-                                                            <span className="font-medium">{formatCurrency(template.cost_breakdown.super)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between gap-4">
-                                                            <span>+ On-Costs</span>
-                                                            <span className="font-medium">
-                                                                {formatCurrency(template.cost_breakdown.on_costs.total)}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex justify-between gap-4 border-t border-slate-600 pt-1 font-semibold text-green-400">
-                                                            <span>Total Weekly Cost</span>
-                                                            <span>{formatCurrency(template.cost_breakdown.total_weekly_cost)}</span>
-                                                        </div>
+                                                    <div className="flex justify-between gap-4">
+                                                        <span>+ Super</span>
+                                                        <span className="font-medium">{formatCurrency(selectedTemplate.cost_breakdown.super)}</span>
                                                     </div>
-                                                </TooltipContent>
-                                            </Tooltip>
+                                                    <div className="flex justify-between gap-4">
+                                                        <span>+ On-Costs</span>
+                                                        <span className="font-medium">{formatCurrency(selectedTemplate.cost_breakdown.on_costs.total)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+                                                        <span>Total Weekly Cost</span>
+                                                        <span>{formatCurrency(selectedTemplate.cost_breakdown.total_weekly_cost)}</span>
+                                                    </div>
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                        <div className="rounded-lg border p-3">
+                                            <p className="text-xs text-muted-foreground">Hours/Week</p>
+                                            <p className="text-lg font-semibold">{selectedTemplate.cost_breakdown.hours_per_week}</p>
                                         </div>
+                                    </div>
 
-                                        {/* Allowances Row */}
-                                        {template.custom_allowances && template.custom_allowances.length > 0 && (
-                                            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Allowances:</span>
-                                                {template.custom_allowances.map((allowance) => (
+                                    {/* Actions row */}
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => onOpenAllowanceDialog(selectedTemplate)}>
+                                            <Plus className="mr-1.5 h-4 w-4" />
+                                            Configure Allowances
+                                        </Button>
+                                    </div>
+
+                                    <Separator />
+
+                                    {/* Allowances */}
+                                    {selectedTemplate.custom_allowances && selectedTemplate.custom_allowances.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-medium mb-2">Allowances</h4>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {selectedTemplate.custom_allowances.map((allowance) => (
                                                     <Tooltip key={allowance.id}>
                                                         <TooltipTrigger asChild>
-                                                            <span className="cursor-help rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                                                                {allowance.name}
+                                                            <span>
+                                                                <Badge variant="secondary" className="cursor-help">
+                                                                    {allowance.name}
+                                                                </Badge>
                                                             </span>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
@@ -522,128 +709,92 @@ export const SettingsDialog = ({
                                                     </Tooltip>
                                                 ))}
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
 
-                                        {/* Settings - Cost Code & Toggles */}
-                                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-3 dark:border-slate-700">
+                                    {/* Settings */}
+                                    <div>
+                                        <h4 className="text-sm font-medium mb-3">Settings</h4>
+                                        <div className="space-y-4">
                                             {/* Cost Code */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-medium whitespace-nowrap text-slate-500 dark:text-slate-400">
-                                                    Cost Code:
-                                                </span>
-                                                {editingCostCode?.id === template.id ? (
-                                                    <div className="flex flex-wrap items-center gap-1">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm">Cost Code Prefix</p>
+                                                    <p className="text-xs text-muted-foreground">Sets the cost code prefix for this template (e.g., "03" for 03-01)</p>
+                                                </div>
+                                                {editingCostCode?.id === selectedTemplate.id ? (
+                                                    <div className="flex items-center gap-1">
                                                         <Input
                                                             value={editingCostCode.costCodePrefix}
                                                             onChange={(e) =>
                                                                 setEditingCostCode({ ...editingCostCode, costCodePrefix: e.target.value })
                                                             }
                                                             placeholder="e.g., 03"
-                                                            className="h-7 w-16 text-xs"
+                                                            className="h-8 w-20 text-sm"
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') handleUpdateCostCode();
                                                                 if (e.key === 'Escape') setEditingCostCode(null);
                                                             }}
                                                             autoFocus
                                                         />
-                                                        <Button size="sm" className="h-7 px-2 text-xs" onClick={handleUpdateCostCode}>
-                                                            Save
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="h-7 px-2 text-xs"
-                                                            onClick={() => setEditingCostCode(null)}
-                                                        >
-                                                            Cancel
-                                                        </Button>
+                                                        <Button size="sm" className="h-8" onClick={handleUpdateCostCode}>Save</Button>
+                                                        <Button size="sm" variant="outline" className="h-8" onClick={() => setEditingCostCode(null)}>Cancel</Button>
                                                     </div>
                                                 ) : (
                                                     <button
                                                         onClick={() =>
-                                                            setEditingCostCode({ id: template.id, costCodePrefix: template.cost_code_prefix || '' })
+                                                            setEditingCostCode({ id: selectedTemplate.id, costCodePrefix: selectedTemplate.cost_code_prefix || '' })
                                                         }
-                                                        className="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                                                        className="rounded-md bg-muted px-3 py-1.5 font-mono text-sm font-medium transition-colors hover:bg-muted/80"
                                                     >
-                                                        {template.cost_code_prefix ? `${template.cost_code_prefix}-01` : 'Set'}
+                                                        {selectedTemplate.cost_code_prefix ? `${selectedTemplate.cost_code_prefix}-01` : 'Set'}
                                                     </button>
                                                 )}
                                             </div>
 
+                                            <Separator />
+
                                             {/* Overtime Toggle */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-medium whitespace-nowrap text-slate-500 dark:text-slate-400">
-                                                    Overtime:
-                                                </span>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm">Overtime</p>
+                                                    <p className="text-xs text-muted-foreground">Show overtime hours row in the forecast grid</p>
+                                                </div>
                                                 <Switch
-                                                    checked={template.overtime_enabled}
-                                                    onCheckedChange={(checked) => handleToggleOvertime(template.id, checked)}
-                                                    className="data-[state=checked]:bg-orange-500"
+                                                    checked={selectedTemplate.overtime_enabled}
+                                                    onCheckedChange={(checked) => handleToggleOvertime(selectedTemplate.id, checked)}
                                                 />
-                                                <span
-                                                    className={`text-xs font-medium ${template.overtime_enabled ? 'text-orange-600 dark:text-orange-400' : 'text-slate-400'}`}
-                                                >
-                                                    {template.overtime_enabled ? 'On' : 'Off'}
-                                                </span>
                                             </div>
 
-                                            {/* Leave Markups Job Costed Toggle */}
-                                            <div className="flex items-center gap-2">
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <span className="cursor-help text-xs font-medium whitespace-nowrap text-slate-500 underline decoration-dotted underline-offset-2 dark:text-slate-400">
-                                                            Leave Markups:
-                                                        </span>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top" className="max-w-xs">
-                                                        <p className="text-xs font-medium mb-1">Controls whether leave markups (annual leave accrual + leave loading) are charged to the job.</p>
-                                                        <p className="text-xs mb-1"><span className="font-medium">Enable</span> if leave accrual costs should be charged directly to the job. This adds annual leave and leave loading markups to the job cost.</p>
-                                                        <p className="text-xs"><span className="font-medium">Disable</span> (default) if leave accruals are absorbed as overhead. Only oncosts (workers comp, payroll tax, super) will be job costed for leave hours.</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
+                                            <Separator />
+
+                                            {/* Leave Markups Toggle */}
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm">Leave Markups Job Costed</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Charge leave accrual costs (annual leave + leave loading) directly to the job
+                                                    </p>
+                                                </div>
                                                 <Switch
-                                                    checked={template.leave_markups_job_costed}
-                                                    onCheckedChange={(checked) => handleToggleLeaveMarkupsJobCosted(template.id, checked)}
-                                                    className="data-[state=checked]:bg-blue-500"
+                                                    checked={selectedTemplate.leave_markups_job_costed}
+                                                    onCheckedChange={(checked) => handleToggleLeaveMarkupsJobCosted(selectedTemplate.id, checked)}
                                                 />
-                                                <span
-                                                    className={`text-xs font-medium ${template.leave_markups_job_costed ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}
-                                                >
-                                                    {template.leave_markups_job_costed ? 'On' : 'Off'}
-                                                </span>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
 
-                    <p className="text-xs text-slate-500">
-                        Templates are sourced from KeyPay Pay Rate Templates. Hourly rates are based on the "Permanent Ordinary Hours" pay category.
-                    </p>
+                                    {/* Cost Breakdown - Collapsible */}
+                                    <CostBreakdownSection template={selectedTemplate} />
 
-                    {/* Location Worktypes (Shift Conditions) */}
-                    {locationWorktypes.length > 0 && (
-                        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
-                                <Info className="h-4 w-4 text-slate-400" />
-                                Active Shift Conditions
-                            </h3>
-                            <div className="flex flex-wrap gap-2">
-                                {locationWorktypes.map((wt) => (
-                                    <span
-                                        key={wt.id}
-                                        className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
-                                    >
-                                        {wt.name}
-                                    </span>
-                                ))}
-                            </div>
-                            <p className="mt-2 text-xs text-slate-500">These shift conditions affect allowance calculations in job costing.</p>
+                                    {/* Footer note */}
+                                    <p className="text-xs text-muted-foreground">
+                                        Templates are sourced from KeyPay. Hourly rates are based on the "Permanent Ordinary Hours" pay category.
+                                    </p>
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
+                    </div>
             </DialogContent>
         </Dialog>
     );

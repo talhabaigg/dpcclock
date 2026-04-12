@@ -38,31 +38,31 @@ export const AllTabContent = ({ costCodeTotalsByPrefix, sortedPrefixes }: AllTab
                 const label = getPrefixLabel(prefix);
 
                 return (
-                    <div key={prefix} className="border-border rounded-lg border p-4">
+                    <div key={prefix} className="bg-card border-border rounded-lg border p-4">
                         {/* Group header: e.g. "Direct (Series 01/02)" */}
-                        <h4 className="text-primary mb-3 font-semibold">
-                            {label} (Series {prefix}/{group.oncostsSeries})
+                        <h4 className="text-foreground mb-3 text-sm font-semibold">
+                            {label} <span className="text-muted-foreground font-normal">(Series {prefix}/{group.oncostsSeries})</span>
                         </h4>
 
                         <div className="space-y-2">
                             {/* Wages total with cost code tooltip */}
-                            <div className="bg-background border-border flex items-center justify-between rounded-lg border p-3">
+                            <div className="bg-muted/30 border-border flex items-center justify-between rounded-md border p-3">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span className="text-primary cursor-help font-mono text-sm font-semibold">
+                                        <span className="text-foreground cursor-help font-mono text-sm font-medium">
                                             {label} Wages
                                         </span>
                                     </TooltipTrigger>
                                     <TooltipContent className="z-[10002]">{group.wagesCode}</TooltipContent>
                                 </Tooltip>
-                                <span className="text-lg font-bold">{formatCurrency(group.wagesAmount)}</span>
+                                <span className="text-foreground text-lg font-semibold tabular-nums">{formatCurrency(group.wagesAmount)}</span>
                             </div>
 
                             {/* Oncosts accordion (expandable to show individual items) */}
                             <Accordion
                                 type="single"
                                 collapsible
-                                className="bg-background border-border rounded-lg border"
+                                className="bg-muted/30 border-border rounded-md border"
                             >
                                 <AccordionItem value="oncosts" className="border-0">
                                     <AccordionTrigger className="px-3 py-2 hover:no-underline">
@@ -70,7 +70,7 @@ export const AllTabContent = ({ costCodeTotalsByPrefix, sortedPrefixes }: AllTab
                                             <div className="flex items-center gap-2">
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <span className="text-primary cursor-help font-mono text-sm font-semibold">
+                                                        <span className="text-foreground cursor-help font-mono text-sm font-medium">
                                                             Oncosts
                                                         </span>
                                                     </TooltipTrigger>
@@ -87,7 +87,7 @@ export const AllTabContent = ({ costCodeTotalsByPrefix, sortedPrefixes }: AllTab
                                                     % of wages)
                                                 </span>
                                             </div>
-                                            <span className="text-lg font-bold">
+                                            <span className="text-foreground text-lg font-semibold tabular-nums">
                                                 {formatCurrency(group.oncostsTotal)}
                                             </span>
                                         </div>
@@ -123,9 +123,9 @@ export const AllTabContent = ({ costCodeTotalsByPrefix, sortedPrefixes }: AllTab
                             </Accordion>
 
                             {/* Group subtotal */}
-                            <div className="flex items-center justify-between rounded-lg bg-slate-100 p-3 dark:bg-slate-800/50">
-                                <span className="font-semibold">Subtotal ({label})</span>
-                                <span className="text-lg font-bold">{formatCurrency(group.total)}</span>
+                            <div className="bg-muted border-border flex items-center justify-between rounded-md border p-3">
+                                <span className="text-foreground text-sm font-medium">Subtotal ({label})</span>
+                                <span className="text-foreground text-lg font-semibold tabular-nums">{formatCurrency(group.total)}</span>
                             </div>
                         </div>
                     </div>
@@ -133,9 +133,9 @@ export const AllTabContent = ({ costCodeTotalsByPrefix, sortedPrefixes }: AllTab
             })}
 
             {/* Grand total across all prefix groups */}
-            <div className="flex items-center justify-between rounded-lg border-2 border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                <span className="text-lg font-bold">Grand Total</span>
-                <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="border-border bg-card flex items-center justify-between rounded-lg border-2 p-4 shadow-sm">
+                <span className="text-foreground text-lg font-semibold">Grand Total</span>
+                <span className="text-foreground text-2xl font-bold tabular-nums">
                     {formatCurrency(
                         Object.values(costCodeTotalsByPrefix).reduce((sum, g) => sum + g.total, 0),
                     )}

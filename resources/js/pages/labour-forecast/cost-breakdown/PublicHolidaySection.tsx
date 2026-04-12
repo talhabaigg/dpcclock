@@ -28,7 +28,7 @@ export const PublicHolidaySection = ({ template }: PublicHolidaySectionProps) =>
     if (!(template.public_holiday_not_worked_hours > 0 && ph)) return null;
 
     return (
-        <div className="space-y-3 rounded-lg bg-indigo-50 p-3 dark:bg-indigo-900/20">
+        <div className="bg-card border-border space-y-3 rounded-lg border border-l-4 border-l-indigo-400/60 p-3">
             <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">
                 Public Holiday Not Worked ({template.public_holiday_not_worked_hours.toFixed(1)} hrs /{' '}
                 {ph.days.toFixed(1)} days)

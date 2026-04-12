@@ -35,23 +35,23 @@ const isAggregated = (aggregate?: string) => aggregate && aggregate !== 'week';
 export const PrefixTabContent = ({ templates, aggregate }: PrefixTabContentProps) => (
     <div className="space-y-6">
         {templates.map((template) => (
-            <div key={template.id} className="border-border space-y-4 rounded-lg border p-4">
+            <div key={template.id} className="bg-card border-border space-y-4 rounded-lg border p-4">
                 {/* ============================================================
                     TEMPLATE HEADER - Name, headcount, hourly rate, total cost
                    ============================================================ */}
                 <div className="border-border flex items-center justify-between border-b pb-3">
                     <div>
-                        <h3 className="text-lg font-semibold">{template.label}</h3>
+                        <h3 className="text-foreground text-lg font-semibold">{template.label}</h3>
                         <p className="text-muted-foreground text-sm">
                             {isAggregated(aggregate) ? 'Person-Weeks' : 'Headcount'}: {template.headcount.toFixed(1)} | Hourly Rate:{' '}
                             {formatCurrency(template.hourly_rate)}
                         </p>
                     </div>
                     <div className="text-right">
-                        <p className="text-muted-foreground text-xs">
+                        <p className="text-muted-foreground text-xs font-medium">
                             {isAggregated(aggregate) ? 'Total Cost' : 'Weekly Cost per Head'}
                         </p>
-                        <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                        <p className="text-foreground text-xl font-bold tabular-nums">
                             {formatCurrency(
                                 isAggregated(aggregate)
                                     ? template.weekly_cost
@@ -66,31 +66,31 @@ export const PrefixTabContent = ({ templates, aggregate }: PrefixTabContentProps
                 {/* ============================================================
                     HOURS SUMMARY GRID - Quick overview of all hour types
                    ============================================================ */}
-                <div className="grid grid-cols-4 gap-3 rounded bg-slate-50 p-3 text-sm dark:bg-slate-800/30">
+                <div className="bg-muted/50 border-border grid grid-cols-4 gap-3 rounded-md border p-3 text-sm">
                     <div>
-                        <p className="text-muted-foreground text-xs">Ordinary Hours</p>
-                        <p className="font-semibold">{template.cost_breakdown.ordinary_hours.toFixed(1)} hrs</p>
+                        <p className="text-muted-foreground text-xs font-medium">Ordinary Hours</p>
+                        <p className="text-foreground font-semibold tabular-nums">{template.cost_breakdown.ordinary_hours.toFixed(1)} hrs</p>
                     </div>
                     {template.overtime_hours > 0 && (
                         <div>
-                            <p className="text-xs text-orange-600 dark:text-orange-400">Overtime Hours</p>
-                            <p className="font-semibold text-orange-600 dark:text-orange-400">
+                            <p className="text-xs font-medium text-orange-600 dark:text-orange-400">Overtime Hours</p>
+                            <p className="font-semibold tabular-nums text-orange-700 dark:text-orange-400">
                                 {template.overtime_hours.toFixed(1)} hrs
                             </p>
                         </div>
                     )}
                     {template.leave_hours > 0 && (
                         <div>
-                            <p className="text-xs text-blue-600 dark:text-blue-400">Leave Hours</p>
-                            <p className="font-semibold text-blue-600 dark:text-blue-400">
+                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Leave Hours</p>
+                            <p className="font-semibold tabular-nums text-blue-700 dark:text-blue-400">
                                 {template.leave_hours.toFixed(1)} hrs
                             </p>
                         </div>
                     )}
                     {template.rdo_hours > 0 && (
                         <div>
-                            <p className="text-xs text-purple-600 dark:text-purple-400">RDO Hours</p>
-                            <p className="font-semibold text-purple-600 dark:text-purple-400">
+                            <p className="text-xs font-medium text-purple-600 dark:text-purple-400">RDO Hours</p>
+                            <p className="font-semibold tabular-nums text-purple-700 dark:text-purple-400">
                                 {template.rdo_hours.toFixed(1)} hrs
                             </p>
                         </div>
@@ -124,11 +124,11 @@ export const PrefixTabContent = ({ templates, aggregate }: PrefixTabContentProps
                    ============================================================ */}
 
                 {/* Per-head (or total in aggregate mode) grand total */}
-                <div className="mt-4 flex justify-between rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-                    <span className="text-lg font-bold">
+                <div className="bg-muted border-border mt-4 flex justify-between rounded-md border p-3">
+                    <span className="text-foreground text-lg font-semibold">
                         {isAggregated(aggregate) ? 'Total Cost' : 'Total Weekly Cost (Per Head)'}
                     </span>
-                    <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                    <span className="text-foreground text-xl font-bold tabular-nums">
                         {formatCurrency(
                             isAggregated(aggregate)
                                 ? calculatePerHeadCost(template.cost_breakdown)

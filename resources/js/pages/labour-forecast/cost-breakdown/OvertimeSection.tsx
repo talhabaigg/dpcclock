@@ -28,7 +28,7 @@ export const OvertimeSection = ({ template }: OvertimeSectionProps) => {
     if (!(template.overtime_hours > 0 && overtime)) return null;
 
     return (
-        <div className="space-y-2 rounded-lg bg-orange-50 p-3 dark:bg-orange-900/20">
+        <div className="bg-card border-border space-y-2 rounded-lg border border-l-4 border-l-orange-400/60 p-3">
             <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">
                 Overtime ({template.overtime_hours.toFixed(1)} hrs)
             </h4>

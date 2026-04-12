@@ -2,6 +2,8 @@
  * LabourForecastChart component for editing labour forecast data via chart interaction
  */
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     CategoryScale,
     Chart as ChartJS,
@@ -47,28 +49,19 @@ interface EditBox {
     value: string;
 }
 
-// Color palette for multiple work types
-const WORK_TYPE_COLORS = [
-    { line: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' }, // Indigo
-    { line: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' }, // Amber
-    { line: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' }, // Emerald
-    { line: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' }, // Red
-    { line: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' }, // Violet
-    { line: '#06b6d4', bg: 'rgba(6, 182, 212, 0.2)' }, // Cyan
-    { line: '#f97316', bg: 'rgba(249, 115, 22, 0.2)' }, // Orange
-    { line: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' }, // Pink
-];
+const CHART_VAR_NAMES = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'] as const;
 
-const WORK_TYPE_COLORS_DARK = [
-    { line: '#818cf8', bg: 'rgba(129, 140, 248, 0.3)' }, // Indigo
-    { line: '#fbbf24', bg: 'rgba(251, 191, 36, 0.3)' }, // Amber
-    { line: '#34d399', bg: 'rgba(52, 211, 153, 0.3)' }, // Emerald
-    { line: '#f87171', bg: 'rgba(248, 113, 113, 0.3)' }, // Red
-    { line: '#a78bfa', bg: 'rgba(167, 139, 250, 0.3)' }, // Violet
-    { line: '#22d3ee', bg: 'rgba(34, 211, 238, 0.3)' }, // Cyan
-    { line: '#fb923c', bg: 'rgba(251, 146, 60, 0.3)' }, // Orange
-    { line: '#f472b6', bg: 'rgba(244, 114, 182, 0.3)' }, // Pink
-];
+function readCssVar(name: string, fallback: string): string {
+    if (typeof window === 'undefined') return fallback;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+}
+
+// Wrap a color with alpha via color-mix (supported by canvas in all modern browsers).
+function withAlpha(color: string, alpha: number): string {
+    const pct = Math.round(alpha * 100);
+    return `color-mix(in oklch, ${color} ${pct}%, transparent)`;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function LabourForecastChart({ data, datasets, editable, onEdit, selectedWorkType = 'all' }: LabourForecastChartProps) {
@@ -127,18 +120,43 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
         });
     }, [editBox, editBoxDirty, getEditBoxInput]);
 
-    // Modern color palette with dark mode support
-    const COLORS = useMemo(
-        () => ({
-            line: isDark ? '#818cf8' : '#6366f1', // Indigo (indigo-400/500)
-            gradientStart: isDark ? 'rgba(129, 140, 248, 0.3)' : 'rgba(99, 102, 241, 0.2)',
-            gradientEnd: isDark ? 'rgba(129, 140, 248, 0.02)' : 'rgba(99, 102, 241, 0.02)',
-            gridColor: isDark ? '#374151' : '#e2e8f0',
-            textColor: isDark ? '#f3f4f6' : '#1e293b',
-            mutedText: isDark ? '#9ca3af' : '#64748b',
-            labelBg: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            tooltipBg: isDark ? '#1f2937' : '#ffffff',
-        }),
+    // Resolve shadcn design tokens (chart-1..5, border, foreground, muted-foreground, card, popover).
+    // `isDark` is in deps so values refresh when theme toggles.
+    const COLORS = useMemo(() => {
+        const chart1 = readCssVar('--chart-1', 'oklch(0.646 0.222 41.116)');
+        const border = readCssVar('--border', 'oklch(0.922 0 0)');
+        const foreground = readCssVar('--foreground', 'oklch(0.145 0 0)');
+        const mutedForeground = readCssVar('--muted-foreground', 'oklch(0.556 0 0)');
+        const popover = readCssVar('--popover', 'oklch(1 0 0)');
+        const card = readCssVar('--card', 'oklch(1 0 0)');
+
+        return {
+            line: chart1,
+            gradientStart: withAlpha(chart1, isDark ? 0.3 : 0.2),
+            gradientEnd: withAlpha(chart1, 0.02),
+            gridColor: border,
+            textColor: foreground,
+            mutedText: mutedForeground,
+            labelBg: popover,
+            tooltipBg: card,
+            pointBorder: card,
+        };
+    }, [isDark]);
+
+    // Multi-dataset palette cycles through --chart-1 .. --chart-5.
+    const WORK_TYPE_COLORS = useMemo(
+        () =>
+            CHART_VAR_NAMES.map((name, idx) => {
+                const fallbacks = [
+                    'oklch(0.646 0.222 41.116)',
+                    'oklch(0.6 0.118 184.704)',
+                    'oklch(0.398 0.07 227.392)',
+                    'oklch(0.828 0.189 84.429)',
+                    'oklch(0.769 0.188 70.08)',
+                ];
+                const line = readCssVar(name, fallbacks[idx]);
+                return { line, bg: withAlpha(line, isDark ? 0.3 : 0.2) };
+            }),
         [isDark],
     );
 
@@ -163,35 +181,23 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                         ctx.save();
 
                         const text = formatValue(rawValue);
-                        const fontSize = isSmallChart ? 9 : 11;
-                        ctx.font = `600 ${fontSize}px "Inter", system-ui, sans-serif`;
+                        const fontSize = isSmallChart ? 10 : 11;
+                        ctx.font = `500 ${fontSize}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
                         const textWidth = ctx.measureText(text).width;
-                        const padding = isSmallChart ? 4 : 6;
-                        const boxHeight = isSmallChart ? 18 : 22;
-                        const yOffset = isSmallChart ? 22 : 28;
+                        const padding = isSmallChart ? 5 : 7;
+                        const boxHeight = isSmallChart ? 18 : 20;
+                        const yOffset = isSmallChart ? 20 : 24;
                         const borderRadius = 6;
-
-                        // Draw rounded rectangle background with shadow
-                        ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-                        ctx.shadowBlur = 4;
-                        ctx.shadowOffsetY = 2;
 
                         ctx.beginPath();
                         ctx.roundRect(x - textWidth / 2 - padding, y - yOffset, textWidth + padding * 2, boxHeight, borderRadius);
                         ctx.fillStyle = COLORS.labelBg;
                         ctx.fill();
 
-                        // Reset shadow for border
-                        ctx.shadowColor = 'transparent';
-                        ctx.shadowBlur = 0;
-                        ctx.shadowOffsetY = 0;
-
-                        // Draw border
                         ctx.strokeStyle = COLORS.gridColor;
                         ctx.lineWidth = 1;
                         ctx.stroke();
 
-                        // Draw text
                         ctx.fillStyle = COLORS.textColor;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
@@ -205,8 +211,6 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
     );
 
     const chartData = useMemo(() => {
-        const colorPalette = isDark ? WORK_TYPE_COLORS_DARK : WORK_TYPE_COLORS;
-
         // Use datasets if provided (multiple work types), otherwise fall back to single data
         if (datasets && datasets.length > 0) {
             // Get labels from first dataset
@@ -215,22 +219,22 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
             return {
                 labels,
                 datasets: datasets.map((wt, idx) => {
-                    const colors = colorPalette[idx % colorPalette.length];
+                    const colors = WORK_TYPE_COLORS[idx % WORK_TYPE_COLORS.length];
                     return {
                         label: wt.name,
                         data: wt.data.map((d) => d.value),
                         spanGaps: true,
-                        borderWidth: 2.5,
+                        borderWidth: 2,
                         borderColor: colors.line,
                         tension: 0.4,
-                        fill: false, // No fill for multi-line chart
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
+                        fill: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
                         pointHitRadius: 14,
                         pointBackgroundColor: colors.line,
-                        pointBorderColor: isDark ? '#1f2937' : '#ffffff',
+                        pointBorderColor: COLORS.pointBorder,
                         pointBorderWidth: 2,
-                        pointHoverBorderWidth: 2.5,
+                        pointHoverBorderWidth: 2,
                         pointStyle: 'circle' as const,
                     };
                 }),
@@ -245,7 +249,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     label: 'Headcount',
                     data: data.map((d) => d.value),
                     spanGaps: true,
-                    borderWidth: 3,
+                    borderWidth: 2,
                     borderColor: COLORS.line,
                     tension: 0.4,
                     fill: true,
@@ -258,18 +262,18 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                         gradient.addColorStop(1, COLORS.gradientEnd);
                         return gradient;
                     },
-                    pointRadius: 6,
-                    pointHoverRadius: 9,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
                     pointHitRadius: 16,
                     pointBackgroundColor: COLORS.line,
-                    pointBorderColor: isDark ? '#1f2937' : '#ffffff',
-                    pointBorderWidth: 2.5,
-                    pointHoverBorderWidth: 3,
+                    pointBorderColor: COLORS.pointBorder,
+                    pointBorderWidth: 2,
+                    pointHoverBorderWidth: 2,
                     pointStyle: 'circle' as const,
                 },
             ],
         };
-    }, [data, datasets, COLORS, isDark]);
+    }, [data, datasets, COLORS, WORK_TYPE_COLORS]);
 
     const hasMultipleDatasets = datasets && datasets.length > 0;
 
@@ -301,35 +305,37 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                     labels: {
                         usePointStyle: true,
                         pointStyle: 'circle',
-                        padding: 15,
+                        padding: 12,
+                        boxWidth: 8,
+                        boxHeight: 8,
                         font: {
-                            size: 11,
-                            family: "'Inter', system-ui, sans-serif",
+                            size: 12,
+                            weight: 500,
                         },
-                        color: COLORS.textColor,
+                        color: COLORS.mutedText,
                     },
                 },
                 tooltip: {
                     enabled: true,
                     backgroundColor: COLORS.tooltipBg,
                     titleColor: COLORS.textColor,
-                    bodyColor: COLORS.textColor,
+                    bodyColor: COLORS.mutedText,
                     borderColor: COLORS.gridColor,
                     borderWidth: 1,
-                    padding: 12,
+                    padding: 10,
                     cornerRadius: 8,
                     displayColors: true,
-                    boxWidth: 12,
-                    boxHeight: 12,
+                    boxWidth: 10,
+                    boxHeight: 10,
                     boxPadding: 4,
+                    usePointStyle: true,
                     titleFont: {
-                        size: 13,
-                        weight: 'bold' as const,
-                        family: "'Inter', system-ui, sans-serif",
+                        size: 12,
+                        weight: 600,
                     },
                     bodyFont: {
                         size: 12,
-                        family: "'Inter', system-ui, sans-serif",
+                        weight: 500,
                     },
                     callbacks: {
                         label: (ctx) => {
@@ -412,18 +418,14 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
             scales: {
                 x: {
                     grid: {
-                        display: true,
-                        color: COLORS.gridColor,
-                        drawOnChartArea: true,
-                        drawTicks: true,
+                        display: false,
                     },
                     ticks: {
                         maxRotation: 0,
                         autoSkip: true,
                         padding: 8,
                         font: {
-                            size: 11,
-                            family: "'Inter', system-ui, sans-serif",
+                            size: 12,
                         },
                         color: COLORS.mutedText,
                     },
@@ -453,7 +455,7 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
     return (
         <div
             ref={wrapRef}
-            className="relative h-full min-h-[180px] w-full rounded-lg bg-white p-2 sm:min-h-[250px] sm:p-4 dark:bg-slate-900"
+            className="bg-card relative h-full min-h-[180px] w-full rounded-lg p-2 sm:min-h-[250px] sm:p-4"
             onPointerDown={() => {
                 if (editBox) closeEditBox();
             }}
@@ -467,22 +469,20 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
 
             {editBox && (
                 <div
-                    className="absolute z-50 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/10 dark:border-indigo-900/50 dark:bg-slate-800"
-                    style={{ left: editBox.left, top: editBox.top, maxWidth: 'calc(100% - 16px)', width: '200px' }}
+                    className="bg-popover text-popover-foreground border-border absolute z-50 overflow-hidden rounded-lg border shadow-md"
+                    style={{ left: editBox.left, top: editBox.top, maxWidth: 'calc(100% - 16px)', width: '208px' }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >
-                    {/* Header */}
-                    <div className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-2.5 dark:border-indigo-900/50 dark:from-indigo-950/50 dark:to-slate-800">
-                        <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">{data[editBox.index]?.weekLabel}</p>
+                    <div className="border-border bg-muted/30 border-b px-3 py-2">
+                        <p className="text-foreground text-sm font-medium">{data[editBox.index]?.weekLabel}</p>
                     </div>
 
-                    {/* Content */}
                     <div className="p-3">
                         <div className="relative">
-                            <input
+                            <Input
                                 autoFocus
                                 inputMode="numeric"
-                                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-16 text-sm font-semibold text-slate-800 transition-all outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-indigo-400"
+                                className="pr-12 font-medium"
                                 value={editBox.value}
                                 onChange={(e) => {
                                     setEditBoxDirty(true);
@@ -494,29 +494,18 @@ export function LabourForecastChart({ data, datasets, editable, onEdit, selected
                                 }}
                                 onBlur={commitEditBox}
                             />
-                            <div className="absolute top-1/2 right-2 -translate-y-1/2">
-                                <span className="inline-flex items-center rounded-md bg-indigo-100 px-1.5 py-0.5 text-xs font-bold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
-                                    HC
-                                </span>
-                            </div>
+                            <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs font-medium">
+                                HC
+                            </span>
                         </div>
 
-                        {/* Action buttons */}
                         <div className="mt-3 flex gap-2">
-                            <button
-                                className="flex h-8 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
-                                onClick={closeEditBox}
-                                type="button"
-                            >
+                            <Button variant="outline" size="sm" className="flex-1" onClick={closeEditBox} type="button">
                                 Cancel
-                            </button>
-                            <button
-                                className="flex h-8 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-xs font-medium text-white shadow-sm shadow-indigo-500/30 transition-all hover:from-indigo-600 hover:to-violet-600 active:scale-[0.98]"
-                                onClick={commitEditBox}
-                                type="button"
-                            >
+                            </Button>
+                            <Button size="sm" className="flex-1" onClick={commitEditBox} type="button">
                                 Save
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

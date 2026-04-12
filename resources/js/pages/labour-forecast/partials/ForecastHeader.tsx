@@ -17,6 +17,7 @@
  * PARENT COMPONENT: show.tsx (LabourForecastShow)
  */
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { router } from '@inertiajs/react';
 import { BarChart3, Check, ChevronLeft, ChevronRight, Copy, Loader2, Save, Send, Settings, X } from 'lucide-react';
@@ -87,119 +88,112 @@ export const ForecastHeader = ({
         router.get(route('labour-forecast.show', { location: location.id }), { month: newMonth }, { preserveScroll: true });
     };
 
-    // Status badge color
-    const getStatusBadgeClass = () => {
-        if (!savedForecast) return '';
+    // Status badge variant
+    const getStatusBadgeVariant = (): 'secondary' | 'default' | 'destructive' | 'outline' => {
+        if (!savedForecast) return 'secondary';
         switch (savedForecast.status) {
             case 'draft':
-                return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+                return 'secondary';
             case 'submitted':
-                return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+                return 'default';
             case 'approved':
-                return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+                return 'outline';
             case 'rejected':
-                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+                return 'destructive';
             default:
-                return '';
+                return 'secondary';
         }
     };
 
     return (
-        <div className="mb-4 space-y-3">
-            {/* Title Row */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-lg font-semibold sm:text-xl">{location.name}</h1>
-                        {savedForecast && (
-                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClass()}`}>
-                                {savedForecast.status.charAt(0).toUpperCase() + savedForecast.status.slice(1)}
-                            </span>
-                        )}
-                        {hasUnsavedChanges && <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved</span>}
-                    </div>
-                    <p className="text-sm text-gray-500">Job: {location.job_number}</p>
-                </div>
-
-                {/* Month Navigation */}
-                <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1 dark:border-slate-700 dark:bg-slate-800">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('prev')}>
+        <div className="mb-4">
+            {/* Toolbar Row */}
+            <div className="flex flex-wrap items-center gap-2">
+                {/* LEFT: Context — what am I viewing */}
+                <div className="flex items-center gap-1 rounded-md border bg-card px-1 py-0.5">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigateMonth('prev')}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="min-w-[120px] text-center text-sm font-medium sm:min-w-[140px]">{formatMonthDisplay(selectedMonth)}</span>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth('next')}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigateMonth('next')}>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
-            </div>
 
-            {/* Action Buttons Row */}
-            <div className="flex flex-wrap items-center gap-2">
-                {/* Save Button */}
-                {hasConfiguredTemplates && !isEditingLocked && (
-                    <Button onClick={onSave} disabled={isSaving || !hasUnsavedChanges} size="sm" className="bg-green-600 hover:bg-green-700">
-                        {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-                        <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
-                    </Button>
+                {savedForecast && (
+                    <Badge variant={getStatusBadgeVariant()}>
+                        {savedForecast.status.charAt(0).toUpperCase() + savedForecast.status.slice(1)}
+                    </Badge>
                 )}
+                {hasUnsavedChanges && <span className="text-xs text-muted-foreground">Unsaved</span>}
 
-                {/* Copy from Previous Month Button */}
-                {hasConfiguredTemplates && !isEditingLocked && (
+                {/* RIGHT: Actions — pushed to end */}
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {/* Secondary actions */}
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={onCopyFromPrevious}
-                        disabled={isCopying}
-                        title="Copy headcount from last approved forecast for all project months"
+                        onClick={() => router.get(route('labour-forecast.variance', { location: location.id }), { month: selectedMonth })}
+                        title="View forecast vs actual variance report"
                     >
-                        {isCopying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
-                        <span className="hidden sm:inline">{isCopying ? 'Copying...' : 'Copy Previous'}</span>
+                        <BarChart3 className="h-4 w-4 sm:mr-1.5" />
+                        <span className="hidden sm:inline">Variance</span>
                     </Button>
-                )}
 
-                {/* Workflow Buttons */}
-                {savedForecast && savedForecast.status === 'draft' && permissions.canSubmit && (
-                    <Button onClick={onSubmit} disabled={isSubmitting || hasUnsavedChanges} size="sm" className="bg-blue-600 hover:bg-blue-700">
-                        {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
-                        <span className="hidden sm:inline">Submit</span>
+                    <Button variant="outline" size="sm" onClick={onOpenSettings}>
+                        <Settings className="h-4 w-4 sm:mr-1.5" />
+                        <span className="hidden sm:inline">Configure</span>
                     </Button>
-                )}
 
-                {savedForecast && savedForecast.status === 'submitted' && permissions.canApprove && (
-                    <>
-                        <Button onClick={onApprove} disabled={isSubmitting} size="sm" className="bg-green-600 hover:bg-green-700">
-                            {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
-                            <span className="hidden sm:inline">Approve</span>
+                    {hasConfiguredTemplates && !isEditingLocked && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onCopyFromPrevious}
+                            disabled={isCopying}
+                            title="Copy headcount from last approved forecast for all project months"
+                        >
+                            {isCopying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
+                            <span className="hidden sm:inline">{isCopying ? 'Copying...' : 'Copy Previous'}</span>
                         </Button>
+                    )}
+
+                    {/* Primary workflow actions (rightmost) */}
+                    {savedForecast && savedForecast.status === 'submitted' && permissions.canApprove && (
                         <Button variant="destructive" size="sm" onClick={onOpenRejectDialog} disabled={isSubmitting}>
                             <X className="mr-1.5 h-4 w-4" />
                             <span className="hidden sm:inline">Reject</span>
                         </Button>
-                    </>
-                )}
+                    )}
 
-                {savedForecast && (savedForecast.status === 'approved' || savedForecast.status === 'rejected') && permissions.canApprove && (
-                    <Button variant="outline" size="sm" onClick={onRevertToDraft} disabled={isSubmitting}>
-                        <span className="hidden sm:inline">Revert to Draft</span>
-                        <span className="sm:hidden">Revert</span>
-                    </Button>
-                )}
+                    {savedForecast && (savedForecast.status === 'approved' || savedForecast.status === 'rejected') && permissions.canApprove && (
+                        <Button variant="outline" size="sm" onClick={onRevertToDraft} disabled={isSubmitting}>
+                            <span className="hidden sm:inline">Revert to Draft</span>
+                            <span className="sm:hidden">Revert</span>
+                        </Button>
+                    )}
 
-                <Button variant="outline" size="sm" onClick={onOpenSettings}>
-                    <Settings className="h-4 w-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Configure</span>
-                </Button>
+                    {hasConfiguredTemplates && !isEditingLocked && (
+                        <Button onClick={onSave} disabled={isSaving || !hasUnsavedChanges} size="sm">
+                            {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+                            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
+                        </Button>
+                    )}
 
-                {/* Variance Report Button */}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.get(route('labour-forecast.variance', { location: location.id }), { month: selectedMonth })}
-                    title="View forecast vs actual variance report"
-                >
-                    <BarChart3 className="h-4 w-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Variance</span>
-                </Button>
+                    {savedForecast && savedForecast.status === 'draft' && permissions.canSubmit && (
+                        <Button onClick={onSubmit} disabled={isSubmitting || hasUnsavedChanges} size="sm">
+                            {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+                            <span className="hidden sm:inline">Submit</span>
+                        </Button>
+                    )}
+
+                    {savedForecast && savedForecast.status === 'submitted' && permissions.canApprove && (
+                        <Button onClick={onApprove} disabled={isSubmitting} size="sm">
+                            {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
+                            <span className="hidden sm:inline">Approve</span>
+                        </Button>
+                    )}
+                </div>
             </div>
         </div>
     );

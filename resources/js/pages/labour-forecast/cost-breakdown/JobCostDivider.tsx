@@ -16,8 +16,8 @@ export interface JobCostDividerProps {
 
 export const JobCostDivider = ({ label }: JobCostDividerProps) => (
     <div className="my-3 flex items-center gap-2">
-        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600" />
-        <span className="text-xs font-medium text-slate-400">{label}</span>
-        <div className="flex-1 border-t-2 border-dashed border-slate-300 dark:border-slate-600" />
+        <div className="flex-1 border-border border-t-2 border-dashed" />
+        <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">{label}</span>
+        <div className="flex-1 border-border border-t-2 border-dashed" />
     </div>
 );

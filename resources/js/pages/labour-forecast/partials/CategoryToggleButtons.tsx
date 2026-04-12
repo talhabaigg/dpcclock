@@ -36,17 +36,17 @@ interface CategoryToggleButtonsProps {
 export const CategoryToggleButtons = ({ selectedCategory, onCategoryChange, categoryOptions, getCategoryBreakdown }: CategoryToggleButtonsProps) => {
     return (
         <TooltipProvider delayDuration={300}>
-            <div className="inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-lg bg-slate-200/80 p-0.5 sm:p-1 dark:bg-slate-700">
+            <div className="bg-muted inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-md p-0.5">
                 {categoryOptions.map((category) => {
                     const breakdown = getCategoryBreakdown(category.id);
                     return (
                         <Tooltip key={category.id}>
                             <TooltipTrigger asChild>
                                 <button
-                                    className={`flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs transition-all sm:px-3 sm:py-1.5 ${
+                                    className={`flex items-center justify-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:py-1 ${
                                         selectedCategory === category.id
-                                            ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
-                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground'
                                     }`}
                                     onClick={() => onCategoryChange(category.id)}
                                 >
@@ -54,22 +54,33 @@ export const CategoryToggleButtons = ({ selectedCategory, onCategoryChange, cate
                                     <span className="max-w-[60px] truncate sm:max-w-none">{category.name}</span>
                                 </button>
                             </TooltipTrigger>
-                            <TooltipContent side="bottom" className={breakdown ? 'max-w-xs' : ''}>
-                                <p className="font-medium">{category.name}</p>
-                                {category.hourlyRate && <p className="text-xs text-slate-400">{formatCurrency(category.hourlyRate)}/hr base</p>}
+                            <TooltipContent
+                                side="bottom"
+                                className={breakdown ? 'flex !max-w-[16rem] flex-col !items-stretch gap-0' : ''}
+                            >
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <p className="font-medium">{category.name}</p>
+                                    {category.hourlyRate && (
+                                        <p className="text-background/70 text-[11px] tabular-nums">
+                                            {formatCurrency(category.hourlyRate)}/hr base
+                                        </p>
+                                    )}
+                                </div>
                                 {breakdown && (
-                                    <div className="mt-2 space-y-0.5 border-t border-slate-600 pt-2 text-xs">
-                                        <div className="flex justify-between gap-3">
-                                            <span className="text-slate-400">Wages + Allowances</span>
-                                            <span>{formatCurrency(breakdown.gross_wages)}</span>
+                                    <div className="border-background/20 mt-2 space-y-1 border-t pt-2">
+                                        <div className="flex items-baseline justify-between gap-4">
+                                            <span className="text-background/70">Wages + Allowances</span>
+                                            <span className="tabular-nums">{formatCurrency(breakdown.gross_wages)}</span>
                                         </div>
-                                        <div className="flex justify-between gap-3">
-                                            <span className="text-slate-400">Leave + Super + On-costs</span>
-                                            <span>{formatCurrency(breakdown.total_weekly_cost - breakdown.gross_wages)}</span>
+                                        <div className="flex items-baseline justify-between gap-4">
+                                            <span className="text-background/70">Leave + Super + On-costs</span>
+                                            <span className="tabular-nums">
+                                                {formatCurrency(breakdown.total_weekly_cost - breakdown.gross_wages)}
+                                            </span>
                                         </div>
-                                        <div className="flex justify-between gap-3 border-t border-slate-600 pt-1 font-semibold text-green-400">
+                                        <div className="border-background/20 flex items-baseline justify-between gap-4 border-t pt-1 font-semibold">
                                             <span>Weekly Cost</span>
-                                            <span>{formatCurrency(breakdown.total_weekly_cost)}</span>
+                                            <span className="tabular-nums">{formatCurrency(breakdown.total_weekly_cost)}</span>
                                         </div>
                                     </div>
                                 )}

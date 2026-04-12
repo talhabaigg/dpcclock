@@ -37,7 +37,7 @@ export const LeaveSection = ({ template }: LeaveSectionProps) => {
             {!(template.leave_hours > 0 && leave) ? (
                 <p className="text-muted-foreground text-sm italic">None</p>
             ) : (
-                <div className="space-y-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+                <div className="bg-card border-border space-y-3 rounded-lg border border-l-4 border-l-blue-400/60 p-3">
                     {/* Hours/days summary */}
                     <p className="text-muted-foreground text-xs">
                         {template.leave_hours.toFixed(1)} hrs / {leave.days.toFixed(1)} days
@@ -77,21 +77,21 @@ export const LeaveSection = ({ template }: LeaveSectionProps) => {
                             /* Markups NOT job costed - show strikethrough with dividers */
                             <>
                                 <JobCostDivider label="NOT JOB COSTED" />
-                                <div className="rounded bg-slate-50 p-2 dark:bg-slate-800/30">
-                                    <div className="text-xs font-semibold text-slate-400">
+                                <div className="bg-muted rounded-md p-2">
+                                    <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
                                         Leave Markups (NOT job costed):
                                     </div>
-                                    <div className="flex justify-between pl-4">
-                                        <span className="text-slate-400 line-through">Annual Leave Accrual (9.28%)</span>
-                                        <span className="text-slate-400 line-through">{formatCurrency(leave.leave_markups.annual_leave_accrual)}</span>
+                                    <div className="text-muted-foreground flex justify-between pl-4 line-through">
+                                        <span>Annual Leave Accrual (9.28%)</span>
+                                        <span>{formatCurrency(leave.leave_markups.annual_leave_accrual)}</span>
                                     </div>
-                                    <div className="flex justify-between pl-4">
-                                        <span className="text-slate-400 line-through">Leave Loading (4.61%)</span>
-                                        <span className="text-slate-400 line-through">{formatCurrency(leave.leave_markups.leave_loading)}</span>
+                                    <div className="text-muted-foreground flex justify-between pl-4 line-through">
+                                        <span>Leave Loading (4.61%)</span>
+                                        <span>{formatCurrency(leave.leave_markups.leave_loading)}</span>
                                     </div>
-                                    <div className="flex justify-between pt-1 pl-4">
-                                        <span className="text-slate-400 line-through">Leave Markups Subtotal</span>
-                                        <span className="text-slate-400 line-through">{formatCurrency(leave.leave_markups.total)}</span>
+                                    <div className="text-muted-foreground flex justify-between pl-4 pt-1 line-through">
+                                        <span>Leave Markups Subtotal</span>
+                                        <span>{formatCurrency(leave.leave_markups.total)}</span>
                                     </div>
                                 </div>
                                 <JobCostDivider label="JOB COSTED" />

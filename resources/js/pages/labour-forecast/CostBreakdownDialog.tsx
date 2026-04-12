@@ -80,10 +80,10 @@ export const CostBreakdownDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-full max-w-5xl overflow-y-auto sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <DollarSign className="text-primary h-5 w-5" />
+                        <DollarSign className="text-muted-foreground size-5" />
                         Cost Breakdown - {locationName}
                     </DialogTitle>
                     <DialogDescription>{data ? data.week_ending : 'Detailed cost breakdown'}</DialogDescription>
@@ -92,13 +92,13 @@ export const CostBreakdownDialog = ({
                 {/* Loading state */}
                 {loading && (
                     <div className="flex items-center justify-center py-12">
-                        <Loader2 className="text-primary h-8 w-8 animate-spin" />
+                        <Loader2 className="text-muted-foreground size-8 animate-spin" />
                     </div>
                 )}
 
                 {/* Error state */}
                 {error && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300">
+                    <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border p-4 text-sm">
                         {error}
                     </div>
                 )}
@@ -107,24 +107,24 @@ export const CostBreakdownDialog = ({
                 {data && !loading && (
                     <div className="space-y-6">
                         {/* Summary cards: headcount, total cost, period */}
-                        <div className="grid grid-cols-3 gap-4 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/50">
+                        <div className="border-border bg-muted/30 grid grid-cols-3 gap-4 rounded-lg border p-4">
                             <div>
-                                <p className="text-muted-foreground text-xs">
+                                <p className="text-muted-foreground text-xs font-medium">
                                     {aggregate && aggregate !== 'week' ? 'Total Person-Weeks' : 'Total Headcount'}
                                 </p>
-                                <p className="text-lg font-semibold">{data.total_headcount.toFixed(1)}</p>
+                                <p className="text-foreground mt-1 text-lg font-semibold tabular-nums">{data.total_headcount.toFixed(1)}</p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground text-xs">Total Cost</p>
-                                <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                                <p className="text-muted-foreground text-xs font-medium">Total Cost</p>
+                                <p className="text-foreground mt-1 text-lg font-semibold tabular-nums">
                                     {formatCurrency(data.templates.reduce((sum, t) => sum + t.weekly_cost, 0))}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground text-xs">
+                                <p className="text-muted-foreground text-xs font-medium">
                                     {aggregate && aggregate !== 'week' ? 'Period' : 'Week Ending'}
                                 </p>
-                                <p className="text-lg font-semibold">{data.week_ending}</p>
+                                <p className="text-foreground mt-1 text-lg font-semibold">{data.week_ending}</p>
                             </div>
                         </div>
 
