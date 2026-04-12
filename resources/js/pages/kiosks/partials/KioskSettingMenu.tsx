@@ -165,20 +165,14 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                     <DropdownMenuSeparator />
 
                     {!adminMode && (
-                        <DropdownMenuItem
-                            onSelect={(e) => {
-                                e.preventDefault();
-                                handleOpenAdminDialog();
-                            }}
-                        >
+                        <DropdownMenuItem onClick={handleOpenAdminDialog}>
                             Switch to Admin Mode
                         </DropdownMenuItem>
                     )}
 
                     {adminMode && (
                         <DropdownMenuItem
-                            onSelect={(e) => {
-                                e.preventDefault();
+                            onClick={() => {
                                 setMenuOpen(false);
                                 setUpdateStartDialogOpen(true);
                             }}
@@ -191,8 +185,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                         <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                                onSelect={(e) => {
-                                    e.preventDefault();
+                                onClick={() => {
                                     setMenuOpen(false);
                                     setLockDeviceName('');
                                     setLockDeviceDialogOpen(true);
