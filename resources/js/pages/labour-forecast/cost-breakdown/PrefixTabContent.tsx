@@ -68,7 +68,7 @@ export const PrefixTabContent = ({ templates, aggregate }: PrefixTabContentProps
                    ============================================================ */}
                 <div className="bg-muted/50 border-border grid grid-cols-4 gap-3 rounded-md border p-3 text-sm">
                     <div>
-                        <p className="text-muted-foreground text-xs font-medium">Ordinary Hours</p>
+                        <p className="text-muted-foreground text-xs font-medium">Normal Time</p>
                         <p className="text-foreground font-semibold tabular-nums">{template.cost_breakdown.ordinary_hours.toFixed(1)} hrs</p>
                     </div>
                     {template.overtime_hours > 0 && (

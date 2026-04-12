@@ -31,8 +31,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TrendingUp } from 'lucide-react';
 import { type ChartDataPoint, type WorkTypeDataset, LabourForecastChart } from '../LabourForecastChart';
-import type { CategoryOption, CostBreakdown } from '../types';
+import type { CategoryOption, CostBreakdown, TimeRange } from '../types';
 import { CategoryToggleButtons } from './CategoryToggleButtons';
+import { TimeRangeToggle } from './TimeRangeToggle';
 
 interface ChartDialogProps {
     open: boolean;
@@ -45,6 +46,8 @@ interface ChartDialogProps {
     onEdit: (weekKey: string, value: number) => void;
     getCategoryDisplayName: () => string;
     getCategoryBreakdown: (categoryId: string) => CostBreakdown | null;
+    timeRange: TimeRange;
+    onTimeRangeChange: (range: TimeRange) => void;
 }
 
 export const ChartDialog = ({
@@ -58,6 +61,8 @@ export const ChartDialog = ({
     onEdit,
     getCategoryDisplayName,
     getCategoryBreakdown,
+    timeRange,
+    onTimeRangeChange,
 }: ChartDialogProps) => {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -75,8 +80,9 @@ export const ChartDialog = ({
                     </div>
                 </div>
 
-                {/* Category Toggle Buttons */}
-                <div className="border-border bg-muted/30 flex-shrink-0 border-b px-4 py-2 sm:px-6">
+                {/* Toggles */}
+                <div className="border-border bg-muted/30 flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-2 sm:px-6">
+                    <TimeRangeToggle timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
                     <CategoryToggleButtons
                         selectedCategory={selectedCategory}
                         onCategoryChange={onCategoryChange}

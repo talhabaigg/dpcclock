@@ -71,9 +71,9 @@ export const InlineChartSection = ({
                     </Button>
                 </div>
                 {/* Controls row */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                <div className="flex flex-wrap items-center gap-2">
                     <TimeRangeToggle timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
-                    <div className="bg-border h-6 w-px flex-shrink-0" />
+                    <div className="bg-border hidden h-6 w-px flex-shrink-0 sm:block" />
                     <CategoryToggleButtons
                         selectedCategory={selectedCategory}
                         onCategoryChange={onCategoryChange}
@@ -94,7 +94,7 @@ export const InlineChartSection = ({
             </div>
 
             {/* Inline Chart */}
-            <div className="h-[220px] max-w-96 min-w-96 p-2 sm:h-[280px] sm:min-w-full sm:p-3">
+            <div className="h-[220px] w-full p-2 sm:h-[280px] sm:p-3">
                 <LabourForecastChart
                     data={chartData}
                     datasets={selectedCategory === 'all' ? chartDatasets : undefined}

@@ -36,7 +36,7 @@ interface CategoryToggleButtonsProps {
 export const CategoryToggleButtons = ({ selectedCategory, onCategoryChange, categoryOptions, getCategoryBreakdown }: CategoryToggleButtonsProps) => {
     return (
         <TooltipProvider delayDuration={300}>
-            <div className="bg-muted inline-flex flex-shrink-0 flex-wrap gap-0.5 rounded-md p-0.5">
+            <div className="bg-muted flex w-full flex-wrap gap-0.5 rounded-md p-0.5 sm:inline-flex sm:w-auto">
                 {categoryOptions.map((category) => {
                     const breakdown = getCategoryBreakdown(category.id);
                     return (
@@ -51,7 +51,7 @@ export const CategoryToggleButtons = ({ selectedCategory, onCategoryChange, cate
                                     onClick={() => onCategoryChange(category.id)}
                                 >
                                     {category.id === 'all' ? <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : null}
-                                    <span className="max-w-[60px] truncate sm:max-w-none">{category.name}</span>
+                                    <span className="max-w-[80px] truncate sm:max-w-[140px]">{category.name}</span>
                                 </button>
                             </TooltipTrigger>
                             <TooltipContent

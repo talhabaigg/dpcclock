@@ -27,7 +27,7 @@ export const OrdinarySection = ({ breakdown }: OrdinarySectionProps) => {
 
     return (
         <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Ordinary Hours</h4>
+            <h4 className="text-sm font-semibold">Normal Time</h4>
 
             {ordinary_hours === 0 ? (
                 <p className="text-muted-foreground text-sm italic">No regular hours</p>

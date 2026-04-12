@@ -31,7 +31,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
-import type { CellValueChangedEvent } from 'ag-grid-community';
 import { api } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -205,7 +204,7 @@ const LabourForecastShow = ({
             // Ordinary Hours row (linked to headcount: 1 hc = 40 hours)
             const ordinaryRow: RowData = {
                 id: `${wt.id}_ordinary`,
-                workType: 'Ordinary Hours',
+                workType: 'Normal Time',
                 hourlyRate: wt.hourlyRate,
                 isOrdinaryRow: true,
                 isChildRow: true,
@@ -268,7 +267,7 @@ const LabourForecastShow = ({
             // PH row
             const phRow: RowData = {
                 id: `${wt.id}_ph`,
-                workType: 'PH Not Worked Hours',
+                workType: 'Public Holiday',
                 hourlyRate: wt.hourlyRate,
                 isPublicHolidayRow: true,
                 isChildRow: true,
@@ -317,11 +316,11 @@ const LabourForecastShow = ({
                 const existingOrdinaryRow = prevRows.find((r) => r.id === `${wt.id}_ordinary`);
                 const parentRow = newRows.find((r) => r.id === wt.id);
                 if (existingOrdinaryRow) {
-                    newRows.push({ ...existingOrdinaryRow, workType: 'Ordinary Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
+                    newRows.push({ ...existingOrdinaryRow, workType: 'Normal Time', hourlyRate: wt.hourlyRate, isChildRow: true });
                 } else {
                     const ordinaryRow: RowData = {
                         id: `${wt.id}_ordinary`,
-                        workType: 'Ordinary Hours',
+                        workType: 'Normal Time',
                         hourlyRate: wt.hourlyRate,
                         isOrdinaryRow: true,
                         isChildRow: true,
@@ -397,11 +396,11 @@ const LabourForecastShow = ({
 
                 const existingPhRow = prevRows.find((r) => r.id === `${wt.id}_ph`);
                 if (existingPhRow) {
-                    newRows.push({ ...existingPhRow, workType: 'PH Not Worked Hours', hourlyRate: wt.hourlyRate, isChildRow: true });
+                    newRows.push({ ...existingPhRow, workType: 'Public Holiday', hourlyRate: wt.hourlyRate, isChildRow: true });
                 } else {
                     const phRow: RowData = {
                         id: `${wt.id}_ph`,
-                        workType: 'PH Not Worked Hours',
+                        workType: 'Public Holiday',
                         hourlyRate: wt.hourlyRate,
                         isPublicHolidayRow: true,
                         isChildRow: true,
@@ -518,7 +517,7 @@ const LabourForecastShow = ({
         const ordinaryRows = rowData.filter((r) => r.isOrdinaryRow && !r.isTotal);
         const totalOrdinaryRow: RowData = {
             id: 'total_ordinary',
-            workType: 'Ordinary Hours',
+            workType: 'Normal Time',
             isTotal: true,
             isOrdinaryRow: true,
             isChildRow: true,
@@ -570,7 +569,7 @@ const LabourForecastShow = ({
         const phRows = rowData.filter((r) => r.isPublicHolidayRow && !r.isTotal);
         const totalPhRow: RowData = {
             id: 'total_ph',
-            workType: 'PH Not Worked Hours',
+            workType: 'Public Holiday',
             isTotal: true,
             isPublicHolidayRow: true,
             isChildRow: true,
@@ -593,12 +592,8 @@ const LabourForecastShow = ({
         if (phRows.length > 0) result.push(totalPhRow);
         result.push(costRow);
 
-        return result.filter((row) => {
-            if (!row.isChildRow) return true;
-            if (row.parentTemplateId && expandedParents.has(row.parentTemplateId)) return true;
-            return false;
-        });
-    }, [rowData, weeks, weeklyCosts, expandedParents]);
+        return result;
+    }, [rowData, weeks, weeklyCosts]);
 
     // ========================================================================
     // DERIVED DATA: Chart data
@@ -710,29 +705,27 @@ const LabourForecastShow = ({
         setExpandedParents(new Set());
     }, []);
 
-    const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-        if (event.data?.isTotal || event.data?.isCostRow) return;
-        const field = event.colDef.field!;
-        const newValue = Number(event.newValue) || 0;
+    const onCellValueChanged = useCallback((editedRow: RowData, field: string, newValue: number) => {
+        if (editedRow.isTotal || editedRow.isCostRow) return;
 
         setRowData((prevRows) => {
             return prevRows.map((row) => {
                 // Update the edited row
-                if (row.id === event.data.id) {
+                if (row.id === editedRow.id) {
                     return { ...row, [field]: newValue };
                 }
 
                 // Bidirectional linking: headcount <-> ordinary hours
-                if (event.data?.isOrdinaryRow) {
+                if (editedRow.isOrdinaryRow) {
                     // Ordinary hours was edited -> update parent headcount
-                    const parentId = event.data.parentTemplateId;
+                    const parentId = editedRow.parentTemplateId;
                     if (row.id === parentId) {
                         const headcount = Math.round((newValue / HOURS_PER_HEADCOUNT) * 10) / 10; // 1 decimal precision
                         return { ...row, [field]: headcount };
                     }
-                } else if (!event.data?.isChildRow) {
+                } else if (!editedRow.isChildRow) {
                     // Parent headcount was edited -> update ordinary hours row
-                    const ordinaryRowId = `${event.data.id}_ordinary`;
+                    const ordinaryRowId = `${editedRow.id}_ordinary`;
                     if (row.id === ordinaryRowId) {
                         const ordinaryHours = newValue * HOURS_PER_HEADCOUNT;
                         return { ...row, [field]: ordinaryHours };
@@ -998,14 +991,16 @@ const LabourForecastShow = ({
             <ChartDialog
                 open={chartOpen}
                 onOpenChange={setChartOpen}
-                chartData={chartData}
-                chartDatasets={chartDatasets}
+                chartData={inlineChartData}
+                chartDatasets={inlineChartDatasets}
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}
                 categoryOptions={categoryOptions}
                 onEdit={handleChartEdit}
                 getCategoryDisplayName={getCategoryDisplayName}
                 getCategoryBreakdown={getCategoryBreakdown}
+                timeRange={timeRange}
+                onTimeRangeChange={setTimeRange}
             />
 
             {/* Main Content */}

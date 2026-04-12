@@ -65,7 +65,7 @@ export const DetailPanel = ({
     const hourRows: HourRowData[] = [
         {
             type: 'ordinary',
-            label: 'Ordinary Hours',
+            label: 'Normal Time',
             values: Object.fromEntries(weeks.map((w) => [w.key, (headcountByWeek[w.key] || 0) * hoursPerWeek])),
             editable: true,
             colorClass: 'bg-teal-500',
@@ -99,7 +99,7 @@ export const DetailPanel = ({
         },
         {
             type: 'ph',
-            label: 'PH Not Worked',
+            label: 'Public Holiday',
             values: phByWeek,
             editable: true,
             colorClass: 'bg-indigo-500',
