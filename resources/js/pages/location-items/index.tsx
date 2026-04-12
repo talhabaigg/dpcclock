@@ -3,6 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
+import { Head } from '@inertiajs/react';
 import { locationMaterialItemColumns } from './index-partials/columns';
 import { DataTable } from './index-partials/data-table';
 
@@ -24,6 +25,7 @@ const LocationMaterialItemsIndex = ({ location }) => {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={`Material Items - ${location.name}`} />
             <div className="sm:ml-2">
                 <ScrollArea className="mx-auto mt-1 h-[200px] max-w-96 rounded-md border p-0 sm:mx-0">
                     <Table className="p-0">

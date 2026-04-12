@@ -1,6 +1,6 @@
 import { AiChat } from '@/components/ai-chat';
 import AppLayout from '@/layouts/app-layout';
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
 interface PageProps {
     auth: {
@@ -17,6 +17,7 @@ const Dashboard = () => {
 
     return (
         <AppLayout>
+            <Head title="Dashboard" />
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {hasAiChat ? (
                     <div className="min-h-0 flex-1">

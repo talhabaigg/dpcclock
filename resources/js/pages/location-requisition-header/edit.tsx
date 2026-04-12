@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Form, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { AlertCircle } from 'lucide-react';
 const RequisitionHeaderTemplateEdit = ({ location }) => {
     return (
         <AppLayout>
+            <Head title={`Edit Requisition Header - ${location.name}`} />
             <Form method="put" action={`/location/${location.id}/req-header/update`} className="mx-auto my-2 min-w-96 space-y-2">
                 <Alert className="max-w-96">
                     <AlertCircle />

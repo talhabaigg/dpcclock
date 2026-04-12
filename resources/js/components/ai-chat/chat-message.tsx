@@ -157,7 +157,6 @@ function ChartBlock({ data }: { data: ChartData }) {
             // Find the SVG element inside the chart container
             const svgElement = chartRef.current.querySelector('svg');
             if (!svgElement) {
-                console.error('No SVG found in chart');
                 return;
             }
 
@@ -229,14 +228,12 @@ function ChartBlock({ data }: { data: ChartData }) {
             };
 
             img.onerror = () => {
-                console.error('Failed to load SVG image');
                 URL.revokeObjectURL(svgUrl);
                 setIsDownloading(false);
             };
 
             img.src = svgUrl;
-        } catch (error) {
-            console.error('Failed to download chart:', error);
+        } catch {
             setIsDownloading(false);
         }
     }, [data.title, isDownloading]);
@@ -483,9 +480,7 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Failed to download image:', error);
-        } finally {
+        } catch { /* ignored */ } finally {
             setIsDownloading(false);
         }
     }, [data.image_url, isDownloading]);

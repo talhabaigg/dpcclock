@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
-import { Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Code2, Edit, RefreshCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -21,6 +21,7 @@ export default function LocationCostCodes() {
 
     return (
         <LocationLayout location={location} activeTab="cost-codes">
+            <Head title={`Cost Codes - ${location.name}`} />
             <LoadingDialog open={open} setOpen={setOpen} message="Loading..." />
             <Card>
                 <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">

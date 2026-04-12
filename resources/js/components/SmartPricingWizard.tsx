@@ -270,7 +270,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
                 line_item_id: currentProblem.line_item_id, ...currentAnswer, item_exists_in_db: currentProblem.item_exists_in_db,
             });
             advanceOrComplete();
-        } catch (err) { console.error('Failed to save context', err); }
+        } catch { /* ignored */ }
         finally { setSaving(false); }
     };
 
@@ -282,7 +282,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
             setRemovedItems((prev) => new Set(prev).add(currentProblem.line_item_id));
             const remaining = activeProblems.filter((p) => p.line_item_id !== currentProblem.line_item_id);
             if (remaining.length === 0 || currentIndex >= remaining.length) { setCompleting(true); onComplete(); }
-        } catch (err) { console.error('Failed to remove item', err); }
+        } catch { /* ignored */ }
         finally { setSaving(false); }
     };
 
@@ -298,7 +298,7 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
                 ai_matches: currentAI?.matches ?? [], item_exists_in_db: currentProblem.item_exists_in_db,
             });
             advanceOrComplete();
-        } catch (err) { console.error('Failed to save context', err); }
+        } catch { /* ignored */ }
         finally { setSaving(false); }
     };
 

@@ -185,8 +185,6 @@ const ShowCashForecast = ({
     const handleAddGeneralCost = () => {
         if (!newCost.name || !newCost.amount || !newCost.start_date) return;
 
-        console.log('Adding general cost:', newCost);
-
         router.post(
             '/cash-forecast/general-costs',
             {
@@ -197,11 +195,7 @@ const ShowCashForecast = ({
                 preserveScroll: true,
                 preserveState: true,
                 only: ['generalCosts', 'months'],
-                onStart: () => {
-                    console.log('Add request started');
-                },
                 onSuccess: () => {
-                    console.log('Add successful');
                     toast.success('Transaction added successfully');
                     setNewCost({
                         type: 'recurring',
@@ -212,11 +206,7 @@ const ShowCashForecast = ({
                     });
                 },
                 onError: (errors) => {
-                    console.error('Add error:', errors);
                     toast.error(Object.values(errors).flat().join(', ') || 'Failed to add general cost');
-                },
-                onFinish: () => {
-                    console.log('Add request finished');
                 },
             },
         );
@@ -252,11 +242,8 @@ const ShowCashForecast = ({
             return;
         }
 
-        console.log('Deleting general cost:', id);
-
         // Set a timeout to catch hanging requests
         const timeout = setTimeout(() => {
-            console.error('Delete request timed out');
             toast.error('Request timed out. Please try again.');
             onComplete?.();
         }, 10000); // 10 second timeout
@@ -266,18 +253,13 @@ const ShowCashForecast = ({
                 preserveScroll: true,
                 preserveState: true,
                 only: ['generalCosts', 'months'],
-                onStart: () => {
-                    console.log('Delete request started');
-                },
                 onSuccess: () => {
                     clearTimeout(timeout);
-                    console.log('Delete successful');
                     toast.success('Transaction deleted successfully');
                     onComplete?.();
                 },
                 onError: (errors) => {
                     clearTimeout(timeout);
-                    console.error('Delete error:', errors);
                     const errorMessage = typeof errors === 'object' && errors !== null
                         ? Object.values(errors).flat().join(', ')
                         : 'Failed to delete general cost';
@@ -286,12 +268,10 @@ const ShowCashForecast = ({
                 },
                 onFinish: () => {
                     clearTimeout(timeout);
-                    console.log('Delete request finished');
                 },
             });
-        } catch (error) {
+        } catch {
             clearTimeout(timeout);
-            console.error('Exception during delete:', error);
             toast.error('An unexpected error occurred');
             onComplete?.();
         }

@@ -9,7 +9,7 @@ import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, BarChart3, CalendarIcon, Check, Eye, Loader2, Trash2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -225,6 +225,7 @@ export default function ProductionData() {
 
     return (
         <LocationLayout location={location} activeTab="production-data">
+            <Head title={`Production Data - ${location.name}`} />
             {/* Upload Section */}
             <Card>
                 <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">

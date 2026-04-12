@@ -287,7 +287,6 @@ export default function Create() {
     //     wrapperBorder: false,
     // });
     const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
-    console.log('AG GRID DEBUG - isDarkMode:', isDarkMode, 'theme:', isDarkMode ? 'DARK' : 'LIGHT');
     // const rowSelection = useMemo(() => {
     //     return {
     //         mode: 'multiRow',

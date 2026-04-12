@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
-import { Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowLeft, FileText, LogIn } from 'lucide-react';
 import SignaturePad from 'signature_pad';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -342,9 +342,13 @@ export default function PrestartSign() {
     );
 
     return isMobile ? (
-        <div className="bg-background min-h-screen">{content}</div>
+        <div className="bg-background min-h-screen">
+            <Head title="Prestart Sign" />
+            {content}
+        </div>
     ) : (
         <KioskLayout employees={employees ?? []} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
+            <Head title="Prestart Sign" />
             {content}
         </KioskLayout>
     );

@@ -326,7 +326,7 @@ export function LeafletDrawingViewer({
         }
         const img = new Image();
         img.onload = () => setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => console.error('Failed to load drawing image');
+        img.onerror = () => setImageDimensions(null);
         img.src = imageUrl;
         return () => {
             img.onload = null;

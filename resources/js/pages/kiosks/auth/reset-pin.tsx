@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft, CheckCircle2, Delete, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
@@ -186,6 +186,7 @@ export default function ResetPin() {
 
     const content = (
         <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
+            <Head title="Reset PIN" />
             {/* Success/Error Dialog */}
             <KioskDialogBox
                 isOpen={showDialog}

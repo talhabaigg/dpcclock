@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { AlertTriangle, Clock, Minus, Plus } from 'lucide-react';
@@ -585,9 +585,13 @@ export default function Clockout() {
     );
 
     return isMobile ? (
-        content
+        <>
+            <Head title="Clock Out" />
+            {content}
+        </>
     ) : (
         <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
+            <Head title="Clock Out" />
             {content}
         </KioskLayout>
     );

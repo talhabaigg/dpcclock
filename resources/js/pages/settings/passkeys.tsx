@@ -94,7 +94,6 @@ export default function Passkeys({ passkeys }: PasskeysProps) {
                 },
             );
         } catch (err: any) {
-            console.error('Passkey registration failed:', err);
             setError(err?.message || 'Failed to register passkey. Please try again.');
             setIsAddingPasskey(false);
         }

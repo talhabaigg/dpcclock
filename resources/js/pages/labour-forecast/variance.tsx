@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -729,6 +729,7 @@ const LabourForecastVariance = ({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Labour Variance" />
             <div className="space-y-6 p-4">
                 {/* Header */}
                 <div className="flex flex-col gap-4">

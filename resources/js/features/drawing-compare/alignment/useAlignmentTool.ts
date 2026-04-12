@@ -182,8 +182,6 @@ export function useAlignmentTool(): UseAlignmentToolReturn {
                             candidateB: point,
                         };
                         const computed = computeAlignmentTransform(alignmentPoints);
-                        console.log('Alignment points:', alignmentPoints);
-                        console.log('Computed transform:', computed);
                         setTransform(computed);
                     }
 

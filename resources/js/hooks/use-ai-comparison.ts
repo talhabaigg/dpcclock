@@ -68,7 +68,6 @@ export function useAIComparison({ drawingId, revisions }: UseAIComparisonParams)
 
             toast.success('AI comparison complete!');
         } catch (error) {
-            console.error('AI comparison error:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to compare revisions');
         } finally {
             setComparing(false);
@@ -124,7 +123,6 @@ export function useAIComparison({ drawingId, revisions }: UseAIComparisonParams)
                 throw new Error(data.message || 'Failed to save observations');
             }
         } catch (error) {
-            console.error('Save observations error:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to save observations');
         } finally {
             setSavingObservations(false);

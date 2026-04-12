@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
@@ -99,6 +99,7 @@ export default function ShowPin() {
 
     const content = (
         <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
+            <Head title="Kiosk PIN" />
             {/* Error Dialog */}
             <KioskDialogBox
                 isOpen={showDialog}

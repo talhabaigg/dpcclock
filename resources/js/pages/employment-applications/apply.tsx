@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
-import { useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { CheckIcon } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
@@ -280,6 +280,8 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
     const allErrors = { ...clientErrors, ...errors };
 
     return (
+        <>
+        <Head title="Apply" />
         <div className="flex min-h-svh flex-col items-center bg-white px-3 py-6 font-[system-ui,_-apple-system,_sans-serif] sm:px-4 sm:py-8 md:px-8 md:py-12">
             <div className="flex w-full max-w-2xl flex-col gap-6 sm:gap-8">
                 {/* Step Indicator */}
@@ -1034,5 +1036,6 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                 </div>
             </div>
         </div>
+        </>
     );
 }

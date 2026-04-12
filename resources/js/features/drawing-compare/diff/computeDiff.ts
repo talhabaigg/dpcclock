@@ -56,7 +56,6 @@ export function computeDiffMask(
     const candidateCtx = candidateCanvas.getContext('2d', { willReadFrequently: true });
 
     if (!baseCtx || !candidateCtx) {
-        console.error('Could not get canvas contexts for diff computation');
         return null;
     }
 
@@ -70,8 +69,7 @@ export function computeDiffMask(
     try {
         baseData = baseCtx.getImageData(0, 0, width, height);
         candidateData = candidateCtx.getImageData(0, 0, width, height);
-    } catch (e) {
-        console.error('Could not read canvas data (CORS issue?):', e);
+    } catch {
         return null;
     }
 

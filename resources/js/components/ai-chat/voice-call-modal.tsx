@@ -221,8 +221,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
 
     const { status, isConnected, isMuted, aiResponse, transcriptHistory, callDuration, audioLevels, startCall, endCall, toggleMute } = useVoiceCall({
         voice: selectedVoice,
-        onError: (error) => {
-            console.error('Voice call error:', error);
+        onError: () => {
         },
     });
 

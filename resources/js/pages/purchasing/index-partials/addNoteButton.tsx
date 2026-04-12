@@ -35,8 +35,7 @@ const AddNoteButton = ({ requisition_id }: AddNoteButtonProps) => {
                 setOpen(false);
                 toast.success('Note added successfully');
             },
-            onError: (errors) => {
-                console.error('Error saving note:', errors);
+            onError: () => {
                 toast.error('Failed to save note');
             },
         });

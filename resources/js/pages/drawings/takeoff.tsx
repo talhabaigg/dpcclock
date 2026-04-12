@@ -346,7 +346,6 @@ export default function DrawingTakeoff() {
             } catch (err) {
                 const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
                 toast.error(`Failed to save deduction. ${msg}`);
-                console.error('Deduction save error:', err);
             }
             setDeductionParentId(null);
             setViewMode('pan');
@@ -395,7 +394,6 @@ export default function DrawingTakeoff() {
         } catch (err) {
             const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
             toast.error(`Failed to save measurement. ${msg}`);
-            console.error('Measurement save error:', err);
         }
     };
 
@@ -434,7 +432,6 @@ export default function DrawingTakeoff() {
         } catch (err) {
             const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
             toast.error(`Failed to save measurement. ${msg}`);
-            console.error('Measurement dialog save error:', err);
         } finally {
             setSavingMeasurement(false);
         }

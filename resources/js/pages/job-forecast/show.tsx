@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import AppLayout from '@/layouts/app-layout';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { BreadcrumbItem } from '@/types';
-import { Link, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import {
@@ -1127,6 +1127,7 @@ const ShowJobForecastPage = ({
     // ===========================
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={jobName ? `Job Forecast - ${jobName}` : 'Job Forecast'} />
             {/* Chart Dialog */}
             <Dialog
                 open={chartCtx.open}

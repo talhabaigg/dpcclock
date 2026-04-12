@@ -1,7 +1,10 @@
+import { Head } from '@inertiajs/react';
 import { CheckIcon } from 'lucide-react';
 
 export default function ThankYou() {
     return (
+        <>
+        <Head title="Thank You" />
         <div className="flex min-h-svh flex-col items-center justify-center bg-white px-4 py-12 font-[system-ui,_-apple-system,_sans-serif]">
             <div className="flex w-full max-w-lg flex-col items-center gap-6 text-center">
                 <div className="flex size-16 items-center justify-center rounded-full bg-[#2e6da4] text-white">
@@ -13,5 +16,6 @@ export default function ThankYou() {
                 </p>
             </div>
         </div>
+        </>
     );
 }

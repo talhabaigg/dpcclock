@@ -638,11 +638,11 @@ export default function DrawingShow() {
             const successCount = results.filter((r) => r.status === 'fulfilled' && (r.value as Response).ok).length;
             const failCount = selectedObs.length - successCount;
 
-            results.forEach((result, i) => {
+            results.forEach((result) => {
                 if (result.status === 'rejected') {
-                    console.error(`Failed to delete observation ${selectedObs[i].id}:`, result.reason);
+                    // silently handled
                 } else if (!result.value.ok) {
-                    console.error(`Failed to delete observation ${selectedObs[i].id}: HTTP ${result.value.status}`);
+                    // silently handled
                 }
             });
 
@@ -659,8 +659,7 @@ export default function DrawingShow() {
             } else {
                 toast.warning(`Deleted ${successCount} observations. ${failCount} failed.`);
             }
-        } catch (err) {
-            console.error('Failed to delete selected observations:', err);
+        } catch {
             toast.error('Failed to delete selected observations.');
         } finally {
             setBulkDeleting(false);
@@ -721,7 +720,6 @@ export default function DrawingShow() {
 
             toast.success('AI comparison complete!');
         } catch (error) {
-            console.error('AI comparison error:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to compare revisions');
         } finally {
             setAIComparing(false);
@@ -794,7 +792,6 @@ export default function DrawingShow() {
                 throw new Error(data.message || 'Failed to save observations');
             }
         } catch (error) {
-            console.error('Save observations error:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to save observations');
         } finally {
             setSavingObservations(false);

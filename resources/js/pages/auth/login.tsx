@@ -73,7 +73,6 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                 },
             );
         } catch (err: any) {
-            console.error('Passkey authentication failed:', err);
             setPasskeyError(err?.message || 'Passkey authentication failed. Please try again.');
             setIsAuthenticatingWithPasskey(false);
         }

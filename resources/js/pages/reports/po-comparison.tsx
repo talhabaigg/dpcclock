@@ -247,17 +247,14 @@ export default function POComparisonReport() {
 
         // Add connection state listeners
         echo.connector.pusher.connection.bind('connected', () => {
-            console.log('[premier-sync] WebSocket connected');
             setIsWsConnected(true);
         });
 
-        echo.connector.pusher.connection.bind('error', (error: any) => {
-            console.error('[premier-sync] WebSocket error:', error);
+        echo.connector.pusher.connection.bind('error', () => {
             setIsWsConnected(false);
         });
 
         echo.connector.pusher.connection.bind('disconnected', () => {
-            console.log('[premier-sync] WebSocket disconnected');
             setIsWsConnected(false);
         });
 
@@ -265,12 +262,10 @@ export default function POComparisonReport() {
         const channel = echo.channel('premier-sync');
 
         channel.subscribed(() => {
-            console.log('[premier-sync] Subscribed to channel');
             setIsWsConnected(true);
         });
 
-        channel.error((error: any) => {
-            console.error('[premier-sync] Channel error:', error);
+        channel.error(() => {
             setIsWsConnected(false);
         });
 
@@ -286,7 +281,6 @@ export default function POComparisonReport() {
                 last_synced_po: string | null;
                 status: string;
             }) => {
-                console.log('[premier-sync] Received sync.progress event:', event);
                 setSyncStatus({
                     cached: event.cached,
                     total: event.total,
@@ -643,9 +637,7 @@ export default function POComparisonReport() {
                     setSyncStatus(data);
                 }
             }
-        } catch (err) {
-            console.error('Failed to fetch sync status:', err);
-        } finally {
+        } catch { /* ignored */ } finally {
             setSyncStatusLoading(false);
         }
     }, [buildFilters]);

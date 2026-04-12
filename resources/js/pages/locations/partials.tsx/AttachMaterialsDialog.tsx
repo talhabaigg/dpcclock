@@ -80,9 +80,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
             const response = await fetch('/suppliers/json');
             const data = await response.json();
             setSuppliers(data);
-        } catch (error) {
-            console.error('Failed to fetch suppliers:', error);
-        } finally {
+        } catch { /* ignored */ } finally {
             setIsLoadingSuppliers(false);
         }
     };
@@ -106,9 +104,7 @@ export default function AttachMaterialsDialog({ locationId, existingMaterialIds 
             // Filter out already attached materials
             const filtered = data.filter((m: MaterialItem) => !existingMaterialIds.includes(m.id));
             setMaterials(filtered);
-        } catch (error) {
-            console.error('Failed to fetch materials:', error);
-        } finally {
+        } catch { /* ignored */ } finally {
             setIsLoadingMaterials(false);
         }
     }, [selectedSupplierId, searchQuery, locationId, existingMaterialIds]);

@@ -30,7 +30,7 @@
 
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { api } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -470,8 +470,7 @@ const LabourForecastShow = ({
                 setIsCalculatingCosts(true);
                 const result = await api.post<{ costs: Record<string, number> }>(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, { weeks: weeksWithData });
                 setWeeklyCosts({ ...newCosts, ...result.costs });
-            } catch (error) {
-                console.error('Failed to calculate costs batch', error);
+            } catch {
                 setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
             } finally {
                 setIsCalculatingCosts(false);
@@ -492,8 +491,7 @@ const LabourForecastShow = ({
             try {
                 const data = await api.get(`/location/${location.id}/labour-forecast/budget-summary`);
                 setBudgetData(data);
-            } catch (error) {
-                console.error('Failed to fetch budget data', error);
+            } catch {
                 setBudgetData(null);
             } finally {
                 setIsBudgetLoading(false);
@@ -963,6 +961,7 @@ const LabourForecastShow = ({
     // ========================================================================
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={`Labour Forecast - ${location.name}`} />
             {/* Dialogs */}
             <SettingsDialog
                 open={settingsOpen}

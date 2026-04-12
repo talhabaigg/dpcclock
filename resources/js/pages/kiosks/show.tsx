@@ -1,6 +1,6 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskLayout from './partials/layout';
@@ -74,6 +74,7 @@ export default function Kiosk() {
 
     return (
         <KioskLayout employees={employees} kiosk={kiosk} adminMode={adminMode}>
+            <Head title={kiosk.name ?? 'Kiosk'} />
             <div className="flex flex-col items-center justify-center gap-8 p-6 text-center">
                 {/* Flash Messages */}
                 <div

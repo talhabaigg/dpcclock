@@ -145,16 +145,11 @@ export function useDiffOverlay(
         const baseCorner = baseCtx.getImageData(5, 5, 1, 1).data;
         const candidateCorner = candidateCtx.getImageData(5, 5, 1, 1).data;
 
-        // Log canvas dimensions and sample data for debugging
-        console.log('Diff computation: base canvas', baseCanvas.width, 'x', baseCanvas.height, 'corner:', Array.from(baseCorner));
-        console.log('Diff computation: candidate canvas', candidateCanvas.width, 'x', candidateCanvas.height, 'corner:', Array.from(candidateCorner));
-
         // Check if canvases have content (non-transparent alpha)
         const baseHasContent = baseCorner[3] > 0;
         const candidateHasContent = candidateCorner[3] > 0;
 
         if (!baseHasContent) {
-            console.warn('Diff computation: Base canvas appears empty (transparent)');
             setState((prev) => ({
                 ...prev,
                 isComputing: false,
@@ -165,7 +160,6 @@ export function useDiffOverlay(
         }
 
         if (!candidateHasContent) {
-            console.warn('Diff computation: Candidate canvas appears empty (transparent)');
             setState((prev) => ({
                 ...prev,
                 isComputing: false,
@@ -179,16 +173,7 @@ export function useDiffOverlay(
         const widthRatio = baseCanvas.width / candidateCanvas.width;
         const heightRatio = baseCanvas.height / candidateCanvas.height;
         if (widthRatio < 0.9 || widthRatio > 1.1 || heightRatio < 0.9 || heightRatio > 1.1) {
-            console.warn(
-                'Diff computation: Canvas dimensions significantly different - base:',
-                baseCanvas.width,
-                'x',
-                baseCanvas.height,
-                'candidate:',
-                candidateCanvas.width,
-                'x',
-                candidateCanvas.height,
-            );
+            // Canvas dimensions significantly different - proceeding anyway
         }
 
         // If not aligned, use identity transform (no transformation)
@@ -248,7 +233,6 @@ export function useDiffOverlay(
                     return;
                 }
 
-                console.error('Diff computation error:', e);
                 setState((prev) => ({
                     ...prev,
                     isComputing: false,

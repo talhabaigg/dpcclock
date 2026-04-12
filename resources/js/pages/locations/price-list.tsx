@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { cn } from '@/lib/utils';
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Download, FileSpreadsheet, Lock, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -95,6 +95,7 @@ export default function LocationPriceList() {
 
     return (
         <LocationLayout location={location} activeTab="price-list">
+            <Head title={`Price List - ${location.name}`} />
             <LoadingDialog open={isUploading} setOpen={() => {}} message="Uploading price list..." />
             <Card>
                 <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">

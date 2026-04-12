@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft, CheckCircle2, LogIn } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
@@ -71,6 +71,7 @@ export default function ClockIn() {
 
     const content = (
         <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
+            <Head title="Clock In" />
             {/* Processing Dialog */}
             <KioskDialogBox
                 isOpen={showProcessing}

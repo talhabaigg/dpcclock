@@ -73,8 +73,7 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
                 setItems(mapped);
                 setHighlightedIndex(0);
-            } catch (err: any) {
-                console.error('Failed to fetch items:', err.message);
+            } catch {
                 setItems([]);
             } finally {
                 setLoading(false);

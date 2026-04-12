@@ -37,9 +37,7 @@ export default function LocationPriceHistoryDialog({ locationId, locationName }:
             const response = await fetch(`/locations/${locationId}/price-history`);
             const data = await response.json();
             setHistory(data);
-        } catch (error) {
-            console.error('Failed to fetch price history:', error);
-        } finally {
+        } catch { /* ignored */ } finally {
             setIsLoading(false);
         }
     }, [locationId]);

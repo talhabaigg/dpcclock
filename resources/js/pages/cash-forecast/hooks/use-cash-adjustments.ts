@@ -176,12 +176,6 @@ export const useCashInAdjustments = ({ cashInSources, cashInAdjustments, current
             source_month: modalState.sourceMonth,
             splits: modalState.splits.filter((split) => split.amount > 0),
         };
-        console.log('[CashIn Save Debug]', {
-            modalState,
-            payload,
-            sourceAmount: getSourceAmount(modalState.jobNumber, modalState.sourceMonth),
-            splitTotal: modalState.splits.reduce((sum, s) => sum + s.amount, 0),
-        });
         router.post(
             '/cash-forecast/cash-in-adjustments',
             payload,

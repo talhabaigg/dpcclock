@@ -89,9 +89,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                     ai_transcript: aiText || undefined,
                 }),
             });
-        } catch (err) {
-            console.error('Failed to save voice transcript:', err);
-        }
+        } catch { /* ignored */ }
     }, []);
 
     const handleDataChannelMessage = useCallback(
@@ -197,9 +195,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                                     }),
                                 );
                             }
-                        } catch (toolError) {
-                            console.error('Tool execution error:', toolError);
-                        }
+                        } catch { /* ignored */ }
                         break;
                     }
 
@@ -211,16 +207,13 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         break;
 
                     case 'error': {
-                        console.error('Realtime API error:', message.error);
                         const error = new Error(message.error?.message || 'Unknown error');
                         onError?.(error);
                         updateStatus('error');
                         break;
                     }
                 }
-            } catch (err) {
-                console.error('Error parsing data channel message:', err);
-            }
+            } catch { /* ignored */ }
         },
         [onTranscript, onResponse, onToolCall, onError, updateStatus, saveTranscript],
     );
@@ -300,9 +293,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         animFrameRef.current = requestAnimationFrame(updateLevels);
                     };
                     animFrameRef.current = requestAnimationFrame(updateLevels);
-                } catch (err) {
-                    console.warn('Could not set up audio analyser:', err);
-                }
+                } catch { /* ignored */ }
             };
 
             // Step 3: Get user microphone
@@ -389,7 +380,6 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             updateStatus('listening');
         } catch (err) {
-            console.error('Voice call error:', err);
             const error = err instanceof Error ? err : new Error('Failed to start voice call');
             onError?.(error);
             updateStatus('error');
@@ -426,9 +416,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         estimatedCost: data.estimated_cost,
                     });
                 }
-            } catch (err) {
-                console.error('Failed to end voice session on server:', err);
-            }
+            } catch { /* ignored */ }
             voiceSessionIdRef.current = null;
             conversationIdRef.current = null;
         }

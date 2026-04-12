@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { AlertTriangle, CheckCircle, Download, FolderTree, ShieldCheck } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -63,6 +63,7 @@ export default function LocationShow() {
 
     return (
         <LocationLayout location={location} activeTab="sublocations">
+            <Head title={location.name} />
             <Tabs defaultValue="sublocations" className="flex flex-col">
                 <TabsList>
                     <TabsTrigger value="sublocations">

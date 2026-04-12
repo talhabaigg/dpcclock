@@ -1,10 +1,11 @@
-import { isWeekend } from 'date-fns';
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import { isWeekend, startOfDay } from 'date-fns';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { TaskLink, TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
 import DependencyArrows from './dependency-arrows';
 import GanttHeader from './gantt-header';
 import GanttRow from './gantt-row';
+import { dateToX } from './utils';
 
 interface GanttPanelProps {
     visibleTasks: TaskNode[];
@@ -92,22 +93,34 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
             mouseY: mousePos.y,
         } : null;
 
+        const headerRef = useRef<HTMLDivElement>(null);
+
         const handleScroll = useCallback(() => {
             if (scrollRef.current) {
                 onVerticalScroll?.(scrollRef.current.scrollTop);
+                if (headerRef.current) {
+                    headerRef.current.scrollLeft = scrollRef.current.scrollLeft;
+                }
             }
         }, [onVerticalScroll]);
+
+        // Sync header scroll on mount and when body scrolls
+        useEffect(() => {
+            const body = scrollRef.current;
+            if (!body) return;
+            const syncHeader = () => {
+                if (headerRef.current) {
+                    headerRef.current.scrollLeft = body.scrollLeft;
+                }
+            };
+            body.addEventListener('scroll', syncHeader);
+            return () => body.removeEventListener('scroll', syncHeader);
+        }, []);
 
         return (
             <div className="flex min-w-[300px] flex-1 flex-col">
                 {/* Header — fixed, scrolls horizontally with body via shared width */}
-                <div className="overflow-hidden" ref={(el) => {
-                    // Sync header horizontal scroll with body
-                    if (!el || !scrollRef.current) return;
-                    const body = scrollRef.current;
-                    const syncHeader = () => { el.scrollLeft = body.scrollLeft; };
-                    body.addEventListener('scroll', syncHeader);
-                }}>
+                <div className="overflow-hidden" ref={headerRef}>
                     <div style={{ minWidth: totalWidth }}>
                         <GanttHeader days={days} dayWidth={dayWidth} />
                     </div>
@@ -141,13 +154,13 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
 
                             {/* Today line */}
                             {(() => {
-                                const today = new Date();
-                                const todayIdx = days.findIndex((d) => d.toDateString() === today.toDateString());
-                                if (todayIdx === -1) return null;
+                                const today = startOfDay(new Date());
+                                const todayX = dateToX(today, rangeStart, dayWidth);
+                                if (todayX < 0 || todayX > totalWidth) return null;
                                 return (
                                     <div
                                         className="pointer-events-none absolute top-0 z-10 h-full w-px bg-red-500"
-                                        style={{ left: todayIdx * dayWidth + dayWidth / 2 }}
+                                        style={{ left: todayX + dayWidth / 2 }}
                                     />
                                 );
                             })()}

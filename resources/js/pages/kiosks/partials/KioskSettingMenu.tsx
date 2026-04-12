@@ -65,10 +65,9 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                 onSuccess: () => {
                     setAdminPinDialogOpen(false);
                 },
-                onError: (errors) => {
+                onError: () => {
                     setShowProcessing(false);
                     form.setData('pin', '');
-                    console.error('Admin PIN validation failed:', errors);
                 },
                 onFinish: () => {
                     setShowProcessing(false);

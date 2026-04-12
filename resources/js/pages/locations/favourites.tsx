@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { Download, Heart } from 'lucide-react';
 import FavouriteMaterialUploader from './partials.tsx/favMaterialUploader';
 
@@ -19,6 +19,7 @@ export default function LocationFavourites() {
 
     return (
         <LocationLayout location={location} activeTab="favourites">
+            <Head title={`Favourites - ${location.name}`} />
             <Card>
                 <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

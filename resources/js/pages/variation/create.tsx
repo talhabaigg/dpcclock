@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
 import { cn, fmtCurrency } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
-import { useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { api, ApiError } from '@/lib/api';
 import { format } from 'date-fns';
 import {
@@ -355,6 +355,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Create Variation" />
             <div className="min-h-screen min-w-0 overflow-x-hidden">
                 {/* Header */}
                 <div className="border-b px-4 py-4 sm:px-6 sm:py-5 md:px-8">

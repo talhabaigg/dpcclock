@@ -121,9 +121,8 @@ export default function UpdatePricing() {
             if (data.items.length === 0) {
                 toast.info('No items found matching the criteria');
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to preview changes');
-            console.error(error);
         } finally {
             setIsLoading(false);
         }

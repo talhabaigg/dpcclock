@@ -64,7 +64,6 @@ export const CostBreakdownDialog = ({
             const queryString = params.toString();
             const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
             const result = await api.get(url);
-            console.log('Cost breakdown response:', result);
             setData(result);
         } catch (err: unknown) {
             setError(err instanceof ApiError ? (err.data?.error as string) || err.message : 'Failed to fetch cost breakdown');

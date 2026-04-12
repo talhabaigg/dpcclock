@@ -114,7 +114,6 @@ export default function PasskeyPrompt() {
                 },
             );
         } catch (err: any) {
-            console.error('Passkey registration failed:', err);
             setError(err?.message || 'Failed to register passkey. Please try again.');
             setIsRegistering(false);
         }
