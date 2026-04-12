@@ -54,6 +54,12 @@ export type UnifiedRow = {
     overUnderBilling?: number;
     forecastStatus?: 'not_started' | 'draft' | 'submitted' | 'finalized';
     lastSubmittedAt?: string | null;
+    // Tree path for AG Grid tree data — revenue rows are roots, cost/profit are children
+    path: string[];
+    // True for grand-total rows (Total Revenue / Total Cost / Total Profit). The rowType
+    // still reflects the value semantics ('revenue'/'cost'/'profit') so formatters keep
+    // working; isTotal layers bold/background styling on top.
+    isTotal?: boolean;
     // Summary columns - context-dependent values
     totalValue: number | null;
     toDate: number | null;
@@ -95,32 +101,28 @@ function getMonthlyValue(actuals: MonthlyData | undefined, forecast: MonthlyData
 }
 
 /**
- * Transform source data into unified rows for the grid
+ * Transform source data into unified rows for the grid.
+ * Cost and profit rows are emitted as tree-data children of each revenue row,
+ * so the grid can show/hide them via row expansion instead of a separate view.
  */
-export function transformToUnifiedRows(
-    data: TurnoverRow[],
-    months: string[],
-    lastActualMonth: string | null,
-    viewMode: 'revenue-only' | 'expanded' | 'comparison',
-): UnifiedRow[] {
+export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): UnifiedRow[] {
     const rows: UnifiedRow[] = [];
 
     data.forEach((job) => {
+        const parentKey = `${job.type}-${job.id}`;
+
         const isActualMonth: Record<string, boolean> = {};
 
-        // Calculate contractFY and actuals dynamically from filtered months
         let revenueContractFY = 0;
         let revenueActualsFY = 0;
         months.forEach((month) => {
             const { value } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
             revenueContractFY += value;
-            // FY To Date: sum raw actuals directly (not dependent on display preference)
             revenueActualsFY += safeNumber(job.revenue_actuals?.[month]);
         });
 
-        // Revenue row (always visible)
         const revenueRow: UnifiedRow = {
-            id: `${job.type}-${job.id}-revenue`,
+            id: `${parentKey}-revenue`,
             rowType: 'revenue',
             jobId: job.id,
             jobNumber: job.job_number,
@@ -130,6 +132,7 @@ export function transformToUnifiedRows(
             overUnderBilling: job.over_under_billing,
             forecastStatus: job.forecast_status,
             lastSubmittedAt: job.last_submitted_at,
+            path: [parentKey],
             totalValue: job.total_contract_value,
             toDate: job.claimed_to_date,
             remainingTotal: job.remaining_order_book,
@@ -139,7 +142,6 @@ export function transformToUnifiedRows(
             isActualMonth,
         };
 
-        // Add monthly revenue values
         months.forEach((month) => {
             const { value, isActual } = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
             (revenueRow as any)[`month_${month}`] = value;
@@ -148,87 +150,101 @@ export function transformToUnifiedRows(
 
         rows.push(revenueRow);
 
-        // Cost and Profit rows (only in expanded mode)
-        if (viewMode === 'expanded') {
-            // Calculate cost contractFY and actuals dynamically from filtered months
-            let costContractFY = 0;
-            let costActualsFY = 0;
-            months.forEach((month) => {
-                const { value } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
-                costContractFY += value;
-                // FY To Date: sum raw actuals directly (not dependent on display preference)
-                costActualsFY += safeNumber(job.cost_actuals?.[month]);
-            });
+        let costContractFY = 0;
+        let costActualsFY = 0;
+        months.forEach((month) => {
+            const { value } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
+            costContractFY += value;
+            costActualsFY += safeNumber(job.cost_actuals?.[month]);
+        });
 
-            // Cost row
-            const costRow: UnifiedRow = {
-                id: `${job.type}-${job.id}-cost`,
-                rowType: 'cost',
-                jobId: job.id,
-                jobNumber: '',
-                jobName: 'Cost',
-                projectType: job.type,
-                totalValue: job.budget,
-                toDate: job.cost_to_date,
-                remainingTotal: job.remaining_budget,
-                contractFY: costContractFY,
-                fyToDate: costActualsFY,
-                remainingFY: costContractFY - costActualsFY,
-                isActualMonth: {},
-            };
+        const costRow: UnifiedRow = {
+            id: `${parentKey}-cost`,
+            rowType: 'cost',
+            jobId: job.id,
+            jobNumber: '',
+            jobName: '',
+            projectType: job.type,
+            path: [parentKey, 'cost'],
+            totalValue: job.budget,
+            toDate: job.cost_to_date,
+            remainingTotal: job.remaining_budget,
+            contractFY: costContractFY,
+            fyToDate: costActualsFY,
+            remainingFY: costContractFY - costActualsFY,
+            isActualMonth: {},
+        };
 
-            months.forEach((month) => {
-                const { value, isActual } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
-                (costRow as any)[`month_${month}`] = value;
-                costRow.isActualMonth[month] = isActual;
-            });
+        months.forEach((month) => {
+            const { value, isActual } = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
+            (costRow as any)[`month_${month}`] = value;
+            costRow.isActualMonth[month] = isActual;
+        });
 
-            rows.push(costRow);
+        rows.push(costRow);
 
-            // Profit row
-            const profitRow: UnifiedRow = {
-                id: `${job.type}-${job.id}-profit`,
-                rowType: 'profit',
-                jobId: job.id,
-                jobNumber: '',
-                jobName: 'Profit',
-                projectType: job.type,
-                totalValue: safeNumber(job.total_contract_value) - safeNumber(job.budget),
-                toDate: safeNumber(job.claimed_to_date) - safeNumber(job.cost_to_date),
-                remainingTotal: null,
-                contractFY: revenueContractFY - costContractFY,
-                fyToDate: revenueActualsFY - costActualsFY,
-                remainingFY: null,
-                isActualMonth: {},
-            };
+        const profitRow: UnifiedRow = {
+            id: `${parentKey}-profit`,
+            rowType: 'profit',
+            jobId: job.id,
+            jobNumber: '',
+            jobName: '',
+            projectType: job.type,
+            path: [parentKey, 'profit'],
+            totalValue: safeNumber(job.total_contract_value) - safeNumber(job.budget),
+            toDate: safeNumber(job.claimed_to_date) - safeNumber(job.cost_to_date),
+            remainingTotal: null,
+            contractFY: revenueContractFY - costContractFY,
+            fyToDate: revenueActualsFY - costActualsFY,
+            remainingFY: null,
+            isActualMonth: {},
+        };
 
-            months.forEach((month) => {
-                const revenue = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
-                const cost = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
-                (profitRow as any)[`month_${month}`] = revenue.value - cost.value;
-                profitRow.isActualMonth[month] = revenue.isActual;
-            });
+        months.forEach((month) => {
+            const revenue = getMonthlyValue(job.revenue_actuals, job.revenue_forecast, month);
+            const cost = getMonthlyValue(job.cost_actuals, job.cost_forecast, month);
+            (profitRow as any)[`month_${month}`] = revenue.value - cost.value;
+            profitRow.isActualMonth[month] = revenue.isActual;
+        });
 
-            rows.push(profitRow);
-        }
+        rows.push(profitRow);
     });
 
     return rows;
 }
 
 /**
- * Calculate total row for a given row type
+ * Calculate total row for a given row type.
+ * `treeRole` controls where the row sits in the tree:
+ *   - 'root' renders as a top-level expandable totals row (e.g. Total Revenue)
+ *   - 'child' nests under the totals root (e.g. Total Cost / Total Profit)
+ *   - 'standalone' is a leaf root (e.g. Labour Req)
  */
-export function calculateTotalRow(rows: UnifiedRow[], rowType: RowType, months: string[], label: string): UnifiedRow {
+export function calculateTotalRow(
+    rows: UnifiedRow[],
+    rowType: RowType,
+    months: string[],
+    label: string,
+    treeRole: 'root' | 'child' | 'standalone' = 'standalone',
+): UnifiedRow {
     const filteredRows = rows.filter((r) => r.rowType === rowType);
+
+    const path =
+        treeRole === 'child'
+            ? ['totals-root', `total-${rowType}`]
+            : treeRole === 'root'
+                ? ['totals-root']
+                : [`total-${rowType}`];
 
     const totalRow: UnifiedRow = {
         id: `total-${rowType}`,
-        rowType: 'total',
+        rowType,
         jobId: 0,
         jobNumber: label,
         jobName: '',
         projectType: 'total',
+        path,
+        isTotal: true,
         totalValue: 0,
         toDate: 0,
         remainingTotal: 0,
@@ -269,6 +285,7 @@ export function calculateLabourRow(revenueRows: UnifiedRow[], data: TurnoverRow[
         jobNumber: 'Labour Req',
         jobName: '',
         projectType: 'summary',
+        path: ['labour-requirement'],
         totalValue: null,
         toDate: null,
         remainingTotal: null,
@@ -306,21 +323,29 @@ export function calculateLabourRow(revenueRows: UnifiedRow[], data: TurnoverRow[
 /**
  * Create target rows for the grid.
  * Accepts pre-transformed revenue rows to avoid re-deriving monthly values from raw data.
+ * `lastActualMonth` (YYYY-MM) splits each row's monthly values into FY-to-date (≤ cutoff)
+ * and remaining FY (> cutoff) totals, mirroring the forecast grid's semantics.
  */
-export function createTargetRows(revenueRows: UnifiedRow[], months: string[], monthlyTargets: Record<string, number>): UnifiedRow[] {
+export function createTargetRows(
+    revenueRows: UnifiedRow[],
+    months: string[],
+    monthlyTargets: Record<string, number>,
+    lastActualMonth: string | null,
+): UnifiedRow[] {
     const targetRow: UnifiedRow = {
         id: 'target-row',
         rowType: 'target',
         jobId: 0,
-        jobNumber: 'Revenue Target',
+        jobNumber: 'Budget',
         jobName: '',
         projectType: 'summary',
+        path: ['target-row'],
         totalValue: null,
         toDate: null,
         remainingTotal: null,
         contractFY: null,
-        fyToDate: null,
-        remainingFY: null,
+        fyToDate: 0,
+        remainingFY: 0,
         fyTotal: 0,
         isActualMonth: {},
     };
@@ -332,12 +357,13 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         jobNumber: 'Work in Hand',
         jobName: '',
         projectType: 'summary',
+        path: ['actual-row'],
         totalValue: null,
         toDate: null,
         remainingTotal: null,
         contractFY: null,
-        fyToDate: null,
-        remainingFY: null,
+        fyToDate: 0,
+        remainingFY: 0,
         fyTotal: 0,
         isActualMonth: {},
     };
@@ -349,20 +375,23 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         jobNumber: 'Variance',
         jobName: '',
         projectType: 'summary',
+        path: ['variance-row'],
         totalValue: null,
         toDate: null,
         remainingTotal: null,
         contractFY: null,
-        fyToDate: null,
-        remainingFY: null,
+        fyToDate: 0,
+        remainingFY: 0,
         fyTotal: 0,
         isActualMonth: {},
     };
 
+    const revenueOnlyRows = revenueRows.filter((r) => r.rowType === 'revenue');
+
     months.forEach((month) => {
-        // Sum revenue from pre-transformed rows
+        // Sum revenue from pre-transformed rows (exclude cost/profit children)
         let totalRevenue = 0;
-        revenueRows.forEach((row) => {
+        revenueOnlyRows.forEach((row) => {
             totalRevenue += safeNumber((row as any)[`month_${month}`]);
         });
 
@@ -376,6 +405,17 @@ export function createTargetRows(revenueRows: UnifiedRow[], months: string[], mo
         targetRow.fyTotal = safeNumber(targetRow.fyTotal) + targetValue;
         actualRow.fyTotal = safeNumber(actualRow.fyTotal) + totalRevenue;
         varianceRow.fyTotal = safeNumber(varianceRow.fyTotal) + varianceValue;
+
+        const isToDate = lastActualMonth ? month <= lastActualMonth : false;
+        if (isToDate) {
+            targetRow.fyToDate = safeNumber(targetRow.fyToDate) + targetValue;
+            actualRow.fyToDate = safeNumber(actualRow.fyToDate) + totalRevenue;
+            varianceRow.fyToDate = safeNumber(varianceRow.fyToDate) + varianceValue;
+        } else {
+            targetRow.remainingFY = safeNumber(targetRow.remainingFY) + targetValue;
+            actualRow.remainingFY = safeNumber(actualRow.remainingFY) + totalRevenue;
+            varianceRow.remainingFY = safeNumber(varianceRow.remainingFY) + varianceValue;
+        }
     });
 
     return [targetRow, actualRow, varianceRow];

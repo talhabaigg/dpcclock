@@ -23,10 +23,11 @@ const getRowType = (params: CellClassParams): RowType | undefined => {
 };
 
 /**
- * Check if row is a total row
+ * Check if row is a total row (grand-total summary, regardless of value semantics)
  */
 const isTotalRow = (params: CellClassParams): boolean => {
-    return getRowType(params) === 'total';
+    const data = params.data as UnifiedRow | undefined;
+    return data?.isTotal === true || data?.rowType === 'total';
 };
 
 /**
@@ -84,7 +85,7 @@ export const getValueCellClass = (params: CellClassParams): string => {
     if (isTotalRow(params)) {
         classes.push('font-bold', 'bg-muted');
     } else if (isLabourRow(params)) {
-        classes.push('bg-purple-50', 'dark:bg-purple-900/30');
+        classes.push('bg-muted');
     } else if (rowType === 'profit') {
         if (typeof params.value === 'number') {
             if (params.value >= 0) {
@@ -117,7 +118,7 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
         if (isTotalRow(params)) {
             classes.push('font-bold', 'bg-muted');
         } else if (isLabourRow(params)) {
-            classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
+            classes.push('font-semibold', 'bg-muted');
         } else if (rowType === 'cost') {
             if (month === currentMonthStr || !data?.isActualMonth?.[month]) {
                 classes.push('italic');
@@ -134,9 +135,10 @@ export const getMonthCellClass = (month: string, lastActualMonth: string | null)
                 classes.push('italic');
             }
         } else if (rowType === 'target') {
-            classes.push('bg-violet-50/50', 'dark:bg-violet-950/20', 'text-violet-700', 'dark:text-violet-400');
-        } else if (rowType === 'revenue') {
-            // Current month always styled as forecast (blue) since we prefer forecast over actuals
+            // Budget row stays neutral — only the variance row gets color emphasis.
+        } else if (rowType === 'revenue' && data?.projectType !== 'summary') {
+            // Per-job revenue rows: actuals subtle gray, forecast subtle blue. Skip styling
+            // for summary rows (Work in Hand) so the budget grid stays neutral.
             const hasActualData = month !== currentMonthStr && data?.isActualMonth?.[month];
             if (hasActualData) {
                 classes.push('bg-emerald-50', 'dark:bg-emerald-950/30', 'font-medium');
@@ -174,6 +176,10 @@ export const getMonthHeaderClass = (month: string, lastActualMonth: string | nul
  */
 export const getRowClass = (params: { data: UnifiedRow }): string => {
     const classes = ['transition-colors'];
+    if (params.data?.isTotal) {
+        classes.push('forecast-row-total');
+        return classes.join(' ');
+    }
     const rowType = params.data?.rowType;
 
     switch (rowType) {
@@ -215,7 +221,7 @@ export const getPinnedCellClass = (params: CellClassParams): string => {
     if (isTotalRow(params)) {
         classes.push('font-bold', 'bg-muted');
     } else if (isLabourRow(params)) {
-        classes.push('font-semibold', 'bg-purple-50', 'dark:bg-purple-900/30', 'text-purple-700', 'dark:text-purple-300');
+        classes.push('font-semibold', 'bg-muted');
     } else if (rowType === 'cost') {
         classes.push('pl-6', 'text-muted-foreground', 'text-xs');
     } else if (rowType === 'profit') {

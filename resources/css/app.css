@@ -262,11 +262,11 @@
 }
 
 .forecast-row-labour {
-    background-color: rgba(168, 85, 247, 0.08) !important;
+    background-color: var(--muted) !important;
 }
 
 .dark .forecast-row-labour {
-    background-color: rgba(168, 85, 247, 0.15) !important;
+    background-color: var(--muted) !important;
 }
 
 .forecast-row-total {
@@ -274,14 +274,16 @@
     font-weight: 700 !important;
 }
 
-/* Header styling for actual vs forecast months */
+/* Header styling for actual vs forecast months — actuals are neutral (gray) so
+   green can stay reserved for "positive" semantics in profit/variance cells. */
 .forecast-header-actual {
-    background-color: rgba(16, 185, 129, 0.1) !important; /* emerald */
-    border-bottom: 2px solid #10b981 !important;
+    background-color: rgba(120, 120, 120, 0.08) !important;
+    border-bottom: 2px solid rgba(120, 120, 120, 0.45) !important;
 }
 
 .dark .forecast-header-actual {
-    background-color: rgba(16, 185, 129, 0.15) !important;
+    background-color: rgba(160, 160, 160, 0.10) !important;
+    border-bottom-color: rgba(180, 180, 180, 0.45) !important;
 }
 
 .forecast-header-forecast {

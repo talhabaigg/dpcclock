@@ -8,7 +8,8 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { AgGridReact } from 'ag-grid-react';
 import { TurnoverPrintReport } from './TurnoverPrintReport';
 import { TurnoverReportDialog } from './TurnoverReportDialog';
 import { JobFilterDialog } from './components/JobFilterDialog';
@@ -45,12 +46,24 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
     const [filterDialogOpen, setFilterDialogOpen] = useState(false);
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [printReportOpen, setPrintReportOpen] = useState(false);
+
+    // Grid refs wired across the two views for AG Grid's alignedGrids feature.
+    // Both refs are stable, so we can pass callbacks that read .current at call time
+    // without re-mounting the grids when one view appears/disappears.
+    const revenueGridRef = useRef<AgGridReact>(null);
+    const targetsGridRef = useRef<AgGridReact>(null);
+    const alignWithTargets = useCallback(() => (targetsGridRef.current ? [targetsGridRef.current] : []), []);
+    const alignWithRevenue = useCallback(() => (revenueGridRef.current ? [revenueGridRef.current] : []), []);
     const [activeViews, setActiveViews] = useState<Set<ViewMode>>(() => {
         try {
             const stored = localStorage.getItem(ACTIVE_VIEWS_KEY);
             if (stored) {
-                const parsed = JSON.parse(stored) as ViewMode[];
-                if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
+                const parsed = JSON.parse(stored) as string[];
+                if (Array.isArray(parsed)) {
+                    // Migrate old 'expanded' value (now folded into the revenue grid)
+                    const validViews = parsed.filter((v): v is ViewMode => v === 'revenue-only' || v === 'targets');
+                    if (validViews.length > 0) return new Set(validViews);
+                }
             }
         } catch {
             // Ignore
@@ -69,8 +82,8 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
             return next;
         });
     };
-    const viewNames: Record<ViewMode, string> = { 'revenue-only': 'Revenue', expanded: 'Cost & Profit', targets: 'Targets' };
-    const viewSummary = (['revenue-only', 'expanded', 'targets'] as ViewMode[]).filter((v) => activeViews.has(v)).map((v) => viewNames[v]).join(', ');
+    const viewNames: Record<ViewMode, string> = { 'revenue-only': 'P&L Forecast', targets: 'Budget' };
+    const viewSummary = (['revenue-only', 'targets'] as ViewMode[]).filter((v) => activeViews.has(v)).map((v) => viewNames[v]).join(', ');
     const [gridHeight, setGridHeight] = useState(() => {
         try {
             const stored = localStorage.getItem(GRID_HEIGHT_KEY);
@@ -358,7 +371,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 </PopoverTrigger>
                                 <PopoverContent className="w-52 p-1.5" align="start">
                                     <div className="space-y-0.5">
-                                        {(['revenue-only', 'expanded', 'targets'] as ViewMode[]).map((mode) => {
+                                        {(['revenue-only', 'targets'] as ViewMode[]).map((mode) => {
                                             const isActive = activeViews.has(mode);
                                             const isOnly = isActive && activeViews.size === 1;
                                             return (
@@ -686,16 +699,13 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                     </CardContent>
                 </Card>
 
-                {/* Grids — one per active view */}
-                {(['revenue-only', 'expanded', 'targets'] as ViewMode[])
+                {/* Grids — one per active view. Refs are wired bidirectionally so AG Grid's
+                    alignedGrids feature keeps column widths and horizontal scroll in sync
+                    between the revenue forecast and targets grids. */}
+                {(['revenue-only', 'targets'] as ViewMode[])
                     .filter((v) => activeViews.has(v))
                     .map((mode) => (
                         <div key={mode} className="space-y-1">
-                            {activeViews.size > 1 && (
-                                <h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                                    {viewNames[mode]}
-                                </h3>
-                            )}
                             <UnifiedForecastGrid
                                 data={filteredData}
                                 months={filteredMonths}
@@ -705,6 +715,8 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                                 viewMode={mode}
                                 height={gridHeight}
                                 onHeightChange={handleHeightChange}
+                                gridRef={mode === 'revenue-only' ? revenueGridRef : targetsGridRef}
+                                alignedGrids={mode === 'revenue-only' ? alignWithTargets : alignWithRevenue}
                             />
                         </div>
                     ))}

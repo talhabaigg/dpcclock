@@ -2,10 +2,12 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
 import { router } from '@inertiajs/react';
-import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent } from 'ag-grid-community';
+import type { ColDef, ColumnState, GetRowIdParams, GridReadyEvent, ICellRendererParams } from 'ag-grid-community';
+import type { AgGridReactProps } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+import { AllEnterpriseModule } from 'ag-grid-enterprise';
 import { AgGridReact } from 'ag-grid-react';
-import { Download, GripHorizontal, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, GripHorizontal, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -29,7 +31,7 @@ import { ColumnPresetManager, type ColumnPreset } from './ColumnPresetManager';
 import { ColumnVisibilityDropdown, type ColumnGroup } from './ColumnVisibilityDropdown';
 import { LabourCell } from './LabourCell';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
 
 /** Column IDs for toggleable (non-month) columns — used for visibility sync */
 const TOGGLEABLE_COLUMN_IDS = [
@@ -70,7 +72,7 @@ const columnStateKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewM
 const hiddenColumnsKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewMode}-hidden`;
 const activePresetKey = (viewMode: ViewMode) => `${COLUMN_STATE_BASE_KEY}-${viewMode}-active-preset`;
 
-export type ViewMode = 'revenue-only' | 'expanded' | 'targets';
+export type ViewMode = 'revenue-only' | 'targets';
 
 interface UnifiedForecastGridProps {
     data: TurnoverRow[];
@@ -81,6 +83,10 @@ interface UnifiedForecastGridProps {
     viewMode: ViewMode;
     height?: number;
     onHeightChange?: (height: number) => void;
+    /** External ref for the AG Grid instance (used to wire up alignedGrids across views) */
+    gridRef?: React.RefObject<AgGridReact | null>;
+    /** Other grids whose columns/horizontal scroll should stay in sync with this one */
+    alignedGrids?: AgGridReactProps['alignedGrids'];
 }
 
 export function UnifiedForecastGrid({
@@ -92,8 +98,11 @@ export function UnifiedForecastGrid({
     viewMode,
     height = 500,
     onHeightChange,
+    gridRef: externalGridRef,
+    alignedGrids,
 }: UnifiedForecastGridProps) {
-    const gridRef = useRef<AgGridReact>(null);
+    const internalGridRef = useRef<AgGridReact>(null);
+    const gridRef = externalGridRef ?? internalGridRef;
     const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
         try {
             const stored = localStorage.getItem(hiddenColumnsKey(viewMode));
@@ -124,103 +133,135 @@ export function UnifiedForecastGrid({
         });
     }, [viewMode, hiddenColumns]);
 
-    // Transform data based on view mode
-    const rowData = useMemo(() => {
-        if (viewMode === 'targets') {
-            // Transform revenue rows first so createTargetRows can reuse them
-            const revenueRows = transformToUnifiedRows(data, months, lastActualMonth, 'revenue-only');
-            return createTargetRows(revenueRows, months, monthlyTargets);
-        }
+    // Tracks whether the sticky Total Revenue row is expanded to also show Total Cost
+    // and Total Profit beneath it (pinned rows don't participate in AG Grid tree data,
+    // so we manage expansion ourselves and re-render pinnedBottomRowData accordingly).
+    const [totalsExpanded, setTotalsExpanded] = useState(false);
 
-        return transformToUnifiedRows(data, months, lastActualMonth, viewMode);
+    // Transform data based on view mode (tree-structured for non-targets).
+    const rowData = useMemo(() => {
+        const unified = transformToUnifiedRows(data, months);
+        if (viewMode === 'targets') {
+            return createTargetRows(unified, months, monthlyTargets, lastActualMonth);
+        }
+        return unified;
     }, [data, months, lastActualMonth, viewMode, monthlyTargets]);
 
-    // Calculate pinned bottom row data (totals)
-    const pinnedBottomRowData = useMemo(() => {
+    // Pinned bottom rows: always-visible totals (sticky) + labour requirement.
+    // Total Revenue is the always-shown root; Total Cost/Profit reveal on expand.
+    // Returns undefined (not []) for targets so AG Grid doesn't reserve pinned space.
+    const pinnedBottomRowData = useMemo<UnifiedRow[] | undefined>(() => {
         if (viewMode === 'targets') {
-            return [];
+            return undefined;
         }
-
-        const revenueTotal = calculateTotalRow(rowData, 'revenue', months, 'Total Revenue');
-
-        if (viewMode === 'revenue-only') {
-            const labourRow = calculateLabourRow(
-                rowData.filter((r) => r.rowType === 'revenue'),
-                data,
-                months,
-            );
-            return [revenueTotal, labourRow];
+        const revenueTotal = calculateTotalRow(rowData, 'revenue', months, 'Total Revenue', 'root');
+        const labourRow = calculateLabourRow(
+            rowData.filter((r) => r.rowType === 'revenue' && !r.isTotal),
+            data,
+            months,
+        );
+        if (totalsExpanded) {
+            const costTotal = calculateTotalRow(rowData, 'cost', months, 'Total Cost', 'child');
+            const profitTotal = calculateTotalRow(rowData, 'profit', months, 'Total Profit', 'child');
+            return [revenueTotal, costTotal, profitTotal, labourRow];
         }
-
-        const costTotal = calculateTotalRow(rowData, 'cost', months, 'Total Cost');
-        const profitTotal = calculateTotalRow(rowData, 'profit', months, 'Total Profit');
-
-        return [revenueTotal, costTotal, profitTotal];
-    }, [rowData, months, viewMode, data]);
+        return [revenueTotal, labourRow];
+    }, [rowData, months, viewMode, data, totalsExpanded]);
 
     // Build column definitions
     const columnDefs = useMemo<ColDef[]>(() => {
         const staticCols: ColDef[] = [];
 
         if (viewMode === 'targets') {
-            // Targets view has different columns
-            staticCols.push({
-                headerComponent: () => (
-                    <HeaderWithHelp
-                        displayName="Metric"
-                        helpText="Revenue Target: Monthly budget targets. Work in Hand: Combined actuals and forecasts. Variance: Difference between actual/forecast and target."
-                    />
-                ),
-                field: 'jobNumber',
-                width: 160,
-                pinned: 'left',
-                cellClass: 'font-semibold text-foreground',
-            });
-
-            staticCols.push({
-                headerComponent: () => (
-                    <HeaderWithHelp displayName={`Total ${fyLabel}`} helpText="Sum of all monthly values for the selected financial year" />
-                ),
-                field: 'fyTotal',
-                width: 140,
-                valueFormatter: (params) => formatCurrency(params.value),
-                type: 'numericColumn',
-                cellClass: (params) => {
-                    const data = params.data as UnifiedRow;
-                    if (data?.rowType === 'variance') {
-                        return params.value < 0
-                            ? 'text-right font-semibold text-red-600 dark:text-red-400'
-                            : 'text-right font-semibold text-emerald-600 dark:text-emerald-400';
-                    }
-                    return 'text-right font-semibold';
-                },
-            });
-        } else {
-            // Standard columns for revenue/expanded view
+            // Targets view reuses the revenue forecast column structure (matching colIds
+            // and widths) so AG Grid's `alignedGrids` keeps the months in sync. The metric
+            // column borrows the auto-group colId ('ag-Grid-AutoColumn') so it lines up
+            // with the forecast grid's tree-data auto column.
             staticCols.push(
                 {
                     headerComponent: () => (
-                        <HeaderWithHelp displayName="Job Number" helpText="Unique job identifier. Click to view the job forecast details." />
+                        <HeaderWithHelp
+                            displayName="Metric"
+                            helpText="Revenue Target: Monthly budget targets. Work in Hand: Combined actuals and forecasts. Variance: Difference between actual/forecast and target."
+                        />
                     ),
+                    colId: 'ag-Grid-AutoColumn',
                     field: 'jobNumber',
-                    width: 120,
+                    width: 160,
                     pinned: 'left',
-                    cellClass: getPinnedCellClass,
-                    onCellClicked: (params) => {
-                        const rowData = params.data as UnifiedRow;
-                        if (
-                            rowData.rowType === 'revenue' &&
-                            rowData.projectType !== 'total' &&
-                            rowData.projectType !== 'summary' &&
-                            rowData.jobNumber
-                        ) {
-                            const url = rowData.projectType === 'forecast_project'
-                                ? `/forecast-projects/${rowData.jobId}`
-                                : `/location/${rowData.jobId}/job-forecast`;
-                            router.visit(url);
+                    cellClass: 'font-semibold text-foreground',
+                },
+                { field: 'jobName', headerName: '', width: 150, pinned: 'left', valueFormatter: () => '' },
+                { headerName: '', colId: 'totalValue', width: 130, valueFormatter: () => '' },
+                { headerName: '', colId: 'toDate', width: 130, valueFormatter: () => '' },
+                { headerName: '', colId: 'remainingTotal', width: 140, valueFormatter: () => '' },
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp displayName={fyLabel} helpText="Sum of all monthly values for the selected financial year" />
+                    ),
+                    colId: 'contractFY',
+                    field: 'fyTotal',
+                    width: 130,
+                    valueFormatter: (params) => formatCurrency(params.value),
+                    type: 'numericColumn',
+                    cellClass: (params) => {
+                        const data = params.data as UnifiedRow;
+                        if (data?.rowType === 'variance') {
+                            return params.value < 0
+                                ? 'text-right font-semibold text-red-600 dark:text-red-400'
+                                : 'text-right font-semibold text-emerald-600 dark:text-emerald-400';
                         }
+                        return 'text-right font-semibold';
                     },
                 },
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="FY To Date"
+                            helpText="Cumulative value through the last actual month for each metric (Budget, Work in Hand, Variance)."
+                        />
+                    ),
+                    colId: 'fyToDate',
+                    field: 'fyToDate',
+                    width: 130,
+                    type: 'numericColumn',
+                    valueFormatter: (params) => formatCurrency(params.value),
+                    cellClass: (params) => {
+                        const data = params.data as UnifiedRow;
+                        if (data?.rowType === 'variance') {
+                            return params.value < 0
+                                ? 'text-right font-semibold text-red-600 dark:text-red-400'
+                                : 'text-right font-semibold text-emerald-600 dark:text-emerald-400';
+                        }
+                        return 'text-right font-semibold';
+                    },
+                },
+                {
+                    headerComponent: () => (
+                        <HeaderWithHelp
+                            displayName="Remaining FY"
+                            helpText="Sum of remaining months (after the last actual month) for each metric."
+                        />
+                    ),
+                    colId: 'remainingFY',
+                    field: 'remainingFY',
+                    width: 130,
+                    type: 'numericColumn',
+                    valueFormatter: (params) => formatCurrency(params.value),
+                    cellClass: (params) => {
+                        const data = params.data as UnifiedRow;
+                        if (data?.rowType === 'variance') {
+                            return params.value < 0
+                                ? 'text-right font-semibold text-red-600 dark:text-red-400'
+                                : 'text-right font-semibold text-emerald-600 dark:text-emerald-400';
+                        }
+                        return 'text-right font-semibold';
+                    },
+                },
+            );
+        } else {
+            // Standard columns for revenue view (job number column is provided by autoGroupColumnDef)
+            staticCols.push(
                 {
                     headerComponent: () => <HeaderWithHelp displayName="Job Name" helpText="Name of the project or job" />,
                     field: 'jobName',
@@ -352,7 +393,7 @@ export function UnifiedForecastGrid({
         const monthlyCols: ColDef[] = months.map((month) => ({
             headerName: formatMonthHeader(month),
             field: `month_${month}`,
-            width: viewMode === 'targets' ? 120 : 140,
+            width: 140,
             type: 'numericColumn',
             headerClass: getMonthHeaderClass(month, lastActualMonth),
             cellClass: getMonthCellClass(month, lastActualMonth),
@@ -388,18 +429,102 @@ export function UnifiedForecastGrid({
         [],
     );
 
+    // Tree data: revenue rows are roots; cost/profit rows hang off the same parentKey
+    const getDataPath = useCallback((data: UnifiedRow) => data.path, []);
+
+    // Custom renderer for pinned bottom rows (totals + labour). Pinned rows aren't tree
+    // nodes, so we bypass agGroupCellRenderer to avoid its tree indent and render flat,
+    // matching the alignment of leaf data rows.
+    const PinnedTotalsRenderer = useCallback(
+        (params: ICellRendererParams<UnifiedRow>) => {
+            const d = params.data;
+            if (!d) return null;
+            if (d.isTotal && d.rowType === 'revenue') {
+                return (
+                    <span className="flex items-center font-bold">
+                        <span className="text-muted-foreground hover:text-foreground mr-1 inline-flex size-4 items-center justify-center rounded">
+                            {totalsExpanded ? (
+                                <ChevronDown className="size-3.5" />
+                            ) : (
+                                <ChevronRight className="size-3.5" />
+                            )}
+                        </span>
+                        {d.jobNumber}
+                    </span>
+                );
+            }
+            if (d.isTotal) return <span className="pl-5 font-bold">{d.jobNumber}</span>;
+            if (d.rowType === 'labour') return d.jobNumber;
+            return d.jobNumber;
+        },
+        [totalsExpanded],
+    );
+
+    // Auto group column — replaces the static jobNumber column. Renders job number for
+    // revenue rows (clickable) and "Cost"/"Profit" labels for child rows. Pinned bottom
+    // rows use a flat custom renderer to avoid the tree-indent padding.
+    const autoGroupColumnDef = useMemo<ColDef>(
+        () => ({
+            headerName: 'Job Number',
+            minWidth: 160,
+            width: 160,
+            pinned: 'left',
+            sortable: true,
+            cellClass: getPinnedCellClass,
+            cellRendererSelector: (params) => {
+                if (params.node.rowPinned) {
+                    return { component: PinnedTotalsRenderer };
+                }
+                return { component: 'agGroupCellRenderer' };
+            },
+            cellRendererParams: {
+                suppressCount: true,
+                innerRenderer: (params: ICellRendererParams<UnifiedRow>) => {
+                    const d = params.data;
+                    if (!d) return null;
+                    if (d.rowType === 'cost') return <span className="text-muted-foreground text-xs">Cost</span>;
+                    if (d.rowType === 'profit') return <span className="text-xs">Profit</span>;
+                    return d.jobNumber;
+                },
+            },
+            onCellClicked: (params) => {
+                const rowData = params.data as UnifiedRow | undefined;
+                if (rowData?.isTotal && rowData.rowType === 'revenue') {
+                    setTotalsExpanded((prev) => !prev);
+                    return;
+                }
+                if (
+                    rowData?.rowType === 'revenue' &&
+                    !rowData.isTotal &&
+                    rowData.projectType !== 'total' &&
+                    rowData.projectType !== 'summary' &&
+                    rowData.jobNumber
+                ) {
+                    const url = rowData.projectType === 'forecast_project'
+                        ? `/forecast-projects/${rowData.jobId}`
+                        : `/location/${rowData.jobId}/job-forecast`;
+                    router.visit(url);
+                }
+            },
+        }),
+        [PinnedTotalsRenderer],
+    );
+
     // Get row ID for stable rendering
     const getRowId = useCallback((params: GetRowIdParams) => {
         return (params.data as UnifiedRow)?.id ?? `row-${params.level}-${rowIdCounter++}`;
     }, []);
 
-    // Get row height - labour rows need more space
-    const getRowHeight = useCallback((params: { data: UnifiedRow }) => {
-        if (params.data?.rowType === 'labour') {
-            return 50;
-        }
-        return 36;
+    const expandAllRows = useCallback(() => {
+        gridRef.current?.api?.expandAll();
     }, []);
+
+    const collapseAllRows = useCallback(() => {
+        gridRef.current?.api?.collapseAll();
+    }, []);
+
+    // Get row height (uniform across data and pinned rows)
+    const getRowHeight = useCallback(() => 36, []);
 
     // Update current column state
     const updateCurrentColumnState = useCallback(() => {
@@ -610,11 +735,27 @@ export function UnifiedForecastGrid({
             {/* Toolbar */}
             <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-foreground">
-                    {viewMode === 'targets' ? 'Revenue Targets' : viewMode === 'expanded' ? 'Revenue, Cost & Profit' : 'Revenue Forecast'}
+                    {viewMode === 'targets' ? 'Budget' : 'P&L Forecast'}
                 </div>
                 <div className="flex items-center gap-2">
                     {viewMode !== 'targets' && (
                         <>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button onClick={expandAllRows} variant="outline" size="icon" className="h-8 w-8">
+                                        <ChevronsUpDown className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Expand all (show cost &amp; profit)</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button onClick={collapseAllRows} variant="outline" size="icon" className="h-8 w-8">
+                                        <ChevronsDownUp className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Collapse all</TooltipContent>
+                            </Tooltip>
                             <ColumnPresetManager
                                 currentColumnState={currentColumnState}
                                 currentHiddenColumns={Array.from(hiddenColumns)}
@@ -649,17 +790,29 @@ export function UnifiedForecastGrid({
                 </div>
             </div>
 
-            {/* Grid */}
+            {/* Grid — targets uses an explicit height sized to its rows (header + 3 rows +
+                horizontal scrollbar), since autoHeight leaves extra space under the rows
+                when alignedGrids forces a horizontal scrollbar to match the P&L grid. */}
             <div
                 className="bg-card overflow-hidden rounded-xl border shadow-sm"
-                style={viewMode === 'expanded' ? { height: `${height}px` } : undefined}
+                style={{
+                    height:
+                        viewMode === 'targets'
+                            ? `${40 + rowData.length * 36 + 18}px`
+                            : `${height}px`,
+                }}
             >
                 <AgGridReact
                     ref={gridRef}
+                    alignedGrids={alignedGrids}
                     rowData={rowData}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    domLayout={viewMode === 'expanded' ? 'normal' : 'autoHeight'}
+                    autoGroupColumnDef={viewMode !== 'targets' ? autoGroupColumnDef : undefined}
+                    treeData={viewMode !== 'targets'}
+                    getDataPath={viewMode !== 'targets' ? (getDataPath as any) : undefined}
+                    groupDefaultExpanded={0}
+                    domLayout="normal"
                     theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? shadcnDarkTheme : shadcnLightTheme}
                     getRowId={getRowId}
                     getRowHeight={getRowHeight}
@@ -678,7 +831,7 @@ export function UnifiedForecastGrid({
             </div>
 
             {/* Resize handle */}
-            {onHeightChange && (
+            {onHeightChange && viewMode !== 'targets' && (
                 <div
                     className="group relative flex h-4 cursor-row-resize items-center justify-center rounded hover:bg-blue-100 dark:hover:bg-blue-900/50"
                     onMouseDown={handleResizeStart}
