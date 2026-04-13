@@ -15,6 +15,7 @@ interface Kiosk {
     id: number;
     name: string;
     eh_kiosk_id: string;
+    default_start_time?: string;
     related_kiosks?: Array<{ id: number; name: string }>;
 }
 
@@ -111,7 +112,7 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
 
                 {!isQrSession && (
                     <div className="flex items-center gap-2">
-                        <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} managers={kiosk.managers ?? []} />
+                        <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} managers={kiosk.managers ?? []} defaultStartTime={kiosk.default_start_time} />
                         <KioskTokenDialog kioskId={kiosk.id} />
                     </div>
                 )}

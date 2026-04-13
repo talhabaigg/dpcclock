@@ -14,8 +14,11 @@ import MinuteSelector from '@/pages/timesheets/components/minuteSelector';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { router, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Lock, Settings, ShieldCheck, User } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useInitials } from '@/hooks/use-initials';
+import { ArrowLeft, Clock, Lock, Search, Settings, ShieldCheck, User } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
 
@@ -29,9 +32,10 @@ interface KioskSettingMenuProps {
     adminMode: boolean | undefined;
     employees: Array<any>;
     managers: Manager[];
+    defaultStartTime?: string;
 }
 
-const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSettingMenuProps) => {
+const KioskSettingMenu = ({ kioskId, adminMode, employees, managers, defaultStartTime }: KioskSettingMenuProps) => {
     const { auth } = usePage().props as unknown as { auth: { user: any } };
     const isDeviceMode = !auth?.user;
 
@@ -88,36 +92,58 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
     const [isLocking, setIsLocking] = useState(false);
 
     const firstDialogFocusRef = useRef<HTMLButtonElement | null>(null);
+    const getInitials = useInitials();
     const filteredClockedInEmployees = employees.filter((emp) => emp.clocked_in === true);
 
-    const [selectedHour, setSelectedHour] = useState('09');
-    const [selectedMinute, setSelectedMinute] = useState('00');
+    const [defaultHour, defaultMinute] = (defaultStartTime || '09:00:00').split(':');
+    const [selectedHour, setSelectedHour] = useState(defaultHour);
+    const [selectedMinute, setSelectedMinute] = useState(defaultMinute);
+    const [employeeSearch, setEmployeeSearch] = useState('');
+    const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<number>>(new Set());
     const updateStartTimeForm = useForm({
         employeeIds: [] as number[],
         startTime: '',
     });
 
-    const handleUpdateStartTime = () => {
-        const selectedEmployeeIds = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) =>
-            parseInt((checkbox as HTMLInputElement).value, 10),
-        );
+    const searchedEmployees = useMemo(
+        () =>
+            filteredClockedInEmployees.filter((emp) =>
+                emp.name.toLowerCase().includes(employeeSearch.toLowerCase()),
+            ),
+        [filteredClockedInEmployees, employeeSearch],
+    );
 
-        if (selectedEmployeeIds.length === 0) {
-            alert('Please select at least one employee.');
-            return;
+    const toggleEmployee = (id: number) => {
+        setSelectedEmployeeIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleAll = () => {
+        if (selectedEmployeeIds.size === searchedEmployees.length) {
+            setSelectedEmployeeIds(new Set());
+        } else {
+            setSelectedEmployeeIds(new Set(searchedEmployees.map((emp) => emp.eh_employee_id)));
         }
-        const newStartTime = `${selectedHour}:${selectedMinute}:00`;
+    };
 
-        const startTime = newStartTime;
+    const handleUpdateStartTime = () => {
+        if (selectedEmployeeIds.size === 0) return;
 
+        const startTime = `${selectedHour}:${selectedMinute}:00`;
         const url = route('clocks.updateStartTimeForEmployees', { kioskId });
         updateStartTimeForm.transform((d) => ({
             ...d,
-            employeeIds: selectedEmployeeIds,
+            employeeIds: Array.from(selectedEmployeeIds),
             startTime,
         }));
         updateStartTimeForm.post(url, { onSuccess: () => updateStartTimeForm.reset('employeeIds', 'startTime') });
         setUpdateStartDialogOpen(false);
+        setSelectedEmployeeIds(new Set());
+        setEmployeeSearch('');
     };
 
     const handleOpenAdminDialog = () => {
@@ -159,12 +185,13 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                     </button>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent>
+                <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>Settings</DropdownMenuLabel>
                     <DropdownMenuSeparator />
 
                     {!adminMode && (
                         <DropdownMenuItem onClick={handleOpenAdminDialog}>
+                            <ShieldCheck className="mr-2 h-4 w-4" />
                             Switch to Admin Mode
                         </DropdownMenuItem>
                     )}
@@ -176,6 +203,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
                                 setUpdateStartDialogOpen(true);
                             }}
                         >
+                            <Clock className="mr-2 h-4 w-4" />
                             Update start time
                         </DropdownMenuItem>
                     )}
@@ -360,29 +388,98 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers }: KioskSett
             </Dialog>
 
             {/* Update Start Time Dialog */}
-            <Dialog open={updateStartDialogOpen} onOpenChange={setUpdateStartDialogOpen}>
-                <DialogContent className="max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Change Start Time</DialogTitle>
-                        <DialogDescription>Select a start time and pick employees to apply the update.</DialogDescription>
+            <Dialog
+                open={updateStartDialogOpen}
+                onOpenChange={(open) => {
+                    setUpdateStartDialogOpen(open);
+                    if (!open) {
+                        setSelectedEmployeeIds(new Set());
+                        setEmployeeSearch('');
+                    }
+                }}
+            >
+                <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-md">
+                    <DialogHeader className="border-b px-5 py-5">
+                        <DialogTitle className="text-lg">Change Start Time</DialogTitle>
+                        <DialogDescription>Select a new start time and choose employees to update.</DialogDescription>
                     </DialogHeader>
-                    <div className="flex flex-row justify-between space-x-2">
-                        <HourSelector clockInHour={selectedHour} onChange={setSelectedHour} />
-                        <MinuteSelector minute={selectedMinute} onChange={setSelectedMinute} />
 
-                        <Button className="w-1/2" onClick={handleUpdateStartTime}>
+                    {/* Time selector */}
+                    <div className="flex items-center gap-3 border-b px-5 py-4">
+                        <div className="bg-muted/50 flex flex-1 items-center justify-center rounded-lg border px-1 py-1">
+                            <HourSelector clockInHour={selectedHour} onChange={setSelectedHour} />
+                        </div>
+                        <span className="text-muted-foreground text-2xl font-bold">:</span>
+                        <div className="bg-muted/50 flex flex-1 items-center justify-center rounded-lg border px-1 py-1">
+                            <MinuteSelector minute={selectedMinute} onChange={setSelectedMinute} />
+                        </div>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative border-b px-5 py-3">
+                        <Search className="text-muted-foreground absolute left-8 top-1/2 h-4 w-4 -translate-y-1/2" />
+                        <Input
+                            placeholder="Search employees..."
+                            value={employeeSearch}
+                            onChange={(e) => setEmployeeSearch(e.target.value)}
+                            className="h-11 pl-9 text-base"
+                        />
+                    </div>
+
+                    {/* Select all */}
+                    <div className="flex items-center justify-between border-b px-5 py-3">
+                        <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground touch-manipulation text-sm font-medium transition-colors"
+                            onClick={toggleAll}
+                        >
+                            {selectedEmployeeIds.size === searchedEmployees.length && searchedEmployees.length > 0
+                                ? 'Deselect all'
+                                : 'Select all'}
+                        </button>
+                        <span className="text-muted-foreground text-sm">
+                            {selectedEmployeeIds.size} selected
+                        </span>
+                    </div>
+
+                    {/* Employee list */}
+                    <div className="flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-2">
+                        {searchedEmployees.length === 0 ? (
+                            <p className="text-muted-foreground py-6 text-center text-sm">No employees found.</p>
+                        ) : (
+                            <div className="space-y-1">
+                                {searchedEmployees.map((emp) => {
+                                    const isSelected = selectedEmployeeIds.has(emp.eh_employee_id);
+                                    return (
+                                        <button
+                                            key={emp.id}
+                                            type="button"
+                                            className={cn(
+                                                'flex w-full touch-manipulation items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors',
+                                                isSelected ? 'bg-primary/5' : 'hover:bg-muted active:bg-muted',
+                                            )}
+                                            onClick={() => toggleEmployee(emp.eh_employee_id)}
+                                        >
+                                            <Checkbox checked={isSelected} tabIndex={-1} className="h-5 w-5" />
+                                            <Avatar className="h-9 w-9">
+                                                <AvatarFallback className="bg-neutral-200 text-xs text-black dark:bg-neutral-700 dark:text-white">
+                                                    {getInitials(emp.name)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <span className="flex-1 truncate text-base font-medium">{emp.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="border-t px-5 py-4">
+                        <Button className="h-12 w-full text-base touch-manipulation" onClick={handleUpdateStartTime} disabled={selectedEmployeeIds.size === 0}>
                             Update Start Time
                         </Button>
                     </div>
-
-                    {filteredClockedInEmployees.map((emp) => (
-                        <form key={emp.id} className="flex items-center space-x-2 border-b p-2">
-                            <input type="checkbox" id={`emp-${emp.id}`} name={`emp-${emp.id}`} value={emp.eh_employee_id} className="h-4 w-4" />
-                            <label htmlFor={`emp-${emp.id}`} className="text-lg font-medium">
-                                {emp.name}
-                            </label>
-                        </form>
-                    ))}
                 </DialogContent>
             </Dialog>
         </>

@@ -546,6 +546,22 @@ class ProjectTaskController extends Controller
         ]);
     }
 
+    public function revertToBaseline(Location $location)
+    {
+        $location->projectTasks()
+            ->whereNotNull('baseline_start')
+            ->whereNotNull('baseline_finish')
+            ->update([
+                'start_date' => \Illuminate\Support\Facades\DB::raw('baseline_start'),
+                'end_date' => \Illuminate\Support\Facades\DB::raw('baseline_finish'),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'tasks' => $location->projectTasks()->orderBy('sort_order')->get(),
+        ]);
+    }
+
     // ── Dependency Links ──
 
     public function storeLink(Request $request, Location $location)

@@ -463,6 +463,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/tasks/import', [ProjectTaskController::class, 'import'])->name('project-tasks.import');
         Route::post('/locations/{location}/tasks/bulk-ownership', [ProjectTaskController::class, 'bulkOwnership'])->name('project-tasks.bulk-ownership');
         Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
+        Route::post('/locations/{location}/tasks/revert-to-baseline', [ProjectTaskController::class, 'revertToBaseline'])->name('project-tasks.revert-to-baseline');
         Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
         Route::get('/locations/{location}/tasks/export-ms-project', [ProjectTaskController::class, 'exportMsProject'])->name('project-tasks.export-ms-project');
         Route::get('/locations/{location}/tasks/export-debug', [ProjectTaskController::class, 'exportMsProjectDebug']);

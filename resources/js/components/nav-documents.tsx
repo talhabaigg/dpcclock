@@ -1,5 +1,5 @@
 import { ChevronRight, Pin, type LucideIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -19,6 +19,41 @@ import {
 import { useFavorites } from '@/hooks/use-favorites';
 import { isNavItemActive } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
+
+const LONG_PRESS_DURATION = 500;
+
+function useLongPress(onLongPress: () => void) {
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const didLongPress = useRef(false);
+    const [pressing, setPressing] = useState(false);
+
+    const onTouchStart = useCallback(() => {
+        didLongPress.current = false;
+        setPressing(true);
+        timerRef.current = setTimeout(() => {
+            didLongPress.current = true;
+            setPressing(false);
+            onLongPress();
+        }, LONG_PRESS_DURATION);
+    }, [onLongPress]);
+
+    const cancel = useCallback(() => {
+        setPressing(false);
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+    }, []);
+
+    const onClick = useCallback((e: React.MouseEvent) => {
+        if (didLongPress.current) {
+            e.preventDefault();
+            didLongPress.current = false;
+        }
+    }, []);
+
+    return { onTouchStart, onTouchEnd: cancel, onTouchMove: cancel, onClick, pressing };
+}
 
 const STORAGE_KEY = 'navDocumentsCollapsibleState';
 
@@ -88,17 +123,41 @@ function FavoriteButton({ url, isFavorite, toggleFavorite }: { url: string; isFa
     );
 }
 
+function LongPressSubItem({ subItem, currentUrl, isFavorite, toggleFavorite }: { subItem: SubItem; currentUrl: string; isFavorite: (url: string) => boolean; toggleFavorite: (url: string) => void }) {
+    const [showPinFlash, setShowPinFlash] = useState(false);
+    const { pressing, ...longPressHandlers } = useLongPress(
+        useCallback(() => {
+            toggleFavorite(subItem.url);
+            setShowPinFlash(true);
+            setTimeout(() => setShowPinFlash(false), 800);
+        }, [subItem.url, toggleFavorite]),
+    );
+
+    const fav = isFavorite(subItem.url);
+    const showPin = pressing || showPinFlash;
+
+    return (
+        <SidebarMenuSubItem>
+            <SidebarMenuSubButton
+                render={<Link href={subItem.url} prefetch {...longPressHandlers} />}
+                isActive={isNavItemActive(subItem.url, currentUrl)}
+            >
+                <span className="truncate">{subItem.name}</span>
+                {showPin && (
+                    <Pin className={`ml-auto size-3 shrink-0 ${pressing ? 'animate-pulse' : ''} ${fav ? 'fill-current text-sidebar-foreground/70' : 'text-sidebar-foreground/40'}`} />
+                )}
+                <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
+            </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+    );
+}
+
 function renderGroupedSubItems(subItems: SubItem[], currentUrl: string, isFavorite: (url: string) => boolean, toggleFavorite: (url: string) => void) {
     return groupAlpha(subItems).map((group, groupIndex) => (
         <div key={group.letter}>
             {groupIndex > 0 && <hr className="border-sidebar-border my-1" />}
             {group.items.map((subItem) => (
-                <SidebarMenuSubItem key={subItem.name}>
-                    <SidebarMenuSubButton render={<Link href={subItem.url} prefetch />} isActive={isNavItemActive(subItem.url, currentUrl)}>
-                            <span className="truncate">{subItem.name}</span>
-                            <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
+                <LongPressSubItem key={subItem.name} subItem={subItem} currentUrl={currentUrl} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
             ))}
         </div>
     ));
@@ -132,8 +191,8 @@ function renderDropdownSubItems(subItems: SubItem[], groupByAlpha: boolean, curr
 
 export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; permissions?: string[] }) {
     const page = usePage();
-    const { state } = useSidebar();
-    const isCollapsed = state === 'collapsed';
+    const { state, isMobile } = useSidebar();
+    const isCollapsed = state === 'collapsed' && !isMobile;
     const { isFavorite, toggleFavorite } = useFavorites();
 
     const [openMap, setOpenMap] = useState<CollapseState>(() => loadCollapseState());
@@ -196,12 +255,7 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                                                 {item.groupByAlpha
                                                     ? renderGroupedSubItems(visibleSubItems, page.url, isFavorite, toggleFavorite)
                                                     : visibleSubItems.map((subItem) => (
-                                                          <SidebarMenuSubItem key={subItem.name}>
-                                                              <SidebarMenuSubButton render={<Link href={subItem.url} prefetch />} isActive={isNavItemActive(subItem.url, page.url)}>
-                                                                  <span className="truncate">{subItem.name}</span>
-                                                                  <FavoriteButton url={subItem.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
-                                                              </SidebarMenuSubButton>
-                                                          </SidebarMenuSubItem>
+                                                          <LongPressSubItem key={subItem.name} subItem={subItem} currentUrl={page.url} isFavorite={isFavorite} toggleFavorite={toggleFavorite} />
                                                       ))}
                                             </SidebarMenuSub>
                                         </CollapsibleContent>

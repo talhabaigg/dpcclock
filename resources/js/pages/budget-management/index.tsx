@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Calculator, CheckCircle2, Loader2, Save, Target, TrendingUp } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Loader2, Save } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type RevenueTargetProps = {
     fyYear: number;
@@ -44,6 +44,46 @@ const formatCompactCurrency = (value: number): string => {
     if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
     return formatCurrency(value);
 };
+
+const formatAudDisplay = (value: number): string => {
+    if (!value) return '';
+    return value.toLocaleString('en-AU');
+};
+
+function CurrencyInput({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled?: boolean }) {
+    const [editing, setEditing] = useState(false);
+    const [raw, setRaw] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleFocus = () => {
+        setEditing(true);
+        setRaw(value ? String(value) : '');
+    };
+
+    const handleBlur = () => {
+        setEditing(false);
+        const parsed = parseInt(raw.replace(/[^0-9]/g, ''), 10) || 0;
+        onChange(parsed);
+    };
+
+    return (
+        <div className="relative flex items-center">
+            <span className="text-muted-foreground pointer-events-none absolute left-1 text-xs">$</span>
+            <Input
+                ref={inputRef}
+                type={editing ? 'number' : 'text'}
+                min="0"
+                step="1000"
+                value={editing ? raw : formatAudDisplay(value)}
+                onChange={(e) => setRaw(e.target.value)}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                disabled={disabled}
+                className="h-9 w-full min-w-[70px] border-0 bg-transparent pl-4 text-right text-sm font-medium shadow-none focus-visible:ring-0 dark:bg-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+        </div>
+    );
+}
 
 export default function BudgetManagementIndex({ fyYear, months, targets, availableFYs }: RevenueTargetProps) {
     const { props } = usePage<PageProps>();
@@ -82,8 +122,6 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
         post('/budget-management', { preserveScroll: true });
     };
 
-    const currentFYLabel = availableFYs.find((fy) => fy.value === String(fyYear))?.label ?? `FY${fyYear}`;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Budget Management" />
@@ -106,12 +144,12 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
             {/* Success Overlay */}
             {showSuccess && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="bg-card rounded-xl border border-emerald-500/50 p-8 shadow-lg">
+                    <div className="bg-card rounded-xl border p-8 shadow-lg">
                         <div className="flex flex-col items-center gap-4">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
-                                <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                            <div className="bg-muted flex h-14 w-14 items-center justify-center rounded-full">
+                                <CheckCircle2 className="text-foreground h-8 w-8" />
                             </div>
-                            <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{flashSuccess ?? 'Saved successfully!'}</p>
+                            <p className="text-foreground text-lg font-semibold">{flashSuccess ?? 'Saved successfully!'}</p>
                         </div>
                     </div>
                 </div>
@@ -119,8 +157,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
 
             <div className="flex flex-col gap-4 p-3 sm:p-4">
                 {/* Toolbar */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-muted-foreground text-sm">Set monthly revenue targets for {currentFYLabel}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                     <Select value={String(data.fyYear)} onValueChange={handleFyChange}>
                         <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Select FY" />
@@ -136,150 +173,116 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Total Annual Target</CardDescription>
-                                <span className="text-muted-foreground/60"><Target className="h-4 w-4" /></span>
-                            </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+                    <Card size="sm">
+                        <CardHeader>
+                            <CardDescription>Total Annual Target</CardDescription>
+                            <CardTitle className="tabular-nums">{formatCurrency(totalTarget)}</CardTitle>
                         </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
-                                {formatCurrency(totalTarget)}
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">{currentFYLabel}</p>
-                        </CardContent>
                     </Card>
 
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Monthly Average</CardDescription>
-                                <span className="text-muted-foreground/60"><TrendingUp className="h-4 w-4" /></span>
-                            </div>
+                    <Card size="sm">
+                        <CardHeader>
+                            <CardDescription>Monthly Average</CardDescription>
+                            <CardTitle className="tabular-nums">{formatCompactCurrency(monthlyAverage)}</CardTitle>
                         </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
-                                {formatCompactCurrency(monthlyAverage)}
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">Per active month</p>
-                        </CardContent>
                     </Card>
 
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">Months Configured</CardDescription>
-                                <span className="text-muted-foreground/60"><Calculator className="h-4 w-4" /></span>
-                            </div>
+                    <Card size="sm">
+                        <CardHeader>
+                            <CardDescription>Months Configured</CardDescription>
+                            <CardTitle className="tabular-nums">{filledMonths} <span className="text-muted-foreground text-sm font-normal">/ 12</span></CardTitle>
                         </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="whitespace-nowrap text-sm font-semibold tabular-nums sm:text-lg">
-                                {filledMonths} <span className="text-muted-foreground text-xs font-normal sm:text-sm">/ 12</span>
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">With targets set</p>
-                        </CardContent>
                     </Card>
                 </div>
 
                 {/* Budget Form */}
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div className="overflow-hidden rounded-lg border">
-                        <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
-                            <div className="min-w-[800px]">
-                                {/* Month Headers */}
-                                <div className="bg-muted/50 grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] text-xs font-semibold tracking-wide uppercase">
-                                    {months.map((month, index) => {
-                                        const quarterColors = [
-                                            'border-l-blue-400 dark:border-l-blue-500',
-                                            'border-l-emerald-400 dark:border-l-emerald-500',
-                                            'border-l-amber-400 dark:border-l-amber-500',
-                                            'border-l-purple-400 dark:border-l-purple-500',
-                                        ];
-                                        return (
-                                            <div
-                                                key={month}
-                                                className={`text-muted-foreground border-border border-r px-3 py-3 text-center ${index % 3 === 0 ? `border-l-2 ${quarterColors[Math.floor(index / 3)]}` : ''}`}
-                                            >
-                                                {formatMonthShort(month)}
-                                            </div>
-                                        );
-                                    })}
-                                    <div className="text-muted-foreground px-4 py-3 text-right">FY Total</div>
-                                </div>
+                    {/* Mobile: 2-column vertical list */}
+                    <div className="overflow-hidden rounded-lg border sm:hidden">
+                        <table className="w-full border-collapse text-sm">
+                            <thead>
+                                <tr className="bg-muted/50 text-xs font-semibold tracking-wide uppercase">
+                                    <th className="text-muted-foreground border-b border-r border-border px-3 py-2 text-left font-semibold">Month</th>
+                                    <th className="text-muted-foreground border-b border-border px-3 py-2 text-right font-semibold">Target</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {months.map((month, index) => {
+                                    const value = Number(data.targets[month] ?? 0);
+                                    return (
+                                        <tr key={month} className={index > 0 && index % 3 === 0 ? 'border-t-2 border-t-foreground/20' : ''}>
+                                            <td className="border-b border-r border-border px-3 py-2 text-sm font-medium">{formatMonthShort(month)}</td>
+                                            <td className="border-b border-border px-1 py-1">
+                                                <CurrencyInput
+                                                    value={value}
+                                                    onChange={(v) =>
+                                                        setData('targets', {
+                                                            ...data.targets,
+                                                            [month]: v,
+                                                        })
+                                                    }
+                                                    disabled={!isAdmin}
+                                                />
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
 
-                                {/* Input Row */}
-                                <div className="border-border grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center border-b">
-                                    {months.map((month, index) => {
-                                        const value = Number(data.targets[month] ?? 0);
-                                        const hasValue = value > 0;
-                                        return (
-                                            <Tooltip key={month}>
-                                                <TooltipTrigger asChild>
-                                                    <div className={`border-border border-r px-2 py-3 ${index % 3 === 0 ? 'border-l' : ''}`}>
-                                                        <Input
-                                                            type="number"
-                                                            min="0"
-                                                            step="1000"
-                                                            value={data.targets[month] ?? 0}
-                                                            onChange={(e) =>
-                                                                setData('targets', {
-                                                                    ...data.targets,
-                                                                    [month]: e.target.value === '' ? 0 : Number(e.target.value),
-                                                                })
-                                                            }
-                                                            className={`h-9 w-full min-w-[70px] text-right text-sm font-medium ${
-                                                                hasValue ? 'border-primary/30 bg-primary/5' : ''
-                                                            }`}
-                                                            disabled={!isAdmin}
-                                                        />
-                                                    </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{formatCurrency(value)}</TooltipContent>
-                                            </Tooltip>
-                                        );
-                                    })}
-                                    <div className="px-4 py-3 text-right">
-                                        <span className="text-lg font-bold">{formatCurrency(totalTarget)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Formatted Display Row */}
-                                <div className="bg-muted/30 grid grid-cols-[repeat(12,minmax(88px,1fr))_140px] items-center">
+                    {/* Desktop: horizontal table */}
+                    <div className="hidden overflow-hidden rounded-lg border sm:block">
+                        <table className="w-full border-collapse text-sm">
+                            <thead>
+                                <tr className="bg-muted/50 text-xs font-semibold tracking-wide uppercase">
+                                    {months.map((month, index) => (
+                                        <th key={month} className={`text-muted-foreground border-b border-r border-border px-3 py-3 text-center font-semibold ${index > 0 && index % 3 === 0 ? 'border-l-2 border-l-foreground/20' : ''}`}>
+                                            {formatMonthShort(month)}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
                                     {months.map((month, index) => {
                                         const value = Number(data.targets[month] ?? 0);
                                         return (
-                                            <div
-                                                key={`display-${month}`}
-                                                className={`text-muted-foreground border-border border-r px-2 py-2 text-center text-xs ${index % 3 === 0 ? 'border-l' : ''}`}
-                                            >
-                                                {value > 0 ? formatCompactCurrency(value) : '-'}
-                                            </div>
+                                            <td key={month} className={`border-r border-border px-1 py-1 ${index > 0 && index % 3 === 0 ? 'border-l-2 border-l-foreground/20' : ''}`}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div>
+                                                            <CurrencyInput
+                                                                value={value}
+                                                                onChange={(v) =>
+                                                                    setData('targets', {
+                                                                        ...data.targets,
+                                                                        [month]: v,
+                                                                    })
+                                                                }
+                                                                disabled={!isAdmin}
+                                                            />
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(value)}</TooltipContent>
+                                                </Tooltip>
+                                            </td>
                                         );
                                     })}
-                                    <div className="text-muted-foreground px-4 py-2 text-right text-xs font-medium">
-                                        {formatCompactCurrency(totalTarget)}
-                                    </div>
-                                </div>
-                            </div>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {isAdmin && (
+                        <div className="flex justify-end">
+                            <Button type="submit" size="sm" disabled={processing} className="gap-2">
+                                {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                Save
+                            </Button>
                         </div>
-                    </div>
-
-                    {/* Action Bar */}
-                    <div className="bg-muted/50 flex items-center justify-between rounded-lg border px-4 py-3">
-                        {isAdmin ? (
-                            <>
-                                <p className="text-muted-foreground text-sm">Save your changes after editing targets.</p>
-                                <Button type="submit" size="sm" disabled={processing} className="gap-2">
-                                    {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                                    Save Targets
-                                </Button>
-                            </>
-                        ) : (
-                            <p className="text-muted-foreground text-sm">Only administrators can edit revenue targets.</p>
-                        )}
-                    </div>
+                    )}
                 </form>
             </div>
         </AppLayout>

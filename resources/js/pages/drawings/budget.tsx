@@ -477,7 +477,7 @@ export default function DrawingBudget() {
                     <div className="bg-border h-3 w-px" />
                     <span>Used: <span className="font-mono font-medium tabular-nums">{grandTotals.used_hours.toFixed(1)}h</span></span>
                     <div className="bg-border h-3 w-px" />
-                    <span className={grandTotals.variance < 0 ? 'text-red-500 font-medium' : grandTotals.variance > 0 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}>
+                    <span className="font-medium">
                         Variance: <span className="font-mono tabular-nums">{grandTotals.variance >= 0 ? '+' : ''}{grandTotals.variance.toFixed(1)}h</span>
                     </span>
                     <div className="flex-1" />
@@ -643,10 +643,10 @@ export default function DrawingBudget() {
                                     <th className="border border-border px-1 py-0.5 text-center font-medium" rowSpan={2}>
                                         Inst. Qty
                                     </th>
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold text-blue-600 dark:text-blue-400" colSpan={6}>
+                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold" colSpan={6}>
                                         Actual
                                     </th>
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold text-orange-600 dark:text-orange-400" colSpan={3}>
+                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold" colSpan={3}>
                                         Projected
                                     </th>
                                 </tr>
@@ -712,19 +712,19 @@ function TotalRow({ label, data, className }: { label: string; data: GridRow; cl
             <td className="border border-border px-1 py-1 text-center tabular-nums">{Math.round(data.percent_complete)}%</td>
             <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.earned_hours)}</td>
             <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.used_hours)}</td>
-            <td className={cn('border border-border px-1 py-1 text-center tabular-nums', data.variance < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-1 text-center tabular-nums">
                 {fmtVal(data.variance)}
             </td>
-            <td className={cn('border border-border px-1 py-1 text-center tabular-nums', data.remaining < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-1 text-center tabular-nums">
                 {fmtVal(data.remaining)}
             </td>
-            <td className={cn('border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums', data.projected_pct !== null && (data.projected_pct > 0 ? 'text-green-600' : data.projected_pct < 0 ? 'text-red-500' : ''))}>
+            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">
                 {fmtPct(data.projected_pct)}
             </td>
             <td className="border border-border px-1 py-1 text-center tabular-nums">
                 {data.projected_hours !== null ? fmtVal(data.projected_hours) : '\u2014'}
             </td>
-            <td className={cn('border border-border px-1 py-1 text-center tabular-nums', data.projected_variance !== null && data.projected_variance < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-1 text-center tabular-nums">
                 {data.projected_variance !== null ? fmtVal(data.projected_variance) : '\u2014'}
             </td>
         </tr>
@@ -775,19 +775,19 @@ function GroupRows({
                 <td className="border border-border px-1 py-1 text-center tabular-nums">{Math.round(group.totals.percent_complete)}%</td>
                 <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.earned_hours)}</td>
                 <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.used_hours)}</td>
-                <td className={cn('border border-border px-1 py-1 text-center tabular-nums', group.totals.variance < 0 && 'text-red-500')}>
+                <td className="border border-border px-1 py-1 text-center tabular-nums">
                     {fmtVal(group.totals.variance)}
                 </td>
-                <td className={cn('border border-border px-1 py-1 text-center tabular-nums', group.totals.remaining < 0 && 'text-red-500')}>
+                <td className="border border-border px-1 py-1 text-center tabular-nums">
                     {fmtVal(group.totals.remaining)}
                 </td>
-                <td className={cn('border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums', group.totals.projected_pct !== null && (group.totals.projected_pct > 0 ? 'text-green-600' : group.totals.projected_pct < 0 ? 'text-red-500' : ''))}>
+                <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">
                     {fmtPct(group.totals.projected_pct)}
                 </td>
                 <td className="border border-border px-1 py-1 text-center tabular-nums">
                     {group.totals.projected_hours !== null ? fmtVal(group.totals.projected_hours) : '\u2014'}
                 </td>
-                <td className={cn('border border-border px-1 py-1 text-center tabular-nums', group.totals.projected_variance !== null && group.totals.projected_variance < 0 && 'text-red-500')}>
+                <td className="border border-border px-1 py-1 text-center tabular-nums">
                     {group.totals.projected_variance !== null ? fmtVal(group.totals.projected_variance) : '\u2014'}
                 </td>
             </tr>
@@ -842,7 +842,7 @@ function DataRow({
 
     return (
         <tr
-            className={cn('border-b cursor-pointer', isSelected ? 'bg-blue-50 dark:bg-blue-950/30' : isEven ? 'bg-muted/15 hover:bg-accent/30' : 'hover:bg-accent/30')}
+            className={cn('border-b cursor-pointer', isSelected ? 'bg-accent' : isEven ? 'bg-muted/15 hover:bg-accent/30' : 'hover:bg-accent/30')}
             onClick={onSelect}
         >
             <td className="border border-border py-0.5 pl-7 pr-2">
@@ -854,7 +854,7 @@ function DataRow({
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.total_qty)}</td>
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.installed_qty)}</td>
             <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums">{fmtVal(row.est_hours)}</td>
-            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-blue-500 [&:focus-within]:ring-inset">
+            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
                 <input
                     type="number"
                     min={0}
@@ -871,7 +871,7 @@ function DataRow({
                 />
             </td>
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.earned_hours)}</td>
-            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-blue-500 [&:focus-within]:ring-inset">
+            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
                 <input
                     type="number"
                     min={0}
@@ -886,19 +886,19 @@ function DataRow({
                     onClick={(e) => e.stopPropagation()}
                 />
             </td>
-            <td className={cn('border border-border px-1 py-0.5 text-center tabular-nums', row.variance < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
                 {fmtVal(row.variance)}
             </td>
-            <td className={cn('border border-border px-1 py-0.5 text-center tabular-nums', row.remaining < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
                 {fmtVal(row.remaining)}
             </td>
-            <td className={cn('border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums', row.projected_pct !== null && (row.projected_pct > 0 ? 'text-green-600' : row.projected_pct < 0 ? 'text-red-500' : ''))}>
+            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums">
                 {fmtPct(row.projected_pct)}
             </td>
             <td className="border border-border px-1 py-0.5 text-center tabular-nums">
                 {row.projected_hours !== null ? fmtVal(row.projected_hours) : '\u2014'}
             </td>
-            <td className={cn('border border-border px-1 py-0.5 text-center tabular-nums', row.projected_variance !== null && row.projected_variance < 0 && 'text-red-500')}>
+            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
                 {row.projected_variance !== null ? fmtVal(row.projected_variance) : '\u2014'}
             </td>
         </tr>
@@ -910,7 +910,7 @@ function DataRow({
 type ChartDataPoint = { date: string; variance: number };
 
 const chartConfig: ChartConfig = {
-    variance: { label: 'Variance (hrs)', color: 'hsl(var(--chart-1))' },
+    variance: { label: 'Variance (hrs)', color: 'hsl(var(--foreground))' },
 };
 
 const CHART_RANGES: { key: ChartRange; label: string }[] = [
@@ -1050,30 +1050,15 @@ function VarianceChart({
 }
 
 function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[]; today: string }) {
-    // Compute gradient split: where y=0 sits as a fraction from the top
-    const { gradientOffset } = useMemo(() => {
-        const values = chartData.map((d) => d.variance);
-        const maxVal = Math.max(...values, 0);
-        const minVal = Math.min(...values, 0);
-        const range = maxVal - minVal;
-        return { gradientOffset: range > 0 ? maxVal / range : 0.5 };
-    }, [chartData]);
+
 
     return (
         <ChartContainer config={chartConfig} className="h-[140px] w-full">
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
                 <defs>
                     <linearGradient id="varianceFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                        <stop offset={`${gradientOffset * 100}%`} stopColor="#22c55e" stopOpacity={0.05} />
-                        <stop offset={`${gradientOffset * 100}%`} stopColor="#ef4444" stopOpacity={0.05} />
-                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3} />
-                    </linearGradient>
-                    <linearGradient id="varianceStroke" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22c55e" />
-                        <stop offset={`${gradientOffset * 100}%`} stopColor="#22c55e" />
-                        <stop offset={`${gradientOffset * 100}%`} stopColor="#ef4444" />
-                        <stop offset="100%" stopColor="#ef4444" />
+                        <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity={0.03} />
                     </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -1093,7 +1078,8 @@ function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[];
                                 textAnchor="middle"
                                 fontSize={9}
                                 fontWeight={isToday ? 700 : 400}
-                                fill={isToday ? '#3b82f6' : isWeekend ? '#94a3b8' : 'currentColor'}
+                                fill="currentColor"
+                                opacity={isWeekend ? 0.4 : isToday ? 1 : 0.7}
                             >
                                 {day}
                             </text>
@@ -1111,10 +1097,10 @@ function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[];
                     width={35}
                 />
                 {/* Baseline at 0 */}
-                <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5} />
+                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1.5} />
                 {/* Today marker */}
                 {chartData.some((d) => d.date === today) && (
-                    <ReferenceLine x={today} stroke="#3b82f6" strokeWidth={2} strokeOpacity={0.4} strokeDasharray="4 2" />
+                    <ReferenceLine x={today} stroke="hsl(var(--foreground))" strokeWidth={1.5} strokeOpacity={0.3} strokeDasharray="4 2" />
                 )}
                 <ChartTooltip
                     content={
@@ -1135,11 +1121,11 @@ function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[];
                 <Area
                     type="monotone"
                     dataKey="variance"
-                    stroke="url(#varianceStroke)"
-                    strokeWidth={2}
+                    stroke="hsl(var(--foreground))"
+                    strokeWidth={1.5}
                     fill="url(#varianceFill)"
                     connectNulls
-                    dot={{ r: 3, fill: '#64748b', stroke: '#fff', strokeWidth: 1 }}
+                    dot={{ r: 3, fill: 'hsl(var(--muted-foreground))', stroke: 'hsl(var(--background))', strokeWidth: 1 }}
                     activeDot={{ r: 5, strokeWidth: 2 }}
                 />
             </ComposedChart>

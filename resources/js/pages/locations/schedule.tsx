@@ -494,6 +494,22 @@ export default function Schedule() {
         }
     }, [location.id]);
 
+    const handleRevertToBaseline = useCallback(async () => {
+        if (!confirm('Revert all tasks to their baseline dates? Current dates will be overwritten.')) return;
+        setLoading(true);
+        try {
+            const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(
+                `/locations/${location.id}/tasks/revert-to-baseline`,
+            );
+            setTasks(result.tasks);
+            toast.success('All tasks reverted to baseline');
+        } catch {
+            toast.error('Failed to revert to baseline');
+        } finally {
+            setLoading(false);
+        }
+    }, [location.id]);
+
     const handleClearAll = useCallback(async () => {
         if (!confirm('Delete ALL tasks and links for this location? This cannot be undone.')) return;
         setLoading(true);
@@ -566,6 +582,7 @@ export default function Schedule() {
                     onDownloadTemplate={() => window.location.href = '/schedule-template'}
                     onExportMsProject={() => window.location.href = `/locations/${location.id}/tasks/export-ms-project`}
                     onSetBaseline={handleSetBaseline}
+                    onRevertToBaseline={handleRevertToBaseline}
                     onClearAll={handleClearAll}
                     onBulkMarkOwned={() => handleBulkMarkOwned(true)}
                     onBulkUnmarkOwned={() => handleBulkMarkOwned(false)}

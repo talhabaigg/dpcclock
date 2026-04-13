@@ -34,6 +34,7 @@ interface ScheduleToolbarProps {
     onDownloadTemplate: () => void;
     onExportMsProject: () => void;
     onSetBaseline: () => void;
+    onRevertToBaseline: () => void;
     onClearAll: () => void;
     onBulkMarkOwned: () => void;
     onBulkUnmarkOwned: () => void;
@@ -73,6 +74,7 @@ export default function ScheduleToolbar({
     onDownloadTemplate,
     onExportMsProject,
     onSetBaseline,
+    onRevertToBaseline,
     onClearAll,
     onBulkMarkOwned,
     onBulkUnmarkOwned,
@@ -115,6 +117,9 @@ export default function ScheduleToolbar({
                             </MenubarItem>
                             <MenubarItem onClick={onSetBaseline}>
                                 Set Baseline
+                            </MenubarItem>
+                            <MenubarItem onClick={onRevertToBaseline}>
+                                Revert to Baseline
                             </MenubarItem>
                             <MenubarSeparator />
                             <MenubarItem
