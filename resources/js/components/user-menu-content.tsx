@@ -4,7 +4,7 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { cn } from '@/lib/utils';
 import { type SharedData, type User } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Coins, Key, LogOut, Phone, Settings, Shield, Sparkles, TrendingUp, UsersRound } from 'lucide-react';
+import { ArrowDown, ArrowUp, Key, LogOut, Phone, Settings, Shield, UsersRound } from 'lucide-react';
 
 interface TokenStats {
     total_tokens: number;
@@ -41,7 +41,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
 
     const aiPercent = tokenStats ? Math.min((tokenStats.total_tokens / tokenStats.limit) * 100, 100) : 0;
     const aiRemaining = tokenStats ? Math.max(tokenStats.limit - tokenStats.total_tokens, 0) : 0;
-    const aiProgressColor = aiPercent >= 90 ? 'bg-red-500' : aiPercent >= 70 ? 'bg-yellow-500' : 'bg-emerald-500';
+    const aiProgressColor = aiPercent >= 90 ? 'bg-red-500' : aiPercent >= 70 ? 'bg-amber-500' : 'bg-foreground/70';
 
     return (
         <>
@@ -53,61 +53,35 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             {tokenStats && (
                 <>
                     <DropdownMenuSeparator />
-                    <div className="px-2 py-2">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                                <Sparkles className="text-muted-foreground size-3.5" />
-                                <span className="text-xs font-medium">AI Usage</span>
-                            </div>
-                            <span className="text-muted-foreground text-[10px]">{formatNumber(tokenStats.total_tokens)} / {formatNumber(tokenStats.limit)}</span>
+                    <div className="space-y-2 px-2 py-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">AI Usage</span>
+                            <span className="text-muted-foreground text-[10px] tabular-nums">
+                                {formatNumber(tokenStats.total_tokens)} / {formatNumber(tokenStats.limit)}
+                            </span>
                         </div>
-                        <div className="bg-muted relative h-1.5 w-full overflow-hidden rounded-full">
+                        <div className="bg-muted relative h-1 w-full overflow-hidden rounded-full">
                             <div className={cn('h-full transition-all duration-500', aiProgressColor)} style={{ width: `${aiPercent}%` }} />
                         </div>
-                        <div className="text-muted-foreground mt-1 flex justify-between text-[10px]">
-                            <span>{aiPercent.toFixed(1)}% used</span>
-                            <span>{formatNumber(aiRemaining)} remaining</span>
+                        <div className="text-muted-foreground flex items-center justify-between text-[10px] tabular-nums">
+                            <span>{aiPercent.toFixed(0)}% used · {formatNumber(aiRemaining)} left</span>
+                            <span>${tokenStats.total_cost.toFixed(4)}</span>
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-1.5">
-                            <div className="bg-muted/50 rounded-md px-2 py-1.5">
-                                <div className="flex items-center gap-1">
-                                    <TrendingUp className="size-3 text-blue-500" />
-                                    <span className="text-muted-foreground text-[10px]">Input</span>
-                                </div>
-                                <p className="text-xs font-medium">{formatNumber(tokenStats.input_tokens)}</p>
-                            </div>
-                            <div className="bg-muted/50 rounded-md px-2 py-1.5">
-                                <div className="flex items-center gap-1">
-                                    <TrendingUp className="size-3 rotate-180 text-purple-500" />
-                                    <span className="text-muted-foreground text-[10px]">Output</span>
-                                </div>
-                                <p className="text-xs font-medium">{formatNumber(tokenStats.output_tokens)}</p>
-                            </div>
-                        </div>
-                        {(tokenStats.voice_calls > 0 || tokenStats.voice_minutes > 0) && (
-                            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                                <div className="bg-muted/50 rounded-md px-2 py-1.5">
-                                    <div className="flex items-center gap-1">
-                                        <Phone className="size-3 text-green-500" />
-                                        <span className="text-muted-foreground text-[10px]">Calls</span>
-                                    </div>
-                                    <p className="text-xs font-medium">{tokenStats.voice_calls}</p>
-                                </div>
-                                <div className="bg-muted/50 rounded-md px-2 py-1.5">
-                                    <div className="flex items-center gap-1">
-                                        <Phone className="size-3 text-green-500" />
-                                        <span className="text-muted-foreground text-[10px]">Minutes</span>
-                                    </div>
-                                    <p className="text-xs font-medium">{tokenStats.voice_minutes.toFixed(1)}</p>
-                                </div>
-                            </div>
-                        )}
-                        <div className="mt-1.5 flex items-center justify-between">
-                            <div className="flex items-center gap-1">
-                                <Coins className="size-3 text-amber-500" />
-                                <span className="text-muted-foreground text-[10px]">Total Cost</span>
-                            </div>
-                            <span className="text-xs font-medium text-amber-600">${tokenStats.total_cost.toFixed(4)}</span>
+                        <div className="text-muted-foreground flex items-center gap-3 text-[10px] tabular-nums">
+                            <span className="flex items-center gap-1">
+                                <ArrowUp className="size-3" />
+                                {formatNumber(tokenStats.input_tokens)} in
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <ArrowDown className="size-3" />
+                                {formatNumber(tokenStats.output_tokens)} out
+                            </span>
+                            {(tokenStats.voice_calls > 0 || tokenStats.voice_minutes > 0) && (
+                                <span className="flex items-center gap-1">
+                                    <Phone className="size-3" />
+                                    {tokenStats.voice_minutes.toFixed(1)}m
+                                </span>
+                            )}
                         </div>
                     </div>
                 </>

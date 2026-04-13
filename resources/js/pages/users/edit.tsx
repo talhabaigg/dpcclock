@@ -9,6 +9,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,11 +20,12 @@ import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { SearchSelect } from '@/components/search-select';
+import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, Ban, KeyRound, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, KeyRound, Loader2, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -47,6 +49,8 @@ type User = {
     name: string;
     position: string | null;
     email: string;
+    phone: string | null;
+    avatar?: string;
     created_at: string;
     disabled_at: string | null;
     disable_kiosk_notifications: boolean;
@@ -88,6 +92,8 @@ export default function UserEdit() {
         vendors: Vendor[];
     }>().props;
 
+    const getInitials = useInitials();
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Users', href: '/users' },
         { title: user.name, href: `/users/edit/${user.id}` },
@@ -97,38 +103,109 @@ export default function UserEdit() {
         name: user.name,
         position: user.position ?? '',
         email: user.email,
+        phone: user.phone ?? '',
         roles: user.roles[0]?.id.toString() ?? '',
-        managed_kiosks: user.managed_kiosks,
         disable_kiosk_notifications: user.disable_kiosk_notifications ?? false,
         receive_injury_alerts: user.receive_injury_alerts ?? false,
         premier_vendor_id: user.premier_vendor_id ? String(user.premier_vendor_id) : '',
     });
 
-    const [selectedKiosk, setSelectedKiosk] = useState('');
-    const [addingKiosk, setAddingKiosk] = useState(false);
+    // Dual-list kiosk staging
+    const initialAssignedIds = useMemo(() => user.managed_kiosks.map((k) => k.id), [user.managed_kiosks]);
+    const [assignedKioskIds, setAssignedKioskIds] = useState<number[]>(initialAssignedIds);
+    const [availableSearch, setAvailableSearch] = useState('');
+    const [assignedSearch, setAssignedSearch] = useState('');
+    const [savingKiosks, setSavingKiosks] = useState(false);
 
-    // Remove kiosk confirmation dialog
-    const [removeDialog, setRemoveDialog] = useState<{
-        open: boolean;
-        kioskId: number;
-        kioskName: string;
-    }>({
-        open: false,
-        kioskId: 0,
-        kioskName: '',
-    });
-    const [removingKiosk, setRemovingKiosk] = useState(false);
+    const assignedKiosks = useMemo(
+        () => assignedKioskIds
+            .map((id) => kiosks.find((k) => k.id === id))
+            .filter((k): k is Kiosk => !!k),
+        [assignedKioskIds, kiosks],
+    );
+    const availableKiosks = useMemo(
+        () => kiosks.filter((k) => !assignedKioskIds.includes(k.id)),
+        [kiosks, assignedKioskIds],
+    );
 
-    // Disable account dialog
+    const filteredAvailable = useMemo(() => {
+        const q = availableSearch.trim().toLowerCase();
+        return q ? availableKiosks.filter((k) => k.name.toLowerCase().includes(q)) : availableKiosks;
+    }, [availableKiosks, availableSearch]);
+    const filteredAssigned = useMemo(() => {
+        const q = assignedSearch.trim().toLowerCase();
+        return q ? assignedKiosks.filter((k) => k.name.toLowerCase().includes(q)) : assignedKiosks;
+    }, [assignedKiosks, assignedSearch]);
+
+    const kiosksDirty = useMemo(() => {
+        if (assignedKioskIds.length !== initialAssignedIds.length) return true;
+        const a = [...assignedKioskIds].sort();
+        const b = [...initialAssignedIds].sort();
+        return a.some((id, i) => id !== b[i]);
+    }, [assignedKioskIds, initialAssignedIds]);
+
+    const assignKiosk = (id: number) => setAssignedKioskIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    const unassignKiosk = (id: number) => setAssignedKioskIds((prev) => prev.filter((k) => k !== id));
+    const assignAll = () => setAssignedKioskIds((prev) => Array.from(new Set([...prev, ...filteredAvailable.map((k) => k.id)])));
+    const unassignAll = () => {
+        const idsToRemove = new Set(filteredAssigned.map((k) => k.id));
+        setAssignedKioskIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
+    };
+
+    const handleSaveKiosks = () => {
+        setSavingKiosks(true);
+        router.post(
+            route('users.kiosks.sync', user.id),
+            { kiosk_ids: assignedKioskIds },
+            {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Managed kiosks updated'),
+                onFinish: () => setSavingKiosks(false),
+            },
+        );
+    };
+
+    const resetKiosks = () => setAssignedKioskIds(initialAssignedIds);
+
     const [disableDialog, setDisableDialog] = useState(false);
     const [togglingDisable, setTogglingDisable] = useState(false);
 
-    // Direct permissions
     const [permSheetOpen, setPermSheetOpen] = useState(false);
     const [selectedPerms, setSelectedPerms] = useState<string[]>(directPermissions ?? []);
     const [savingPerms, setSavingPerms] = useState(false);
     const [permSearch, setPermSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>(categories?.[0] || '');
+
+    const rolePermissionNames = useMemo(
+        () => new Set(user.roles.flatMap((r) => r.permissions.map((p) => p.name))),
+        [user.roles],
+    );
+
+    const directPermissionsByCategory = useMemo(() => {
+        const byName = new Map<string, GroupedPermission>();
+        for (const perms of Object.values(groupedPermissions)) {
+            for (const p of perms) byName.set(p.name, p);
+        }
+        const grouped: Record<string, GroupedPermission[]> = {};
+        for (const name of directPermissions ?? []) {
+            const meta = byName.get(name);
+            const category = meta?.category ?? 'Other';
+            if (!grouped[category]) grouped[category] = [];
+            grouped[category].push(meta ?? { id: 0, name, description: '', guard_name: '', category });
+        }
+        for (const key of Object.keys(grouped)) {
+            grouped[key].sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return grouped;
+    }, [directPermissions, groupedPermissions]);
+
+    const formatPermLabel = (name: string) =>
+        name
+            .split('.')
+            .pop()
+            ?.split('-')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ') ?? name;
 
     const filteredPermissions = useMemo(() => {
         if (!permSearch.trim()) return groupedPermissions;
@@ -148,17 +225,20 @@ export default function UserEdit() {
     const activePerms = filteredPermissions[resolvedCategory] || [];
 
     const getCategoryCount = (category: string) => {
-        const perms = groupedPermissions[category] || [];
+        const perms = (groupedPermissions[category] || []).filter((p) => !rolePermissionNames.has(p.name));
         const selected = perms.filter((p) => selectedPerms.includes(p.name)).length;
         return { selected, total: perms.length };
     };
 
     const togglePermission = (permName: string) => {
+        if (rolePermissionNames.has(permName)) return;
         setSelectedPerms((prev) => (prev.includes(permName) ? prev.filter((p) => p !== permName) : [...prev, permName]));
     };
 
     const toggleCategoryPermissions = (category: string, select: boolean) => {
-        const categoryPerms = groupedPermissions[category]?.map((p) => p.name) || [];
+        const categoryPerms = (groupedPermissions[category] || [])
+            .filter((p) => !rolePermissionNames.has(p.name))
+            .map((p) => p.name);
         if (select) {
             setSelectedPerms((prev) => Array.from(new Set([...prev, ...categoryPerms])));
         } else {
@@ -178,66 +258,18 @@ export default function UserEdit() {
         });
     };
 
-    // Show flash messages via toast
     useEffect(() => {
-        if (flash?.success) {
-            toast.success(flash.success);
-        }
-        if (flash?.error) {
-            toast.error(flash.error);
-        }
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
     }, [flash?.success, flash?.error]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         put(route('users.update', user.id), {
-            onSuccess: () => {
-                toast.success('User updated successfully');
-            },
+            onSuccess: () => toast.success('User updated successfully'),
         });
     };
 
-    // Add kiosk with explicit button click
-    const handleAddKiosk = () => {
-        if (!selectedKiosk) return;
-
-        setAddingKiosk(true);
-        router.post(
-            route('users.kiosk.store', user.id),
-            { kiosk_id: selectedKiosk },
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setSelectedKiosk('');
-                    toast.success('Kiosk added successfully');
-                },
-                onFinish: () => {
-                    setAddingKiosk(false);
-                },
-            },
-        );
-    };
-
-    // Remove kiosk with confirmation
-    const handleRemoveKiosk = () => {
-        setRemovingKiosk(true);
-        router.get(
-            `/users/kiosk/${removeDialog.kioskId}/${user.id}/remove`,
-            {},
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Kiosk removed successfully');
-                    setRemoveDialog({ open: false, kioskId: 0, kioskName: '' });
-                },
-                onFinish: () => {
-                    setRemovingKiosk(false);
-                },
-            },
-        );
-    };
-
-    // Toggle account disable
     const handleToggleDisable = () => {
         setTogglingDisable(true);
         router.post(
@@ -245,30 +277,44 @@ export default function UserEdit() {
             {},
             {
                 preserveScroll: true,
-                onSuccess: () => {
-                    setDisableDialog(false);
-                },
-                onFinish: () => {
-                    setTogglingDisable(false);
-                },
+                onSuccess: () => setDisableDialog(false),
+                onFinish: () => setTogglingDisable(false),
             },
         );
     };
 
-    // Filter out already assigned kiosks from the dropdown
-    const availableKiosks = kiosks.filter((k) => !data.managed_kiosks.some((mk) => mk.id === k.id));
-
     const hasErrors = Object.keys(errors).length > 0;
+    const currentRoleName = roles.find((r) => r.id.toString() === data.roles)?.name;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Edit ${user.name}`} />
 
             <div className="mx-auto max-w-2xl px-4 py-4 sm:px-6 sm:py-6">
-                {/* Page Header */}
-                <div className="mb-6">
-                    <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Edit User</h1>
-                    <p className="text-muted-foreground text-sm">Update user profile and permissions</p>
+                {/* Identity Header */}
+                <div className="mb-6 flex items-center gap-4">
+                    <Avatar className="h-14 w-14 shrink-0">
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                        <AvatarFallback className="bg-neutral-200 text-base font-medium text-black dark:bg-neutral-700 dark:text-white">
+                            {getInitials(user.name)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{user.name}</h1>
+                            {user.disabled_at ? (
+                                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+                                    Disabled
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400">
+                                    Active
+                                </Badge>
+                            )}
+                            {currentRoleName && <Badge variant="secondary">{currentRoleName}</Badge>}
+                        </div>
+                        <p className="text-muted-foreground truncate text-sm">{user.email}</p>
+                    </div>
                 </div>
 
                 {/* Error Summary */}
@@ -287,98 +333,85 @@ export default function UserEdit() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-                    {/* Basic Information */}
+                    {/* Profile */}
                     <Card>
                         <CardHeader className="px-4 sm:px-6">
-                            <CardTitle className="text-base sm:text-lg">Basic Information</CardTitle>
-                            <CardDescription>Update the user's profile details</CardDescription>
+                            <CardTitle className="text-base sm:text-lg">Profile</CardTitle>
+                            <CardDescription>Basic contact details</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 px-4 sm:px-6">
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="name">Name</Label>
-                                    <Input
-                                        type="text"
-                                        name="name"
-                                        id="name"
-                                        value={data.name}
-                                        onChange={(e) => setData('name', e.target.value)}
-                                        className={`h-10 sm:h-9 ${errors.name ? 'border-destructive' : ''}`}
-                                        aria-invalid={!!errors.name}
-                                        aria-describedby={errors.name ? 'name-error' : undefined}
-                                    />
-                                    {errors.name && (
-                                        <p id="name-error" className="text-destructive text-sm">
-                                            {errors.name}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input
-                                        type="email"
-                                        name="email"
-                                        id="email"
-                                        value={data.email}
-                                        onChange={(e) => setData('email', e.target.value)}
-                                        className={`h-10 sm:h-9 ${errors.email ? 'border-destructive' : ''}`}
-                                        aria-invalid={!!errors.email}
-                                        aria-describedby={errors.email ? 'email-error' : undefined}
-                                    />
-                                    {errors.email && (
-                                        <p id="email-error" className="text-destructive text-sm">
-                                            {errors.email}
-                                        </p>
-                                    )}
-                                </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="name">Name</Label>
+                                <Input
+                                    type="text"
+                                    name="name"
+                                    id="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    className={cn('h-10 sm:h-9', errors.name && 'border-destructive')}
+                                    aria-invalid={!!errors.name}
+                                    aria-describedby={errors.name ? 'name-error' : undefined}
+                                />
+                                {errors.name && <p id="name-error" className="text-destructive text-sm">{errors.name}</p>}
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="position">Position / Title</Label>
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                    type="email"
+                                    name="email"
+                                    id="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    className={cn('h-10 sm:h-9', errors.email && 'border-destructive')}
+                                    aria-invalid={!!errors.email}
+                                    aria-describedby={errors.email ? 'email-error' : undefined}
+                                />
+                                {errors.email && <p id="email-error" className="text-destructive text-sm">{errors.email}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="position">Title</Label>
                                 <Input
                                     type="text"
                                     name="position"
                                     id="position"
-                                    placeholder="e.g. Project Manager, Site Supervisor"
+                                    placeholder="e.g. Project Manager"
                                     value={data.position}
                                     onChange={(e) => setData('position', e.target.value)}
-                                    className={`h-10 sm:h-9 ${errors.position ? 'border-destructive' : ''}`}
+                                    className={cn('h-10 sm:h-9', errors.position && 'border-destructive')}
                                     aria-invalid={!!errors.position}
                                     aria-describedby={errors.position ? 'position-error' : undefined}
                                 />
-                                {errors.position && (
-                                    <p id="position-error" className="text-destructive text-sm">
-                                        {errors.position}
-                                    </p>
-                                )}
+                                {errors.position && <p id="position-error" className="text-destructive text-sm">{errors.position}</p>}
                             </div>
-                            {vendors && vendors.length > 0 && (
-                                <div className="space-y-2">
-                                    <Label>CC Vendor (Premier)</Label>
-                                    <SearchSelect
-                                        options={vendors.map((v) => ({ value: String(v.id), label: `${v.code} — ${v.name}` }))}
-                                        optionName="CC vendor"
-                                        selectedOption={data.premier_vendor_id}
-                                        onValueChange={(value) => setData('premier_vendor_id', value)}
-                                    />
-                                    {errors.premier_vendor_id && (
-                                        <p className="text-destructive text-sm">{errors.premier_vendor_id}</p>
-                                    )}
-                                </div>
-                            )}
+                            <div className="space-y-2">
+                                <Label htmlFor="phone">Phone Number</Label>
+                                <Input
+                                    type="tel"
+                                    name="phone"
+                                    id="phone"
+                                    placeholder="e.g. +61 400 000 000"
+                                    value={data.phone}
+                                    onChange={(e) => setData('phone', e.target.value)}
+                                    className={cn('h-10 sm:h-9', errors.phone && 'border-destructive')}
+                                    aria-invalid={!!errors.phone}
+                                    aria-describedby={errors.phone ? 'phone-error' : undefined}
+                                />
+                                {errors.phone && <p id="phone-error" className="text-destructive text-sm">{errors.phone}</p>}
+                            </div>
                         </CardContent>
                     </Card>
 
-                    {/* Role & Permissions */}
+                    {/* Access */}
                     <Card>
                         <CardHeader className="px-4 sm:px-6">
-                            <CardTitle className="text-base sm:text-lg">Role & Permissions</CardTitle>
-                            <CardDescription>Control what this user can access</CardDescription>
+                            <CardTitle className="text-base sm:text-lg">Access</CardTitle>
+                            <CardDescription>Role-based access plus any individual permissions</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4 px-4 sm:px-6">
+                        <CardContent className="space-y-5 px-4 sm:px-6">
                             <div className="space-y-2">
                                 <Label htmlFor="roles">Role</Label>
                                 <Select name="roles" value={data.roles} onValueChange={(value) => setData('roles', value)}>
-                                    <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[200px]">
+                                    <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[240px]">
                                         <SelectValue placeholder="Select Role" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -391,170 +424,305 @@ export default function UserEdit() {
                                 </Select>
                                 {errors.roles && <p className="text-destructive text-sm">{errors.roles}</p>}
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    {/* Direct Permissions (edge cases) */}
-                    <Card>
-                        <CardHeader className="px-4 sm:px-6">
-                            <CardTitle className="text-base sm:text-lg">Direct Permissions</CardTitle>
-                            <CardDescription>Grant additional permissions beyond the user's role for edge cases</CardDescription>
-                        </CardHeader>
-                        <CardContent className="px-4 sm:px-6">
-                            {directPermissions.length > 0 ? (
-                                <div className="mb-4 flex flex-wrap gap-2">
-                                    {directPermissions.map((perm) => (
-                                        <Badge key={perm} variant="secondary" className="text-xs">
-                                            <KeyRound className="mr-1 h-3 w-3" />
-                                            {perm}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-muted-foreground mb-4 text-sm">No direct permissions assigned.</p>
-                            )}
-                            <Button type="button" variant="outline" size="sm" onClick={() => { setSelectedPerms(directPermissions ?? []); setPermSheetOpen(true); }}>
-                                <KeyRound className="mr-1.5 h-4 w-4" />
-                                Manage Permissions
-                            </Button>
-                        </CardContent>
-                    </Card>
+                            <Separator />
 
-                    {/* Kiosk Management */}
-                    <Card>
-                        <CardHeader className="px-4 sm:px-6">
-                            <CardTitle className="text-base sm:text-lg">Kiosk Management</CardTitle>
-                            <CardDescription>Assign kiosks this user will manage and receive notifications for</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4 px-4 sm:px-6">
-                            {/* Notification toggle */}
-                            <div className="flex items-start gap-3 sm:items-center">
-                                <Switch
-                                    id="disable_kiosk_notifications"
-                                    checked={data.disable_kiosk_notifications}
-                                    onCheckedChange={(checked) => setData('disable_kiosk_notifications', checked)}
-                                    className="mt-0.5 sm:mt-0"
-                                />
-                                <Label htmlFor="disable_kiosk_notifications" className="cursor-pointer leading-tight sm:leading-normal">
-                                    Disable Kiosk Clock-in Notifications
-                                </Label>
-                            </div>
-
-                            {/* Injury alert toggle */}
-                            <div className="flex items-start gap-3 sm:items-center">
-                                <Switch
-                                    id="receive_injury_alerts"
-                                    checked={data.receive_injury_alerts}
-                                    onCheckedChange={(checked) => setData('receive_injury_alerts', checked)}
-                                    className="mt-0.5 sm:mt-0"
-                                />
-                                <Label htmlFor="receive_injury_alerts" className="cursor-pointer leading-tight sm:leading-normal">
-                                    Receive Injury Alerts (all locations)
-                                </Label>
-                            </div>
-
-                            {/* Kiosk selection with Add button */}
-                            <div className="space-y-2">
-                                <Label>Add Kiosk</Label>
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                    <Select value={selectedKiosk} onValueChange={setSelectedKiosk} disabled={availableKiosks.length === 0}>
-                                        <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[200px]">
-                                            <SelectValue placeholder={availableKiosks.length === 0 ? 'No kiosks available' : 'Select Kiosk'} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableKiosks.map((kiosk) => (
-                                                <SelectItem key={kiosk.id} value={kiosk.id.toString()}>
-                                                    {kiosk.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                            <div className="space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <Label className="text-sm">Direct Permissions</Label>
+                                        <p className="text-muted-foreground text-xs">Granted beyond the role for edge cases</p>
+                                    </div>
                                     <Button
                                         type="button"
-                                        onClick={handleAddKiosk}
-                                        disabled={!selectedKiosk || addingKiosk}
-                                        size="default"
-                                        className="h-10 w-full sm:h-9 sm:w-auto"
+                                        variant="outline"
+                                        size="sm"
+                                        className="shrink-0"
+                                        onClick={() => {
+                                            setSelectedPerms(directPermissions ?? []);
+                                            setPermSheetOpen(true);
+                                        }}
                                     >
-                                        {addingKiosk ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        <KeyRound className="mr-1.5 h-4 w-4" />
+                                        Manage
+                                    </Button>
+                                </div>
+                                {directPermissions.length > 0 ? (
+                                    <div className="divide-y rounded-md border text-xs">
+                                        {Object.entries(directPermissionsByCategory).map(([category, perms]) => (
+                                            <div key={category} className="flex items-start gap-2 px-2.5 py-1.5">
+                                                <span className="text-muted-foreground w-24 shrink-0 truncate pt-0.5 font-medium">
+                                                    {category}
+                                                </span>
+                                                <div className="flex flex-1 flex-wrap gap-1">
+                                                    {perms.map((perm) => (
+                                                        <Badge key={perm.name} variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                                            {formatPermLabel(perm.name)}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground rounded-md border border-dashed px-3 py-3 text-center text-xs">
+                                        No direct permissions assigned
+                                    </p>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Managed Kiosks (dual list) */}
+                    <Card>
+                        <CardHeader className="px-4 sm:px-6">
+                            <CardTitle className="text-base sm:text-lg">Managed Kiosks</CardTitle>
+                            <CardDescription>Click a kiosk to move it between lists, then Save</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 px-4 sm:px-6">
+                            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr]">
+                                {/* Available list */}
+                                <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
+                                    <div className="bg-muted/40 flex items-center justify-between border-b px-3 py-2">
+                                        <span className="text-xs font-medium">Available</span>
+                                        <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
+                                            {filteredAvailable.length}
+                                        </Badge>
+                                    </div>
+                                    <div className="border-b p-2">
+                                        <div className="relative">
+                                            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+                                            <Input
+                                                placeholder="Search..."
+                                                value={availableSearch}
+                                                onChange={(e) => setAvailableSearch(e.target.value)}
+                                                className="h-8 pl-8 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-64 min-h-[160px] flex-1 overflow-y-auto">
+                                        {filteredAvailable.length === 0 ? (
+                                            <p className="text-muted-foreground px-3 py-6 text-center text-xs">
+                                                {availableKiosks.length === 0 ? 'All kiosks assigned' : 'No matches'}
+                                            </p>
                                         ) : (
+                                            <ul className="divide-y">
+                                                {filteredAvailable.map((kiosk) => (
+                                                    <li key={kiosk.id}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => assignKiosk(kiosk.id)}
+                                                            className="hover:bg-muted flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors"
+                                                        >
+                                                            <span className="truncate">{kiosk.name}</span>
+                                                            <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Middle controls */}
+                                <div className="flex shrink-0 flex-row items-center justify-center gap-2 sm:flex-col">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-9 w-9"
+                                        onClick={assignAll}
+                                        disabled={filteredAvailable.length === 0}
+                                        aria-label="Add all"
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-9 w-9"
+                                        onClick={unassignAll}
+                                        disabled={filteredAssigned.length === 0}
+                                        aria-label="Remove all"
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {/* Assigned list */}
+                                <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
+                                    <div className="bg-muted/40 flex items-center justify-between border-b px-3 py-2">
+                                        <span className="text-xs font-medium">Assigned</span>
+                                        <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
+                                            {filteredAssigned.length}
+                                        </Badge>
+                                    </div>
+                                    <div className="border-b p-2">
+                                        <div className="relative">
+                                            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+                                            <Input
+                                                placeholder="Search..."
+                                                value={assignedSearch}
+                                                onChange={(e) => setAssignedSearch(e.target.value)}
+                                                className="h-8 pl-8 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-64 min-h-[160px] flex-1 overflow-y-auto">
+                                        {filteredAssigned.length === 0 ? (
+                                            <p className="text-muted-foreground px-3 py-6 text-center text-xs">
+                                                {assignedKiosks.length === 0 ? 'None assigned' : 'No matches'}
+                                            </p>
+                                        ) : (
+                                            <ul className="divide-y">
+                                                {filteredAssigned.map((kiosk) => (
+                                                    <li key={kiosk.id}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => unassignKiosk(kiosk.id)}
+                                                            className="hover:bg-muted flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors"
+                                                        >
+                                                            <ChevronLeft className="text-muted-foreground h-4 w-4 shrink-0" />
+                                                            <span className="flex-1 truncate text-left">{kiosk.name}</span>
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {kiosksDirty && (
+                                <div className="flex items-center justify-end gap-2 border-t pt-3">
+                                    <Button type="button" variant="ghost" size="sm" onClick={resetKiosks} disabled={savingKiosks}>
+                                        Reset
+                                    </Button>
+                                    <Button type="button" size="sm" onClick={handleSaveKiosks} disabled={savingKiosks}>
+                                        {savingKiosks ? (
                                             <>
-                                                <Plus className="mr-1.5 h-4 w-4" />
-                                                Add Kiosk
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Saving...
                                             </>
+                                        ) : (
+                                            'Save Kiosks'
                                         )}
                                     </Button>
                                 </div>
-                            </div>
-
-                            {/* Managed kiosks list */}
-                            {data.managed_kiosks.length > 0 && (
-                                <div className="space-y-2">
-                                    <Label>Managed Kiosks</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {data.managed_kiosks.map((kiosk) => (
-                                            <Badge key={kiosk.id} variant="secondary" className="flex h-8 items-center gap-1.5 pr-1.5 text-sm sm:h-7">
-                                                {kiosk.name}
-                                                <button
-                                                    type="button"
-                                                    className="hover:bg-destructive hover:text-destructive-foreground ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full transition-colors focus:ring-2 focus:ring-offset-1 focus:outline-none"
-                                                    onClick={() =>
-                                                        setRemoveDialog({
-                                                            open: true,
-                                                            kioskId: kiosk.id,
-                                                            kioskName: kiosk.name,
-                                                        })
-                                                    }
-                                                    aria-label={`Remove ${kiosk.name}`}
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
                             )}
                         </CardContent>
                     </Card>
 
-                    {/* Account Status */}
+                    {/* Notifications */}
                     <Card>
                         <CardHeader className="px-4 sm:px-6">
-                            <CardTitle className="text-base sm:text-lg">
-                                {user.disabled_at ? 'Enable account' : 'Disable account'}
-                            </CardTitle>
+                            <CardTitle className="text-base sm:text-lg">Notifications</CardTitle>
+                            <CardDescription>Control which alerts this user receives</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-4 sm:px-6">
+                            <div className="divide-y rounded-md border">
+                                <div className="flex items-center justify-between gap-4 px-3 py-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">Kiosk clock-in notifications</p>
+                                        <p className="text-muted-foreground text-xs">Alerts when employees clock in at assigned kiosks</p>
+                                    </div>
+                                    <Switch
+                                        id="disable_kiosk_notifications"
+                                        checked={!data.disable_kiosk_notifications}
+                                        onCheckedChange={(checked) => setData('disable_kiosk_notifications', !checked)}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between gap-4 px-3 py-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">Injury alerts</p>
+                                        <p className="text-muted-foreground text-xs">Receive alerts for injuries across all locations</p>
+                                    </div>
+                                    <Switch
+                                        id="receive_injury_alerts"
+                                        checked={data.receive_injury_alerts}
+                                        onCheckedChange={(checked) => setData('receive_injury_alerts', checked)}
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Integrations */}
+                    {vendors && vendors.length > 0 && (
+                        <Card>
+                            <CardHeader className="px-4 sm:px-6">
+                                <CardTitle className="text-base sm:text-lg">Integrations</CardTitle>
+                                <CardDescription>Link this user to external systems</CardDescription>
+                            </CardHeader>
+                            <CardContent className="px-4 sm:px-6">
+                                <div className="space-y-2">
+                                    <Label>CC Vendor (Premier)</Label>
+                                    <SearchSelect
+                                        options={vendors.map((v) => ({ value: String(v.id), label: `${v.code} — ${v.name}` }))}
+                                        optionName="CC vendor"
+                                        selectedOption={data.premier_vendor_id}
+                                        onValueChange={(value) => setData('premier_vendor_id', value)}
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        Links uploaded receipts to this user's credit card and helps route them for processing.
+                                    </p>
+                                    {errors.premier_vendor_id && <p className="text-destructive text-sm">{errors.premier_vendor_id}</p>}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Danger Zone */}
+                    <Card className={cn(
+                        'border-destructive/30',
+                        user.disabled_at && 'border-amber-300 dark:border-amber-900',
+                    )}>
+                        <CardHeader className="px-4 sm:px-6">
+                            <CardTitle className="text-base sm:text-lg">Danger Zone</CardTitle>
                             <CardDescription>
                                 {user.disabled_at
-                                    ? 'This account is currently disabled and cannot log in'
-                                    : 'Prevent this user from logging in'}
+                                    ? 'This account is disabled and cannot log in'
+                                    : 'Actions here affect the user\'s ability to access the system'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="px-4 sm:px-6">
-                            <div className={`rounded-lg border p-4 ${user.disabled_at ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950' : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'}`}>
-                                <p className={`text-sm font-medium ${user.disabled_at ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-                                    Warning
-                                </p>
-                                <p className={`mt-1 text-sm ${user.disabled_at ? 'text-amber-600/80 dark:text-amber-400/80' : 'text-red-600/80 dark:text-red-400/80'}`}>
-                                    {user.disabled_at
-                                        ? `Disabled on ${new Date(user.disabled_at).toLocaleDateString()}. Re-enabling will allow this user to log in again.`
-                                        : 'This will immediately log the user out and prevent them from signing in.'}
-                                </p>
+                            <div className="flex flex-col gap-3 rounded-md border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <ShieldAlert className={cn(
+                                        'mt-0.5 h-5 w-5 shrink-0',
+                                        user.disabled_at ? 'text-amber-600 dark:text-amber-400' : 'text-destructive',
+                                    )} />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">
+                                            {user.disabled_at ? 'Enable account' : 'Disable account'}
+                                        </p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {user.disabled_at
+                                                ? `Disabled on ${new Date(user.disabled_at).toLocaleDateString()}. Re-enabling restores login.`
+                                                : 'Immediately logs the user out and blocks sign-in'}
+                                        </p>
+                                    </div>
+                                </div>
                                 <Button
                                     type="button"
                                     variant={user.disabled_at ? 'outline' : 'destructive'}
-                                    className="mt-3 h-9 gap-2"
+                                    size="sm"
+                                    className="shrink-0 gap-2"
                                     onClick={() => setDisableDialog(true)}
                                 >
                                     {user.disabled_at ? <ShieldCheck className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-                                    {user.disabled_at ? 'Enable account' : 'Disable account'}
+                                    {user.disabled_at ? 'Enable' : 'Disable'}
                                 </Button>
                             </div>
                         </CardContent>
                     </Card>
 
                     {/* Form Actions */}
-                    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:pt-0">
+                    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:pt-0">
+                        <Button type="button" variant="outline" className="h-10 w-full sm:h-9 sm:w-auto" asChild>
+                            <Link href="/users">Cancel</Link>
+                        </Button>
                         <Button type="submit" disabled={processing} className="h-10 w-full sm:h-9 sm:w-auto">
                             {processing ? (
                                 <>
@@ -565,43 +733,19 @@ export default function UserEdit() {
                                 'Save Changes'
                             )}
                         </Button>
-                        <Button type="button" variant="outline" className="h-10 w-full sm:h-9 sm:w-auto" asChild>
-                            <Link href="/users">Cancel</Link>
-                        </Button>
                     </div>
                 </form>
             </div>
 
-            {/* Remove Kiosk Confirmation Dialog */}
-            <AlertDialog open={removeDialog.open} onOpenChange={(open) => setRemoveDialog((prev) => ({ ...prev, open }))}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Remove Kiosk</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to remove <strong>{removeDialog.kioskName}</strong> from this user's managed kiosks? They will no
-                            longer receive notifications for this kiosk.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={removingKiosk}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRemoveKiosk} disabled={removingKiosk}>
-                            {removingKiosk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Remove
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             {/* Direct Permissions Sheet */}
             <Sheet open={permSheetOpen} onOpenChange={setPermSheetOpen}>
-                <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[900px]">
+                <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-[900px]">
                     <SheetHeader className="shrink-0 space-y-0 border-b px-6 py-4">
                         <SheetTitle className="text-lg">Direct Permissions</SheetTitle>
                         <SheetDescription>Grant additional permissions beyond the user's role. These are for edge cases only.</SheetDescription>
                     </SheetHeader>
 
                     <div className="flex min-h-0 flex-1 overflow-hidden">
-                        {/* Left Panel - Categories */}
                         <div className="flex w-[240px] shrink-0 flex-col overflow-hidden border-r">
                             <div className="p-3">
                                 <div className="relative">
@@ -648,7 +792,6 @@ export default function UserEdit() {
                             </div>
                         </div>
 
-                        {/* Right Panel - Permissions */}
                         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                             {resolvedCategory ? (
                                 <>
@@ -672,20 +815,32 @@ export default function UserEdit() {
                                     <div className="min-h-0 flex-1 overflow-y-auto">
                                         <div className="divide-y">
                                             {activePerms.map((perm, index) => {
-                                                const isChecked = selectedPerms.includes(perm.name);
+                                                const grantedByRole = rolePermissionNames.has(perm.name);
+                                                const isChecked = grantedByRole || selectedPerms.includes(perm.name);
                                                 return (
                                                     <label
                                                         key={perm.id}
                                                         className={cn(
-                                                            'flex cursor-pointer items-center gap-4 px-5 py-3 transition-colors',
+                                                            'flex items-center gap-4 px-5 py-3 transition-colors',
+                                                            grantedByRole ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:bg-muted/60',
                                                             index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30',
-                                                            'hover:bg-muted/60',
                                                         )}
                                                     >
-                                                        <Switch checked={isChecked} onCheckedChange={() => togglePermission(perm.name)} />
+                                                        <Switch
+                                                            checked={isChecked}
+                                                            disabled={grantedByRole}
+                                                            onCheckedChange={() => togglePermission(perm.name)}
+                                                        />
                                                         <div className="min-w-0 flex-1">
-                                                            <div className={cn('text-sm font-medium transition-colors', isChecked ? 'text-foreground' : 'text-muted-foreground')}>
-                                                                {perm.name.split('.').pop()?.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={cn('text-sm font-medium transition-colors', isChecked ? 'text-foreground' : 'text-muted-foreground')}>
+                                                                    {perm.name.split('.').pop()?.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                                </div>
+                                                                {grantedByRole && (
+                                                                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                                                        via role
+                                                                    </Badge>
+                                                                )}
                                                             </div>
                                                             {perm.description && <div className="text-muted-foreground/70 mt-0.5 text-xs leading-snug">{perm.description}</div>}
                                                         </div>
@@ -702,8 +857,7 @@ export default function UserEdit() {
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="shrink-0 border-t bg-muted/30 px-6 py-3">
+                    <div className="bg-muted/30 shrink-0 border-t px-6 py-3">
                         <div className="flex items-center justify-between">
                             <p className="text-muted-foreground text-sm">
                                 <span className="text-foreground font-semibold tabular-nums">{selectedPerms.length}</span> direct permissions selected
@@ -726,9 +880,7 @@ export default function UserEdit() {
                         <AlertDialogTitle>{user.disabled_at ? 'Enable Account' : 'Disable Account'}</AlertDialogTitle>
                         <AlertDialogDescription>
                             {user.disabled_at ? (
-                                <>
-                                    Are you sure you want to re-enable <strong>{user.name}</strong>'s account? They will be able to log in again.
-                                </>
+                                <>Are you sure you want to re-enable <strong>{user.name}</strong>'s account? They will be able to log in again.</>
                             ) : (
                                 <>
                                     Are you sure you want to disable <strong>{user.name}</strong>'s account? They will be logged out and unable to

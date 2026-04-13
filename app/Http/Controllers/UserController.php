@@ -74,6 +74,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'position' => 'nullable|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'phone' => 'nullable|string|max:50',
             'roles' => 'required|string|exists:roles,id',
             'disable_kiosk_notifications' => 'boolean',
             'receive_injury_alerts' => 'boolean',
@@ -85,6 +86,7 @@ class UserController extends Controller
             'name' => $request->input('name'),
             'position' => $request->input('position'),
             'email' => $request->input('email'),
+            'phone' => $request->input('phone'),
             'disable_kiosk_notifications' => $request->boolean('disable_kiosk_notifications'),
             'receive_injury_alerts' => $request->boolean('receive_injury_alerts'),
             'premier_vendor_id' => $request->input('premier_vendor_id'),
@@ -130,6 +132,18 @@ class UserController extends Controller
         $user->managedKiosks()->detach($kiosk->id);
 
         return back()->with('success', 'Kiosk removed from user successfully.');
+    }
+
+    public function syncKiosks(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'kiosk_ids' => 'array',
+            'kiosk_ids.*' => 'integer|exists:kiosks,id',
+        ]);
+
+        $user->managedKiosks()->sync($data['kiosk_ids'] ?? []);
+
+        return back()->with('success', 'Managed kiosks updated successfully.');
     }
 
     public function toggleDisable(User $user)
