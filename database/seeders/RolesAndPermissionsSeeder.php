@@ -259,6 +259,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.missing-sign-out' => 'View missing sign-out report',
             'reports.safety-dashboard' => 'View safety dashboard',
             'reports.wip' => 'View WIP report',
+            'reports.timesheet-vs-dpc' => 'View timesheet vs DPC report',
         ],
 
         // ============================================
@@ -495,6 +496,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.view',
             'reports.safety-dashboard',
             'reports.wip',
+            'reports.timesheet-vs-dpc',
             // Credit Card Receipts (own only)
             'receipts.view',
             // AI

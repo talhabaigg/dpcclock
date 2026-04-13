@@ -39,6 +39,7 @@ use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
 use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\MissingSignOutReportController;
+use App\Http\Controllers\TimesheetVsDpcReportController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
@@ -1146,6 +1147,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:reports.missing-sign-out')->group(function () {
         Route::get('/reports/missing-sign-out', [MissingSignOutReportController::class, 'index'])->name('reports.missingSignOut');
         Route::get('/reports/missing-sign-out/data', [MissingSignOutReportController::class, 'getData'])->name('reports.missingSignOut.data');
+    });
+
+    // Timesheet vs DPC Report
+    Route::middleware('permission:reports.timesheet-vs-dpc')->group(function () {
+        Route::get('/reports/timesheet-vs-dpc', [TimesheetVsDpcReportController::class, 'index'])->name('reports.timesheetVsDpc');
+        Route::get('/reports/timesheet-vs-dpc/data', [TimesheetVsDpcReportController::class, 'getData'])->name('reports.timesheetVsDpc.data');
     });
 
     // WIP Report
