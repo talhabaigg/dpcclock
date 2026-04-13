@@ -300,7 +300,7 @@ function RoleSheet({
 }) {
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[900px]">
+            <SheetContent side="right" className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[900px]">
                 <SheetHeader className="shrink-0 space-y-0 border-b px-6 py-4">
                     <SheetTitle className="text-lg">{title}</SheetTitle>
                     <SheetDescription>{description}</SheetDescription>
