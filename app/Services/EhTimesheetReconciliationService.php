@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Clock;
 use App\Models\Employee;
+use App\Models\Location;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -79,9 +80,16 @@ class EhTimesheetReconciliationService
         $from = $range['from'];
         $to = $range['to'];
 
+        // When a parent location is chosen, expand to include all sub-locations
+        // (matches the Review page's behaviour and how EH nests locations).
+        $locationIds = $locationFilter ? $this->expandLocationToSubs($locationFilter) : null;
+
         $ehRows = $this->fetchEh($from, $to);
-        if ($locationFilter) {
-            $ehRows = array_values(array_filter($ehRows, fn ($r) => (string) ($r['locationId'] ?? '') === (string) $locationFilter));
+        if ($locationIds) {
+            $ehRows = array_values(array_filter(
+                $ehRows,
+                fn ($r) => in_array((string) ($r['locationId'] ?? ''), $locationIds, true)
+            ));
         }
         if ($statusFilter) {
             $ehRows = array_values(array_filter($ehRows, fn ($r) => strcasecmp((string) ($r['status'] ?? ''), $statusFilter) === 0));
@@ -90,8 +98,8 @@ class EhTimesheetReconciliationService
         $localQuery = Clock::query()
             ->with(['employee', 'location', 'worktype'])
             ->whereBetween('clock_in', [$from, $to]);
-        if ($locationFilter) {
-            $localQuery->where('eh_location_id', $locationFilter);
+        if ($locationIds) {
+            $localQuery->whereIn('eh_location_id', $locationIds);
         }
         if ($statusFilter) {
             $localQuery->whereRaw('LOWER(status) = ?', [strtolower($statusFilter)]);
@@ -256,6 +264,17 @@ class EhTimesheetReconciliationService
         }
 
         return $diff;
+    }
+
+    private function expandLocationToSubs(string $ehLocationId): array
+    {
+        $subIds = Location::where('eh_parent_id', $ehLocationId)
+            ->pluck('eh_location_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        return array_values(array_unique(array_merge([(string) $ehLocationId], $subIds)));
     }
 
     private function weekRange(string $weekEnding): array
