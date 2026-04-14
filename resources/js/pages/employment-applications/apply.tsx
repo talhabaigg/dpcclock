@@ -281,7 +281,7 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
 
     return (
         <>
-        <Head title="Apply" />
+        <Head title="Enquire" />
         <div className="flex min-h-svh flex-col items-center bg-white px-3 py-6 font-[system-ui,_-apple-system,_sans-serif] sm:px-4 sm:py-8 md:px-8 md:py-12">
             <div className="flex w-full max-w-2xl flex-col gap-6 sm:gap-8">
                 {/* Step Indicator */}
@@ -918,7 +918,7 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                             <div className="rounded-sm border border-gray-200 bg-white p-6 sm:p-8">
                                 <SectionHeader title="Declaration & Acceptance" />
                                 <p className="mb-6 text-sm leading-relaxed text-gray-600">
-                                    I declare that the information provided in this application is true and correct. I understand that
+                                    I declare that the information provided in this enquiry is true and correct. I understand that
                                     providing false or misleading information may result in termination of employment.
                                 </p>
 
@@ -1008,7 +1008,7 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                                 className="flex-1 rounded bg-[#2e6da4] px-6 py-3.5 text-base font-medium text-white transition-colors hover:bg-[#255a87] active:bg-[#1e4d6e] disabled:opacity-50 sm:py-3 sm:text-sm"
                                 disabled={processing || !data.declaration_accepted}
                             >
-                                {processing ? 'Submitting...' : 'Submit Application'}
+                                {processing ? 'Submitting...' : 'Submit Enquiry'}
                             </button>
                         )}
                     </div>
@@ -1029,7 +1029,7 @@ export default function Apply({ skills, recaptchaSiteKey }: Props) {
                         Sensitive information (medical history, Aboriginal or Torres Strait Islander status) is collected with your
                         consent and used solely for equal opportunity reporting and workplace safety requirements. Your information will
                         only be accessed by authorised personnel involved in the recruitment process and will not be shared with third
-                        parties without your consent. If your application is unsuccessful, your data will be retained for up to 12 months
+                        parties without your consent. If your enquiry is unsuccessful, your data will be retained for up to 12 months
                         then securely deleted. You may request access to, correction, or deletion of your information by contacting us at{' '}
                         <span className="font-medium text-gray-500">privacy@superiorgroup.com.au</span>.
                     </p>

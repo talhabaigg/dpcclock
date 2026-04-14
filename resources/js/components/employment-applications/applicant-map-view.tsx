@@ -831,7 +831,7 @@ export default function ApplicantMapView({ applications }: Props) {
                 {/* Count + collapse toggle */}
                 <div className="flex items-center justify-between border-b px-3 py-1.5">
                     <p className="text-muted-foreground text-xs">
-                        {mappable.length} applicant{mappable.length !== 1 ? 's' : ''} on map
+                        {mappable.length} candidate{mappable.length !== 1 ? 's' : ''} on map
                         {unmappable.length > 0 && ` · ${unmappable.length} without coordinates`}
                     </p>
                     <button
@@ -894,8 +894,8 @@ export default function ApplicantMapView({ applications }: Props) {
                 {mappable.length === 0 ? (
                     <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3">
                         <MapPin className="h-12 w-12 opacity-30" />
-                        <p className="text-sm">No geocoded applicants to display</p>
-                        <p className="text-xs">Run <code className="bg-muted rounded px-1">php artisan applications:geocode</code> to geocode existing applications</p>
+                        <p className="text-sm">No geocoded candidates to display</p>
+                        <p className="text-xs">Run <code className="bg-muted rounded px-1">php artisan applications:geocode</code> to geocode existing enquiries</p>
                     </div>
                 ) : (
                     <>
@@ -923,7 +923,7 @@ export default function ApplicantMapView({ applications }: Props) {
                                 onClick={clearLine}
                             >
                                 <X className="h-3.5 w-3.5" />
-                                Back to all applicants
+                                Back to all candidates
                             </Button>
                         )}
                     </>

@@ -31,7 +31,7 @@ interface PageProps {
 }
 
 const MODEL_OPTIONS = [
-    { value: 'employment_application', label: 'Employment Application' },
+    { value: 'employment_application', label: 'Employment Enquiry' },
 ];
 
 export default function ChecklistTemplateForm({ template }: PageProps) {

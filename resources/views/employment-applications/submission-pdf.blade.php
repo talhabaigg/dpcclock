@@ -33,7 +33,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>Application — {{ $app->first_name }} {{ $app->surname }}</title>
+    <title>Enquiry — {{ $app->first_name }} {{ $app->surname }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -169,7 +169,7 @@
     <div class="header">
         <img src="{{ public_path('logo.png') }}" alt="Logo" /><br>
         <div style="margin-top:10px">
-            <span class="header-title">Employment Application</span>
+            <span class="header-title">Employment Enquiry</span>
             <span class="header-meta">Downloaded: {{ now()->format('d M Y, g:i A') }} &nbsp;&middot;&nbsp; Submitted: {{ $dateVal($app->created_at) }}</span>
         </div>
     </div>
@@ -315,7 +315,7 @@
             </tr>
         </table>
         <div class="declaration-box">
-            I declare that the information provided in this application is true and correct.
+            I declare that the information provided in this enquiry is true and correct.
             I understand that providing false or misleading information may result in termination of employment.
         </div>
         <table class="grid">
@@ -334,7 +334,7 @@
     <div class="footer">
         <table>
             <tr>
-                <td>{{ $app->first_name }} {{ $app->surname }} — Employment Application #{{ $app->id }}</td>
+                <td>{{ $app->first_name }} {{ $app->surname }} — Employment Enquiry #{{ $app->id }}</td>
                 <td style="text-align:right">Downloaded {{ now()->format('d M Y, g:i A') }}</td>
             </tr>
         </table>

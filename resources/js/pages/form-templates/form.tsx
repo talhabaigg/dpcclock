@@ -85,7 +85,7 @@ const FIELD_TYPES = [
 const TYPES_WITH_OPTIONS = ['select', 'radio', 'checkbox'];
 const DISPLAY_ONLY_TYPES = ['heading', 'paragraph'];
 
-const MODEL_OPTIONS = [{ value: 'employment_application', label: 'Employment Application' }];
+const MODEL_OPTIONS = [{ value: 'employment_application', label: 'Employment Enquiry' }];
 
 /** Map field type to its icon component and a color class for the accent. */
 const FIELD_TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: string }> = {

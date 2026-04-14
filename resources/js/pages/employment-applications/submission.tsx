@@ -117,7 +117,7 @@ function formatDate(dateString: string | null) {
 
 export default function Submission({ application: app }: PageProps) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Employment Applications', href: '/employment-applications' },
+        { title: 'Employment Enquiries', href: '/employment-applications' },
         { title: `${app.first_name} ${app.surname}`, href: `/employment-applications/${app.id}` },
         { title: 'Full Submission', href: `/employment-applications/${app.id}/submission` },
     ];
@@ -142,7 +142,7 @@ export default function Submission({ application: app }: PageProps) {
                         className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4" />
-                        Back to application
+                        Back to enquiry
                     </Link>
                     <a
                         href={`/employment-applications/${app.id}/submission/pdf`}
@@ -307,7 +307,7 @@ export default function Submission({ application: app }: PageProps) {
                             />
                         </div>
                         <div className="bg-muted/40 rounded-lg p-4 text-sm text-muted-foreground italic">
-                            I declare that the information provided in this application is true and correct. I understand that
+                            I declare that the information provided in this enquiry is true and correct. I understand that
                             providing false or misleading information may result in termination of employment.
                         </div>
                         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">

@@ -21,7 +21,7 @@ interface PageProps {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-    'App\\Models\\EmploymentApplication': 'Employment Application',
+    'App\\Models\\EmploymentApplication': 'Employment Enquiry',
 };
 
 const breadcrumbs: BreadcrumbItem[] = [

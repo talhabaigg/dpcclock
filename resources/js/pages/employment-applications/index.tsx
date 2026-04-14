@@ -58,7 +58,7 @@ interface PageProps {
     isLocal?: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employment Applications', href: '/employment-applications' }];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employment Enquiries', href: '/employment-applications' }];
 
 const STATUS_LABELS: Record<string, string> = {
     new: 'New',
@@ -382,7 +382,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             const data = await res.json();
             setOnboardedMatches(data.matches ?? []);
         } catch {
-            setAlertMessage({ type: 'error', text: 'Failed to check onboarded applications.' });
+            setAlertMessage({ type: 'error', text: 'Failed to check onboarded enquiries.' });
             setShowOnboardedDialog(false);
         } finally {
             setLoadingOnboarded(false);
@@ -399,7 +399,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Employment Applications" />
+            <Head title="Employment Enquiries" />
 
             <div className={`flex flex-col p-3 sm:p-4 ${view === 'kanban' || view === 'map' ? 'h-[calc(100dvh-4rem)] overflow-hidden gap-3' : 'gap-4'}`}>
                 {alertMessage && (
@@ -476,7 +476,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {isLocal && (
-                            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowDropAllDialog(true)} title="Delete all applications (local only)">
+                            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowDropAllDialog(true)} title="Delete all enquiries (local only)">
                                 <Trash2 size={14} />
                                 <span className="hidden sm:inline">Drop All</span>
                             </Button>
@@ -538,10 +538,10 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                 <label className="text-muted-foreground text-xs font-medium">Apprentices</label>
                                 <Select value={filters.apprentice ?? ''} onValueChange={(v) => applyFilters({ apprentice: v === 'all' ? '' : v, apprentice_year: v !== 'only' ? '' : filters.apprentice_year })}>
                                     <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="All applicants" />
+                                        <SelectValue placeholder="All candidates" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All applicants</SelectItem>
+                                        <SelectItem value="all">All candidates</SelectItem>
                                         <SelectItem value="only">Apprentices only</SelectItem>
                                         <SelectItem value="exclude">Exclude apprentices</SelectItem>
                                     </SelectContent>
@@ -643,7 +643,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             {!applications.data.length ? (
                                 <div className="text-muted-foreground flex flex-col items-center gap-2 py-12 text-sm">
                                     <FileText className="h-8 w-8 opacity-40" />
-                                    <p>No applications found</p>
+                                    <p>No enquiries found</p>
                                 </div>
                             ) : (
                                 applications.data.map((app) => (
@@ -694,7 +694,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                             <TableCell colSpan={8} className="h-32 text-center">
                                                 <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                     <FileText className="h-8 w-8 opacity-40" />
-                                                    <p>No applications found</p>
+                                                    <p>No enquiries found</p>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -708,7 +708,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                                             {app.first_name} {app.surname}
                                                         </span>
                                                         {app.duplicate_count > 0 && (
-                                                            <span title={`${app.duplicate_count} other application(s) with this email`}>
+                                                            <span title={`${app.duplicate_count} other enquiry(ies) with this email`}>
                                                                 <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                                                             </span>
                                                         )}
@@ -741,9 +741,9 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Import Employment Applications</DialogTitle>
+                        <DialogTitle>Import Employment Enquiries</DialogTitle>
                         <DialogDescription>
-                            Upload an Excel file (.xlsx) to import applications.{' '}
+                            Upload an Excel file (.xlsx) to import enquiries.{' '}
                             <a href="/employment-applications/import-template" className="text-primary underline">
                                 Download the template
                             </a>{' '}
@@ -773,9 +773,9 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             <Dialog open={showLegacyImportDialog} onOpenChange={setShowLegacyImportDialog}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Import Legacy Applications</DialogTitle>
+                        <DialogTitle>Import Legacy Enquiries</DialogTitle>
                         <DialogDescription>
-                            Upload the exported Excel file (.xlsx) from the old website to import existing applications.
+                            Upload the exported Excel file (.xlsx) from the old website to import existing enquiries.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
@@ -791,7 +791,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             Cancel
                         </Button>
                         <Button onClick={handleLegacyImport} disabled={!legacyImportFile || importing}>
-                            {importing ? 'Importing...' : 'Import Legacy Applications'}
+                            {importing ? 'Importing...' : 'Import Legacy Enquiries'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -802,9 +802,9 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                 <Dialog open={showDropAllDialog} onOpenChange={setShowDropAllDialog}>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Delete All Applications</DialogTitle>
+                            <DialogTitle>Delete All Enquiries</DialogTitle>
                             <DialogDescription>
-                                This will permanently delete all employment applications. This action cannot be undone.
+                                This will permanently delete all employment enquiries. This action cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -834,9 +834,9 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             <Dialog open={showOnboardedDialog} onOpenChange={setShowOnboardedDialog}>
                 <DialogContent className="max-h-[80vh] min-w-full overflow-hidden flex flex-col">
                     <DialogHeader>
-                        <DialogTitle>Onboarded Applications</DialogTitle>
+                        <DialogTitle>Onboarded Enquiries</DialogTitle>
                         <DialogDescription>
-                            Applications matching existing employees by email.
+                            Enquiries matching existing employees by email.
                         </DialogDescription>
                     </DialogHeader>
                     {loadingOnboarded ? (
@@ -844,13 +844,13 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             <Loader2 className="h-6 w-6 animate-spin" />
                         </div>
                     ) : onboardedMatches.length === 0 ? (
-                        <p className="text-muted-foreground py-8 text-center text-sm">No matching applications found.</p>
+                        <p className="text-muted-foreground py-8 text-center text-sm">No matching enquiries found.</p>
                     ) : (
                         <div className="overflow-y-auto -mx-6 px-6">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Applicant</TableHead>
+                                        <TableHead>Candidate</TableHead>
                                         <TableHead>Employee</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>

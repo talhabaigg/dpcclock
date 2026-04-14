@@ -473,7 +473,7 @@ class EmploymentApplicationController extends Controller
         // Gate: only users with 'approve' permission can move to "approved"
         if ($newStatus === EmploymentApplication::STATUS_APPROVED) {
             if (! $request->user()->can('employment-applications.approve')) {
-                return back()->withErrors(['status' => 'You do not have permission to approve applications.']);
+                return back()->withErrors(['status' => 'You do not have permission to approve enquiries.']);
             }
 
             $incomplete = $employmentApplication->incompleteRequiredChecklistItemsCount();
@@ -519,7 +519,7 @@ class EmploymentApplicationController extends Controller
             'declined_reason' => $request->reason,
         ]);
 
-        $body = "Declined application" . ($request->reason ? ": {$request->reason}" : '');
+        $body = "Declined enquiry" . ($request->reason ? ": {$request->reason}" : '');
         $employmentApplication->addSystemComment(
             $body,
             ['status_change' => ['from' => $oldStatus, 'to' => 'declined']],
@@ -541,7 +541,7 @@ class EmploymentApplicationController extends Controller
                     'phone' => $employmentApplication->phone,
                     'email' => $employmentApplication->email,
                     'date_of_birth' => $employmentApplication->date_of_birth,
-                    'reason' => $request->reason ?: "Declined from employment application #{$employmentApplication->id}",
+                    'reason' => $request->reason ?: "Declined from employment enquiry #{$employmentApplication->id}",
                     'added_by' => $request->user()->id,
                     'status' => 'active',
                 ]);
@@ -557,7 +557,7 @@ class EmploymentApplicationController extends Controller
     public function reopen(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
     {
         if (! $employmentApplication->isDeclined()) {
-            return back()->withErrors(['status' => 'Only declined applications can be reopened.']);
+            return back()->withErrors(['status' => 'Only declined enquiries can be reopened.']);
         }
 
         $request->validate([
@@ -677,7 +677,7 @@ class EmploymentApplicationController extends Controller
         $import = new EmploymentApplicationImport;
         Excel::import($import, $request->file('file'));
 
-        $message = "Imported {$import->importedCount} application(s).";
+        $message = "Imported {$import->importedCount} enquiry(ies).";
         if ($import->skippedCount > 0) {
             $message .= " Skipped {$import->skippedCount}.";
         }
@@ -702,7 +702,7 @@ class EmploymentApplicationController extends Controller
         $import = new LegacyEmploymentApplicationImport;
         Excel::import($import, $request->file('file'));
 
-        $message = "Imported {$import->importedCount} legacy application(s).";
+        $message = "Imported {$import->importedCount} legacy enquiry(ies).";
         if ($import->skippedCount > 0) {
             $message .= " Skipped {$import->skippedCount}.";
         }
@@ -767,7 +767,7 @@ class EmploymentApplicationController extends Controller
 
         EmploymentApplication::query()->delete();
 
-        return back()->with('success', 'All employment applications have been deleted.');
+        return back()->with('success', 'All employment enquiries have been deleted.');
     }
 
     /**

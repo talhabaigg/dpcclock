@@ -10,9 +10,9 @@ export default function ThankYou() {
                 <div className="flex size-16 items-center justify-center rounded-full bg-[#2e6da4] text-white">
                     <CheckIcon className="size-8" />
                 </div>
-                <h2 className="text-2xl font-semibold text-gray-800">Application Submitted</h2>
+                <h2 className="text-2xl font-semibold text-gray-800">Enquiry Submitted</h2>
                 <p className="text-sm leading-relaxed text-gray-500">
-                    Thank you for your application. We will review it and get back to you shortly.
+                    Thank you for your enquiry. We will review it and get back to you shortly.
                 </p>
             </div>
         </div>

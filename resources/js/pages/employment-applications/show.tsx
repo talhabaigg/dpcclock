@@ -1294,7 +1294,7 @@ function ReferenceCheckDialog({
             errs.email = 'Please enter a valid email address.';
         }
         if (!form.would_rehire) {
-            errs.would_rehire = 'Please indicate whether you would re-hire the applicant.';
+            errs.would_rehire = 'Please indicate whether you would re-hire the candidate.';
         }
         return errs;
     }
@@ -1471,15 +1471,15 @@ function ReferenceCheckDialog({
                                 {step === 2 && (
                                     <div className="space-y-4">
                                         <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm leading-relaxed space-y-1">
-                                            <p>If the referee is happy to proceed, confirm the applicant's employment details and general information by asking the following questions.</p>
+                                            <p>If the referee is happy to proceed, confirm the candidate's employment details and general information by asking the following questions.</p>
                                             <p className="text-muted-foreground italic">
-                                                "This reference will be used in the overall evaluation of the applicant and will affect whether they are selected for the job.
-                                                The Applicant is being considered for the position of <strong>{occupationDisplay}</strong>.
+                                                "This reference will be used in the overall evaluation of the candidate and will affect whether they are selected for the job.
+                                                The Candidate is being considered for the position of <strong>{occupationDisplay}</strong>.
                                                 Could you please keep this in mind when answering the following questions?"
                                             </p>
                                         </div>
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Can you confirm the Applicant's dates of employment?</p>
+                                            <p className="text-muted-foreground text-xs italic">Can you confirm the Candidate's dates of employment?</p>
                                             <Label htmlFor="rc_from">Employment From</Label>
                                             <Input id="rc_from" type="date" value={form.employment_from} onChange={(e) => set('employment_from', e.target.value)} />
                                         </div>
@@ -1500,12 +1500,12 @@ function ReferenceCheckDialog({
                                             </RadioGroup>
                                         </div>
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What is your relationship with the Applicant? <span className="font-medium">(Answer should be Supervisor or Manager)</span></p>
-                                            <Label htmlFor="rc_rel">Relationship to Applicant</Label>
+                                            <p className="text-muted-foreground text-xs italic">What is your relationship with the Candidate? <span className="font-medium">(Answer should be Supervisor or Manager)</span></p>
+                                            <Label htmlFor="rc_rel">Relationship to Candidate</Label>
                                             <Input id="rc_rel" placeholder="e.g. Supervisor or Manager" value={form.relationship} onChange={(e) => set('relationship', e.target.value)} />
                                         </div>
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">For how long? <span className="font-medium">☑ Check against applicant's history</span></p>
+                                            <p className="text-muted-foreground text-xs italic">For how long? <span className="font-medium">☑ Check against candidate's history</span></p>
                                             <Label htmlFor="rc_dur">For How Long?</Label>
                                             <Input id="rc_dur" value={form.relationship_duration} onChange={(e) => set('relationship_duration', e.target.value)} />
                                         </div>
@@ -1515,8 +1515,8 @@ function ReferenceCheckDialog({
                                             <Input id="rc_company" value={form.company_at_time} onChange={(e) => set('company_at_time', e.target.value)} />
                                         </div>
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What was the Applicant's job title?</p>
-                                            <Label>Applicant's Job Title</Label>
+                                            <p className="text-muted-foreground text-xs italic">What was the Candidate's job title?</p>
+                                            <Label>Candidate's Job Title</Label>
                                             <RadioGroup value={form.applicant_job_title} onValueChange={(v) => set('applicant_job_title', v)} className="flex flex-wrap gap-4">
                                                 {['plasterer', 'carpenter', 'labourer', 'other'].map((t) => (
                                                     <div key={t} className="flex items-center gap-2">
@@ -1530,7 +1530,7 @@ function ReferenceCheckDialog({
                                             )}
                                         </div>
                                         <div className="grid gap-2">
-                                            <p className="text-muted-foreground text-xs italic">What were the Applicant's main duties/responsibilities?</p>
+                                            <p className="text-muted-foreground text-xs italic">What were the Candidate's main duties/responsibilities?</p>
                                             <Label>Main Duties / Responsibilities</Label>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {REF_CHECK_DUTIES.map((duty) => (
@@ -1547,7 +1547,7 @@ function ReferenceCheckDialog({
                                 {step === 3 && (
                                     <div className="space-y-4">
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Overall, how would you describe the Applicant's performance in the role?</p>
+                                            <p className="text-muted-foreground text-xs italic">Overall, how would you describe the Candidate's performance in the role?</p>
                                             <Label>Overall Performance</Label>
                                             <RadioGroup value={form.performance_rating} onValueChange={(v) => set('performance_rating', v)} className="flex flex-wrap gap-4">
                                                 {PERF_OPTIONS.map((o) => (
@@ -1605,13 +1605,13 @@ function ReferenceCheckDialog({
                                 {step === 4 && (
                                     <div className="space-y-4">
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What do you believe the Applicant's greatest strengths are? <span className="font-medium">"Are they better at framing, sheeting, or setting?"</span></p>
+                                            <p className="text-muted-foreground text-xs italic">What do you believe the Candidate's greatest strengths are? <span className="font-medium">"Are they better at framing, sheeting, or setting?"</span></p>
                                             <Label htmlFor="rc_strengths">Greatest Strengths</Label>
                                             <Textarea id="rc_strengths" rows={3} value={form.greatest_strengths} onChange={(e) => set('greatest_strengths', e.target.value)} />
                                         </div>
                                         <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Would you re-hire the Applicant?</p>
-                                            <Label>Would You Re-hire the Applicant? <span className="text-destructive">*</span></Label>
+                                            <p className="text-muted-foreground text-xs italic">Would you re-hire the Candidate?</p>
+                                            <Label>Would You Re-hire the Candidate? <span className="text-destructive">*</span></Label>
                                             <RadioGroup
                                                 value={form.would_rehire}
                                                 onValueChange={(v) => { set('would_rehire', v); setErrors((p) => ({ ...p, would_rehire: '' })); }}
@@ -1701,7 +1701,7 @@ function ReadOnlyRefCheck({
                 <RCField label="Employed From" value={check.employment_from ? new Date(check.employment_from).toLocaleDateString('en-AU') : null} />
                 <RCField label="Employed To" value={check.employment_to ? new Date(check.employment_to).toLocaleDateString('en-AU') : null} />
                 <RCField label="Dates Align with Job Enquiry" value={check.dates_align === null ? '—' : check.dates_align ? 'Yes' : 'No'} />
-                <RCField label="Relationship to Applicant" value={check.relationship} />
+                <RCField label="Relationship to Candidate" value={check.relationship} />
                 <RCField label="Duration" value={check.relationship_duration} />
                 <RCField label="Company at Time" value={check.company_at_time} />
                 <RCField label="Job Title" value={
@@ -1936,7 +1936,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const declineForm = useForm({ reason: '', add_to_screening: false });
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Employment Applications', href: '/employment-applications' },
+        { title: 'Employment Enquiries', href: '/employment-applications' },
         { title: `${app.first_name} ${app.surname}`, href: `/employment-applications/${app.id}` },
     ];
 
@@ -2040,7 +2040,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`${app.first_name} ${app.surname} — Application`} />
+            <Head title={`${app.first_name} ${app.surname} — Enquiry`} />
 
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {alertMessage && (
@@ -2059,9 +2059,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 {duplicates.length > 0 && (
                     <Alert className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
                         <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertTitle className="text-amber-700 dark:text-amber-400">Duplicate Applicant</AlertTitle>
+                        <AlertTitle className="text-amber-700 dark:text-amber-400">Duplicate Candidate</AlertTitle>
                         <AlertDescription className="text-amber-600 dark:text-amber-300">
-                            {duplicates.length} other application(s):
+                            {duplicates.length} other enquiry(ies):
                             {duplicates.map((d) => (
                                 <Link key={d.id} href={`/employment-applications/${d.id}`} className="ml-2 underline">
                                     {STATUS_LABELS[d.status] ?? d.status} ({formatDate(d.created_at)})
@@ -2084,7 +2084,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 {app.status === 'declined' && (
                     <Alert className="border-red-500/50 bg-red-50/50 dark:bg-red-950/20">
                         <XIcon className="h-4 w-4 text-red-600" />
-                        <AlertTitle className="text-red-700 dark:text-red-400">Application Declined</AlertTitle>
+                        <AlertTitle className="text-red-700 dark:text-red-400">Enquiry Declined</AlertTitle>
                         <AlertDescription className="text-red-600 dark:text-red-300">
                             {app.declined_by_user && <>by {app.declined_by_user.name} on {formatDate(app.declined_at)}</>}
                             {app.declined_reason && <> — {app.declined_reason}</>}
@@ -2494,7 +2494,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
                                     >
                                         <XCircle className="h-3.5 w-3.5" />
-                                        Decline Application
+                                        Decline Enquiry
                                     </button>
                                 )}
 
@@ -2538,9 +2538,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             <Dialog open={showDeclineDialog} onOpenChange={setShowDeclineDialog}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Decline Application</DialogTitle>
+                        <DialogTitle>Decline Enquiry</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to decline {app.first_name} {app.surname}'s application?
+                            Are you sure you want to decline {app.first_name} {app.surname}'s enquiry?
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4">

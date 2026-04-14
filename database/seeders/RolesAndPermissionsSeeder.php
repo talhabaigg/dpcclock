@@ -273,10 +273,10 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         // EMPLOYMENT APPLICATIONS
         // ============================================
-        'Employment Applications' => [
-            'employment-applications.view' => 'View employment applications',
-            'employment-applications.screen' => 'Screen applications (change status up to face-to-face, tick checklists)',
-            'employment-applications.approve' => 'Approve applications (move past face-to-face to approved)',
+        'Employment Enquiries' => [
+            'employment-applications.view' => 'View employment enquiries',
+            'employment-applications.screen' => 'Screen enquiries (change status up to face-to-face, tick checklists)',
+            'employment-applications.approve' => 'Approve enquiries (move past face-to-face to approved)',
         ],
 
         // ============================================

@@ -195,7 +195,7 @@ const workforce = [
         permission: 'employment-applications.view',
         subItems: [
             {
-                name: 'Applications',
+                name: 'Enquiries',
                 url: '/employment-applications',
                 icon: FileText,
                 permission: 'employment-applications.view',

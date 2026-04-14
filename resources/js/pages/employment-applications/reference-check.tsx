@@ -125,7 +125,7 @@ function ReadOnlyView({ check, reference, application }: { check: ExistingCheck;
         <div className="space-y-8">
             {/* Header info */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <ReadField label="Applicant Name" value={`${application.first_name} ${application.surname}`} />
+                <ReadField label="Candidate Name" value={`${application.first_name} ${application.surname}`} />
                 <ReadField label="Position" value={formatOccupation(application)} />
                 <ReadField label="Name of Referee" value={reference.contact_person} />
                 <ReadField label="Referee's Current Job Title" value={check.referee_current_job_title} />
@@ -151,7 +151,7 @@ function ReadOnlyView({ check, reference, application }: { check: ExistingCheck;
                     <ReadField label="Relationship" value={check.relationship} />
                     <ReadField label="For How Long" value={check.relationship_duration} />
                     <ReadField label="Company at Time" value={check.company_at_time} />
-                    <ReadField label="Applicant's Job Title" value={
+                    <ReadField label="Candidate's Job Title" value={
                         check.applicant_job_title === 'other' && check.applicant_job_title_other
                             ? check.applicant_job_title_other
                             : check.applicant_job_title
@@ -222,7 +222,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
     const isReadOnly = existingCheck !== null;
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Employment Applications', href: '/employment-applications' },
+        { title: 'Employment Enquiries', href: '/employment-applications' },
         { title: `${application.first_name} ${application.surname}`, href: `/employment-applications/${application.id}` },
         { title: `Reference Check — ${reference.contact_person}`, href: '#' },
     ];
@@ -276,7 +276,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
                         className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4" />
-                        Back to application
+                        Back to enquiry
                     </Link>
                     {isReadOnly && (
                         <Badge variant="secondary" className="flex items-center gap-1 text-emerald-700">
@@ -302,7 +302,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
                                 {/* Header info */}
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="grid gap-1.5">
-                                        <Label className="text-muted-foreground text-xs">Applicant Name</Label>
+                                        <Label className="text-muted-foreground text-xs">Candidate Name</Label>
                                         <p className="text-sm font-medium">{application.first_name} {application.surname}</p>
                                     </div>
                                     <div className="grid gap-1.5">
@@ -390,7 +390,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
                                     <SectionHeading part="Part B" title="Confirmation of Employment Details and General Information" />
 
                                     <p className="text-muted-foreground mb-4 text-sm">
-                                        The applicant is being considered for the position of <strong>{formatOccupation(application)}</strong>.
+                                        The candidate is being considered for the position of <strong>{formatOccupation(application)}</strong>.
                                         Please keep this in mind when answering the following questions.
                                     </p>
 
@@ -436,7 +436,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="grid gap-1.5">
-                                                <Label htmlFor="relationship">Relationship to Applicant</Label>
+                                                <Label htmlFor="relationship">Relationship to Candidate</Label>
                                                 <Input
                                                     id="relationship"
                                                     placeholder="e.g. Supervisor or Manager"
@@ -466,7 +466,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
                                         </div>
 
                                         <div className="grid gap-1.5">
-                                            <Label>Applicant's Job Title</Label>
+                                            <Label>Candidate's Job Title</Label>
                                             <RadioGroup
                                                 value={data.applicant_job_title}
                                                 onValueChange={(v) => setData('applicant_job_title', v)}
@@ -601,7 +601,7 @@ export default function ReferenceCheck({ reference, application, existingCheck }
                                         </div>
 
                                         <div className="grid gap-1.5">
-                                            <Label>Would You Re-hire the Applicant?</Label>
+                                            <Label>Would You Re-hire the Candidate?</Label>
                                             <RadioGroup
                                                 value={data.would_rehire}
                                                 onValueChange={(v) => setData('would_rehire', v)}
