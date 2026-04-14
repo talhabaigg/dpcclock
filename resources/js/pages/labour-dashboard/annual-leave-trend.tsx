@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
+import ExpandableChartCard, { computeTickInterval } from './expandable-chart-card';
 
 export interface AnnualLeaveTrendPoint {
     month: string;
@@ -26,7 +26,7 @@ const takenConfig = {
 } satisfies ChartConfig;
 
 const netConfig = {
-    net_balance: { label: 'Net Balance', color: 'hsl(142, 71%, 45%)' },
+    net_balance: { label: 'Running Balance', color: 'hsl(142, 71%, 45%)' },
 } satisfies ChartConfig;
 
 export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
@@ -35,16 +35,12 @@ export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
     return (
         <div className="grid gap-6 lg:grid-cols-3">
             {/* Accrual chart */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Annual Leave — Accrued</CardTitle>
-                    <p className="text-xs text-muted-foreground">Monthly accrual with cumulative line</p>
-                </CardHeader>
-                <CardContent>
-                    <ChartContainer config={accrualConfig} className="aspect-auto w-full" style={{ height: 260 }}>
+            <ExpandableChartCard title="Annual Leave — Accrued" description="Monthly accrual with cumulative line">
+                {({ height, width }) => (
+                    <ChartContainer config={accrualConfig} className="aspect-auto w-full" style={{ height }}>
                         <ComposedChart data={data} margin={{ right: 20 }}>
                             <CartesianGrid vertical={false} />
-                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={computeTickInterval(width, data.length, 45)} />
                             <YAxis tickLine={false} axisLine={false} width={45} tick={{ fontSize: 10 }} />
                             <ChartTooltip content={<ChartTooltipContent />} />
                             <ChartLegend content={<ChartLegendContent />} />
@@ -58,20 +54,16 @@ export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
                             />
                         </ComposedChart>
                     </ChartContainer>
-                </CardContent>
-            </Card>
+                )}
+            </ExpandableChartCard>
 
             {/* Taken chart */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Annual Leave — Taken</CardTitle>
-                    <p className="text-xs text-muted-foreground">Monthly taken with cumulative line</p>
-                </CardHeader>
-                <CardContent>
-                    <ChartContainer config={takenConfig} className="aspect-auto w-full" style={{ height: 260 }}>
+            <ExpandableChartCard title="Annual Leave — Taken" description="Monthly taken with cumulative line">
+                {({ height, width }) => (
+                    <ChartContainer config={takenConfig} className="aspect-auto w-full" style={{ height }}>
                         <ComposedChart data={data} margin={{ right: 20 }}>
                             <CartesianGrid vertical={false} />
-                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={computeTickInterval(width, data.length, 45)} />
                             <YAxis tickLine={false} axisLine={false} width={45} tick={{ fontSize: 10 }} />
                             <ChartTooltip content={<ChartTooltipContent />} />
                             <ChartLegend content={<ChartLegendContent />} />
@@ -85,17 +77,13 @@ export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
                             />
                         </ComposedChart>
                     </ChartContainer>
-                </CardContent>
-            </Card>
+                )}
+            </ExpandableChartCard>
 
-            {/* Net balance chart */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Annual Leave — Net Balance</CardTitle>
-                    <p className="text-xs text-muted-foreground">Cumulative accrued minus taken</p>
-                </CardHeader>
-                <CardContent>
-                    <ChartContainer config={netConfig} className="aspect-auto w-full" style={{ height: 260 }}>
+            {/* Running balance chart */}
+            <ExpandableChartCard title="Annual Leave — Running Balance" description="Total accrued leave balance by month">
+                {({ height, width }) => (
+                    <ChartContainer config={netConfig} className="aspect-auto w-full" style={{ height }}>
                         <AreaChart data={data} margin={{ right: 20 }}>
                             <defs>
                                 <linearGradient id="netBalanceGradient" x1="0" y1="0" x2="0" y2="1">
@@ -104,7 +92,7 @@ export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
                                 </linearGradient>
                             </defs>
                             <CartesianGrid vertical={false} />
-                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={computeTickInterval(width, data.length, 45)} />
                             <YAxis tickLine={false} axisLine={false} width={45} tick={{ fontSize: 10 }} />
                             <ChartTooltip content={<ChartTooltipContent />} />
                             <ChartLegend content={<ChartLegendContent />} />
@@ -117,8 +105,8 @@ export default function AnnualLeaveTrend({ data }: AnnualLeaveTrendProps) {
                             />
                         </AreaChart>
                     </ChartContainer>
-                </CardContent>
-            </Card>
+                )}
+            </ExpandableChartCard>
         </div>
     );
 }

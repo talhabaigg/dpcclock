@@ -166,6 +166,51 @@ class EmploymentHeroService
         return $response->json();
     }
 
+    /**
+     * Fetch leave balances for many dates concurrently.
+     * Returns a map of asAtDate => balances array.
+     *
+     * EH rate-limits concurrent requests to this endpoint, so we cap the pool
+     * size and retry 429s with backoff.
+     */
+    public function getLeaveBalancesBatch(array $asAtDates): array
+    {
+        if (empty($asAtDates)) {
+            return [];
+        }
+
+        $auth = 'Basic '.base64_encode($this->apiKey.':');
+        $url = "{$this->baseUrl}/business/{$this->businessId}/report/leavebalances";
+        $chunks = array_chunk($asAtDates, 3);
+
+        $result = [];
+        foreach ($chunks as $chunk) {
+            $responses = Http::pool(fn ($pool) => array_map(
+                fn ($date) => $pool->as($date)
+                    ->withHeaders(['Authorization' => $auth])
+                    ->timeout(120)
+                    ->retry(3, 2000, fn ($exception, $request) => true, throw: false)
+                    ->get($url, ['asAtDate' => $date]),
+                $chunk
+            ));
+
+            foreach ($chunk as $date) {
+                $response = $responses[$date] ?? null;
+                if (!$response || $response->failed()) {
+                    Log::error('Failed to get leave balances from Employment Hero (batch)', [
+                        'asAtDate' => $date,
+                        'status' => $response?->status(),
+                        'body' => $response?->body(),
+                    ]);
+                    throw new \RuntimeException('Failed to get leave balances for '.$date);
+                }
+                $result[$date] = $response->json();
+            }
+        }
+
+        return $result;
+    }
+
     public function initiateSelfServiceOnboarding(array $data): array
     {
         $response = Http::withHeaders([

@@ -84,7 +84,8 @@
       "Bash(git -C \"c:\\\\Laravel\\\\dpcclock\" remote get-url origin 2>&1:*)",
       "Bash(gh auth:*)",
       "Bash(python3 -c \"import json; json.load\\(open\\('/Users/talhabaig/Documents/Laravel/dpcclock/.claude/settings.local.json'\\)\\); print\\('Valid JSON'\\)\")",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(python3)"
     ]
   }
 }

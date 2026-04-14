@@ -32,7 +32,7 @@ function SeverityIcon({ score }: { score: number }) {
 }
 
 // Column grid for consistent alignment across header/body/footer
-const COL_GRID = 'grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center text-xs';
+const COL_GRID = 'grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_2fr] items-center gap-x-3 text-xs';
 
 function IndicatorRow({ row }: { row: SickLeaveIndicatorRow }) {
     return (
@@ -54,7 +54,7 @@ function IndicatorRow({ row }: { row: SickLeaveIndicatorRow }) {
                 <SeverityIcon score={row.sensitive_score} />
                 <span className="font-semibold tabular-nums">{row.sensitive_score}</span>
             </div>
-            <div>
+            <div className="pl-3">
                 {row.notes && <span className="text-[10px] text-amber-500">{row.notes}</span>}
             </div>
         </div>
@@ -86,7 +86,7 @@ function IndicatorTable({ data, height }: { data: SickLeaveIndicatorRow[]; heigh
                 <div className="text-right">Before PH</div>
                 <div className="text-right">After PH</div>
                 <div className="text-right">Score</div>
-                <div>Notes</div>
+                <div className="pl-3">Notes</div>
             </div>
 
             {/* Scrollable Body */}

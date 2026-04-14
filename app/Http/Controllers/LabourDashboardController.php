@@ -399,7 +399,7 @@ class LabourDashboardController extends Controller
         ]);
     }
 
-    public function getAnnualLeaveTrend(Request $request)
+    public function getAnnualLeaveTrend(Request $request, EmploymentHeroService $ehService)
     {
         $request->validate([
             'date_from' => 'required|date',
@@ -443,6 +443,36 @@ class LabourDashboardController extends Controller
 
         ksort($byMonth);
 
+        // Running balance: query Employment Hero's leave balances as at each month end.
+        // Resolve each month-end date, then fetch uncached dates in parallel via Http::pool.
+        $monthEndByKey = [];
+        foreach (array_keys($byMonth) as $monthKey) {
+            $monthEnd = Carbon::parse($monthKey . '-01')->endOfMonth();
+            if ($monthEnd->gt($dateTo)) {
+                $monthEnd = $dateTo->copy();
+            }
+            $monthEndByKey[$monthKey] = $monthEnd->format('Y-m-d');
+        }
+
+        $balancesByDate = [];
+        $datesToFetch = [];
+        foreach (array_unique($monthEndByKey) as $asAtDate) {
+            $cached = Cache::get("leave_balances_{$asAtDate}");
+            if ($cached !== null) {
+                $balancesByDate[$asAtDate] = $cached;
+            } else {
+                $datesToFetch[] = $asAtDate;
+            }
+        }
+
+        if (!empty($datesToFetch)) {
+            $fetched = $ehService->getLeaveBalancesBatch($datesToFetch);
+            foreach ($fetched as $date => $balances) {
+                Cache::put("leave_balances_{$date}", $balances, now()->addWeek());
+                $balancesByDate[$date] = $balances;
+            }
+        }
+
         $cumulativeAccrued = 0;
         $cumulativeTaken = 0;
         $trend = [];
@@ -451,13 +481,18 @@ class LabourDashboardController extends Controller
             $cumulativeAccrued += $data['accrued'];
             $cumulativeTaken += $data['taken'];
 
+            $asAtDate = $monthEndByKey[$monthKey];
+            $netBalance = (float) collect($balancesByDate[$asAtDate] ?? [])
+                ->where('leaveCategoryName', 'Annual Leave')
+                ->sum(fn ($row) => (float) ($row['accruedAmountInHours'] ?? 0));
+
             $trend[] = [
                 'month' => Carbon::parse($monthKey . '-01')->format('M Y'),
                 'accrued' => round($data['accrued'], 2),
                 'taken' => round($data['taken'], 2),
                 'cumulative_accrued' => round($cumulativeAccrued, 2),
                 'cumulative_taken' => round($cumulativeTaken, 2),
-                'net_balance' => round($cumulativeAccrued - $cumulativeTaken, 2),
+                'net_balance' => round($netBalance, 2),
             ];
         }
 

@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import ExpandableChartCard, { computeTickInterval } from './expandable-chart-card';
 
 interface SickLeaveTrendProps {
     weeklyTrend: { week: string; month: string; hours: number }[];
@@ -41,14 +41,10 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
     return (
         <div className="grid gap-6 lg:grid-cols-3">
             {/* Weekly total trend - area chart */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Sick Leave Hours — Total</CardTitle>
-                    <p className="text-xs text-muted-foreground">Weekly trend across all projects</p>
-                </CardHeader>
-                <CardContent>
-                    {weeklyTrend.length > 0 ? (
-                        <ChartContainer config={totalConfig} className="aspect-auto w-full" style={{ height: 260 }}>
+            <ExpandableChartCard title="Sick Leave Hours — Total" description="Weekly trend across all projects">
+                {({ height, width }) =>
+                    weeklyTrend.length > 0 ? (
+                        <ChartContainer config={totalConfig} className="aspect-auto w-full" style={{ height }}>
                             <AreaChart data={weeklyTrend} margin={{ right: 30 }}>
                                 <defs>
                                     <linearGradient id="sickLeaveGradient" x1="0" y1="0" x2="0" y2="1">
@@ -62,7 +58,7 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                                     tickLine={false}
                                     axisLine={false}
                                     tick={{ fontSize: 11 }}
-                                    interval={0}
+                                    interval={computeTickInterval(width, weeklyTrend.length)}
                                     tickFormatter={(_value, index) => {
                                         return (weeklyTrend[index] as any)?.month || '';
                                     }}
@@ -85,22 +81,18 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                             </AreaChart>
                         </ChartContainer>
                     ) : (
-                        <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                        <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
                             No sick leave recorded
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    )
+                }
+            </ExpandableChartCard>
 
             {/* By project - line chart with one line per project */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Sick Leave Hours — By Project</CardTitle>
-                    <p className="text-xs text-muted-foreground">Weekly trend per project</p>
-                </CardHeader>
-                <CardContent>
-                    {projectTrend.length > 0 ? (
-                        <ChartContainer config={projectConfig} className="aspect-auto w-full" style={{ height: 260 }}>
+            <ExpandableChartCard title="Sick Leave Hours — By Project" description="Weekly trend per project">
+                {({ height, width }) =>
+                    projectTrend.length > 0 ? (
+                        <ChartContainer config={projectConfig} className="aspect-auto w-full" style={{ height }}>
                             <LineChart data={projectTrend} margin={{ right: 30 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis
@@ -108,7 +100,7 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                                     tickLine={false}
                                     axisLine={false}
                                     tick={{ fontSize: 11 }}
-                                    interval={0}
+                                    interval={computeTickInterval(width, projectTrend.length)}
                                     tickFormatter={(_value, index) => {
                                         return (projectTrend[index] as any)?.month || '';
                                     }}
@@ -136,12 +128,12 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                             </LineChart>
                         </ChartContainer>
                     ) : (
-                        <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                        <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
                             No sick leave recorded
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    )
+                }
+            </ExpandableChartCard>
 
             {children}
         </div>
