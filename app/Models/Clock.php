@@ -47,7 +47,8 @@ class Clock extends Model
 
     public function employee()
     {
-        return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id');
+        return $this->belongsTo(Employee::class, 'eh_employee_id', 'eh_employee_id')
+            ->withTrashed();
     }
 
     public function kiosk()

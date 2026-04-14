@@ -550,6 +550,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
         Route::get('/timesheets/sync/eh/all', [ClockController::class, 'syncTimesheetsForAll'])->name('timesheets.sync.all');
         Route::get('/timesheets/{employeeId}/{weekEnding}/sync/eh', [ClockController::class, 'syncTimesheet'])->name('timesheets.sync');
+        Route::get('/timesheets-reconcile', [\App\Http\Controllers\EhReconciliationController::class, 'index'])->name('timesheets.reconcile');
+        Route::post('/timesheets-reconcile/delete', [\App\Http\Controllers\EhReconciliationController::class, 'deleteClocks'])->name('timesheets.reconcile.delete');
+        Route::post('/timesheets-reconcile/repull', [\App\Http\Controllers\EhReconciliationController::class, 'repullWeek'])->name('timesheets.reconcile.repull');
     });
     Route::get('/timesheets-converter', [ClockController::class, 'showTimesheetsConverter'])->name('timesheets.converter')
         ->middleware('permission:timesheets.convert');

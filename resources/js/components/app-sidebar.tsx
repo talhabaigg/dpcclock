@@ -167,6 +167,12 @@ const timesheets = [
                 permission: 'timesheets.review',
             },
             {
+                name: 'EH Reconciliation',
+                url: '/timesheets-reconcile',
+                icon: Scale,
+                permission: 'timesheets.sync',
+            },
+            {
                 name: 'Kiosks',
                 url: '/kiosks',
                 icon: Monitor,

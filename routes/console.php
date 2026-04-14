@@ -86,17 +86,24 @@ Schedule::command('premier:sync-variations')
     ->withoutOverlapping();
 
 // Employment Hero Timesheet Sync - Daily
+// Re-pulls the current week plus the prior 3 weeks so post-close EH edits
+// (status flips to Processed, manual time corrections, office-added entries)
+// flow back locally. Without this, weeks drift permanently once the current
+// Friday passes.
 Schedule::call(function () {
     $tz = 'Australia/Brisbane';
     $now = Carbon::now($tz);
     if ($now->isFriday()) {
-        $weekEnding = $now->copy();
+        $currentFriday = $now->copy();
     } elseif ($now->isWeekend()) {
-        $weekEnding = $now->copy()->previous(Carbon::FRIDAY);
+        $currentFriday = $now->copy()->previous(Carbon::FRIDAY);
     } else {
-        $weekEnding = $now->copy()->endOfWeek(Carbon::FRIDAY);
+        $currentFriday = $now->copy()->endOfWeek(Carbon::FRIDAY);
     }
-    dispatch(new LoadTimesheetsFromEH($weekEnding->format('d-m-Y')));
+    for ($i = 0; $i <= 3; $i++) {
+        $weekEnding = $currentFriday->copy()->subWeeks($i);
+        dispatch(new LoadTimesheetsFromEH($weekEnding->format('d-m-Y')));
+    }
 })
     ->name('load-timesheets-from-eh')
     ->dailyAt('05:00')

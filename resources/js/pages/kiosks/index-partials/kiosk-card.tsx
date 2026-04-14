@@ -1,11 +1,7 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useInitials } from '@/hooks/use-initials';
+import { Card } from '@/components/ui/card';
 import { Link } from '@inertiajs/react';
-import { ChevronRight, Clock, MapPin, Settings, Users } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 interface KioskCardProps {
     kiosk: {
@@ -33,101 +29,39 @@ const formatTime = (time: string) => {
 };
 
 const KioskCard = ({ kiosk }: KioskCardProps) => {
-    const getInitials = useInitials();
-    const employeeCount = kiosk.employees?.length || 0;
+    const employeeCount = kiosk.employees?.length ?? 0;
+    const kioskName = kiosk.name.trim();
+    const locationName = kiosk.location?.name?.trim() || 'No location';
 
     return (
-        <Card className="group flex flex-col overflow-hidden transition-all hover:shadow-md">
-            <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                        <h3 className="truncate leading-tight font-semibold">{kiosk.name}</h3>
-                        <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
-                            <MapPin className="h-3 w-3 flex-shrink-0" />
-                            <span className="truncate" title={kiosk.location?.name?.trim() || 'N/A'}>
-                                {kiosk.location?.name?.trim() || 'N/A'}
-                            </span>
-                        </div>
+        <Card className="hover:border-foreground/20 relative transition-colors">
+            <Link href={`/kiosks/${kiosk.id}`} className="flex min-h-[140px] flex-col justify-between gap-4 p-6">
+                <div className="min-w-0 space-y-1 pr-9">
+                    <div className="truncate text-lg leading-tight font-semibold" title={kioskName}>
+                        {kioskName}
                     </div>
-                    <Badge variant="outline" className="flex-shrink-0 font-mono text-xs">
-                        {kiosk.eh_location_id}
-                    </Badge>
-                </div>
-            </CardHeader>
-
-            <CardContent className="flex flex-1 flex-col gap-4 pt-0">
-                {/* Time Schedule */}
-                <div className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2">
-                    <Clock className="text-muted-foreground h-4 w-4" />
-                    <div className="flex flex-1 items-center justify-between text-sm">
-                        <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatTime(kiosk.default_start_time)}</span>
-                        <span className="text-muted-foreground">—</span>
-                        <span className="font-medium text-rose-600 dark:text-rose-400">{formatTime(kiosk.default_end_time)}</span>
+                    <div className="text-muted-foreground truncate text-sm" title={locationName}>
+                        {locationName}
                     </div>
                 </div>
 
-                {/* Employees */}
-                <div className="flex items-center justify-between">
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                        <Users className="h-4 w-4" />
-                        <span>
-                            {employeeCount} employee{employeeCount !== 1 ? 's' : ''}
-                        </span>
-                    </div>
-                    {kiosk.employees && kiosk.employees.length > 0 && (
-                        <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex -space-x-2">
-                                        {kiosk.employees.slice(0, 4).map((employee, idx) => (
-                                            <Avatar
-                                                key={employee.name + idx}
-                                                className="border-background h-7 w-7 border-2 transition-transform hover:z-10 hover:scale-110"
-                                            >
-                                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                                                    {getInitials(employee.name)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                        ))}
-                                        {kiosk.employees.length > 4 && (
-                                            <Avatar className="border-background h-7 w-7 border-2">
-                                                <AvatarFallback className="bg-muted text-xs font-medium">
-                                                    +{kiosk.employees.length - 4}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                        )}
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="max-w-xs">
-                                    <p className="mb-1 text-xs font-medium">Assigned Employees</p>
-                                    <div className="text-muted-foreground text-xs">
-                                        {kiosk.employees
-                                            .slice(0, 8)
-                                            .map((e) => e.name)
-                                            .join(', ')}
-                                        {kiosk.employees.length > 8 && ` and ${kiosk.employees.length - 8} more`}
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
+                <div className="text-muted-foreground flex items-center gap-2 text-sm tabular-nums">
+                    <span>
+                        {formatTime(kiosk.default_start_time)} – {formatTime(kiosk.default_end_time)}
+                    </span>
+                    <span aria-hidden>·</span>
+                    <span>
+                        {employeeCount} employee{employeeCount !== 1 ? 's' : ''}
+                    </span>
                 </div>
+            </Link>
 
-                {/* Actions */}
-                <div className="mt-auto flex items-center gap-2 pt-2">
-                    <Link href={`/kiosks/${kiosk.id}`} className="flex-1">
-                        <Button className="w-full gap-2" size="sm">
-                            Open
-                            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                        </Button>
-                    </Link>
-                    <Link href={`/kiosks/${kiosk.id}/edit`}>
-                        <Button variant="outline" size="icon" className="h-9 w-9">
-                            <Settings className="h-4 w-4" />
-                        </Button>
-                    </Link>
-                </div>
-            </CardContent>
+            <Link href={`/kiosks/${kiosk.id}/edit`} className="absolute top-3 right-3">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Settings className="h-4 w-4" />
+                    <span className="sr-only">Settings</span>
+                </Button>
+            </Link>
         </Card>
     );
 };
