@@ -276,7 +276,9 @@ class RolesAndPermissionsSeeder extends Seeder
         'Employment Enquiries' => [
             'employment-applications.view' => 'View employment enquiries',
             'employment-applications.screen' => 'Screen enquiries (change status up to face-to-face, tick checklists)',
-            'employment-applications.approve' => 'Approve enquiries (move past face-to-face to approved)',
+            'employment-applications.whs-review' => 'Send enquiry to WHS Review',
+            'employment-applications.whs' => 'WHS reviewer (move from WHS Review to Final Review)',
+            'employment-applications.approve' => 'Approve enquiries (move from Final Review to approved)',
         ],
 
         // ============================================

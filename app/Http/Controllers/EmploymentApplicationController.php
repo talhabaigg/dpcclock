@@ -470,6 +470,20 @@ class EmploymentApplicationController extends Controller
             return back()->withErrors(['status' => 'Use the Send to Payroll action instead.']);
         }
 
+        // Gate: only users with 'whs-review' permission can move to "WHS Review"
+        if ($newStatus === EmploymentApplication::STATUS_WHS_REVIEW) {
+            if (! $request->user()->can('employment-applications.whs-review')) {
+                return back()->withErrors(['status' => 'You do not have permission to send enquiries to WHS Review.']);
+            }
+        }
+
+        // Gate: only users with 'whs' permission can move to "Final Review"
+        if ($newStatus === EmploymentApplication::STATUS_FINAL_REVIEW) {
+            if (! $request->user()->can('employment-applications.whs')) {
+                return back()->withErrors(['status' => 'You do not have permission to send enquiries to Final Review.']);
+            }
+        }
+
         // Gate: only users with 'approve' permission can move to "approved"
         if ($newStatus === EmploymentApplication::STATUS_APPROVED) {
             if (! $request->user()->can('employment-applications.approve')) {

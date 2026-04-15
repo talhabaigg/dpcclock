@@ -46,7 +46,7 @@ class PurchasingController extends Controller
         })
             ->with('worktypes', 'header');
 
-        if ($user->hasRole('site-supervisor')) {
+        if (! $user->hasPermissionTo('requisitions.view-all')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }
@@ -73,7 +73,7 @@ class PurchasingController extends Controller
                 ->orWhere('eh_parent_id', 1198645);
         })->with('worktypes', 'header');
 
-        if ($user->hasRole('site-supervisor')) {
+        if (! $user->hasPermissionTo('requisitions.view-all')) {
             $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
             $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
         }
@@ -761,9 +761,17 @@ class PurchasingController extends Controller
             return redirect()->route('requisition.show', $id)->with('error', 'Requisition is not in pending or failed status.');
         }
         $suppliers = Supplier::all();
-        $locations = Location::open()->where(function ($q) {
+        $locationsQuery = Location::open()->where(function ($q) {
             $q->where('eh_parent_id', 1149031)->orWhere('eh_parent_id', 1198645)->orWhere('eh_parent_id', 1249093);
-        })->get();
+        });
+
+        $user = auth()->user();
+        if (! $user->hasPermissionTo('requisitions.view-all')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $locationsQuery->whereIn('eh_location_id', $ehLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
         $costCodes = CostCode::select('id', 'code', 'description')->get();
 
         return Inertia::render('purchasing/create', [

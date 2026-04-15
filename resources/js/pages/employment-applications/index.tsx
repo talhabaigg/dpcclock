@@ -66,6 +66,8 @@ const STATUS_LABELS: Record<string, string> = {
     phone_interview: 'Phone Interview',
     reference_check: 'Reference Check',
     face_to_face: 'Face to Face',
+    whs_review: 'WHS Review',
+    final_review: 'Final Review',
     approved: 'Approved',
     contract_sent: 'Contract Sent',
     contract_signed: 'Contract Signed',
@@ -79,6 +81,8 @@ const STATUS_LANE_TOP: Record<string, string> = {
     phone_interview: 'border-t-blue-400',
     reference_check: 'border-t-orange-400',
     face_to_face: 'border-t-yellow-400',
+    whs_review: 'border-t-amber-500',
+    final_review: 'border-t-lime-500',
     approved: 'border-t-green-400',
     contract_sent: 'border-t-teal-400',
     contract_signed: 'border-t-emerald-500',
@@ -103,7 +107,7 @@ function formatDate(dateString: string) {
 }
 
 function appNumber(id: number) {
-    return `APP-${String(id).padStart(4, '0')}`;
+    return `ENQ-${String(id).padStart(4, '0')}`;
 }
 
 function occupationLabel(app: EmploymentApplication) {
@@ -678,7 +682,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
-                                        <TableHead className="px-3">App #</TableHead>
+                                        <TableHead className="px-3">Enquiry #</TableHead>
                                         <TableHead className="px-3">Name</TableHead>
                                         <TableHead className="px-3">Email</TableHead>
                                         <TableHead className="px-3">Phone</TableHead>

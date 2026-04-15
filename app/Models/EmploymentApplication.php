@@ -19,6 +19,8 @@ class EmploymentApplication extends Model
     public const STATUS_PHONE_INTERVIEW = 'phone_interview';
     public const STATUS_REFERENCE_CHECK = 'reference_check';
     public const STATUS_FACE_TO_FACE = 'face_to_face';
+    public const STATUS_WHS_REVIEW = 'whs_review';
+    public const STATUS_FINAL_REVIEW = 'final_review';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_CONTRACT_SENT = 'contract_sent';
     public const STATUS_CONTRACT_SIGNED = 'contract_signed';
@@ -31,6 +33,8 @@ class EmploymentApplication extends Model
         self::STATUS_PHONE_INTERVIEW,
         self::STATUS_REFERENCE_CHECK,
         self::STATUS_FACE_TO_FACE,
+        self::STATUS_WHS_REVIEW,
+        self::STATUS_FINAL_REVIEW,
         self::STATUS_APPROVED,
         self::STATUS_CONTRACT_SENT,
         self::STATUS_CONTRACT_SIGNED,

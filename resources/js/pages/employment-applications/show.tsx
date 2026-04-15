@@ -294,6 +294,8 @@ const STATUS_LABELS: Record<string, string> = {
     phone_interview: 'Phone Interview',
     reference_check: 'Reference Check',
     face_to_face: 'Face to Face',
+    whs_review: 'WHS Review',
+    final_review: 'Final Review',
     approved: 'Approved',
     contract_sent: 'Contract Sent',
     contract_signed: 'Contract Signed',
@@ -301,7 +303,7 @@ const STATUS_LABELS: Record<string, string> = {
     declined: 'Declined',
 };
 
-const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
+const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'whs_review', 'final_review', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
 
 /** Statuses set only by the system (signing service, event listeners, onboarding) — not user-selectable */
 const SYSTEM_STATUSES = ['contract_sent', 'contract_signed', 'onboarded'];
@@ -1893,6 +1895,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const permissions = auth.permissions ?? [];
     const canView = auth.isAdmin || permissions.includes('employment-applications.view');
     const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
+    const canWhsReview = auth.isAdmin || permissions.includes('employment-applications.whs-review');
+    const canWhs = auth.isAdmin || permissions.includes('employment-applications.whs');
     const canApprove = auth.isAdmin || permissions.includes('employment-applications.approve');
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
@@ -2304,7 +2308,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                     <SelectValue placeholder="Change status..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {SELECTABLE_STATUSES.filter((s) => s !== 'approved' || canApprove).map((s) => (
+                                                    {SELECTABLE_STATUSES.filter((s) => {
+                                                        if (s === 'whs_review') return canWhsReview;
+                                                        if (s === 'final_review') return canWhs;
+                                                        if (s === 'approved') return canApprove;
+                                                        return true;
+                                                    }).map((s) => (
                                                         <SelectItem key={s} value={s}>
                                                             {STATUS_LABELS[s]}
                                                         </SelectItem>
