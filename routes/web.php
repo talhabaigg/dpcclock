@@ -115,6 +115,13 @@ Route::middleware('throttle:30,1')->group(function () {
     Route::get('/form/{token}/thank-you', [FormRequestController::class, 'thankYou'])->name('form.thank-you');
 });
 
+// Public SDS register (no auth — QR-accessible)
+Route::middleware('throttle:120,1')->group(function () {
+    Route::get('/public/sds', [SafetyDataSheetController::class, 'publicIndex'])->name('sds.public.index');
+    Route::get('/public/sds/{sd}/download', [SafetyDataSheetController::class, 'publicDownload'])->name('sds.public.download');
+    Route::get('/public/sds/{sd}/files/{mediaId}', [SafetyDataSheetController::class, 'publicDownloadOtherFile'])->name('sds.public.download-file');
+});
+
 Route::get('/notifications/mark-all-read', function () {
     $user = auth()->user();
     $user->unreadNotifications->markAsRead();

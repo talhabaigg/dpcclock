@@ -12,9 +12,10 @@ import { type BreadcrumbItem } from '@/types';
 import PaginationComponent, { type PaginationData } from '@/components/index-pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { AlertTriangle, CircleCheck, Download, FileText, Loader2, MoreVertical, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CircleCheck, Download, FileText, Loader2, MoreVertical, Pencil, Plus, Printer, QrCode, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
+import { QRCodeSVG } from 'qrcode.react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'SDS Register', href: '/sds' }];
 
@@ -110,6 +111,91 @@ export default function SdsIndex() {
 
     // Delete dialog
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // QR dialog
+    const [showQrDialog, setShowQrDialog] = useState(false);
+    const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/public/sds` : '/public/sds';
+
+    const handlePrintQr = () => {
+        const svg = document.getElementById('sds-public-qr')?.outerHTML ?? '';
+        const win = window.open('', '_blank', 'width=800,height=900');
+        if (!win) return;
+        const logoUrl = `${window.location.origin}/logo.png`;
+        win.document.write(`<!doctype html><html><head><title>SDS Register QR Code</title>
+            <style>
+                @page { size: A4 portrait; margin: 15mm; }
+                * { box-sizing: border-box; }
+                html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+                body { font-family: system-ui, -apple-system, sans-serif; text-align: center; }
+                .card {
+                    width: 100%;
+                    max-width: 180mm;
+                    margin: 0 auto;
+                    border: 3px solid #111;
+                    border-radius: 6mm;
+                    padding: 14mm 12mm;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+                .logo { height: 22mm; width: auto; margin-bottom: 8mm; }
+                h1 { font-size: 28pt; margin: 0 0 2mm; letter-spacing: -0.01em; font-weight: 700; }
+                h2 { font-size: 14pt; margin: 0 0 8mm; color: #444; font-weight: 500; }
+                .qr {
+                    padding: 6mm;
+                    background: #fff;
+                    border: 1px solid #ddd;
+                    border-radius: 3mm;
+                    margin-bottom: 8mm;
+                }
+                .qr svg { width: 110mm; height: 110mm; display: block; }
+                .instructions { font-size: 12pt; color: #222; line-height: 1.5; margin-bottom: 5mm; }
+                .url {
+                    font-size: 9pt;
+                    color: #555;
+                    word-break: break-all;
+                    font-family: ui-monospace, 'Courier New', monospace;
+                    margin-bottom: 6mm;
+                }
+                .footer {
+                    padding-top: 4mm;
+                    border-top: 1px solid #ddd;
+                    font-size: 9pt;
+                    color: #777;
+                    width: 100%;
+                }
+                @media print {
+                    html, body { width: 210mm; height: 297mm; }
+                    .card { border-width: 2pt; page-break-inside: avoid; }
+                }
+            </style></head><body>
+            <div class="card">
+                <img class="logo" src="${logoUrl}" alt="DPC" />
+                <h1>SDS Register</h1>
+                <h2>Scan to view the register</h2>
+                <div class="qr">${svg}</div>
+                <div class="instructions">
+                    Point your phone camera at the code above to access all<br/>
+                    product safety data sheets. No login required.
+                </div>
+                <div class="url">${publicUrl}</div>
+                <div class="footer">For safety enquiries, contact your site supervisor.</div>
+            </div>
+            <script>
+                window.onload = () => {
+                    const img = document.querySelector('img.logo');
+                    const doPrint = () => { window.focus(); window.print(); };
+                    if (img && !img.complete) {
+                        img.onload = () => setTimeout(doPrint, 100);
+                        img.onerror = () => setTimeout(doPrint, 100);
+                    } else {
+                        setTimeout(doPrint, 250);
+                    }
+                };
+            </script>
+            </body></html>`);
+        win.document.close();
+    };
 
     useEffect(() => {
         if (flash?.success) setAlertMessage({ type: 'success', text: flash.success });
@@ -242,10 +328,16 @@ export default function SdsIndex() {
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">SDS Register</h2>
-                    <Button size="sm" onClick={openCreate} className="gap-1.5">
-                        <Plus size={14} />
-                        Add SDS
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowQrDialog(true)} className="gap-1.5">
+                            <QrCode size={14} />
+                            Public QR
+                        </Button>
+                        <Button size="sm" onClick={openCreate} className="gap-1.5">
+                            <Plus size={14} />
+                            Add SDS
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Filters */}
@@ -584,6 +676,39 @@ export default function SdsIndex() {
                         <Button variant="link" onClick={() => setShowDialog(false)} disabled={submitting}>
                             Cancel
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Public QR Dialog */}
+            <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <QrCode className="h-5 w-5" />
+                            Public SDS Register QR
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center gap-4 py-2">
+                        <p className="text-muted-foreground text-center text-sm">
+                            Print this QR code and post it on site. Anyone who scans it can view and download SDS files without logging in.
+                        </p>
+                        <div className="rounded-xl border-2 border-primary/20 bg-white p-4 shadow-lg shadow-primary/5">
+                            <QRCodeSVG id="sds-public-qr" value={publicUrl} size={240} level="M" includeMargin={false} />
+                        </div>
+                        <div className="w-full rounded-lg bg-muted/50 p-3">
+                            <p className="text-muted-foreground text-center text-xs break-all">{publicUrl}</p>
+                        </div>
+                        <div className="flex w-full gap-2">
+                            <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={() => { navigator.clipboard.writeText(publicUrl); }}>
+                                <FileText className="h-4 w-4" />
+                                Copy Link
+                            </Button>
+                            <Button size="sm" className="flex-1 gap-2" onClick={handlePrintQr}>
+                                <Printer className="h-4 w-4" />
+                                Print
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

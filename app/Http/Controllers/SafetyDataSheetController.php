@@ -165,4 +165,65 @@ class SafetyDataSheetController extends Controller
 
         return $media;
     }
+
+    public function publicIndex(Request $request)
+    {
+        $query = SafetyDataSheet::with(['media']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('product_name', 'like', "%{$search}%")
+                  ->orWhere('manufacturer', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('manufacturer')) {
+            $query->where('manufacturer', $request->manufacturer);
+        }
+
+        $sds = $query->orderBy('product_name')->paginate(50)->withQueryString();
+
+        $manufacturers = SafetyDataSheet::distinct()->orderBy('manufacturer')->pluck('manufacturer');
+
+        return Inertia::render('sds/public', [
+            'sds' => $sds,
+            'filters' => $request->only(['search', 'manufacturer']),
+            'manufacturers' => $manufacturers,
+        ]);
+    }
+
+    public function publicDownload(SafetyDataSheet $sd)
+    {
+        $media = $sd->getFirstMedia('sds_file');
+        abort_unless($media, 404);
+
+        return $this->serveInline($media);
+    }
+
+    public function publicDownloadOtherFile(SafetyDataSheet $sd, int $mediaId)
+    {
+        $media = $sd->media()->where('id', $mediaId)->where('collection_name', 'other_files')->first();
+        abort_unless($media, 404);
+
+        return $this->serveInline($media);
+    }
+
+    private function serveInline(\Spatie\MediaLibrary\MediaCollections\Models\Media $media)
+    {
+        $filename = $media->file_name;
+
+        if (app()->environment('production')) {
+            return redirect($media->getTemporaryUrl(now()->addMinutes(30), '', [
+                'ResponseContentDisposition' => 'inline; filename="' . addslashes($filename) . '"',
+                'ResponseContentType' => $media->mime_type,
+            ]));
+        }
+
+        return response()->file($media->getPath(), [
+            'Content-Type' => $media->mime_type,
+            'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+        ]);
+    }
 }
