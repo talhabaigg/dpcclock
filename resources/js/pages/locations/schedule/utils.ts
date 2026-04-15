@@ -1,26 +1,57 @@
-import { addDays, differenceInCalendarDays, format, isWeekend, min, max, parseISO, startOfDay } from 'date-fns';
-import type { ProjectTask, SortMode, TaskLink, TaskNode } from './types';
+import { addDays, differenceInCalendarDays, format, min, max, parseISO, startOfDay } from 'date-fns';
+import type { ProjectTask, SortMode, TaskLink, TaskNode, TaskStatus } from './types';
+
+/**
+ * Effective status for a task — manual override if set, otherwise derived from progress + dates.
+ *  - progress >= 100 → done
+ *  - past end_date and progress < 100 → overdue
+ *  - progress > 0 → in_progress
+ *  - else → not_started
+ */
+export function getEffectiveStatus(task: { status: TaskStatus | null; progress: number | null; start_date: string | null; end_date: string | null }): TaskStatus {
+    if (task.status) return task.status;
+    const progress = task.progress ?? 0;
+    if (progress >= 100) return 'done';
+    const today = startOfDay(new Date());
+    if (task.end_date && startOfDay(parseISO(task.end_date)) < today && progress < 100) return 'overdue';
+    if (progress > 0) return 'in_progress';
+    return 'not_started';
+}
 
 // ── Working Days ──
 
-export type NonWorkDayType = 'public_holiday' | 'rdo';
+export type NonWorkDayType = 'public_holiday' | 'rdo' | 'project';
 
 /** Module-level calendar of state-scoped non-work days. Keyed by YYYY-MM-DD. */
 let NON_WORK_DAY_MAP: Map<string, NonWorkDayType> = new Map();
+
+/** JS day-of-week indices (0=Sun..6=Sat) considered working for this project. */
+let WORKING_DAYS: Set<number> = new Set([1, 2, 3, 4, 5]);
 
 /** Load the page's non-work-day list into the module-level calendar. Call once at page mount. */
 export function setNonWorkDays(entries: { date: string; type: NonWorkDayType }[]): void {
     NON_WORK_DAY_MAP = new Map(entries.map((e) => [e.date, e.type]));
 }
 
-/** Returns the non-work-day type for a date, or null if it's a regular workday. Weekends → 'weekend' (treated as null in type queries since no entry). */
+/** Configure the project's working week. Defaults to Mon-Fri when empty. */
+export function setWorkingDays(days: number[] | null | undefined): void {
+    const next = (days ?? []).filter((d) => d >= 0 && d <= 6);
+    WORKING_DAYS = next.length ? new Set(next) : new Set([1, 2, 3, 4, 5]);
+}
+
+/** Returns the non-work-day type for a date, or null if it's a regular workday. */
 export function getNonWorkDayType(date: Date): NonWorkDayType | null {
     return NON_WORK_DAY_MAP.get(format(date, 'yyyy-MM-dd')) ?? null;
 }
 
-/** Single source of truth for "is this a non-work day?". Weekends + state-scoped holidays/RDOs. */
+/** True if the weekday is outside the project's working week. */
+export function isNonWorkingWeekday(date: Date): boolean {
+    return !WORKING_DAYS.has(date.getDay());
+}
+
+/** Single source of truth for "is this a non-work day?". Non-working weekdays + global holidays/RDOs + project days. */
 export function isNonWorkDay(date: Date): boolean {
-    if (isWeekend(date)) return true;
+    if (isNonWorkingWeekday(date)) return true;
     return NON_WORK_DAY_MAP.has(format(date, 'yyyy-MM-dd'));
 }
 

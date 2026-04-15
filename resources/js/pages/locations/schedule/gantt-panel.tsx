@@ -1,11 +1,11 @@
-import { isWeekend, startOfDay } from 'date-fns';
+import { startOfDay } from 'date-fns';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { TaskLink, TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
 import DependencyArrows from './dependency-arrows';
 import GanttHeader from './gantt-header';
 import GanttRow from './gantt-row';
-import { dateToX, getNonWorkDayType } from './utils';
+import { dateToX, getNonWorkDayType, isNonWorkingWeekday } from './utils';
 
 interface GanttPanelProps {
     visibleTasks: TaskNode[];
@@ -139,18 +139,20 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
                             onMouseMove={handleMouseMove}
                             onClick={handleBodyClick}
                         >
-                            {/* Non-work-day background stripes — weekend (gray), RDO (amber), public holiday (red) */}
+                            {/* Non-work-day background stripes — off-days (gray), RDO (amber), public holiday (blue), project (rose) */}
                             <div className="pointer-events-none absolute inset-0" style={{ width: totalWidth }}>
                                 {days.map((day, i) => {
                                     const nwdType = getNonWorkDayType(day);
-                                    const weekend = isWeekend(day);
+                                    const weekend = isNonWorkingWeekday(day);
                                     if (!nwdType && !weekend) return null;
-                                    // Priority: public holiday > RDO > weekend (most explicit wins).
-                                    const bg = nwdType === 'public_holiday'
-                                        ? 'bg-blue-300/30'
-                                        : nwdType === 'rdo'
-                                            ? 'bg-amber-300/30'
-                                            : 'bg-muted/40';
+                                    // Priority: project > public holiday > RDO > non-working weekday.
+                                    const bg = nwdType === 'project'
+                                        ? 'bg-rose-300/30'
+                                        : nwdType === 'public_holiday'
+                                            ? 'bg-blue-300/30'
+                                            : nwdType === 'rdo'
+                                                ? 'bg-amber-300/30'
+                                                : 'bg-muted/40';
                                     return (
                                         <div
                                             key={i}

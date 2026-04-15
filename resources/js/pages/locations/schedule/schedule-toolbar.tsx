@@ -8,12 +8,16 @@ import {
     MenubarItem,
     MenubarMenu,
     MenubarSeparator,
+    MenubarSub,
+    MenubarSubContent,
+    MenubarSubTrigger,
     MenubarTrigger,
 } from '@/components/ui/menubar';
 import { cn } from '@/lib/utils';
-import { ArrowDownUp, CalendarDays, HardHat, Maximize2, Search, X } from 'lucide-react';
-import type { FilterFlag, SortMode, ZoomLevel } from './types';
-import { SORT_MODE_LABELS } from './types';
+import { Link } from '@inertiajs/react';
+import { ArrowDownUp, CalendarDays, CalendarRange, HardHat, Maximize2, Search, X } from 'lucide-react';
+import type { ColumnKey, ColumnVisibility, FilterFlag, SortMode, ZoomLevel } from './types';
+import { COLUMN_LABELS, SORT_MODE_LABELS } from './types';
 
 interface ScheduleToolbarProps {
     zoom: ZoomLevel;
@@ -49,6 +53,9 @@ interface ScheduleToolbarProps {
     endDateRange: { from: string | null; to: string | null };
     onClearEndDateRange: () => void;
     importButton?: React.ReactNode;
+    calendarHref?: string;
+    visibleColumns: ColumnVisibility;
+    onToggleColumn: (key: ColumnKey) => void;
 }
 
 const VIEW_OPTIONS: { key: ZoomLevel; label: string }[] = [
@@ -92,7 +99,11 @@ export default function ScheduleToolbar({
     endDateRange,
     onClearEndDateRange,
     importButton,
+    calendarHref,
+    visibleColumns,
+    onToggleColumn,
 }: ScheduleToolbarProps) {
+    const columnKeys: ColumnKey[] = ['start', 'finish', 'days', 'responsible', 'status'];
     return (
         <div className="flex flex-col">
             {/* Menu bar row */}
@@ -154,6 +165,20 @@ export default function ScheduleToolbar({
                             >
                                 Show Baseline
                             </MenubarCheckboxItem>
+                            <MenubarSub>
+                                <MenubarSubTrigger inset>Columns</MenubarSubTrigger>
+                                <MenubarSubContent>
+                                    {columnKeys.map((key) => (
+                                        <MenubarCheckboxItem
+                                            key={key}
+                                            checked={visibleColumns[key]}
+                                            onCheckedChange={() => onToggleColumn(key)}
+                                        >
+                                            {COLUMN_LABELS[key]}
+                                        </MenubarCheckboxItem>
+                                    ))}
+                                </MenubarSubContent>
+                            </MenubarSub>
                             <MenubarSeparator />
                             <MenubarItem inset onClick={onExpandAll}>
                                 Expand All Tasks
@@ -185,7 +210,15 @@ export default function ScheduleToolbar({
                 </Menubar>
 
                 {/* Import dialog (hidden, triggered via File > Import menu item) */}
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-2">
+                    {calendarHref && (
+                        <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 text-xs">
+                            <Link href={calendarHref}>
+                                <CalendarRange className="h-3.5 w-3.5" />
+                                Project Calendar
+                            </Link>
+                        </Button>
+                    )}
                     {importButton}
                 </div>
             </div>

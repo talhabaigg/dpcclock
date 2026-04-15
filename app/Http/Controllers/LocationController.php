@@ -188,14 +188,15 @@ class LocationController extends Controller
 
         $links = \App\Models\ProjectTaskLink::where('location_id', $location->id)->get();
 
-        // Non-work days pulled from timesheet_events scoped to this location's state.
+        // Non-work days pulled from timesheet_events scoped to this location's state,
+        // unioned with this project's own non-work days (safety/weather/industrial_action/other).
         // Each row expands to one entry per calendar day between start and end inclusive.
         $state = $location->state ?? 'QLD';
+        $nonWorkDays = [];
+
         $events = \App\Models\TimesheetEvent::where('state', $state)
             ->whereIn('type', ['public_holiday', 'rdo'])
             ->get(['title', 'start', 'end', 'type']);
-
-        $nonWorkDays = [];
         foreach ($events as $e) {
             $cursor = \Illuminate\Support\Carbon::parse($e->start);
             $end = \Illuminate\Support\Carbon::parse($e->end);
@@ -209,11 +210,40 @@ class LocationController extends Controller
             }
         }
 
+        $projectNwd = $location->nonWorkDays()->get(['title', 'start', 'end', 'type']);
+        foreach ($projectNwd as $e) {
+            $cursor = \Illuminate\Support\Carbon::parse($e->start);
+            $end = \Illuminate\Support\Carbon::parse($e->end);
+            while ($cursor->lte($end)) {
+                $nonWorkDays[] = [
+                    'date' => $cursor->format('Y-m-d'),
+                    'type' => 'project', // distinct from global types so gantt can color-code
+                    'subtype' => $e->type, // safety | industrial_action | weather | other
+                    'label' => $e->title,
+                ];
+                $cursor->addDay();
+            }
+        }
+
+        // Active labour pay rate templates for the Resource picker on tasks.
+        $payRateTemplates = $location->labourForecastTemplates()
+            ->with('payRateTemplate:id,name')
+            ->get(['id', 'location_id', 'pay_rate_template_id', 'custom_label', 'hourly_rate', 'sort_order'])
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'label' => $t->custom_label ?: ($t->payRateTemplate?->name ?? 'Template #' . $t->id),
+                'hourly_rate' => (float) $t->hourly_rate,
+                'sort_order' => $t->sort_order,
+            ])
+            ->values();
+
         return Inertia::render('locations/schedule', [
             'location' => $location,
             'tasks' => $tasks,
             'links' => $links,
             'nonWorkDays' => $nonWorkDays,
+            'workingDays' => $location->working_days_resolved,
+            'payRateTemplates' => $payRateTemplates,
         ]);
     }
 

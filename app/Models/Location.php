@@ -17,6 +17,7 @@ class Location extends Model
         'eh_parent_id',
         'external_id',
         'state',
+        'working_days',
         'dashboard_settings',
         'closed_at',
         'closed_by',
@@ -27,8 +28,19 @@ class Location extends Model
 
     protected $casts = [
         'dashboard_settings' => 'array',
+        'working_days' => 'array',
         'closed_at' => 'datetime',
     ];
+
+    /** JS day-of-week indices (0=Sun..6=Sat) considered working. Defaults to Mon-Fri. */
+    public function getWorkingDaysResolvedAttribute(): array
+    {
+        $days = $this->working_days;
+        if (!is_array($days) || empty($days)) {
+            return [1, 2, 3, 4, 5];
+        }
+        return array_values(array_unique(array_map('intval', $days)));
+    }
 
     public function scopeOpen($query)
     {
@@ -180,5 +192,10 @@ class Location extends Model
     public function projectTasks()
     {
         return $this->hasMany(ProjectTask::class);
+    }
+
+    public function nonWorkDays()
+    {
+        return $this->hasMany(ProjectNonWorkDay::class);
     }
 }

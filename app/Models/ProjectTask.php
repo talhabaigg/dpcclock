@@ -22,6 +22,10 @@ class ProjectTask extends Model
         'color',
         'is_critical',
         'is_owned',
+        'headcount',
+        'location_pay_rate_template_id',
+        'responsible',
+        'status',
         'created_by',
         'updated_by',
     ];
@@ -34,6 +38,7 @@ class ProjectTask extends Model
         'progress' => 'float',
         'is_critical' => 'boolean',
         'is_owned' => 'boolean',
+        'headcount' => 'integer',
     ];
 
     protected static function booted(): void
@@ -71,6 +76,11 @@ class ProjectTask extends Model
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function payRateTemplate()
+    {
+        return $this->belongsTo(LocationPayRateTemplate::class, 'location_pay_rate_template_id');
     }
 
     public function outgoingLinks()

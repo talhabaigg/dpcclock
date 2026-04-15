@@ -21,6 +21,15 @@ class ProjectTaskController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'color' => 'nullable|string|max:7',
             'is_critical' => 'sometimes|boolean',
+            'headcount' => 'nullable|integer|min:0|max:9999',
+            'location_pay_rate_template_id' => [
+                'nullable',
+                'integer',
+                \Illuminate\Validation\Rule::exists('location_pay_rate_templates', 'id')
+                    ->where('location_id', $location->id),
+            ],
+            'responsible' => 'nullable|string|max:255',
+            'status' => 'nullable|in:not_started,in_progress,blocked,done',
         ]);
 
         $maxSort = $location->projectTasks()
@@ -28,7 +37,7 @@ class ProjectTaskController extends Controller
             ->max('sort_order') ?? -1;
 
         $task = $location->projectTasks()->create([
-            ...$this->snapTaskDates($validated, $location->state ?? 'QLD'),
+            ...$this->snapTaskDates($validated, $location),
             'sort_order' => $maxSort + 1,
         ]);
 
@@ -48,9 +57,19 @@ class ProjectTaskController extends Controller
             'color' => 'sometimes|nullable|string|max:7',
             'is_critical' => 'sometimes|boolean',
             'is_owned' => 'sometimes|boolean',
+            'headcount' => 'sometimes|nullable|integer|min:0|max:9999',
+            'location_pay_rate_template_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                \Illuminate\Validation\Rule::exists('location_pay_rate_templates', 'id')
+                    ->where('location_id', $task->location_id),
+            ],
+            'responsible' => 'sometimes|nullable|string|max:255',
+            'status' => 'sometimes|nullable|in:not_started,in_progress,blocked,done',
         ]);
 
-        $task->update($this->snapTaskDates($validated, $task->location->state ?? 'QLD'));
+        $task->update($this->snapTaskDates($validated, $task->location));
 
         return response()->json($task->fresh());
     }
@@ -62,7 +81,7 @@ class ProjectTaskController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        $task->update($this->snapTaskDates($validated, $task->location->state ?? 'QLD'));
+        $task->update($this->snapTaskDates($validated, $task->location));
 
         return response()->json($task->fresh());
     }
@@ -193,8 +212,8 @@ class ProjectTaskController extends Controller
             $task = $location->projectTasks()->create([
                 'parent_id' => $parentId,
                 'name' => $name,
-                'start_date' => $this->snapToWorkday($this->parseDate($row['start_date'] ?? null), 'forward', $location->state ?? 'QLD'),
-                'end_date' => $this->snapToWorkday($this->parseDate($row['end_date'] ?? null), 'backward', $location->state ?? 'QLD'),
+                'start_date' => $this->snapToWorkday($this->parseDate($row['start_date'] ?? null), 'forward', $location),
+                'end_date' => $this->snapToWorkday($this->parseDate($row['end_date'] ?? null), 'backward', $location),
                 'sort_order' => $index,
             ]);
 
@@ -559,22 +578,24 @@ class ProjectTaskController extends Controller
     }
 
     /**
-     * Cache of non-work day YYYY-MM-DD strings keyed by state, built from timesheet_events.
-     * Populated lazily the first time snapToWorkday is called within a request.
+     * Cache of non-work day YYYY-MM-DD strings keyed by location, built from
+     * timesheet_events (state-scoped) plus per-project non-work days.
      */
     private ?array $nonWorkDayCache = null;
-    private ?string $nonWorkDayState = null;
+    private ?int $nonWorkDayLocationId = null;
 
-    private function loadNonWorkDays(string $state): array
+    private function loadNonWorkDays(Location $location): array
     {
-        if ($this->nonWorkDayCache !== null && $this->nonWorkDayState === $state) {
+        if ($this->nonWorkDayCache !== null && $this->nonWorkDayLocationId === $location->id) {
             return $this->nonWorkDayCache;
         }
         $set = [];
-        $events = \App\Models\TimesheetEvent::where('state', $state)
+        $state = $location->state ?? 'QLD';
+
+        $globals = \App\Models\TimesheetEvent::where('state', $state)
             ->whereIn('type', ['public_holiday', 'rdo'])
             ->get(['start', 'end']);
-        foreach ($events as $e) {
+        foreach ($globals as $e) {
             $cursor = Carbon::parse($e->start);
             $end = Carbon::parse($e->end);
             while ($cursor->lte($end)) {
@@ -582,19 +603,31 @@ class ProjectTaskController extends Controller
                 $cursor->addDay();
             }
         }
+
+        $project = $location->nonWorkDays()->get(['start', 'end']);
+        foreach ($project as $e) {
+            $cursor = Carbon::parse($e->start);
+            $end = Carbon::parse($e->end);
+            while ($cursor->lte($end)) {
+                $set[$cursor->format('Y-m-d')] = true;
+                $cursor->addDay();
+            }
+        }
+
         $this->nonWorkDayCache = $set;
-        $this->nonWorkDayState = $state;
+        $this->nonWorkDayLocationId = $location->id;
         return $set;
     }
 
     /**
      * Single source of truth for "is this a non-work day?".
-     * Weekends + state-scoped public holidays/RDOs from timesheet_events.
+     * Non-working weekdays (per location) + global holidays/RDOs + project-specific non-work days.
      */
-    private function isNonWorkDay(Carbon $date, string $state = 'QLD'): bool
+    private function isNonWorkDay(Carbon $date, Location $location): bool
     {
-        if ($date->isWeekend()) return true;
-        $set = $this->loadNonWorkDays($state);
+        $workingDays = $location->working_days_resolved; // JS day indices 0-6
+        if (!in_array($date->dayOfWeek, $workingDays, true)) return true;
+        $set = $this->loadNonWorkDays($location);
         return isset($set[$date->format('Y-m-d')]);
     }
 
@@ -602,7 +635,7 @@ class ProjectTaskController extends Controller
      * Snap a date to the nearest working day. Use 'forward' for start dates,
      * 'backward' for end dates. Accepts 'Y-m-d' (or any Carbon-parseable string).
      */
-    private function snapToWorkday(?string $value, string $direction, string $state = 'QLD'): ?string
+    private function snapToWorkday(?string $value, string $direction, Location $location): ?string
     {
         if (!$value) return null;
         try {
@@ -611,19 +644,19 @@ class ProjectTaskController extends Controller
             return null;
         }
         $step = $direction === 'forward' ? 1 : -1;
-        while ($this->isNonWorkDay($d, $state)) {
+        while ($this->isNonWorkDay($d, $location)) {
             $d->addDays($step);
         }
         return $d->format('Y-m-d');
     }
 
     /** Snap the four task date fields (start/end/baseline_start/baseline_finish) in-place on a validated payload. */
-    private function snapTaskDates(array $data, string $state = 'QLD'): array
+    private function snapTaskDates(array $data, Location $location): array
     {
-        if (array_key_exists('start_date', $data))       $data['start_date']       = $this->snapToWorkday($data['start_date'], 'forward', $state);
-        if (array_key_exists('end_date', $data))         $data['end_date']         = $this->snapToWorkday($data['end_date'], 'backward', $state);
-        if (array_key_exists('baseline_start', $data))   $data['baseline_start']   = $this->snapToWorkday($data['baseline_start'], 'forward', $state);
-        if (array_key_exists('baseline_finish', $data)) $data['baseline_finish']  = $this->snapToWorkday($data['baseline_finish'], 'backward', $state);
+        if (array_key_exists('start_date', $data))       $data['start_date']       = $this->snapToWorkday($data['start_date'], 'forward', $location);
+        if (array_key_exists('end_date', $data))         $data['end_date']         = $this->snapToWorkday($data['end_date'], 'backward', $location);
+        if (array_key_exists('baseline_start', $data))   $data['baseline_start']   = $this->snapToWorkday($data['baseline_start'], 'forward', $location);
+        if (array_key_exists('baseline_finish', $data)) $data['baseline_finish']  = $this->snapToWorkday($data['baseline_finish'], 'backward', $location);
         return $data;
     }
 

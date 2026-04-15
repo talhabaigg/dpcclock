@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Check } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { PRESET_COLORS } from './types';
+import { MANUAL_STATUSES, PRESET_COLORS, STATUS_LABELS, type PayRateTemplateOption, type TaskStatus } from './types';
 import { isNonWorkDay, snapToWorkday } from './utils';
 
 const toDate = (s: string): Date | undefined => (s ? parseISO(s) : undefined);
@@ -28,12 +28,18 @@ interface AddTaskDialogProps {
         end_date: string | null;
         color: string | null;
         is_critical: boolean;
+        headcount: number | null;
+        location_pay_rate_template_id: number | null;
+        responsible: string | null;
+        status: TaskStatus | null;
     }) => void;
     parentId: number | null;
     parentName: string | null;
+    payRateTemplates: PayRateTemplateOption[];
+    responsibleOptions: string[];
 }
 
-export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, parentName }: AddTaskDialogProps) {
+export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, parentName, payRateTemplates, responsibleOptions }: AddTaskDialogProps) {
     const [name, setName] = useState('');
     const [baselineStart, setBaselineStart] = useState('');
     const [baselineFinish, setBaselineFinish] = useState('');
@@ -41,6 +47,10 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
     const [endDate, setEndDate] = useState('');
     const [color, setColor] = useState<string | null>(null);
     const [isCritical, setIsCritical] = useState(false);
+    const [headcount, setHeadcount] = useState('');
+    const [templateId, setTemplateId] = useState<string>('');
+    const [responsible, setResponsible] = useState('');
+    const [status, setStatus] = useState<TaskStatus | ''>('');
 
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
@@ -57,6 +67,10 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
             end_date: snapStr(endDate, 'backward') || null,
             color,
             is_critical: isCritical,
+            headcount: headcount ? Math.max(0, parseInt(headcount, 10) || 0) : null,
+            location_pay_rate_template_id: templateId ? parseInt(templateId, 10) : null,
+            responsible: responsible.trim() || null,
+            status: status || null,
         });
 
         setName('');
@@ -66,6 +80,10 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
         setEndDate('');
         setColor(null);
         setIsCritical(false);
+        setHeadcount('');
+        setTemplateId('');
+        setResponsible('');
+        setStatus('');
         onOpenChange(false);
     }
 
@@ -127,6 +145,73 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                     displayFormat="dd MMM yyyy"
                                     disabled={isNonWorkDay}
                                 />
+                            </div>
+                        </div>
+
+                        {/* Resource row */}
+                        <div className="grid grid-cols-[100px_1fr] gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="task-headcount">Headcount</Label>
+                                <Input
+                                    id="task-headcount"
+                                    type="number"
+                                    min={0}
+                                    max={9999}
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    value={headcount}
+                                    onChange={(e) => setHeadcount(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="task-template">Resource (Pay Rate Template)</Label>
+                                <select
+                                    id="task-template"
+                                    value={templateId}
+                                    onChange={(e) => setTemplateId(e.target.value)}
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                >
+                                    <option value="">— None —</option>
+                                    {payRateTemplates.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                            {t.label}
+                                            {t.hourly_rate > 0 ? ` — $${t.hourly_rate.toFixed(2)}/hr` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Responsible + Status row */}
+                        <div className="grid grid-cols-[1fr_160px] gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="task-responsible">Responsible</Label>
+                                <Input
+                                    id="task-responsible"
+                                    list="task-responsible-options"
+                                    value={responsible}
+                                    onChange={(e) => setResponsible(e.target.value)}
+                                    placeholder="e.g. John Smith, Head Office"
+                                />
+                                <datalist id="task-responsible-options">
+                                    {responsibleOptions.map((opt) => (
+                                        <option key={opt} value={opt} />
+                                    ))}
+                                </datalist>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="task-status">Status</Label>
+                                <select
+                                    id="task-status"
+                                    value={status}
+                                    onChange={(e) => setStatus(e.target.value as TaskStatus | '')}
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                >
+                                    <option value="">Auto</option>
+                                    {MANUAL_STATUSES.map((s) => (
+                                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 

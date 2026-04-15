@@ -1,15 +1,16 @@
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical, IndentDecrease, IndentIncrease, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical, IndentDecrease, IndentIncrease, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
-import { ROW_HEIGHT, type TaskNode } from './types';
-import { countWorkingDays, isNonWorkDay, snapToWorkday } from './utils';
+import { MANUAL_STATUSES, ROW_HEIGHT, STATUS_COLORS, STATUS_LABELS, type ColumnVisibility, type TaskNode, type TaskStatus } from './types';
+import { countWorkingDays, getEffectiveStatus, isNonWorkDay, snapToWorkday } from './utils';
 
 interface TaskTreeRowProps {
     node: TaskNode;
@@ -20,10 +21,15 @@ interface TaskTreeRowProps {
     onDelete: (id: number) => void;
     onRename: (id: number, name: string) => void;
     onDatesChange: (id: number, startDate: string, endDate: string) => void;
+    onResponsibleChange: (id: number, value: string | null) => void;
+    responsibleOptions: string[];
+    onStatusChange: (id: number, status: TaskStatus | null) => void;
+    visibleColumns: ColumnVisibility;
     onIndent: (id: number) => void;
     onOutdent: (id: number) => void;
     canIndent: boolean;
     canOutdent: boolean;
+    resourceLabel: string | null;
 }
 
 function formatDisplayDate(dateStr: string | null): string {
@@ -73,7 +79,145 @@ function DateCell({ value, onChange, disabled }: { value: string | null; onChang
     );
 }
 
-function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onIndent, onOutdent, canIndent, canOutdent, showBaseline }: TaskTreeRowProps) {
+function ResponsibleCell({ value, options, onChange }: { value: string | null; options: string[]; onChange: (value: string | null) => void }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+
+    const trimmed = query.trim();
+    const q = trimmed.toLowerCase();
+    const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+    const exists = trimmed && options.some((o) => o.toLowerCase() === q);
+
+    function commit(next: string | null) {
+        onChange(next);
+        setOpen(false);
+        setQuery('');
+    }
+
+    return (
+        <Popover
+            open={open}
+            onOpenChange={(v) => {
+                setOpen(v);
+                if (!v) setQuery('');
+            }}
+        >
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'flex h-full w-full items-center gap-1 px-1 text-[11px] hover:text-primary',
+                        !value && 'text-muted-foreground',
+                    )}
+                    title={value ?? 'Assign responsible party'}
+                >
+                    <span className="flex-1 truncate text-center">{value || '—'}</span>
+                    {value && (
+                        <span
+                            role="button"
+                            tabIndex={-1}
+                            aria-label="Clear"
+                            className="text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                commit(null);
+                            }}
+                        >
+                            <X className="h-3 w-3" />
+                        </span>
+                    )}
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0" align="start" side="bottom">
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder="Search or create..."
+                        className="h-8 text-xs"
+                        value={query}
+                        onValueChange={setQuery}
+                    />
+                    <CommandList className="max-h-[220px]">
+                        <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">
+                            {trimmed ? 'No matches — use Create below.' : 'No options yet.'}
+                        </CommandEmpty>
+                        {filtered.length > 0 && (
+                            <CommandGroup>
+                                {filtered.map((opt) => (
+                                    <CommandItem
+                                        key={opt}
+                                        value={opt}
+                                        onSelect={() => commit(opt)}
+                                        className="text-xs"
+                                    >
+                                        {opt}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        )}
+                        {trimmed && !exists && (
+                            <CommandGroup heading="Create">
+                                <CommandItem
+                                    value={`__create__${trimmed}`}
+                                    onSelect={() => commit(trimmed)}
+                                    className="text-xs text-primary"
+                                >
+                                    <Plus className="mr-2 h-3 w-3" />
+                                    Create &quot;{trimmed}&quot;
+                                </CommandItem>
+                            </CommandGroup>
+                        )}
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: TaskStatus | null) => void }) {
+    const effective = getEffectiveStatus(node);
+    const isOverride = node.status != null;
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium hover:ring-2 hover:ring-ring/40',
+                        STATUS_COLORS[effective],
+                    )}
+                    title={isOverride ? `Manual: ${STATUS_LABELS[effective]}` : `Auto: ${STATUS_LABELS[effective]}`}
+                >
+                    <span className="truncate">{STATUS_LABELS[effective]}</span>
+                    {isOverride && <span className="text-[9px] opacity-70">•</span>}
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[140px]">
+                <DropdownMenuItem
+                    className="text-xs"
+                    onClick={() => onChange(null)}
+                >
+                    <span className="text-muted-foreground">Auto</span>
+                    {!isOverride && <span className="ml-auto text-[10px] text-primary">✓</span>}
+                </DropdownMenuItem>
+                {MANUAL_STATUSES.map((s) => (
+                    <DropdownMenuItem
+                        key={s}
+                        className="text-xs"
+                        onClick={() => onChange(s)}
+                    >
+                        <span className={cn('mr-2 inline-block h-2 w-2 rounded-full', STATUS_COLORS[s].split(' ')[0])} />
+                        {STATUS_LABELS[s]}
+                        {node.status === s && <span className="ml-auto text-[10px] text-primary">✓</span>}
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onResponsibleChange, responsibleOptions, onStatusChange, visibleColumns, onIndent, onOutdent, canIndent, canOutdent, showBaseline, resourceLabel }: TaskTreeRowProps) {
     const [editing, setEditing] = useState(false);
     const [editName, setEditName] = useState(node.name);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +348,17 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
                     )}
                 </div>
 
+                {/* Resource badge (headcount × pay rate template) */}
+                {resourceLabel && !editing && (
+                    <span
+                        className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                        title={resourceLabel}
+                    >
+                        <Users className="h-2.5 w-2.5" />
+                        {resourceLabel}
+                    </span>
+                )}
+
                 <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="ml-1 h-5 w-5 shrink-0 p-0 opacity-0 group-hover:opacity-100">
@@ -242,19 +397,43 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
             </div>
 
             {/* Start Date column */}
-            <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
-                <DateCell value={node.start_date} onChange={handleStartChange} disabled={isGroup} />
-            </div>
+            {visibleColumns.start && (
+                <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
+                    <DateCell value={node.start_date} onChange={handleStartChange} disabled={isGroup} />
+                </div>
+            )}
 
             {/* End Date column */}
-            <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
-                <DateCell value={node.end_date} onChange={handleEndChange} disabled={isGroup} />
-            </div>
+            {visibleColumns.finish && (
+                <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
+                    <DateCell value={node.end_date} onChange={handleEndChange} disabled={isGroup} />
+                </div>
+            )}
 
             {/* Working days column */}
-            <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-[11px]">
-                {workingDays !== null ? `${workingDays}d` : '—'}
-            </div>
+            {visibleColumns.days && (
+                <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-[11px]">
+                    {workingDays !== null ? `${workingDays}d` : '—'}
+                </div>
+            )}
+
+            {/* Responsible column — select-or-create combobox */}
+            {visibleColumns.responsible && (
+                <div className="flex h-full w-[150px] shrink-0 items-center border-l">
+                    <ResponsibleCell
+                        value={node.responsible}
+                        options={responsibleOptions}
+                        onChange={(v) => onResponsibleChange(node.id, v)}
+                    />
+                </div>
+            )}
+
+            {/* Status column — derived by default, overridable */}
+            {visibleColumns.status && (
+                <div className="flex h-full w-[120px] shrink-0 items-center justify-center border-l px-1">
+                    <StatusCell node={node} onChange={(s) => onStatusChange(node.id, s)} />
+                </div>
+            )}
 
             {/* Spacer for scrollbar alignment */}
             <div className="w-[32px] shrink-0" />

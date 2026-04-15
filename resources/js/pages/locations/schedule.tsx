@@ -12,16 +12,17 @@ import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
 import ScheduleToolbar from './schedule/schedule-toolbar';
 import TaskTreePanel from './schedule/task-tree-panel';
-import type { FilterFlag, LinkType, ProjectTask, SortMode, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
-import { ZOOM_CONFIGS } from './schedule/types';
-import { buildTree, dateToX, diffWorkingDays, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks, setNonWorkDays, sortSiblings } from './schedule/utils';
+import type { ColumnKey, ColumnVisibility, FilterFlag, LinkType, ProjectTask, SortMode, TaskLink, TaskNode, TaskStatus, ZoomLevel } from './schedule/types';
+import { DEFAULT_COLUMN_VISIBILITY, ZOOM_CONFIGS } from './schedule/types';
+import { buildTree, dateToX, diffWorkingDays, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks, setNonWorkDays, setWorkingDays, sortSiblings } from './schedule/utils';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 
 type Location = LocationBase & {};
 
 interface NonWorkDayEntry {
     date: string;
-    type: 'public_holiday' | 'rdo';
+    type: 'public_holiday' | 'rdo' | 'project';
+    subtype?: 'safety' | 'industrial_action' | 'weather' | 'other';
     label: string;
 }
 
@@ -30,15 +31,18 @@ interface PageProps {
     tasks: ProjectTask[];
     links: TaskLink[];
     nonWorkDays: NonWorkDayEntry[];
+    workingDays: number[];
+    payRateTemplates: import('./schedule/types').PayRateTemplateOption[];
     [key: string]: unknown;
 }
 
 export default function Schedule() {
-    const { location, tasks: initialTasks, links: initialLinks, nonWorkDays: initialNonWorkDays } = usePage<PageProps>().props;
+    const { location, tasks: initialTasks, links: initialLinks, nonWorkDays: initialNonWorkDays, workingDays: initialWorkingDays, payRateTemplates } = usePage<PageProps>().props;
 
     // Populate the module-level calendar synchronously on every render so schedulers, snap logic
     // and colored stripes all see it on first paint. Rebuilding a small Map per render is cheap.
     const nonWorkDays = initialNonWorkDays ?? [];
+    setWorkingDays(initialWorkingDays ?? [1, 2, 3, 4, 5]);
     setNonWorkDays(nonWorkDays);
 
     const [tasks, setTasks] = useState<ProjectTask[]>(initialTasks);
@@ -74,6 +78,29 @@ export default function Schedule() {
     }, []);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
+    const columnsStorageKey = `schedule.columns.${location.id}`;
+    const [visibleColumns, setVisibleColumns] = useState<ColumnVisibility>(() => {
+        if (typeof window === 'undefined') return DEFAULT_COLUMN_VISIBILITY;
+        try {
+            const stored = window.localStorage.getItem(columnsStorageKey);
+            if (!stored) return DEFAULT_COLUMN_VISIBILITY;
+            const parsed = JSON.parse(stored) as Partial<ColumnVisibility>;
+            return { ...DEFAULT_COLUMN_VISIBILITY, ...parsed };
+        } catch {
+            return DEFAULT_COLUMN_VISIBILITY;
+        }
+    });
+
+    const handleToggleColumn = useCallback((key: ColumnKey) => {
+        setVisibleColumns((prev) => {
+            const next = { ...prev, [key]: !prev[key] };
+            try {
+                window.localStorage.setItem(columnsStorageKey, JSON.stringify(next));
+            } catch { /* storage may be disabled */ }
+            return next;
+        });
+    }, [columnsStorageKey]);
+
     const sortStorageKey = `schedule.sort.${location.id}`;
     const [sortMode, setSortMode] = useState<SortMode>(() => {
         if (typeof window === 'undefined') return 'manual';
@@ -361,7 +388,7 @@ export default function Schedule() {
     // ── Task CRUD ──
 
     const handleAddTask = useCallback(
-        async (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null; color?: string | null; is_critical?: boolean }) => {
+        async (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null; color?: string | null; is_critical?: boolean; headcount?: number | null; location_pay_rate_template_id?: number | null }) => {
             try {
                 const task = await api.post<ProjectTask>(`/locations/${location.id}/tasks`, data);
                 setTasks((prev) => [...prev, task]);
@@ -495,6 +522,37 @@ export default function Schedule() {
         [tasks, links],
     );
 
+    const handleResponsibleChange = useCallback(async (id: number, value: string | null) => {
+        const prev = tasks;
+        setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, responsible: value } : t)));
+        try {
+            await api.patch(`/tasks/${id}`, { responsible: value });
+        } catch {
+            setTasks(prev);
+            toast.error('Failed to update responsible party');
+        }
+    }, [tasks]);
+
+    const handleStatusChange = useCallback(async (id: number, status: TaskStatus | null) => {
+        const prev = tasks;
+        setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, status } : t)));
+        try {
+            await api.patch(`/tasks/${id}`, { status });
+        } catch {
+            setTasks(prev);
+            toast.error('Failed to update status');
+        }
+    }, [tasks]);
+
+    const responsibleOptions = useMemo(() => {
+        const set = new Set<string>();
+        for (const t of tasks) {
+            const v = t.responsible?.trim();
+            if (v) set.add(v);
+        }
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [tasks]);
+
     // Edit dialog update (from the dialog form)
     const handleUpdateTask = useCallback(async (id: number, data: {
         name?: string;
@@ -504,6 +562,8 @@ export default function Schedule() {
         end_date?: string | null;
         color?: string | null;
         is_critical?: boolean;
+        headcount?: number | null;
+        location_pay_rate_template_id?: number | null;
     }) => {
         const prev = tasks;
         setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, ...data } : t)));
@@ -744,6 +804,8 @@ export default function Schedule() {
                     </div>
                 )}
                 <ScheduleToolbar
+                    visibleColumns={visibleColumns}
+                    onToggleColumn={handleToggleColumn}
                     zoom={zoom}
                     onZoomChange={handleZoomChange}
                     onAddTask={() => openAddDialog()}
@@ -776,6 +838,7 @@ export default function Schedule() {
                     onClearStartDateRange={() => setStartDateRange({ from: null, to: null })}
                     endDateRange={endDateRange}
                     onClearEndDateRange={() => setEndDateRange({ from: null, to: null })}
+                    calendarHref={`/locations/${location.id}/calendar`}
                     importButton={<div ref={importBtnRef}>
                         <CsvImporterDialog
                             requiredColumns={['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors']}
@@ -806,6 +869,10 @@ export default function Schedule() {
                         onDelete={handleDelete}
                         onRename={handleRename}
                         onDatesChange={handleDatesChange}
+                        onResponsibleChange={handleResponsibleChange}
+                        responsibleOptions={responsibleOptions}
+                        onStatusChange={handleStatusChange}
+                        visibleColumns={visibleColumns}
                         onAddTask={() => openAddDialog()}
                         onManualReorder={persistManualReorder}
                         onIndent={handleIndent}
@@ -818,6 +885,7 @@ export default function Schedule() {
                         onStartDateRangeChange={setStartDateRange}
                         endDateRange={endDateRange}
                         onEndDateRangeChange={setEndDateRange}
+                        payRateTemplates={payRateTemplates ?? []}
                     />
 
                     <div className="bg-border w-px" />
@@ -846,6 +914,8 @@ export default function Schedule() {
                 onSubmit={handleAddTask}
                 parentId={addParent.id}
                 parentName={addParent.name}
+                payRateTemplates={payRateTemplates ?? []}
+                responsibleOptions={responsibleOptions}
             />
 
             <EditTaskDialog
@@ -857,6 +927,8 @@ export default function Schedule() {
                 onUpdateTask={handleUpdateTask}
                 onDeleteLink={handleDeleteLink}
                 onUpdateLink={handleUpdateLink}
+                payRateTemplates={payRateTemplates ?? []}
+                responsibleOptions={responsibleOptions}
             />
         </AppLayout>
     );

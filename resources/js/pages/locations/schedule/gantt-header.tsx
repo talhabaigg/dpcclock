@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
-import { format, getMonth, getQuarter, getYear, isWeekend } from 'date-fns';
-import { getNonWorkDayType } from './utils';
+import { format, getMonth, getQuarter, getYear } from 'date-fns';
+import { getNonWorkDayType, isNonWorkingWeekday } from './utils';
 
 interface GanttHeaderProps {
     days: Date[];
@@ -89,7 +89,7 @@ export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
                 <div className="flex border-b" style={{ height: dayH }}>
                     {days.map((day, i) => {
                         const nwdType = getNonWorkDayType(day);
-                        const weekend = isWeekend(day);
+                        const weekend = isNonWorkingWeekday(day);
                         return (
                             <div
                                 key={i}
@@ -97,6 +97,7 @@ export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
                                     'flex shrink-0 items-center justify-center border-r text-[10px]',
                                     nwdType === 'public_holiday' && 'bg-blue-300/40 text-blue-900/80',
                                     nwdType === 'rdo' && 'bg-amber-300/40 text-amber-900/80',
+                                    nwdType === 'project' && 'bg-rose-300/40 text-rose-900/80',
                                     !nwdType && weekend && 'bg-muted/60 text-muted-foreground',
                                 )}
                                 style={{ width: dayWidth }}

@@ -19,7 +19,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { endOfMonth, endOfQuarter, format, startOfMonth, startOfQuarter, subMonths, addMonths } from 'date-fns';
 import { ChevronRight, Filter, FolderOpen, Plus } from 'lucide-react';
 import { forwardRef, useCallback, useMemo, useState } from 'react';
-import type { ProjectTask, TaskNode } from './types';
+import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
 import TaskTreeRow from './task-tree-row';
 
@@ -38,6 +38,10 @@ interface TaskTreePanelProps {
     onDelete: (id: number) => void;
     onRename: (id: number, name: string) => void;
     onDatesChange: (id: number, startDate: string, endDate: string) => void;
+    onResponsibleChange: (id: number, value: string | null) => void;
+    responsibleOptions: string[];
+    onStatusChange: (id: number, status: import('./types').TaskStatus | null) => void;
+    visibleColumns: ColumnVisibility;
     onAddTask: () => void;
     /** Called with the new full task list (with updated sort_order) after a manual drag. */
     onManualReorder: (next: ProjectTask[]) => void;
@@ -51,6 +55,7 @@ interface TaskTreePanelProps {
     onStartDateRangeChange: (range: DateRange) => void;
     endDateRange: DateRange;
     onEndDateRangeChange: (range: DateRange) => void;
+    payRateTemplates: PayRateTemplateOption[];
 }
 
 function fmtDate(d: Date): string {
@@ -130,7 +135,7 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
 }
 
 const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
-    ({ visibleTasks, allTasks, expanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onAddTask, onManualReorder, onIndent, onOutdent, showBaseline, filterTaskId, onFilterTaskChange, rootTasks, startDateRange, onStartDateRangeChange, endDateRange, onEndDateRangeChange }, ref) => {
+    ({ visibleTasks, allTasks, expanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onResponsibleChange, responsibleOptions, onStatusChange, visibleColumns, onAddTask, onManualReorder, onIndent, onOutdent, showBaseline, filterTaskId, onFilterTaskChange, rootTasks, startDateRange, onStartDateRangeChange, endDateRange, onEndDateRangeChange, payRateTemplates }, ref) => {
         const [filterOpen, setFilterOpen] = useState(false);
 
         // 5px activation distance prevents accidental drags when clicking row controls.
@@ -209,6 +214,21 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
 
         const sortableIds = visibleTasks.map((t) => t.id);
 
+        const templateById = useMemo(() => {
+            const m = new Map<number, PayRateTemplateOption>();
+            for (const t of payRateTemplates) m.set(t.id, t);
+            return m;
+        }, [payRateTemplates]);
+
+        const getResourceLabel = (node: TaskNode): string | null => {
+            const hc = node.headcount;
+            const tpl = node.location_pay_rate_template_id ? templateById.get(node.location_pay_rate_template_id) : null;
+            if (!hc && !tpl) return null;
+            if (hc && tpl) return `${hc} × ${tpl.label}`;
+            if (hc) return String(hc);
+            return tpl?.label ?? null;
+        };
+
         const allFilterOptions: { id: number; name: string; depth: number; hasChildren: boolean }[] = [];
         function collectTasks(nodes: TaskNode[], depth: number) {
             for (const n of nodes) {
@@ -220,8 +240,19 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
 
         const isFiltered = filterTaskId !== null;
 
+        // Name column + drag handle + trailing scrollbar spacer are fixed.
+        // Per-column widths must stay in sync between header and row.
+        const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120 };
+        const BASE_WIDTH = 4 /* drag */ + 340 /* name min-ish */ + 32 /* trailing */;
+        const panelWidth = BASE_WIDTH
+            + (visibleColumns.start ? COL_WIDTHS.start : 0)
+            + (visibleColumns.finish ? COL_WIDTHS.finish : 0)
+            + (visibleColumns.days ? COL_WIDTHS.days : 0)
+            + (visibleColumns.responsible ? COL_WIDTHS.responsible : 0)
+            + (visibleColumns.status ? COL_WIDTHS.status : 0);
+
         return (
-            <div className="flex shrink-0 flex-col" style={{ width: 590 }}>
+            <div className="flex shrink-0 flex-col" style={{ width: panelWidth }}>
                 {/* Header */}
                 <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
                     {/* Spacer aligned with the per-row drag handle */}
@@ -294,16 +325,22 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                     </Button>
 
                     {/* Start date column header with filter */}
-                    <div className="w-[95px] shrink-0 border-l">
-                        <DateRangeFilter label="Start" range={startDateRange} onChange={onStartDateRangeChange} />
-                    </div>
+                    {visibleColumns.start && (
+                        <div className="w-[95px] shrink-0 border-l">
+                            <DateRangeFilter label="Start" range={startDateRange} onChange={onStartDateRangeChange} />
+                        </div>
+                    )}
 
                     {/* Finish date column header with filter */}
-                    <div className="w-[95px] shrink-0 border-l">
-                        <DateRangeFilter label="Finish" range={endDateRange} onChange={onEndDateRangeChange} />
-                    </div>
+                    {visibleColumns.finish && (
+                        <div className="w-[95px] shrink-0 border-l">
+                            <DateRangeFilter label="Finish" range={endDateRange} onChange={onEndDateRangeChange} />
+                        </div>
+                    )}
 
-                    <span className="w-[40px] shrink-0 border-l px-2 text-center">Days</span>
+                    {visibleColumns.days && <span className="w-[40px] shrink-0 border-l px-2 text-center">Days</span>}
+                    {visibleColumns.responsible && <span className="w-[150px] shrink-0 border-l px-2 text-center">Responsible</span>}
+                    {visibleColumns.status && <span className="w-[120px] shrink-0 border-l px-2 text-center">Status</span>}
                     <span className="w-[32px] shrink-0" />
                 </div>
                 <div className="bg-muted/30 border-b" style={{ height: 24 }} />
@@ -335,11 +372,16 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                                         onDelete={onDelete}
                                         onRename={onRename}
                                         onDatesChange={onDatesChange}
+                                        onResponsibleChange={onResponsibleChange}
+                                        responsibleOptions={responsibleOptions}
+                                        onStatusChange={onStatusChange}
+                                        visibleColumns={visibleColumns}
                                         onIndent={onIndent}
                                         onOutdent={onOutdent}
                                         canIndent={flags?.canIndent ?? false}
                                         canOutdent={flags?.canOutdent ?? false}
                                         showBaseline={showBaseline}
+                                        resourceLabel={getResourceLabel(node)}
                                     />
                                 );
                             })}

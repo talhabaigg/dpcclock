@@ -45,6 +45,7 @@ use App\Http\Controllers\PayRateTemplateController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PendingPurchaseOrderController;
 use App\Http\Controllers\ProductionUploadController;
+use App\Http\Controllers\ProjectCalendarController;
 use App\Http\Controllers\ProjectTaskController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
@@ -483,6 +484,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');
         Route::patch('/task-links/{link}', [ProjectTaskController::class, 'updateLink'])->name('task-links.update');
         Route::delete('/task-links/{link}', [ProjectTaskController::class, 'destroyLink'])->name('task-links.destroy');
+
+        // Project Calendar
+        Route::middleware('permission:project-calendar.view')->group(function () {
+            Route::get('/locations/{location}/calendar', [ProjectCalendarController::class, 'index'])->name('locations.calendar');
+        });
+        Route::middleware('permission:project-calendar.manage')->group(function () {
+            Route::post('/locations/{location}/calendar/events', [ProjectCalendarController::class, 'store'])->name('project-calendar.events.store');
+            Route::patch('/project-calendar/events/{nonWorkDay}', [ProjectCalendarController::class, 'update'])->name('project-calendar.events.update');
+            Route::delete('/project-calendar/events/{nonWorkDay}', [ProjectCalendarController::class, 'destroy'])->name('project-calendar.events.destroy');
+            Route::patch('/locations/{location}/calendar/working-days', [ProjectCalendarController::class, 'updateWorkingDays'])->name('project-calendar.working-days');
+        });
     });
     Route::post('/locations', [LocationController::class, 'store'])->name('locations.store')
         ->middleware('permission:locations.create');

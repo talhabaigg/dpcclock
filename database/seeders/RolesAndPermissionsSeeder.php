@@ -138,6 +138,14 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // PROJECT CALENDAR (per-project non-work days + working week)
+        // ============================================
+        'Project Calendar' => [
+            'project-calendar.view' => 'View project calendar',
+            'project-calendar.manage' => 'Manage project non-work days and working week',
+        ],
+
+        // ============================================
         // REQUISITIONS & PURCHASING
         // ============================================
         'Requisitions' => [
@@ -374,6 +382,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'timesheet-events.edit',
             'timesheet-events.delete',
             'timesheet-events.generate',
+            // Project Calendar
+            'project-calendar.view',
+            'project-calendar.manage',
             // Worktypes
             'worktypes.view',
             'worktypes.create',
@@ -457,6 +468,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'requisitions.process',
             'requisitions.send',
             'requisitions.export',
+            // Project Calendar (view/manage their own project's non-work days + working week)
+            'project-calendar.view',
+            'project-calendar.manage',
             // Materials (view material list only)
             'materials.view',
             // Worker Screening (search only)

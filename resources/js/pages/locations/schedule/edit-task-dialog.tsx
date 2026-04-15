@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Check, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import type { LinkType, TaskLink, TaskNode } from './types';
-import { LINK_TYPE_LABELS, PRESET_COLORS } from './types';
+import type { LinkType, PayRateTemplateOption, TaskLink, TaskNode, TaskStatus } from './types';
+import { LINK_TYPE_LABELS, MANUAL_STATUSES, PRESET_COLORS, STATUS_LABELS } from './types';
 
 import { isNonWorkDay, snapToWorkday } from './utils';
 
@@ -33,9 +33,15 @@ interface EditTaskDialogProps {
         end_date?: string | null;
         color?: string | null;
         is_critical?: boolean;
+        headcount?: number | null;
+        location_pay_rate_template_id?: number | null;
+        responsible?: string | null;
+        status?: TaskStatus | null;
     }) => void;
     onDeleteLink: (linkId: number) => void;
     onUpdateLink: (linkId: number, patch: { type?: LinkType; lag_days?: number }) => void;
+    payRateTemplates: PayRateTemplateOption[];
+    responsibleOptions: string[];
 }
 
 export default function EditTaskDialog({
@@ -47,6 +53,8 @@ export default function EditTaskDialog({
     onUpdateTask,
     onDeleteLink,
     onUpdateLink,
+    payRateTemplates,
+    responsibleOptions,
 }: EditTaskDialogProps) {
     const [name, setName] = useState('');
     const [baselineStart, setBaselineStart] = useState('');
@@ -55,6 +63,10 @@ export default function EditTaskDialog({
     const [endDate, setEndDate] = useState('');
     const [color, setColor] = useState<string | null>(null);
     const [isCritical, setIsCritical] = useState(false);
+    const [headcount, setHeadcount] = useState('');
+    const [templateId, setTemplateId] = useState<string>('');
+    const [responsible, setResponsible] = useState('');
+    const [status, setStatus] = useState<TaskStatus | ''>('');
 
     useEffect(() => {
         if (task) {
@@ -65,6 +77,10 @@ export default function EditTaskDialog({
             setEndDate(task.end_date ?? '');
             setColor(task.color);
             setIsCritical(task.is_critical);
+            setHeadcount(task.headcount != null ? String(task.headcount) : '');
+            setTemplateId(task.location_pay_rate_template_id ? String(task.location_pay_rate_template_id) : '');
+            setResponsible(task.responsible ?? '');
+            setStatus(task.status ?? '');
         }
     }, [task]);
 
@@ -85,6 +101,10 @@ export default function EditTaskDialog({
             end_date: snapStr(endDate, 'backward') || null,
             color,
             is_critical: isCritical,
+            headcount: headcount ? Math.max(0, parseInt(headcount, 10) || 0) : null,
+            location_pay_rate_template_id: templateId ? parseInt(templateId, 10) : null,
+            responsible: responsible.trim() || null,
+            status: status || null,
         });
         onOpenChange(false);
     }
@@ -158,6 +178,75 @@ export default function EditTaskDialog({
                                 Dates are auto-calculated from child tasks.
                             </p>
                         )}
+
+                        {/* Resource row */}
+                        {!isGroup && (
+                            <div className="grid grid-cols-[100px_1fr] gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="edit-headcount">Headcount</Label>
+                                    <Input
+                                        id="edit-headcount"
+                                        type="number"
+                                        min={0}
+                                        max={9999}
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={headcount}
+                                        onChange={(e) => setHeadcount(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="edit-template">Resource (Pay Rate Template)</Label>
+                                    <select
+                                        id="edit-template"
+                                        value={templateId}
+                                        onChange={(e) => setTemplateId(e.target.value)}
+                                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                    >
+                                        <option value="">— None —</option>
+                                        {payRateTemplates.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.label}
+                                                {t.hourly_rate > 0 ? ` — $${t.hourly_rate.toFixed(2)}/hr` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Responsible + Status row */}
+                        <div className="grid grid-cols-[1fr_160px] gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-responsible">Responsible</Label>
+                                <Input
+                                    id="edit-responsible"
+                                    list="edit-responsible-options"
+                                    value={responsible}
+                                    onChange={(e) => setResponsible(e.target.value)}
+                                    placeholder="e.g. John Smith, Head Office"
+                                />
+                                <datalist id="edit-responsible-options">
+                                    {responsibleOptions.map((opt) => (
+                                        <option key={opt} value={opt} />
+                                    ))}
+                                </datalist>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-status">Status</Label>
+                                <select
+                                    id="edit-status"
+                                    value={status}
+                                    onChange={(e) => setStatus(e.target.value as TaskStatus | '')}
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                >
+                                    <option value="">Auto</option>
+                                    {MANUAL_STATUSES.map((s) => (
+                                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
 
                         {/* Color + Critical row */}
                         <div className="grid grid-cols-2 gap-4">
