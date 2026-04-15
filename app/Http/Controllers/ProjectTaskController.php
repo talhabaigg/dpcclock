@@ -28,7 +28,7 @@ class ProjectTaskController extends Controller
             ->max('sort_order') ?? -1;
 
         $task = $location->projectTasks()->create([
-            ...$validated,
+            ...$this->snapTaskDates($validated, $location->state ?? 'QLD'),
             'sort_order' => $maxSort + 1,
         ]);
 
@@ -50,7 +50,7 @@ class ProjectTaskController extends Controller
             'is_owned' => 'sometimes|boolean',
         ]);
 
-        $task->update($validated);
+        $task->update($this->snapTaskDates($validated, $task->location->state ?? 'QLD'));
 
         return response()->json($task->fresh());
     }
@@ -62,7 +62,7 @@ class ProjectTaskController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        $task->update($validated);
+        $task->update($this->snapTaskDates($validated, $task->location->state ?? 'QLD'));
 
         return response()->json($task->fresh());
     }
@@ -90,6 +90,55 @@ class ProjectTaskController extends Controller
         $this->deleteWithDescendants($task);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Atomically re-parent a task and renumber its new sibling group.
+     * Prevents cycles (target parent must not be a descendant of the task).
+     */
+    public function moveHierarchy(Request $request, ProjectTask $task)
+    {
+        $validated = $request->validate([
+            'parent_id' => 'nullable|integer|exists:project_tasks,id',
+            'sibling_order' => 'required|array|min:1',
+            'sibling_order.*' => 'required|integer|exists:project_tasks,id',
+        ]);
+
+        $newParentId = $validated['parent_id'] ?? null;
+
+        if ($newParentId !== null) {
+            if ($newParentId === $task->id) {
+                return response()->json(['error' => 'Cannot move task under itself.'], 422);
+            }
+            $descendantIds = $this->collectDescendantIds($task);
+            if (in_array($newParentId, $descendantIds, true)) {
+                return response()->json(['error' => 'Cannot move task under its own descendant.'], 422);
+            }
+        }
+
+        $task->parent_id = $newParentId;
+        $task->save();
+
+        foreach ($validated['sibling_order'] as $index => $id) {
+            ProjectTask::where('id', $id)
+                ->where('location_id', $task->location_id)
+                ->update(['sort_order' => $index]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'tasks' => $task->location->projectTasks()->orderBy('sort_order')->get(),
+        ]);
+    }
+
+    private function collectDescendantIds(ProjectTask $task): array
+    {
+        $ids = [];
+        foreach ($task->children as $child) {
+            $ids[] = $child->id;
+            $ids = array_merge($ids, $this->collectDescendantIds($child));
+        }
+        return $ids;
     }
 
     private function deleteWithDescendants(ProjectTask $task): void
@@ -144,18 +193,18 @@ class ProjectTaskController extends Controller
             $task = $location->projectTasks()->create([
                 'parent_id' => $parentId,
                 'name' => $name,
-                'start_date' => $this->parseDate($row['start_date'] ?? null),
-                'end_date' => $this->parseDate($row['end_date'] ?? null),
+                'start_date' => $this->snapToWorkday($this->parseDate($row['start_date'] ?? null), 'forward', $location->state ?? 'QLD'),
+                'end_date' => $this->snapToWorkday($this->parseDate($row['end_date'] ?? null), 'backward', $location->state ?? 'QLD'),
                 'sort_order' => $index,
             ]);
 
             $wbsMap[$wbs] = $task->id;
             $created[] = $task;
 
-            // Parse predecessors: "3.1.1:FS;3.1.2:SS" format
+            // Parse predecessors: "3.1.1:FS,3.1.2:SS+2" — comma or semicolon separated.
             $predsStr = trim($row['predecessors'] ?? '');
             if ($predsStr) {
-                foreach (explode(';', $predsStr) as $pred) {
+                foreach (preg_split('/[,;]/', $predsStr) as $pred) {
                     $pred = trim($pred);
                     if (!$pred) continue;
 
@@ -164,6 +213,13 @@ class ProjectTaskController extends Controller
                     } else {
                         $predWbs = $pred;
                         $linkType = 'FS';
+                    }
+
+                    // Parse optional lag suffix on the link-type, e.g. "FS+2", "SS-1", "FS+10d"
+                    $lagDays = 0;
+                    if (preg_match('/^([A-Za-z]{2})\s*([+-]\s*\d+)\s*d?$/', trim($linkType), $m)) {
+                        $linkType = $m[1];
+                        $lagDays = (int) preg_replace('/\s+/', '', $m[2]);
                     }
 
                     $linkType = strtoupper(trim($linkType));
@@ -175,6 +231,7 @@ class ProjectTaskController extends Controller
                         'target_wbs' => $wbs,
                         'source_wbs' => trim($predWbs),
                         'type' => $linkType,
+                        'lag_days' => $lagDays,
                     ];
                 }
             }
@@ -188,7 +245,7 @@ class ProjectTaskController extends Controller
             if ($sourceId && $targetId && $sourceId !== $targetId) {
                 ProjectTaskLink::updateOrCreate(
                     ['source_id' => $sourceId, 'target_id' => $targetId],
-                    ['location_id' => $location->id, 'type' => $pl['type']],
+                    ['location_id' => $location->id, 'type' => $pl['type'], 'lag_days' => $pl['lag_days'] ?? 0],
                 );
                 $linksCreated++;
             }
@@ -431,7 +488,8 @@ class ProjectTaskController extends Controller
                         $addEl($pl, 'PredecessorUID', (string) $uidMap[$link->source_id]);
                         $addEl($pl, 'Type', (string) ($linkTypeMap[$link->type] ?? 1));
                         $addEl($pl, 'CrossProject', '0');
-                        $addEl($pl, 'LinkLag', '0');
+                        // MS Project stores lag in tenths-of-a-minute (8h workday → 4800 per day).
+                        $addEl($pl, 'LinkLag', (string) (((int) ($link->lag_days ?? 0)) * 4800));
                         $addEl($pl, 'LagFormat', '7');
                     }
                 }
@@ -458,16 +516,21 @@ class ProjectTaskController extends Controller
     public function downloadTemplate()
     {
         $headers = ['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors'];
+        // Predecessor syntax: "WBS" | "WBS:TYPE" | "WBS:TYPE±N" (lag in days; +N = lag, -N = lead).
+        // TYPE is one of FS, SS, FF, SF (default FS). Multiple preds comma-separated.
+        // Examples: "1.1.1", "1.1.1:FS", "1.1.1:FS+2", "1.1.1:SS-1", "1.1.1:FS,1.1.2:SS+3".
         $sample = [
             ['1', 'Tower 1', '', '', ''],
             ['1.1', 'Level 22', '', '', ''],
             ['1.1.1', 'Electrical Works', '2026-04-01', '2026-04-15', ''],
-            ['1.1.2', 'Plumbing', '2026-04-16', '2026-04-30', '1.1.1:FS'],
+            ['1.1.2', 'Plumbing', '2026-04-19', '2026-05-03', '1.1.1:FS+2'],
+            ['1.1.3', 'Inspection', '2026-05-04', '2026-05-04', '1.1.2:FS'],
             ['1.2', 'Level 23', '', '', ''],
             ['1.2.1', 'Structural Works', '2026-04-10', '2026-05-10', ''],
-            ['1.2.2', 'Finishing', '2026-05-11', '2026-06-10', '1.2.1:FS'],
+            ['1.2.2', 'Finishing', '2026-05-08', '2026-06-10', '1.2.1:FS-3'],
             ['2', 'Tower 2', '', '', ''],
             ['2.1', 'Foundations', '2026-04-01', '2026-06-01', ''],
+            ['2.2', 'Frame', '2026-05-15', '2026-07-15', '2.1:SS+45,1.1.3:FS'],
         ];
 
         $callback = function () use ($headers, $sample) {
@@ -493,6 +556,75 @@ class ProjectTaskController extends Controller
         } catch (\Exception) {
             return null;
         }
+    }
+
+    /**
+     * Cache of non-work day YYYY-MM-DD strings keyed by state, built from timesheet_events.
+     * Populated lazily the first time snapToWorkday is called within a request.
+     */
+    private ?array $nonWorkDayCache = null;
+    private ?string $nonWorkDayState = null;
+
+    private function loadNonWorkDays(string $state): array
+    {
+        if ($this->nonWorkDayCache !== null && $this->nonWorkDayState === $state) {
+            return $this->nonWorkDayCache;
+        }
+        $set = [];
+        $events = \App\Models\TimesheetEvent::where('state', $state)
+            ->whereIn('type', ['public_holiday', 'rdo'])
+            ->get(['start', 'end']);
+        foreach ($events as $e) {
+            $cursor = Carbon::parse($e->start);
+            $end = Carbon::parse($e->end);
+            while ($cursor->lte($end)) {
+                $set[$cursor->format('Y-m-d')] = true;
+                $cursor->addDay();
+            }
+        }
+        $this->nonWorkDayCache = $set;
+        $this->nonWorkDayState = $state;
+        return $set;
+    }
+
+    /**
+     * Single source of truth for "is this a non-work day?".
+     * Weekends + state-scoped public holidays/RDOs from timesheet_events.
+     */
+    private function isNonWorkDay(Carbon $date, string $state = 'QLD'): bool
+    {
+        if ($date->isWeekend()) return true;
+        $set = $this->loadNonWorkDays($state);
+        return isset($set[$date->format('Y-m-d')]);
+    }
+
+    /**
+     * Snap a date to the nearest working day. Use 'forward' for start dates,
+     * 'backward' for end dates. Accepts 'Y-m-d' (or any Carbon-parseable string).
+     */
+    private function snapToWorkday(?string $value, string $direction, string $state = 'QLD'): ?string
+    {
+        if (!$value) return null;
+        try {
+            $d = Carbon::parse($value);
+        } catch (\Exception) {
+            return null;
+        }
+        $step = $direction === 'forward' ? 1 : -1;
+        while ($this->isNonWorkDay($d, $state)) {
+            $d->addDays($step);
+        }
+        return $d->format('Y-m-d');
+    }
+
+    /** Snap the four task date fields (start/end/baseline_start/baseline_finish) in-place on a validated payload. */
+    private function snapTaskDates(array $data, string $state = 'QLD'): array
+    {
+        if (array_key_exists('start_date', $data))       $data['start_date']       = $this->snapToWorkday($data['start_date'], 'forward', $state);
+        if (array_key_exists('end_date', $data))         $data['end_date']         = $this->snapToWorkday($data['end_date'], 'backward', $state);
+        if (array_key_exists('baseline_start', $data))   $data['baseline_start']   = $this->snapToWorkday($data['baseline_start'], 'forward', $state);
+        if (array_key_exists('baseline_finish', $data)) $data['baseline_finish']  = $this->snapToWorkday($data['baseline_finish'], 'backward', $state);
+        return $data;
     }
 
     private function parseColor(?string $value): ?string
@@ -570,6 +702,7 @@ class ProjectTaskController extends Controller
             'source_id' => 'required|exists:project_tasks,id',
             'target_id' => 'required|exists:project_tasks,id|different:source_id',
             'type' => 'required|in:FS,SS,FF,SF',
+            'lag_days' => 'sometimes|integer|min:-365|max:365',
         ]);
 
         $link = ProjectTaskLink::updateOrCreate(
@@ -580,6 +713,7 @@ class ProjectTaskController extends Controller
             [
                 'location_id' => $location->id,
                 'type' => $validated['type'],
+                'lag_days' => $validated['lag_days'] ?? 0,
             ]
         );
 
@@ -589,7 +723,8 @@ class ProjectTaskController extends Controller
     public function updateLink(Request $request, ProjectTaskLink $link)
     {
         $validated = $request->validate([
-            'type' => 'required|in:FS,SS,FF,SF',
+            'type' => 'sometimes|required|in:FS,SS,FF,SF',
+            'lag_days' => 'sometimes|integer|min:-365|max:365',
         ]);
 
         $link->update($validated);

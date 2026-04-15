@@ -3,11 +3,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronRight, EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical, IndentDecrease, IndentIncrease, Pencil, Plus, Trash2 } from 'lucide-react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { ROW_HEIGHT, type TaskNode } from './types';
-import { countWorkingDays } from './utils';
+import { countWorkingDays, isNonWorkDay, snapToWorkday } from './utils';
 
 interface TaskTreeRowProps {
     node: TaskNode;
@@ -18,6 +20,10 @@ interface TaskTreeRowProps {
     onDelete: (id: number) => void;
     onRename: (id: number, name: string) => void;
     onDatesChange: (id: number, startDate: string, endDate: string) => void;
+    onIndent: (id: number) => void;
+    onOutdent: (id: number) => void;
+    canIndent: boolean;
+    canOutdent: boolean;
 }
 
 function formatDisplayDate(dateStr: string | null): string {
@@ -60,13 +66,14 @@ function DateCell({ value, onChange, disabled }: { value: string | null; onChang
                     }}
                     defaultMonth={selected}
                     initialFocus
+                    disabled={isNonWorkDay}
                 />
             </PopoverContent>
         </Popover>
     );
 }
 
-export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, showBaseline }: TaskTreeRowProps) {
+function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onIndent, onOutdent, canIndent, canOutdent, showBaseline }: TaskTreeRowProps) {
     const [editing, setEditing] = useState(false);
     const [editName, setEditName] = useState(node.name);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -89,13 +96,15 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
     }
 
     function handleStartChange(value: string) {
-        const endDate = node.end_date ?? value;
-        onDatesChange(node.id, value, value > endDate ? value : endDate);
+        const snapped = fmtDate(snapToWorkday(parseISO(value), 'forward'));
+        const endDate = node.end_date ?? snapped;
+        onDatesChange(node.id, snapped, snapped > endDate ? snapped : endDate);
     }
 
     function handleEndChange(value: string) {
-        const startDate = node.start_date ?? value;
-        onDatesChange(node.id, value < startDate ? value : startDate, value);
+        const snapped = fmtDate(snapToWorkday(parseISO(value), 'backward'));
+        const startDate = node.start_date ?? snapped;
+        onDatesChange(node.id, snapped < startDate ? snapped : startDate, snapped);
     }
 
     const workingDays =
@@ -104,11 +113,38 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
     const isGroup = node.hasChildren;
     const rowHeight = (showBaseline && node.baseline_start && node.baseline_finish) ? ROW_HEIGHT + 16 : ROW_HEIGHT;
 
+    // animateLayoutChanges=false disables FLIP transitions on siblings — much snappier at the cost
+    // of an "instant" rearrange instead of a smooth slide. Transform on the active item is preserved.
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
+        id: node.id,
+        animateLayoutChanges: () => false,
+    });
+    const dragStyle: React.CSSProperties = {
+        transform: CSS.Transform.toString(transform),
+        opacity: isDragging ? 0.5 : undefined,
+        zIndex: isDragging ? 10 : undefined,
+        background: isDragging ? 'var(--background, white)' : undefined,
+    };
+
     return (
         <div
+            ref={setNodeRef}
             className={cn('group flex items-center border-b', isGroup && 'font-medium')}
-            style={{ height: rowHeight }}
+            style={{ height: rowHeight, ...dragStyle }}
         >
+            {/* Drag handle — sibling reorder */}
+            <button
+                {...attributes}
+                {...listeners}
+                type="button"
+                className="flex h-full w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
+                style={{ cursor: 'grab', touchAction: 'none' }}
+                title="Drag to reorder (within same parent)"
+                aria-label="Drag to reorder"
+            >
+                <GripVertical className="h-3 w-3" />
+            </button>
+
             {/* Name column — full cell gets the Excel-style outline */}
             <div
                 className={cn(
@@ -183,6 +219,20 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
                             <Pencil className="mr-2 h-4 w-4" />
                             Rename
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => onIndent(node.id)}
+                            disabled={!canIndent}
+                        >
+                            <IndentIncrease className="mr-2 h-4 w-4" />
+                            Indent (make sub-task)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => onOutdent(node.id)}
+                            disabled={!canOutdent}
+                        >
+                            <IndentDecrease className="mr-2 h-4 w-4" />
+                            Outdent (promote)
+                        </DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive" onClick={() => onDelete(node.id)}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
@@ -211,3 +261,8 @@ export default function TaskTreeRow({ node, isExpanded, onToggle, onAddChild, on
         </div>
     );
 }
+
+// Memoize so non-moving rows don't re-render on every pointer move during drag.
+// useSortable subscribes internally and still triggers its own rerender when needed.
+const TaskTreeRow = memo(TaskTreeRowInner);
+export default TaskTreeRow;

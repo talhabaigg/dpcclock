@@ -5,7 +5,7 @@ import { ROW_HEIGHT } from './types';
 import DependencyArrows from './dependency-arrows';
 import GanttHeader from './gantt-header';
 import GanttRow from './gantt-row';
-import { dateToX } from './utils';
+import { dateToX, getNonWorkDayType } from './utils';
 
 interface GanttPanelProps {
     visibleTasks: TaskNode[];
@@ -139,17 +139,26 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
                             onMouseMove={handleMouseMove}
                             onClick={handleBodyClick}
                         >
-                            {/* Weekend background stripes */}
+                            {/* Non-work-day background stripes — weekend (gray), RDO (amber), public holiday (red) */}
                             <div className="pointer-events-none absolute inset-0" style={{ width: totalWidth }}>
-                                {days.map((day, i) =>
-                                    isWeekend(day) ? (
+                                {days.map((day, i) => {
+                                    const nwdType = getNonWorkDayType(day);
+                                    const weekend = isWeekend(day);
+                                    if (!nwdType && !weekend) return null;
+                                    // Priority: public holiday > RDO > weekend (most explicit wins).
+                                    const bg = nwdType === 'public_holiday'
+                                        ? 'bg-blue-300/30'
+                                        : nwdType === 'rdo'
+                                            ? 'bg-amber-300/30'
+                                            : 'bg-muted/40';
+                                    return (
                                         <div
                                             key={i}
-                                            className="bg-muted/40 absolute top-0 h-full"
+                                            className={`${bg} absolute top-0 h-full`}
                                             style={{ left: i * dayWidth, width: dayWidth }}
                                         />
-                                    ) : null,
-                                )}
+                                    );
+                                })}
                             </div>
 
                             {/* Today line */}

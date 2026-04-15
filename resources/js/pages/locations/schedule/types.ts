@@ -35,7 +35,7 @@ export interface TaskNode extends ProjectTask {
     childNodes: TaskNode[];
 }
 
-export type ZoomLevel = 'week' | 'month' | 'quarter';
+export type ZoomLevel = 'week' | 'month' | 'quarter' | 'year';
 
 export interface ZoomConfig {
     dayWidth: number;
@@ -47,6 +47,7 @@ export const ZOOM_CONFIGS: Record<ZoomLevel, ZoomConfig> = {
     week: { dayWidth: 32, paddingDays: 14 },
     month: { dayWidth: 10, paddingDays: 30 },
     quarter: { dayWidth: 3.5, paddingDays: 90 },
+    year: { dayWidth: 1.2, paddingDays: 180 },
 };
 
 export interface TaskLink {
@@ -55,6 +56,8 @@ export interface TaskLink {
     source_id: number;
     target_id: number;
     type: LinkType;
+    /** Calendar days. Positive = lag (delay), negative = lead (overlap). */
+    lag_days: number;
     created_at: string;
     updated_at: string;
 }
@@ -70,3 +73,13 @@ export const LINK_TYPE_LABELS: Record<LinkType, string> = {
 
 export const ROW_HEIGHT = 40;
 export const TREE_PANEL_WIDTH = 400;
+
+export type SortMode = 'manual' | 'start_asc' | 'start_desc' | 'finish_asc' | 'name_asc';
+
+export const SORT_MODE_LABELS: Record<SortMode, string> = {
+    manual: 'Manual',
+    start_asc: 'Start date (earliest first)',
+    start_desc: 'Start date (latest first)',
+    finish_asc: 'Finish date (earliest first)',
+    name_asc: 'Name (A → Z)',
+};

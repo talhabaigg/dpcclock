@@ -459,6 +459,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/tasks/reorder', [ProjectTaskController::class, 'reorder'])->name('project-tasks.reorder');
         Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');
         Route::patch('/tasks/{task}/dates', [ProjectTaskController::class, 'updateDates'])->name('project-tasks.update-dates');
+        Route::patch('/tasks/{task}/hierarchy', [ProjectTaskController::class, 'moveHierarchy'])->name('project-tasks.move-hierarchy');
         Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
         Route::delete('/locations/{location}/tasks', [ProjectTaskController::class, 'destroyAll'])->name('project-tasks.destroy-all');
 

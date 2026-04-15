@@ -1,12 +1,20 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
 import { Check } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { PRESET_COLORS } from './types';
+import { isNonWorkDay, snapToWorkday } from './utils';
+
+const toDate = (s: string): Date | undefined => (s ? parseISO(s) : undefined);
+const toStr = (d?: Date): string => (d ? format(d, 'yyyy-MM-dd') : '');
+const snapStr = (s: string, direction: 'forward' | 'backward'): string =>
+    s ? toStr(snapToWorkday(parseISO(s), direction)) : '';
 
 interface AddTaskDialogProps {
     open: boolean;
@@ -38,13 +46,15 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
         e.preventDefault();
         if (!name.trim()) return;
 
+        // Safety net: if any non-workday snuck through (programmatic input, typed value),
+        // snap starts forward and finishes backward before persisting.
         onSubmit({
             name: name.trim(),
             parent_id: parentId,
-            baseline_start: baselineStart || null,
-            baseline_finish: baselineFinish || null,
-            start_date: startDate || null,
-            end_date: endDate || null,
+            baseline_start: snapStr(baselineStart, 'forward') || null,
+            baseline_finish: snapStr(baselineFinish, 'backward') || null,
+            start_date: snapStr(startDate, 'forward') || null,
+            end_date: snapStr(endDate, 'backward') || null,
             color,
             is_critical: isCritical,
         });
@@ -80,23 +90,43 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="start-date">Start Date</Label>
-                                <Input id="start-date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                                <Label>Start Date</Label>
+                                <DatePickerDemo
+                                    value={toDate(startDate)}
+                                    onChange={(d) => setStartDate(toStr(d))}
+                                    displayFormat="dd MMM yyyy"
+                                    disabled={isNonWorkDay}
+                                />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="end-date">End Date</Label>
-                                <Input id="end-date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                                <Label>End Date</Label>
+                                <DatePickerDemo
+                                    value={toDate(endDate)}
+                                    onChange={(d) => setEndDate(toStr(d))}
+                                    displayFormat="dd MMM yyyy"
+                                    disabled={isNonWorkDay}
+                                />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="baseline-start">Baseline Start</Label>
-                                <Input id="baseline-start" type="date" value={baselineStart} onChange={(e) => setBaselineStart(e.target.value)} />
+                                <Label>Baseline Start</Label>
+                                <DatePickerDemo
+                                    value={toDate(baselineStart)}
+                                    onChange={(d) => setBaselineStart(toStr(d))}
+                                    displayFormat="dd MMM yyyy"
+                                    disabled={isNonWorkDay}
+                                />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="baseline-finish">Baseline Finish</Label>
-                                <Input id="baseline-finish" type="date" value={baselineFinish} onChange={(e) => setBaselineFinish(e.target.value)} />
+                                <Label>Baseline Finish</Label>
+                                <DatePickerDemo
+                                    value={toDate(baselineFinish)}
+                                    onChange={(d) => setBaselineFinish(toStr(d))}
+                                    displayFormat="dd MMM yyyy"
+                                    disabled={isNonWorkDay}
+                                />
                             </div>
                         </div>
 

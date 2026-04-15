@@ -1,3 +1,4 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -5,10 +6,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
 import { Check, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { LinkType, TaskLink, TaskNode } from './types';
 import { LINK_TYPE_LABELS, PRESET_COLORS } from './types';
+
+import { isNonWorkDay, snapToWorkday } from './utils';
+
+const toDate = (s: string): Date | undefined => (s ? parseISO(s) : undefined);
+const toStr = (d?: Date): string => (d ? format(d, 'yyyy-MM-dd') : '');
+const snapStr = (s: string, direction: 'forward' | 'backward'): string =>
+    s ? toStr(snapToWorkday(parseISO(s), direction)) : '';
 
 interface EditTaskDialogProps {
     open: boolean;
@@ -26,7 +35,7 @@ interface EditTaskDialogProps {
         is_critical?: boolean;
     }) => void;
     onDeleteLink: (linkId: number) => void;
-    onUpdateLink: (linkId: number, type: LinkType) => void;
+    onUpdateLink: (linkId: number, patch: { type?: LinkType; lag_days?: number }) => void;
 }
 
 export default function EditTaskDialog({
@@ -70,10 +79,10 @@ export default function EditTaskDialog({
 
         onUpdateTask(task.id, {
             name: name.trim() || task.name,
-            baseline_start: baselineStart || null,
-            baseline_finish: baselineFinish || null,
-            start_date: startDate || null,
-            end_date: endDate || null,
+            baseline_start: snapStr(baselineStart, 'forward') || null,
+            baseline_finish: snapStr(baselineFinish, 'backward') || null,
+            start_date: snapStr(startDate, 'forward') || null,
+            end_date: snapStr(endDate, 'backward') || null,
             color,
             is_critical: isCritical,
         });
@@ -103,22 +112,42 @@ export default function EditTaskDialog({
                             <>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="edit-start">Start Date</Label>
-                                        <Input id="edit-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                                        <Label>Start Date</Label>
+                                        <DatePickerDemo
+                                            value={toDate(startDate)}
+                                            onChange={(d) => setStartDate(toStr(d))}
+                                            displayFormat="dd MMM yyyy"
+                                            disabled={isNonWorkDay}
+                                        />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label htmlFor="edit-end">End Date</Label>
-                                        <Input id="edit-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                                        <Label>End Date</Label>
+                                        <DatePickerDemo
+                                            value={toDate(endDate)}
+                                            onChange={(d) => setEndDate(toStr(d))}
+                                            displayFormat="dd MMM yyyy"
+                                            disabled={isNonWorkDay}
+                                        />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="edit-bl-start">Baseline Start</Label>
-                                        <Input id="edit-bl-start" type="date" value={baselineStart} onChange={(e) => setBaselineStart(e.target.value)} />
+                                        <Label>Baseline Start</Label>
+                                        <DatePickerDemo
+                                            value={toDate(baselineStart)}
+                                            onChange={(d) => setBaselineStart(toStr(d))}
+                                            displayFormat="dd MMM yyyy"
+                                            disabled={isNonWorkDay}
+                                        />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label htmlFor="edit-bl-finish">Baseline Finish</Label>
-                                        <Input id="edit-bl-finish" type="date" value={baselineFinish} onChange={(e) => setBaselineFinish(e.target.value)} />
+                                        <Label>Baseline Finish</Label>
+                                        <DatePickerDemo
+                                            value={toDate(baselineFinish)}
+                                            onChange={(d) => setBaselineFinish(toStr(d))}
+                                            displayFormat="dd MMM yyyy"
+                                            disabled={isNonWorkDay}
+                                        />
                                     </div>
                                 </div>
                             </>
@@ -190,9 +219,9 @@ export default function EditTaskDialog({
                                                 </span>
                                                 <Select
                                                     value={link.type}
-                                                    onValueChange={(val) => onUpdateLink(link.id, val as LinkType)}
+                                                    onValueChange={(val) => onUpdateLink(link.id, { type: val as LinkType })}
                                                 >
-                                                    <SelectTrigger className="h-7 w-[130px] text-xs">
+                                                    <SelectTrigger className="h-7 w-[110px] text-xs">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -203,6 +232,19 @@ export default function EditTaskDialog({
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+                                                <Input
+                                                    type="number"
+                                                    value={link.lag_days ?? 0}
+                                                    onChange={(e) => {
+                                                        const n = Number.parseInt(e.target.value, 10);
+                                                        onUpdateLink(link.id, { lag_days: Number.isFinite(n) ? n : 0 });
+                                                    }}
+                                                    className="h-7 w-[64px] text-xs"
+                                                    title="Lag in days (negative = lead/overlap)"
+                                                    min={-365}
+                                                    max={365}
+                                                />
+                                                <span className="text-muted-foreground text-[10px]">d</span>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"

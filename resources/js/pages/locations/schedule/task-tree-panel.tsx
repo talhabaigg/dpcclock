@@ -4,10 +4,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import {
+    closestCenter,
+    type CollisionDetection,
+    DndContext,
+    type DragEndEvent,
+    MeasuringStrategy,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { endOfMonth, endOfQuarter, format, startOfMonth, startOfQuarter, subMonths, addMonths } from 'date-fns';
 import { ChevronRight, Filter, FolderOpen, Plus } from 'lucide-react';
-import { forwardRef, useState } from 'react';
-import type { TaskNode } from './types';
+import { forwardRef, useCallback, useMemo, useState } from 'react';
+import type { ProjectTask, TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
 import TaskTreeRow from './task-tree-row';
 
@@ -18,6 +30,8 @@ interface DateRange {
 
 interface TaskTreePanelProps {
     visibleTasks: TaskNode[];
+    /** Full task list — needed to recompute sibling order across collapsed branches. */
+    allTasks: ProjectTask[];
     expanded: Set<number>;
     onToggle: (id: number) => void;
     onAddChild: (parentId: number, parentName: string) => void;
@@ -25,6 +39,10 @@ interface TaskTreePanelProps {
     onRename: (id: number, name: string) => void;
     onDatesChange: (id: number, startDate: string, endDate: string) => void;
     onAddTask: () => void;
+    /** Called with the new full task list (with updated sort_order) after a manual drag. */
+    onManualReorder: (next: ProjectTask[]) => void;
+    onIndent: (taskId: number) => void;
+    onOutdent: (taskId: number) => void;
     showBaseline: boolean;
     filterTaskId: number | null;
     onFilterTaskChange: (taskId: number | null) => void;
@@ -112,8 +130,84 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
 }
 
 const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
-    ({ visibleTasks, expanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onAddTask, showBaseline, filterTaskId, onFilterTaskChange, rootTasks, startDateRange, onStartDateRangeChange, endDateRange, onEndDateRangeChange }, ref) => {
+    ({ visibleTasks, allTasks, expanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onAddTask, onManualReorder, onIndent, onOutdent, showBaseline, filterTaskId, onFilterTaskChange, rootTasks, startDateRange, onStartDateRangeChange, endDateRange, onEndDateRangeChange }, ref) => {
         const [filterOpen, setFilterOpen] = useState(false);
+
+        // 5px activation distance prevents accidental drags when clicking row controls.
+        const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+        // Precomputed metadata keyed by task id — avoids O(n²) work in the render loop
+        // (was filter+sort over allTasks per row per render).
+        const rowMeta = useMemo(() => {
+            const parentOf = new Map<number, number | null>();
+            const siblingGroups = new Map<number | null, ProjectTask[]>();
+            for (const t of allTasks) {
+                parentOf.set(t.id, t.parent_id);
+                const arr = siblingGroups.get(t.parent_id) ?? [];
+                arr.push(t);
+                siblingGroups.set(t.parent_id, arr);
+            }
+            for (const arr of siblingGroups.values()) arr.sort((a, b) => a.sort_order - b.sort_order);
+
+            const meta = new Map<number, { canIndent: boolean; canOutdent: boolean }>();
+            for (const t of allTasks) {
+                const sibs = siblingGroups.get(t.parent_id) ?? [];
+                const canIndent = sibs.some((s) => s.id !== t.id && s.sort_order < t.sort_order);
+                const canOutdent = t.parent_id !== null;
+                meta.set(t.id, { canIndent, canOutdent });
+            }
+            return { parentOf, meta };
+        }, [allTasks]);
+
+        // Restrict collision detection to siblings of the actively-dragged row.
+        // This turns an O(n) per-frame scan into O(sibling-count), which is typically small.
+        const siblingCollision = useCallback<CollisionDetection>((args) => {
+            const activeId = args.active?.id;
+            if (activeId == null) return closestCenter(args);
+            const activeParent = rowMeta.parentOf.get(Number(activeId));
+            if (activeParent === undefined) return closestCenter(args);
+            const siblingContainers = args.droppableContainers.filter((c) => {
+                const cid = Number(c.id);
+                return rowMeta.parentOf.get(cid) === activeParent;
+            });
+            return closestCenter({ ...args, droppableContainers: siblingContainers });
+        }, [rowMeta]);
+
+        const handleDragEnd = useCallback((event: DragEndEvent) => {
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+
+            const activeId = Number(active.id);
+            const overId = Number(over.id);
+            const activeTask = allTasks.find((t) => t.id === activeId);
+            const overTask = allTasks.find((t) => t.id === overId);
+            if (!activeTask || !overTask) return;
+
+            // Sibling-only: reject cross-parent drops.
+            if (activeTask.parent_id !== overTask.parent_id) return;
+
+            // Reorder within the sibling group, then renumber sort_order.
+            const siblings = allTasks
+                .filter((t) => t.parent_id === activeTask.parent_id)
+                .sort((a, b) => a.sort_order - b.sort_order);
+            const fromIdx = siblings.findIndex((t) => t.id === activeId);
+            const toIdx = siblings.findIndex((t) => t.id === overId);
+            if (fromIdx < 0 || toIdx < 0) return;
+
+            const reordered = [...siblings];
+            const [moved] = reordered.splice(fromIdx, 1);
+            reordered.splice(toIdx, 0, moved);
+
+            const newOrder = new Map<number, number>();
+            reordered.forEach((t, i) => newOrder.set(t.id, i));
+
+            const next = allTasks.map((t) =>
+                newOrder.has(t.id) ? { ...t, sort_order: newOrder.get(t.id)! } : t,
+            );
+            onManualReorder(next);
+        }, [allTasks, onManualReorder]);
+
+        const sortableIds = visibleTasks.map((t) => t.id);
 
         const allFilterOptions: { id: number; name: string; depth: number; hasChildren: boolean }[] = [];
         function collectTasks(nodes: TaskNode[], depth: number) {
@@ -130,6 +224,8 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
             <div className="flex shrink-0 flex-col" style={{ width: 590 }}>
                 {/* Header */}
                 <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
+                    {/* Spacer aligned with the per-row drag handle */}
+                    <span className="w-4 shrink-0" />
                     <span className="flex-1 truncate px-3">Task Name</span>
 
                     {/* Task filter icon */}
@@ -219,19 +315,36 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                             No tasks yet. Click &quot;+&quot; to begin.
                         </div>
                     )}
-                    {visibleTasks.map((node) => (
-                        <TaskTreeRow
-                            key={node.id}
-                            node={node}
-                            isExpanded={expanded.has(node.id)}
-                            onToggle={onToggle}
-                            onAddChild={onAddChild}
-                            onDelete={onDelete}
-                            onRename={onRename}
-                            onDatesChange={onDatesChange}
-                            showBaseline={showBaseline}
-                        />
-                    ))}
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={siblingCollision}
+                        modifiers={[restrictToVerticalAxis]}
+                        measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                            {visibleTasks.map((node) => {
+                                const flags = rowMeta.meta.get(node.id);
+                                return (
+                                    <TaskTreeRow
+                                        key={node.id}
+                                        node={node}
+                                        isExpanded={expanded.has(node.id)}
+                                        onToggle={onToggle}
+                                        onAddChild={onAddChild}
+                                        onDelete={onDelete}
+                                        onRename={onRename}
+                                        onDatesChange={onDatesChange}
+                                        onIndent={onIndent}
+                                        onOutdent={onOutdent}
+                                        canIndent={flags?.canIndent ?? false}
+                                        canOutdent={flags?.canOutdent ?? false}
+                                        showBaseline={showBaseline}
+                                    />
+                                );
+                            })}
+                        </SortableContext>
+                    </DndContext>
                 </div>
             </div>
         );

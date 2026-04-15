@@ -188,10 +188,32 @@ class LocationController extends Controller
 
         $links = \App\Models\ProjectTaskLink::where('location_id', $location->id)->get();
 
+        // Non-work days pulled from timesheet_events scoped to this location's state.
+        // Each row expands to one entry per calendar day between start and end inclusive.
+        $state = $location->state ?? 'QLD';
+        $events = \App\Models\TimesheetEvent::where('state', $state)
+            ->whereIn('type', ['public_holiday', 'rdo'])
+            ->get(['title', 'start', 'end', 'type']);
+
+        $nonWorkDays = [];
+        foreach ($events as $e) {
+            $cursor = \Illuminate\Support\Carbon::parse($e->start);
+            $end = \Illuminate\Support\Carbon::parse($e->end);
+            while ($cursor->lte($end)) {
+                $nonWorkDays[] = [
+                    'date' => $cursor->format('Y-m-d'),
+                    'type' => $e->type, // 'public_holiday' | 'rdo'
+                    'label' => $e->title,
+                ];
+                $cursor->addDay();
+            }
+        }
+
         return Inertia::render('locations/schedule', [
             'location' => $location,
             'tasks' => $tasks,
             'links' => $links,
+            'nonWorkDays' => $nonWorkDays,
         ]);
     }
 

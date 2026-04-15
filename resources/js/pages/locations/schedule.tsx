@@ -12,22 +12,34 @@ import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
 import ScheduleToolbar from './schedule/schedule-toolbar';
 import TaskTreePanel from './schedule/task-tree-panel';
-import type { FilterFlag, LinkType, ProjectTask, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
+import type { FilterFlag, LinkType, ProjectTask, SortMode, TaskLink, TaskNode, ZoomLevel } from './schedule/types';
 import { ZOOM_CONFIGS } from './schedule/types';
-import { buildTree, dateToX, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks } from './schedule/utils';
-import { differenceInCalendarDays } from 'date-fns';
+import { buildTree, dateToX, diffWorkingDays, flattenVisible, generateDayColumns, getDateRange, getScrollOffsetForDate, getTaskDateBounds, propagateLinks, setNonWorkDays, sortSiblings } from './schedule/utils';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 
 type Location = LocationBase & {};
+
+interface NonWorkDayEntry {
+    date: string;
+    type: 'public_holiday' | 'rdo';
+    label: string;
+}
 
 interface PageProps {
     location: Location;
     tasks: ProjectTask[];
     links: TaskLink[];
+    nonWorkDays: NonWorkDayEntry[];
     [key: string]: unknown;
 }
 
 export default function Schedule() {
-    const { location, tasks: initialTasks, links: initialLinks } = usePage<PageProps>().props;
+    const { location, tasks: initialTasks, links: initialLinks, nonWorkDays: initialNonWorkDays } = usePage<PageProps>().props;
+
+    // Populate the module-level calendar synchronously on every render so schedulers, snap logic
+    // and colored stripes all see it on first paint. Rebuilding a small Map per render is cheap.
+    const nonWorkDays = initialNonWorkDays ?? [];
+    setNonWorkDays(nonWorkDays);
 
     const [tasks, setTasks] = useState<ProjectTask[]>(initialTasks);
     const [links, setLinks] = useState<TaskLink[]>(initialLinks);
@@ -39,6 +51,9 @@ export default function Schedule() {
         return parentIds;
     });
     const [zoom, setZoom] = useState<ZoomLevel>('month');
+    // Auto-fit sets a custom day-width that overrides the preset so spans of any length can shrink
+    // to fit. Cleared whenever a preset zoom button is clicked.
+    const [customDayWidth, setCustomDayWidth] = useState<number | null>(null);
     const [linkMode, setLinkMode] = useState(false);
     const [showBaseline, setShowBaseline] = useState(false);
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -59,6 +74,58 @@ export default function Schedule() {
     }, []);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
+    const sortStorageKey = `schedule.sort.${location.id}`;
+    const [sortMode, setSortMode] = useState<SortMode>(() => {
+        if (typeof window === 'undefined') return 'manual';
+        const stored = window.localStorage.getItem(sortStorageKey);
+        const valid: SortMode[] = ['manual', 'start_asc', 'start_desc', 'finish_asc', 'name_asc'];
+        return (valid as string[]).includes(stored ?? '') ? (stored as SortMode) : 'manual';
+    });
+
+    const handleSortModeChange = useCallback(async (mode: SortMode) => {
+        setSortMode(mode);
+        try {
+            window.localStorage.setItem(sortStorageKey, mode);
+        } catch { /* storage may be disabled */ }
+        if (mode === 'manual') return;
+
+        const updates = sortSiblings(tasks, mode);
+        if (updates.length === 0) return;
+
+        const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
+        const next = tasks.map((t) => updateMap.has(t.id) ? { ...t, sort_order: updateMap.get(t.id)! } : t);
+        setTasks(next);
+
+        try {
+            await api.post(`/locations/${location.id}/tasks/reorder`, { tasks: updates });
+        } catch {
+            setTasks(tasks);
+            toast.error('Failed to save sort order');
+        }
+    }, [tasks, location.id, sortStorageKey]);
+
+    const persistManualReorder = useCallback(async (next: ProjectTask[]) => {
+        // Compute updates: any task whose new sort_order differs from its old one.
+        const oldMap = new Map(tasks.map((t) => [t.id, t.sort_order]));
+        const updates: { id: number; sort_order: number }[] = [];
+        for (const t of next) {
+            if (oldMap.get(t.id) !== t.sort_order) updates.push({ id: t.id, sort_order: t.sort_order });
+        }
+        if (updates.length === 0) return;
+
+        setTasks(next);
+        if (sortMode !== 'manual') {
+            setSortMode('manual');
+            try { window.localStorage.setItem(sortStorageKey, 'manual'); } catch { /* noop */ }
+        }
+
+        try {
+            await api.post(`/locations/${location.id}/tasks/reorder`, { tasks: updates });
+        } catch {
+            setTasks(tasks);
+            toast.error('Failed to save order');
+        }
+    }, [tasks, location.id, sortMode, sortStorageKey]);
 
     const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
     const treeScrollRef = useRef<HTMLDivElement>(null);
@@ -82,8 +149,13 @@ export default function Schedule() {
         return () => el.removeEventListener('scroll', handler);
     }, []);
 
-    const dayWidth = ZOOM_CONFIGS[zoom].dayWidth;
-    const paddingDays = ZOOM_CONFIGS[zoom].paddingDays;
+    const dayWidth = customDayWidth ?? ZOOM_CONFIGS[zoom].dayWidth;
+    const paddingDays = customDayWidth ? ZOOM_CONFIGS.year.paddingDays : ZOOM_CONFIGS[zoom].paddingDays;
+
+    const handleZoomChange = useCallback((next: ZoomLevel) => {
+        setCustomDayWidth(null);
+        setZoom(next);
+    }, []);
 
     // Build tree + flatten
     const tree = useMemo(() => buildTree(tasks), [tasks]);
@@ -250,30 +322,41 @@ export default function Schedule() {
         if (!bounds) return;
 
         const viewportWidth = ganttScrollRef.current.clientWidth;
-        const totalDays = differenceInCalendarDays(bounds.end, bounds.start) + 14; // padding
+        const availableWidth = Math.max(100, viewportWidth - 40);
 
-        // Pick the best zoom level to fit
-        const zoomOptions: ZoomLevel[] = ['week', 'month', 'quarter'];
-        let bestZoom: ZoomLevel = 'quarter';
+        // Include a small calendar padding so bars don't sit flush against the edges.
+        const totalDays = differenceInCalendarDays(bounds.end, bounds.start) + 14;
+
+        // Try to fit using an existing preset first (gives nicer header + scale).
+        const zoomOptions: ZoomLevel[] = ['week', 'month', 'quarter', 'year'];
+        let bestPreset: ZoomLevel | null = null;
         for (const z of zoomOptions) {
             const dw = ZOOM_CONFIGS[z].dayWidth;
-            if (totalDays * dw <= viewportWidth * 1.2) {
-                bestZoom = z;
-                break;
-            }
+            if (totalDays * dw <= availableWidth) { bestPreset = z; break; }
         }
-        setZoom(bestZoom);
 
-        // Scroll to task start after zoom change renders (need a tick)
+        if (bestPreset) {
+            setCustomDayWidth(null);
+            setZoom(bestPreset);
+        } else {
+            // Span is wider than even `year` zoom — compute an exact-fit custom dayWidth.
+            // Floor at 0.3 so bars remain renderable, even for 10+ year spans.
+            const computed = Math.max(0.3, availableWidth / totalDays);
+            setCustomDayWidth(computed);
+            setZoom('year');
+        }
+
         requestAnimationFrame(() => {
             if (!ganttScrollRef.current) return;
-            const newDayWidth = ZOOM_CONFIGS[bestZoom].dayWidth;
-            const newPadding = ZOOM_CONFIGS[bestZoom].paddingDays;
+            const newDayWidth = bestPreset
+                ? ZOOM_CONFIGS[bestPreset].dayWidth
+                : Math.max(0.3, availableWidth / totalDays);
+            const newPadding = ZOOM_CONFIGS.year.paddingDays;
             const newRange = getDateRange(tasks, newPadding);
             const startX = dateToX(bounds.start, newRange.start, newDayWidth);
             ganttScrollRef.current.scrollTo({ left: Math.max(0, startX - 20), behavior: 'smooth' });
         });
-    }, [tasks, rangeStart, dayWidth]);
+    }, [tasks]);
 
     // ── Task CRUD ──
 
@@ -338,14 +421,46 @@ export default function Schedule() {
     const handleDatesChange = useCallback(
         async (id: number, startDate: string, endDate: string) => {
             const prev = tasks;
+            const prevLinks = links;
 
             // Apply the moved task's dates first
             const updatedTasks = prev.map((t) =>
                 t.id === id ? { ...t, start_date: startDate, end_date: endDate } : t,
             );
 
-            // Propagate to linked successors (cascading), passing original tasks for delta calc
-            const cascaded = propagateLinks(id, updatedTasks, links, prev);
+            // Recompute lag on every incoming link to the moved task — drag is the source of truth.
+            const taskById = new Map(updatedTasks.map((t) => [t.id, t]));
+            const lagUpdates: { id: number; lag_days: number }[] = [];
+            const newStart = parseISO(startDate);
+            const newEnd = parseISO(endDate);
+            for (const link of prevLinks) {
+                if (link.target_id !== id) continue;
+                const src = taskById.get(link.source_id);
+                if (!src?.start_date || !src?.end_date) continue;
+                const srcStart = parseISO(src.start_date);
+                const srcEnd = parseISO(src.end_date);
+
+                let derivedLag: number;
+                switch (link.type) {
+                    case 'FS': derivedLag = diffWorkingDays(srcEnd, newStart) - 1; break;
+                    case 'SS': derivedLag = diffWorkingDays(srcStart, newStart); break;
+                    case 'FF': derivedLag = diffWorkingDays(srcEnd, newEnd); break;
+                    case 'SF': derivedLag = diffWorkingDays(srcStart, newEnd) + 1; break;
+                    default:   derivedLag = link.lag_days ?? 0;
+                }
+                if (derivedLag !== (link.lag_days ?? 0)) {
+                    lagUpdates.push({ id: link.id, lag_days: derivedLag });
+                }
+            }
+
+            // Apply lag updates locally so the forward pass downstream uses them.
+            const lagById = new Map(lagUpdates.map((u) => [u.id, u.lag_days]));
+            const updatedLinks = lagById.size > 0
+                ? prevLinks.map((l) => lagById.has(l.id) ? { ...l, lag_days: lagById.get(l.id)! } : l)
+                : prevLinks;
+
+            // Propagate to linked successors (cascading) using the new link lags.
+            const cascaded = propagateLinks(id, updatedTasks, updatedLinks);
 
             // Apply all cascaded updates
             let finalTasks = updatedTasks;
@@ -355,20 +470,25 @@ export default function Schedule() {
                 );
             }
             setTasks(finalTasks);
+            if (lagById.size > 0) setLinks(updatedLinks);
 
-            // Persist all changes — moved task + cascaded successors
+            // Persist all changes — moved task + cascaded successors + lag rewrites.
             try {
-                const allUpdates = [
+                const dateUpdates = [
                     { id, start_date: startDate, end_date: endDate },
                     ...cascaded,
                 ];
-                await Promise.all(
-                    allUpdates.map((u) =>
+                await Promise.all([
+                    ...dateUpdates.map((u) =>
                         api.patch(`/tasks/${u.id}/dates`, { start_date: u.start_date, end_date: u.end_date }),
                     ),
-                );
+                    ...lagUpdates.map((u) =>
+                        api.patch(`/task-links/${u.id}`, { lag_days: u.lag_days }),
+                    ),
+                ]);
             } catch {
                 setTasks(prev);
+                setLinks(prevLinks);
                 toast.error('Failed to update dates');
             }
         },
@@ -402,6 +522,68 @@ export default function Schedule() {
         setEditDialogOpen(true);
     }, []);
 
+    // ── Hierarchy: indent (demote) / outdent (promote) ──
+
+    const moveHierarchy = useCallback(
+        async (taskId: number, newParentId: number | null, siblingOrder: number[]) => {
+            try {
+                const result = await api.patch<{ success: boolean; tasks: ProjectTask[] }>(
+                    `/tasks/${taskId}/hierarchy`,
+                    { parent_id: newParentId, sibling_order: siblingOrder },
+                );
+                setTasks(result.tasks);
+                if (newParentId !== null) {
+                    setExpanded((prev) => new Set(prev).add(newParentId));
+                }
+            } catch {
+                toast.error('Failed to move task');
+            }
+        },
+        [],
+    );
+
+    const handleIndent = useCallback((taskId: number) => {
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) return;
+        // Indent target = nearest preceding sibling (same parent_id, lower sort_order).
+        const siblings = tasks
+            .filter((t) => t.parent_id === task.parent_id && t.id !== taskId)
+            .sort((a, b) => a.sort_order - b.sort_order);
+        const precedingSibling = [...siblings].reverse().find((t) => t.sort_order < task.sort_order);
+        if (!precedingSibling) {
+            toast.error('No task above to indent under');
+            return;
+        }
+        // New siblings under preceding sibling: append this task at the end.
+        const newSiblings = tasks
+            .filter((t) => t.parent_id === precedingSibling.id && t.id !== taskId)
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((t) => t.id);
+        newSiblings.push(taskId);
+        moveHierarchy(taskId, precedingSibling.id, newSiblings);
+    }, [tasks, moveHierarchy]);
+
+    const handleOutdent = useCallback((taskId: number) => {
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task || task.parent_id === null) {
+            toast.error('Task is already at the top level');
+            return;
+        }
+        const oldParent = tasks.find((t) => t.id === task.parent_id);
+        if (!oldParent) return;
+
+        // New parent = grandparent (may be null = root). Insert task right after oldParent.
+        const grandparentId = oldParent.parent_id;
+        const grandSiblings = tasks
+            .filter((t) => t.parent_id === grandparentId && t.id !== taskId)
+            .sort((a, b) => a.sort_order - b.sort_order);
+        const parentIdx = grandSiblings.findIndex((t) => t.id === oldParent.id);
+        const newOrderIds = grandSiblings.map((t) => t.id);
+        newOrderIds.splice(parentIdx + 1, 0, taskId);
+
+        moveHierarchy(taskId, grandparentId, newOrderIds);
+    }, [tasks, moveHierarchy]);
+
     // ── Link CRUD ──
 
     const handleCreateLink = useCallback(
@@ -427,11 +609,11 @@ export default function Schedule() {
         [location.id],
     );
 
-    const handleUpdateLink = useCallback(async (linkId: number, type: LinkType) => {
+    const handleUpdateLink = useCallback(async (linkId: number, patch: { type?: LinkType; lag_days?: number }) => {
         const prev = links;
-        setLinks((curr) => curr.map((l) => (l.id === linkId ? { ...l, type } : l)));
+        setLinks((curr) => curr.map((l) => (l.id === linkId ? { ...l, ...patch } : l)));
         try {
-            await api.patch(`/task-links/${linkId}`, { type });
+            await api.patch(`/task-links/${linkId}`, patch);
         } catch {
             setLinks(prev);
             toast.error('Failed to update link');
@@ -563,7 +745,7 @@ export default function Schedule() {
                 )}
                 <ScheduleToolbar
                     zoom={zoom}
-                    onZoomChange={setZoom}
+                    onZoomChange={handleZoomChange}
                     onAddTask={() => openAddDialog()}
                     onExpandAll={expandAll}
                     onCollapseAll={collapseAll}
@@ -588,6 +770,8 @@ export default function Schedule() {
                     onBulkUnmarkOwned={() => handleBulkMarkOwned(false)}
                     hasFilteredTasks={visibleTasks.length > 0}
                     onImport={() => importBtnRef.current?.querySelector('button')?.click()}
+                    sortMode={sortMode}
+                    onSortModeChange={handleSortModeChange}
                     startDateRange={startDateRange}
                     onClearStartDateRange={() => setStartDateRange({ from: null, to: null })}
                     endDateRange={endDateRange}
@@ -615,6 +799,7 @@ export default function Schedule() {
                     <TaskTreePanel
                         ref={treeScrollRef}
                         visibleTasks={visibleTasks}
+                        allTasks={tasks}
                         expanded={expanded}
                         onToggle={handleToggle}
                         onAddChild={(parentId, parentName) => openAddDialog(parentId, parentName)}
@@ -622,6 +807,9 @@ export default function Schedule() {
                         onRename={handleRename}
                         onDatesChange={handleDatesChange}
                         onAddTask={() => openAddDialog()}
+                        onManualReorder={persistManualReorder}
+                        onIndent={handleIndent}
+                        onOutdent={handleOutdent}
                         showBaseline={showBaseline}
                         filterTaskId={filterTaskId}
                         onFilterTaskChange={setFilterTaskId}

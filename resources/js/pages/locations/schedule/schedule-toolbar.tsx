@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
     Menubar,
@@ -10,8 +11,9 @@ import {
     MenubarTrigger,
 } from '@/components/ui/menubar';
 import { cn } from '@/lib/utils';
-import { CalendarDays, HardHat, Maximize2, Search, X } from 'lucide-react';
-import type { FilterFlag, ZoomLevel } from './types';
+import { ArrowDownUp, CalendarDays, HardHat, Maximize2, Search, X } from 'lucide-react';
+import type { FilterFlag, SortMode, ZoomLevel } from './types';
+import { SORT_MODE_LABELS } from './types';
 
 interface ScheduleToolbarProps {
     zoom: ZoomLevel;
@@ -40,6 +42,8 @@ interface ScheduleToolbarProps {
     onBulkUnmarkOwned: () => void;
     hasFilteredTasks: boolean;
     onImport: () => void;
+    sortMode: SortMode;
+    onSortModeChange: (mode: SortMode) => void;
     startDateRange: { from: string | null; to: string | null };
     onClearStartDateRange: () => void;
     endDateRange: { from: string | null; to: string | null };
@@ -51,6 +55,7 @@ const VIEW_OPTIONS: { key: ZoomLevel; label: string }[] = [
     { key: 'week', label: 'Week' },
     { key: 'month', label: 'Month' },
     { key: 'quarter', label: 'Quarter' },
+    { key: 'year', label: 'Year' },
 ];
 
 export default function ScheduleToolbar({
@@ -80,6 +85,8 @@ export default function ScheduleToolbar({
     onBulkUnmarkOwned,
     hasFilteredTasks,
     onImport,
+    sortMode,
+    onSortModeChange,
     startDateRange,
     onClearStartDateRange,
     endDateRange,
@@ -208,6 +215,30 @@ export default function ScheduleToolbar({
                 <Button size="icon" variant="outline" onClick={onAutoFit} title="Auto-fit" className="h-7 w-7">
                     <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
+
+                {/* Sort menu */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={cn('h-7 text-xs', sortMode !== 'manual' && 'border-primary text-primary')}
+                            title={`Sort: ${SORT_MODE_LABELS[sortMode]}`}
+                        >
+                            <ArrowDownUp className="mr-1 h-3.5 w-3.5" />
+                            Sort
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                        <DropdownMenuRadioGroup value={sortMode} onValueChange={(v) => onSortModeChange(v as SortMode)}>
+                            {(Object.entries(SORT_MODE_LABELS) as [SortMode, string][]).map(([key, label]) => (
+                                <DropdownMenuRadioItem key={key} value={key} className="text-xs">
+                                    {label}
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
                 <div className="mx-1 h-4 w-px bg-border" />
 

@@ -11,7 +11,12 @@ class ProjectTaskLink extends Model
         'source_id',
         'target_id',
         'type',
+        'lag_days',
         'created_by',
+    ];
+
+    protected $casts = [
+        'lag_days' => 'integer',
     ];
 
     protected static function booted(): void

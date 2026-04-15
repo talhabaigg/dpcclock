@@ -1,32 +1,72 @@
 import { addDays, differenceInCalendarDays, format, isWeekend, min, max, parseISO, startOfDay } from 'date-fns';
-import type { ProjectTask, TaskLink, TaskNode } from './types';
+import type { ProjectTask, SortMode, TaskLink, TaskNode } from './types';
 
 // ── Working Days ──
 
+export type NonWorkDayType = 'public_holiday' | 'rdo';
+
+/** Module-level calendar of state-scoped non-work days. Keyed by YYYY-MM-DD. */
+let NON_WORK_DAY_MAP: Map<string, NonWorkDayType> = new Map();
+
+/** Load the page's non-work-day list into the module-level calendar. Call once at page mount. */
+export function setNonWorkDays(entries: { date: string; type: NonWorkDayType }[]): void {
+    NON_WORK_DAY_MAP = new Map(entries.map((e) => [e.date, e.type]));
+}
+
+/** Returns the non-work-day type for a date, or null if it's a regular workday. Weekends → 'weekend' (treated as null in type queries since no entry). */
+export function getNonWorkDayType(date: Date): NonWorkDayType | null {
+    return NON_WORK_DAY_MAP.get(format(date, 'yyyy-MM-dd')) ?? null;
+}
+
+/** Single source of truth for "is this a non-work day?". Weekends + state-scoped holidays/RDOs. */
+export function isNonWorkDay(date: Date): boolean {
+    if (isWeekend(date)) return true;
+    return NON_WORK_DAY_MAP.has(format(date, 'yyyy-MM-dd'));
+}
+
+/** Inclusive count of working days from start to end (both endpoints counted if weekdays). */
 export function countWorkingDays(start: Date, end: Date): number {
     let count = 0;
     let current = startOfDay(start);
     const endDay = startOfDay(end);
     while (current <= endDay) {
-        if (!isWeekend(current)) count++;
+        if (!isNonWorkDay(current)) count++;
         current = addDays(current, 1);
     }
     return count;
 }
 
+/** Add N working days. N may be negative to step backward. N=0 returns start unchanged. */
 export function addWorkingDays(start: Date, days: number): Date {
     let current = startOfDay(start);
-    let added = 0;
-    while (added < days) {
-        current = addDays(current, 1);
-        if (!isWeekend(current)) added++;
+    if (days === 0) return current;
+    const step = days > 0 ? 1 : -1;
+    let remaining = Math.abs(days);
+    while (remaining > 0) {
+        current = addDays(current, step);
+        if (!isNonWorkDay(current)) remaining--;
     }
     return current;
 }
 
+/** Signed working-day delta: how many working days from `from` to `to`. */
+export function diffWorkingDays(from: Date, to: Date): number {
+    const a = startOfDay(from);
+    const b = startOfDay(to);
+    if (a.getTime() === b.getTime()) return 0;
+    const step = b > a ? 1 : -1;
+    let current = a;
+    let count = 0;
+    while (current.getTime() !== b.getTime()) {
+        current = addDays(current, step);
+        if (!isNonWorkDay(current)) count += step;
+    }
+    return count;
+}
+
 export function snapToWorkday(date: Date, direction: 'forward' | 'backward'): Date {
     let d = startOfDay(date);
-    while (isWeekend(d)) {
+    while (isNonWorkDay(d)) {
         d = addDays(d, direction === 'forward' ? 1 : -1);
     }
     return d;
@@ -225,6 +265,54 @@ export function formatMonthHeader(date: Date): string {
     return format(date, 'MMM yyyy');
 }
 
+// ── Sibling Sort ──
+
+interface ReorderEntry {
+    id: number;
+    sort_order: number;
+}
+
+/**
+ * Sort sibling groups (tasks sharing a parent_id) by the chosen mode and
+ * return a `[{id, sort_order}]` payload for the reorder endpoint.
+ * sort_order is an index within the sibling group (0..N-1).
+ */
+export function sortSiblings(tasks: ProjectTask[], mode: SortMode): ReorderEntry[] {
+    if (mode === 'manual') return [];
+
+    const groups = new Map<number | null, ProjectTask[]>();
+    for (const t of tasks) {
+        const arr = groups.get(t.parent_id) ?? [];
+        arr.push(t);
+        groups.set(t.parent_id, arr);
+    }
+
+    const cmp = (a: ProjectTask, b: ProjectTask): number => {
+        const nullsLast = (av: string | null, bv: string | null, dir: 1 | -1): number => {
+            if (av === bv) return 0;
+            if (av === null) return 1;
+            if (bv === null) return -1;
+            return av < bv ? -dir : dir;
+        };
+        switch (mode) {
+            case 'start_asc':   return nullsLast(a.start_date, b.start_date, 1);
+            case 'start_desc':  return nullsLast(a.start_date, b.start_date, -1);
+            case 'finish_asc':  return nullsLast(a.end_date, b.end_date, 1);
+            case 'name_asc':    return a.name.localeCompare(b.name);
+            default:            return 0;
+        }
+    };
+
+    const out: ReorderEntry[] = [];
+    for (const siblings of groups.values()) {
+        const sorted = [...siblings].sort(cmp);
+        sorted.forEach((t, i) => {
+            if (t.sort_order !== i) out.push({ id: t.id, sort_order: i });
+        });
+    }
+    return out;
+}
+
 // ── Dependency Propagation ──
 
 interface TaskDateUpdate {
@@ -234,154 +322,139 @@ interface TaskDateUpdate {
 }
 
 /**
- * Given a moved task, propagate date changes to all linked successors (cascading).
- * Successors always maintain the dependency gap — they move with the predecessor.
- * Returns an array of tasks that need their dates updated.
+ * Forward-pass scheduler. Given a moved task, recomputes every reachable successor
+ * by taking the max of all incoming predecessor constraints (CPM forward pass).
+ *
+ * Properties:
+ *  - Deterministic: independent of link order in the array.
+ *  - Correct for diamonds / multi-predecessor targets.
+ *  - One update per task (deduped).
+ *  - Successors snap to the implied earliest start — moves forward AND backward
+ *    with their predecessors (ASAP behavior). Manual spacing must be stored as lag.
+ *  - Cycles are detected and skipped (the offending task is not updated).
  */
 export function propagateLinks(
     movedTaskId: number,
     tasks: ProjectTask[],
     links: TaskLink[],
-    /** Original tasks before the move — needed to compute the delta */
-    originalTasks?: ProjectTask[],
+    /** Kept for signature compatibility; no longer needed. */
+    _originalTasks?: ProjectTask[],
 ): TaskDateUpdate[] {
+    void _originalTasks;
+
     const taskMap = new Map(tasks.map((t) => [t.id, { ...t }]));
-    const origMap = originalTasks ? new Map(originalTasks.map((t) => [t.id, t])) : null;
+
+    // Build adjacency: outgoing per source, and incoming per target.
+    const outgoingBy = new Map<number, TaskLink[]>();
+    const incomingBy = new Map<number, TaskLink[]>();
+    for (const l of links) {
+        (outgoingBy.get(l.source_id) ?? outgoingBy.set(l.source_id, []).get(l.source_id)!).push(l);
+        (incomingBy.get(l.target_id) ?? incomingBy.set(l.target_id, []).get(l.target_id)!).push(l);
+    }
+
+    // Collect the subgraph reachable from the moved task (downstream only).
+    const reachable = new Set<number>();
+    const stack = [movedTaskId];
+    while (stack.length) {
+        const id = stack.pop()!;
+        if (reachable.has(id)) continue;
+        reachable.add(id);
+        for (const l of outgoingBy.get(id) ?? []) stack.push(l.target_id);
+    }
+
+    // Kahn's topological sort restricted to the reachable subgraph.
+    // In-degree counts only edges whose source is also in the subgraph.
+    const indeg = new Map<number, number>();
+    for (const id of reachable) {
+        let d = 0;
+        for (const l of incomingBy.get(id) ?? []) {
+            if (reachable.has(l.source_id)) d++;
+        }
+        indeg.set(id, d);
+    }
+
+    const queue: number[] = [];
+    for (const [id, d] of indeg) if (d === 0) queue.push(id);
+
+    const order: number[] = [];
+    while (queue.length) {
+        const id = queue.shift()!;
+        order.push(id);
+        for (const l of outgoingBy.get(id) ?? []) {
+            if (!reachable.has(l.target_id)) continue;
+            const next = (indeg.get(l.target_id) ?? 0) - 1;
+            indeg.set(l.target_id, next);
+            if (next === 0) queue.push(l.target_id);
+        }
+    }
+    // Any task left with indeg > 0 is in a cycle — drop from the pass.
+    const scheduled = new Set(order);
+
+    const fmtD = (d: Date) => format(d, 'yyyy-MM-dd');
     const updates: TaskDateUpdate[] = [];
-    const visited = new Set<number>();
 
-    function propagate(sourceId: number) {
-        if (visited.has(sourceId)) return;
-        visited.add(sourceId);
+    // The moved task itself is fixed (already updated by caller). Resolve everything downstream.
+    for (const id of order) {
+        if (id === movedTaskId) continue;
 
-        const sourceTask = taskMap.get(sourceId);
-        if (!sourceTask?.start_date || !sourceTask?.end_date) return;
+        const target = taskMap.get(id);
+        if (!target?.start_date || !target?.end_date) continue;
 
-        const srcStart = parseISO(sourceTask.start_date);
-        const srcEnd = parseISO(sourceTask.end_date);
+        const tgtStart = parseISO(target.start_date);
+        const tgtEnd = parseISO(target.end_date);
+        // Preserve working-day count (e.g. Mon-Thu = 4). Shift-from-start = wdCount - 1.
+        const wdCount = Math.max(1, countWorkingDays(tgtStart, tgtEnd));
+        const wdShift = wdCount - 1;
 
-        const outgoing = links.filter((l) => l.source_id === sourceId);
+        // Earliest start implied by the union of predecessor constraints.
+        let earliestStart: Date | null = null;
 
-        for (const link of outgoing) {
-            const target = taskMap.get(link.target_id);
-            if (!target?.start_date || !target?.end_date) continue;
+        for (const link of incomingBy.get(id) ?? []) {
+            if (!scheduled.has(link.source_id) && link.source_id !== movedTaskId) continue;
+            const src = taskMap.get(link.source_id);
+            if (!src?.start_date || !src?.end_date) continue;
 
-            const tgtStart = parseISO(target.start_date);
-            const tgtEnd = parseISO(target.end_date);
-            const duration = differenceInCalendarDays(tgtEnd, tgtStart);
+            const srcStart = parseISO(src.start_date);
+            const srcEnd = parseISO(src.end_date);
 
-            // Compute where the successor's anchor must be (the constraint)
-            let requiredStart: Date | null = null;
-            let requiredEnd: Date | null = null;
+            const lag = link.lag_days ?? 0;
 
+            let candidateStart: Date;
             switch (link.type) {
-                case 'FS': {
-                    const earliest = addDays(srcEnd, 1);
-                    // Always push to maintain gap, or enforce minimum
-                    if (origMap) {
-                        // Predecessor moved — shift successor by same delta
-                        const origSource = origMap.get(sourceId);
-                        if (origSource?.end_date) {
-                            const origSrcEnd = parseISO(origSource.end_date);
-                            const delta = differenceInCalendarDays(srcEnd, origSrcEnd);
-                            if (delta !== 0) {
-                                requiredStart = addDays(tgtStart, delta);
-                                requiredEnd = addDays(tgtEnd, delta);
-                            }
-                        }
-                    }
-                    // Also enforce minimum constraint
-                    if (!requiredStart && tgtStart < earliest) {
-                        requiredStart = earliest;
-                        requiredEnd = addDays(earliest, duration);
-                    }
-                    // If delta-shifted but still violates, enforce
-                    if (requiredStart && requiredStart < earliest) {
-                        requiredStart = earliest;
-                        requiredEnd = addDays(earliest, duration);
-                    }
-                    break;
-                }
-                case 'SS': {
-                    if (origMap) {
-                        const origSource = origMap.get(sourceId);
-                        if (origSource?.start_date) {
-                            const delta = differenceInCalendarDays(srcStart, parseISO(origSource.start_date));
-                            if (delta !== 0) {
-                                requiredStart = addDays(tgtStart, delta);
-                                requiredEnd = addDays(tgtEnd, delta);
-                            }
-                        }
-                    }
-                    if (!requiredStart && tgtStart < srcStart) {
-                        requiredStart = srcStart;
-                        requiredEnd = addDays(srcStart, duration);
-                    }
-                    if (requiredStart && requiredStart < srcStart) {
-                        requiredStart = srcStart;
-                        requiredEnd = addDays(srcStart, duration);
-                    }
-                    break;
-                }
+                case 'FS': candidateStart = addWorkingDays(srcEnd, 1 + lag); break;
+                case 'SS': candidateStart = addWorkingDays(srcStart, lag); break;
                 case 'FF': {
-                    if (origMap) {
-                        const origSource = origMap.get(sourceId);
-                        if (origSource?.end_date) {
-                            const delta = differenceInCalendarDays(srcEnd, parseISO(origSource.end_date));
-                            if (delta !== 0) {
-                                requiredEnd = addDays(tgtEnd, delta);
-                                requiredStart = addDays(tgtStart, delta);
-                            }
-                        }
-                    }
-                    if (!requiredEnd && tgtEnd < srcEnd) {
-                        requiredEnd = srcEnd;
-                        requiredStart = addDays(srcEnd, -duration);
-                    }
-                    if (requiredEnd && requiredEnd < srcEnd) {
-                        requiredEnd = srcEnd;
-                        requiredStart = addDays(srcEnd, -duration);
-                    }
+                    const candidateEnd = addWorkingDays(srcEnd, lag);
+                    candidateStart = addWorkingDays(candidateEnd, -wdShift);
                     break;
                 }
                 case 'SF': {
-                    if (origMap) {
-                        const origSource = origMap.get(sourceId);
-                        if (origSource?.start_date) {
-                            const delta = differenceInCalendarDays(srcStart, parseISO(origSource.start_date));
-                            if (delta !== 0) {
-                                requiredEnd = addDays(tgtEnd, delta);
-                                requiredStart = addDays(tgtStart, delta);
-                            }
-                        }
-                    }
-                    if (!requiredEnd && tgtEnd < srcStart) {
-                        requiredEnd = srcStart;
-                        requiredStart = addDays(srcStart, -duration);
-                    }
-                    if (requiredEnd && requiredEnd < srcStart) {
-                        requiredEnd = srcStart;
-                        requiredStart = addDays(srcStart, -duration);
-                    }
+                    const candidateEnd = addWorkingDays(srcStart, lag - 1);
+                    candidateStart = addWorkingDays(candidateEnd, -wdShift);
                     break;
                 }
+                default:   candidateStart = addWorkingDays(srcEnd, 1 + lag);
             }
 
-            if (requiredStart && requiredEnd) {
-                const fmtD = (d: Date) => format(d, 'yyyy-MM-dd');
-                const startStr = fmtD(requiredStart);
-                const endStr = fmtD(requiredEnd);
-
-                target.start_date = startStr;
-                target.end_date = endStr;
-
-                updates.push({ id: target.id, start_date: startStr, end_date: endStr });
-
-                propagate(target.id);
+            if (!earliestStart || candidateStart > earliestStart) {
+                earliestStart = candidateStart;
             }
         }
+
+        if (!earliestStart) continue;
+
+        // Snap to the implied start exactly — rewind if predecessor was backdated,
+        // push forward if it was pushed out. Manual spacing is stored as lag.
+        if (differenceInCalendarDays(earliestStart, tgtStart) === 0) continue;
+
+        const newEnd = addWorkingDays(earliestStart, wdShift);
+        const startStr = fmtD(earliestStart);
+        const endStr = fmtD(newEnd);
+
+        target.start_date = startStr;
+        target.end_date = endStr;
+        updates.push({ id, start_date: startStr, end_date: endStr });
     }
 
-    propagate(movedTaskId);
     return updates;
 }

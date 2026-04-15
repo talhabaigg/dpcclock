@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { TaskNode } from './types';
-import { countWorkingDays, dateToX, xToDate } from './utils';
+import { addWorkingDays, countWorkingDays, dateToX, snapToWorkday, xToDate } from './utils';
 
 /** Format a date as YYYY-MM-DD in local timezone (not UTC) */
 function fmtLocalDate(d: Date): string {
@@ -100,21 +100,25 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
 
             if (dragState.type === 'resize-right') {
                 const finalRight = dragState.origLeft + dragState.origWidth + offset.width - dayWidth;
-                const newEnd = xToDate(finalRight, rangeStart, dayWidth);
-                const safeEnd = newEnd < startDate ? startDate : newEnd;
+                const rawEnd = xToDate(finalRight, rangeStart, dayWidth);
+                const snappedEnd = snapToWorkday(rawEnd < startDate ? startDate : rawEnd, 'backward');
+                const safeEnd = snappedEnd < startDate ? startDate : snappedEnd;
                 onDatesChange(node.id, node.start_date!, fmtLocalDate(safeEnd));
             } else if (dragState.type === 'resize-left') {
                 const finalLeft = dragState.origLeft + offset.left;
-                const newStart = xToDate(finalLeft, rangeStart, dayWidth);
-                const safeStart = newStart > endDate ? endDate : newStart;
+                const rawStart = xToDate(finalLeft, rangeStart, dayWidth);
+                const snappedStart = snapToWorkday(rawStart > endDate ? endDate : rawStart, 'forward');
+                const safeStart = snappedStart > endDate ? endDate : snappedStart;
                 onDatesChange(node.id, fmtLocalDate(safeStart), node.end_date!);
             } else {
+                // Move: preserve working-day duration. Snap start forward to workday,
+                // then derive end = start + (workingDays-1) of working days.
                 const finalLeft = dragState.origLeft + offset.left;
-                const finalRight = finalLeft + dragState.origWidth + offset.width - dayWidth;
-                const newStart = xToDate(finalLeft, rangeStart, dayWidth);
-                const newEnd = xToDate(finalRight, rangeStart, dayWidth);
-                const finalEnd = newEnd < newStart ? newStart : newEnd;
-                onDatesChange(node.id, fmtLocalDate(newStart), fmtLocalDate(finalEnd));
+                const rawStart = xToDate(finalLeft, rangeStart, dayWidth);
+                const newStart = snapToWorkday(rawStart, 'forward');
+                const wdCount = Math.max(1, countWorkingDays(startDate, endDate));
+                const newEnd = addWorkingDays(newStart, wdCount - 1);
+                onDatesChange(node.id, fmtLocalDate(newStart), fmtLocalDate(newEnd));
             }
 
             setDragState(null);
