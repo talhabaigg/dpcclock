@@ -7,11 +7,11 @@ use App\Events\FormSubmitted;
 use App\Listeners\BroadcastQueueJobEvents;
 use App\Listeners\UpdateEmploymentApplicationOnFormSubmitted;
 use App\Listeners\UpdateEmploymentApplicationOnSigned;
+use App\Support\FeatureFlags;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
-
 use App\Contracts\RendersPdf;
 use App\Contracts\StampsPdfOverlay;
 use App\Services\Adapters\BrowsershotPdfRenderer;
@@ -35,6 +35,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        FeatureFlags::defineAll();
+
         // Disable SSL verification in local development
         if ($this->app->environment('local')) {
             Http::globalOptions([

@@ -78,6 +78,7 @@ use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\EmployeeFileTypeController;
 use App\Http\Controllers\EmployeeFileController;
+use App\Http\Controllers\FeatureFlagController;
 use App\Http\Controllers\FileComplianceDashboardController;
 use App\Http\Controllers\LocationSdsController;
 use App\Http\Controllers\SafetyDataSheetController;
@@ -1357,6 +1358,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/permissions', [PermissionController::class, 'index'])->name('admin.permissions.index');
         Route::post('/admin/permissions', [PermissionController::class, 'store'])->name('admin.permissions.store');
         Route::delete('/admin/permissions/{permission}', [PermissionController::class, 'destroy'])->name('admin.permissions.destroy');
+    });
+
+    Route::middleware('permission:feature-flags.manage')->group(function () {
+        Route::get('/admin/feature-flags', [FeatureFlagController::class, 'index'])->name('admin.feature-flags.index');
+        Route::put('/admin/feature-flags/{feature}', [FeatureFlagController::class, 'update'])->name('admin.feature-flags.update');
     });
 
     // Favourite Material Items for Locations

@@ -18,8 +18,8 @@ import {
     Clock,
     Database,
     DollarSign,
-    FileDiff,
     FileBarChart,
+    FileDiff,
     FileSpreadsheet,
     FileText,
     FlaskConical,
@@ -31,27 +31,28 @@ import {
     Hash,
     HeartPulse,
     House,
-    LayoutDashboard,
     Layers,
+    LayoutDashboard,
     ListChecks,
     Monitor,
     NotepadText,
     Pickaxe,
     PiggyBank,
+    Receipt,
+    ReceiptText,
     RefreshCcw,
     Scale,
     ShieldAlert,
     ShieldCheck,
-    Wind,
     ShoppingCart,
     SlidersHorizontal,
     Store,
     TableProperties,
     Tags,
-    Receipt,
-    ReceiptText,
+    ToggleLeft,
     UserX,
     UsersRound,
+    Wind,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
@@ -423,6 +424,12 @@ const configuration = [
                 permission: 'document-templates.manage',
             },
             {
+                name: 'Feature Flags',
+                url: '/admin/feature-flags',
+                icon: ToggleLeft,
+                permission: 'feature-flags.manage',
+            },
+            {
                 name: 'Employee File Types',
                 url: '/employee-file-types',
                 icon: FolderOpen,
@@ -431,7 +438,6 @@ const configuration = [
         ],
     },
 ];
-
 
 const footerNavItems: NavItem[] = [
     {
@@ -491,7 +497,17 @@ export function AppSidebar() {
     const filteredConfiguration = filterGroup(configuration);
     const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
 
-    const allNavGroups = [filteredProjects, filteredFinance, filteredTimesheets, filteredWorkforce, filteredOffice, filteredSafety, filteredDocuments, filteredReports, filteredConfiguration];
+    const allNavGroups = [
+        filteredProjects,
+        filteredFinance,
+        filteredTimesheets,
+        filteredWorkforce,
+        filteredOffice,
+        filteredSafety,
+        filteredDocuments,
+        filteredReports,
+        filteredConfiguration,
+    ];
     const allItems: FavoriteEntry[] = [
         ...filteredMainNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),
         ...filteredFooterNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),

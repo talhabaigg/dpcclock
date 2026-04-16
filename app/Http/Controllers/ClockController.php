@@ -11,6 +11,7 @@ use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\SilicaEntry;
 use App\Models\Worktype;
+use App\Support\FeatureFlags;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -373,20 +374,29 @@ class ClockController extends Controller
     // retrieve ongoing clocked in clock and add clockout and generated entries from kiosk
     public function clockout(Request $request)
     {
-        $validated = $request->validate([
+        $silicaQuestionEnabled = FeatureFlags::active(FeatureFlags::KIOSK_SILICA_QUESTION);
+
+        $rules = [
             'employeeId' => 'required',
             'kioskId' => 'required',
             'entries' => 'required|array',
             'safety_concern' => 'required|boolean',
-            'silica.performed' => 'required|boolean',
-            'silica.tasks' => 'nullable|array',
-            'silica.tasks.*' => 'string',
-            'silica.duration_minutes' => 'nullable|integer|min:0',
-            'silica.swms_compliant' => 'nullable|boolean',
-            'silica.control_measures' => 'nullable|array',
-            'silica.control_measures.*' => 'string',
-            'silica.respirator_type' => 'nullable|string',
-        ]);
+        ];
+
+        if ($silicaQuestionEnabled) {
+            $rules = array_merge($rules, [
+                'silica.performed' => 'required|boolean',
+                'silica.tasks' => 'nullable|array',
+                'silica.tasks.*' => 'string',
+                'silica.duration_minutes' => 'nullable|integer|min:0',
+                'silica.swms_compliant' => 'nullable|boolean',
+                'silica.control_measures' => 'nullable|array',
+                'silica.control_measures.*' => 'string',
+                'silica.respirator_type' => 'nullable|string',
+            ]);
+        }
+
+        $validated = $request->validate($rules);
         // dd($validated);
         // Get employee details
         $eh_employee_id = Employee::find($validated['employeeId']);
@@ -449,18 +459,19 @@ class ClockController extends Controller
             }
         }
 
-        // Store silica entry
-        $silica = $validated['silica'];
-        SilicaEntry::create([
-            'employee_id' => $validated['employeeId'],
-            'performed' => $silica['performed'],
-            'tasks' => $silica['performed'] ? ($silica['tasks'] ?? null) : null,
-            'duration_minutes' => $silica['performed'] ? ($silica['duration_minutes'] ?? null) : null,
-            'swms_compliant' => $silica['performed'] ? ($silica['swms_compliant'] ?? null) : null,
-            'control_measures' => $silica['performed'] && !($silica['swms_compliant'] ?? true) ? ($silica['control_measures'] ?? null) : null,
-            'respirator_type' => $silica['performed'] && ($silica['swms_compliant'] ?? false) ? ($silica['respirator_type'] ?? null) : null,
-            'clock_out_date' => now('Australia/Brisbane')->toDateString(),
-        ]);
+        if ($silicaQuestionEnabled) {
+            $silica = $validated['silica'];
+            SilicaEntry::create([
+                'employee_id' => $validated['employeeId'],
+                'performed' => $silica['performed'],
+                'tasks' => $silica['performed'] ? ($silica['tasks'] ?? null) : null,
+                'duration_minutes' => $silica['performed'] ? ($silica['duration_minutes'] ?? null) : null,
+                'swms_compliant' => $silica['performed'] ? ($silica['swms_compliant'] ?? null) : null,
+                'control_measures' => $silica['performed'] && !($silica['swms_compliant'] ?? true) ? ($silica['control_measures'] ?? null) : null,
+                'respirator_type' => $silica['performed'] && ($silica['swms_compliant'] ?? false) ? ($silica['respirator_type'] ?? null) : null,
+                'clock_out_date' => now('Australia/Brisbane')->toDateString(),
+            ]);
+        }
 
         // Redirect back with success message
         return redirect(route('kiosks.show', $validated['kioskId']))->with('success', 'Clocked out successfully.');

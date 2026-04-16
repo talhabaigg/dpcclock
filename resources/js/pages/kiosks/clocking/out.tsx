@@ -1,11 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, Check, Clock, Minus, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ActivitySelector from '../components/activitySelector';
@@ -59,7 +59,7 @@ interface SilicaFormData {
 }
 
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn, adminMode, silicaOptions } = usePage<{
+    const { employees, kiosk, employee, locations, clockedIn, adminMode, silicaOptions, silicaQuestionEnabled } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
@@ -67,6 +67,7 @@ export default function Clockout() {
         clockedIn: { clock_in: string };
         adminMode: boolean;
         silicaOptions: SilicaOptions;
+        silicaQuestionEnabled: boolean;
     }>().props;
 
     const { setData, data, post, processing } = useForm<{
@@ -207,23 +208,26 @@ export default function Clockout() {
         post(route('clocks.out'));
     };
 
-    const silicaAnswered = data.silica.performed !== null && (
-        !data.silica.performed || (
-            data.silica.tasks.length > 0 &&
-            data.silica.duration_minutes > 0 &&
-            data.silica.swms_compliant !== null &&
-            (data.silica.swms_compliant ? data.silica.respirator_type !== '' : data.silica.control_measures.length > 0)
-        )
-    );
+    const silicaAnswered =
+        !silicaQuestionEnabled ||
+        (data.silica.performed !== null &&
+            (!data.silica.performed ||
+                (data.silica.tasks.length > 0 &&
+                    data.silica.duration_minutes > 0 &&
+                    data.silica.swms_compliant !== null &&
+                    (data.silica.swms_compliant ? data.silica.respirator_type !== '' : data.silica.control_measures.length > 0))));
 
-    const isClockOutDisabled = taskAllocations.some((task) => {
-        return (
-            !task.level ||
-            (groupedLocations[task.level] && groupedLocations[task.level].length > 0 && !task.activity) ||
-            task.hours <= 0 ||
-            hoursAllocated !== hoursWorked
-        );
-    }) || !safetyConfirmed || !silicaAnswered;
+    const isClockOutDisabled =
+        taskAllocations.some((task) => {
+            return (
+                !task.level ||
+                (groupedLocations[task.level] && groupedLocations[task.level].length > 0 && !task.activity) ||
+                task.hours <= 0 ||
+                hoursAllocated !== hoursWorked
+            );
+        }) ||
+        !safetyConfirmed ||
+        !silicaAnswered;
     const toggleAllowance = (index: number, type: 'insulation' | 'setout') => {
         setTaskAllocations((prev) => {
             return prev.map((task, i) => {
@@ -594,254 +598,268 @@ export default function Clockout() {
                         </div>
                         {safetyConfirmed && data.safety_concern && (
                             <p className="mt-2 text-xs leading-relaxed text-amber-700">
-                                <AlertTriangle className="mb-0.5 inline h-3.5 w-3.5" />{' '}
-                                You must notify your foreman and/or HSR immediately and complete an incident / injury report.
+                                <AlertTriangle className="mb-0.5 inline h-3.5 w-3.5" /> You must notify your foreman and/or HSR immediately and
+                                complete an incident / injury report.
                             </p>
                         )}
                     </div>
                 </div>
 
-                {/* Silica Question */}
-                <div className="bg-muted/30 space-y-4 rounded-2xl border-2 p-4 sm:p-6">
-                    <p className="text-foreground text-sm font-semibold">
-                        Did you perform silica-generating work today?
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setData('silica', { ...data.silica, performed: true })}
-                            className={cn(
-                                'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
-                                'touch-manipulation active:scale-[0.98]',
-                                data.silica.performed === true
-                                    ? 'border-amber-500 bg-amber-500/10 text-amber-600'
-                                    : 'border-border bg-card text-muted-foreground hover:border-primary/30',
-                            )}
-                        >
-                            Yes
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setData('silica', {
-                                performed: false,
-                                tasks: [],
-                                duration_minutes: 0,
-                                swms_compliant: null,
-                                control_measures: [],
-                                respirator_type: '',
-                            })}
-                            className={cn(
-                                'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
-                                'touch-manipulation active:scale-[0.98]',
-                                data.silica.performed === false
-                                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
-                                    : 'border-border bg-card text-muted-foreground hover:border-primary/30',
-                            )}
-                        >
-                            No
-                        </button>
-                    </div>
+                {silicaQuestionEnabled && (
+                    <>
+                        {/* Silica Question */}
+                        <div className="bg-muted/30 space-y-4 rounded-2xl border-2 p-4 sm:p-6">
+                            <p className="text-foreground text-sm font-semibold">Did you perform silica-generating work today?</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setData('silica', { ...data.silica, performed: true })}
+                                    className={cn(
+                                        'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
+                                        'touch-manipulation active:scale-[0.98]',
+                                        data.silica.performed === true
+                                            ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                                            : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+                                    )}
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setData('silica', {
+                                            performed: false,
+                                            tasks: [],
+                                            duration_minutes: 0,
+                                            swms_compliant: null,
+                                            control_measures: [],
+                                            respirator_type: '',
+                                        })
+                                    }
+                                    className={cn(
+                                        'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
+                                        'touch-manipulation active:scale-[0.98]',
+                                        data.silica.performed === false
+                                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+                                            : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+                                    )}
+                                >
+                                    No
+                                </button>
+                            </div>
 
-                    {data.silica.performed === true && (
-                        <div className="space-y-4 pt-2">
-                            {/* Task Selection - Multi-select */}
-                            <div>
-                                <p className="text-foreground mb-2 text-sm font-semibold">Select tasks performed</p>
-                                <div className="space-y-2">
-                                    {silicaOptions.tasks.map((task) => {
-                                        const selected = data.silica.tasks.includes(task);
-                                        return (
+                            {data.silica.performed === true && (
+                                <div className="space-y-4 pt-2">
+                                    {/* Task Selection - Multi-select */}
+                                    <div>
+                                        <p className="text-foreground mb-2 text-sm font-semibold">Select tasks performed</p>
+                                        <div className="space-y-2">
+                                            {silicaOptions.tasks.map((task) => {
+                                                const selected = data.silica.tasks.includes(task);
+                                                return (
+                                                    <button
+                                                        key={task}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const tasks = selected
+                                                                ? data.silica.tasks.filter((t) => t !== task)
+                                                                : [...data.silica.tasks, task];
+                                                            setData('silica', { ...data.silica, tasks });
+                                                        }}
+                                                        className={cn(
+                                                            'flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
+                                                            'touch-manipulation active:scale-[0.98]',
+                                                            selected
+                                                                ? 'border-amber-500 bg-amber-500/10'
+                                                                : 'border-border bg-card hover:border-primary/30',
+                                                        )}
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                'flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
+                                                                selected
+                                                                    ? 'border-amber-500 bg-amber-500 text-white'
+                                                                    : 'border-muted-foreground/40 bg-background',
+                                                            )}
+                                                        >
+                                                            {selected && <Check className="h-3 w-3" />}
+                                                        </div>
+                                                        <span className={cn('flex-1', selected && 'font-medium text-amber-700')}>{task}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Duration Picker */}
+                                    <div>
+                                        <p className="text-foreground mb-2 text-sm font-semibold">Duration of silica-generating work</p>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <Label className="text-muted-foreground mb-1 block text-xs">Hours</Label>
+                                                <Select
+                                                    value={String(Math.floor(data.silica.duration_minutes / 60))}
+                                                    onValueChange={(v) => {
+                                                        const currentMins = data.silica.duration_minutes % 60;
+                                                        setData('silica', { ...data.silica, duration_minutes: Number(v) * 60 + currentMins });
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-12 text-base font-semibold">
+                                                        <SelectValue placeholder="Hours" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((h) => (
+                                                            <SelectItem key={h} value={String(h)}>
+                                                                {h} {h === 1 ? 'hour' : 'hours'}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <Label className="text-muted-foreground mb-1 block text-xs">Minutes</Label>
+                                                <Select
+                                                    value={String(data.silica.duration_minutes % 60)}
+                                                    onValueChange={(v) => {
+                                                        const currentHours = Math.floor(data.silica.duration_minutes / 60);
+                                                        setData('silica', { ...data.silica, duration_minutes: currentHours * 60 + Number(v) });
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-12 text-base font-semibold">
+                                                        <SelectValue placeholder="Minutes" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {[0, 10, 20, 30, 40, 50].map((m) => (
+                                                            <SelectItem key={m} value={String(m)}>
+                                                                {m} min
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SWMS Compliance */}
+                                    <div>
+                                        <p className="text-foreground mb-2 text-sm font-semibold">Activity was undertaken as per relevant SWMS?</p>
+                                        <div className="grid grid-cols-2 gap-2">
                                             <button
-                                                key={task}
                                                 type="button"
-                                                onClick={() => {
-                                                    const tasks = selected
-                                                        ? data.silica.tasks.filter((t) => t !== task)
-                                                        : [...data.silica.tasks, task];
-                                                    setData('silica', { ...data.silica, tasks });
-                                                }}
+                                                onClick={() => setData('silica', { ...data.silica, swms_compliant: true, control_measures: [] })}
                                                 className={cn(
-                                                    'flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
+                                                    'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
                                                     'touch-manipulation active:scale-[0.98]',
-                                                    selected
-                                                        ? 'border-amber-500 bg-amber-500/10'
-                                                        : 'border-border bg-card hover:border-primary/30',
+                                                    data.silica.swms_compliant === true
+                                                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
+                                                        : 'border-border bg-card text-muted-foreground hover:border-primary/30',
                                                 )}
                                             >
-                                                <div
-                                                    className={cn(
-                                                        'flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
-                                                        selected ? 'border-amber-500 bg-amber-500 text-white' : 'border-muted-foreground/40 bg-background',
-                                                    )}
-                                                >
-                                                    {selected && <Check className="h-3 w-3" />}
-                                                </div>
-                                                <span className={cn('flex-1', selected && 'text-amber-700 font-medium')}>{task}</span>
+                                                Yes
                                             </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Duration Picker */}
-                            <div>
-                                <p className="text-foreground mb-2 text-sm font-semibold">Duration of silica-generating work</p>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex-1">
-                                        <Label className="text-muted-foreground mb-1 block text-xs">Hours</Label>
-                                        <Select
-                                            value={String(Math.floor(data.silica.duration_minutes / 60))}
-                                            onValueChange={(v) => {
-                                                const currentMins = data.silica.duration_minutes % 60;
-                                                setData('silica', { ...data.silica, duration_minutes: Number(v) * 60 + currentMins });
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-12 text-base font-semibold">
-                                                <SelectValue placeholder="Hours" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((h) => (
-                                                    <SelectItem key={h} value={String(h)}>{h} {h === 1 ? 'hour' : 'hours'}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            <button
+                                                type="button"
+                                                onClick={() => setData('silica', { ...data.silica, swms_compliant: false, respirator_type: '' })}
+                                                className={cn(
+                                                    'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
+                                                    'touch-manipulation active:scale-[0.98]',
+                                                    data.silica.swms_compliant === false
+                                                        ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                                                        : 'border-border bg-card text-muted-foreground hover:border-primary/30',
+                                                )}
+                                            >
+                                                No
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex-1">
-                                        <Label className="text-muted-foreground mb-1 block text-xs">Minutes</Label>
-                                        <Select
-                                            value={String(data.silica.duration_minutes % 60)}
-                                            onValueChange={(v) => {
-                                                const currentHours = Math.floor(data.silica.duration_minutes / 60);
-                                                setData('silica', { ...data.silica, duration_minutes: currentHours * 60 + Number(v) });
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-12 text-base font-semibold">
-                                                <SelectValue placeholder="Minutes" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[0, 10, 20, 30, 40, 50].map((m) => (
-                                                    <SelectItem key={m} value={String(m)}>{m} min</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* SWMS Compliance */}
-                            <div>
-                                <p className="text-foreground mb-2 text-sm font-semibold">
-                                    Activity was undertaken as per relevant SWMS?
-                                </p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setData('silica', { ...data.silica, swms_compliant: true, control_measures: [] })}
-                                        className={cn(
-                                            'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
-                                            'touch-manipulation active:scale-[0.98]',
-                                            data.silica.swms_compliant === true
-                                                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600'
-                                                : 'border-border bg-card text-muted-foreground hover:border-primary/30',
-                                        )}
-                                    >
-                                        Yes
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setData('silica', { ...data.silica, swms_compliant: false, respirator_type: '' })}
-                                        className={cn(
-                                            'flex h-12 items-center justify-center rounded-xl border-2 text-base font-semibold transition-all',
-                                            'touch-manipulation active:scale-[0.98]',
-                                            data.silica.swms_compliant === false
-                                                ? 'border-amber-500 bg-amber-500/10 text-amber-600'
-                                                : 'border-border bg-card text-muted-foreground hover:border-primary/30',
-                                        )}
-                                    >
-                                        No
-                                    </button>
-                                </div>
-                            </div>
+                                    {/* Control Measures (when SWMS = No) */}
+                                    {data.silica.swms_compliant === false && (
+                                        <div>
+                                            <p className="text-foreground mb-2 text-sm font-semibold">Select control measures used</p>
+                                            <div className="space-y-2">
+                                                {silicaOptions.control_measures.map((measure) => {
+                                                    const selected = data.silica.control_measures.includes(measure);
+                                                    return (
+                                                        <button
+                                                            key={measure}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const control_measures = selected
+                                                                    ? data.silica.control_measures.filter((m) => m !== measure)
+                                                                    : [...data.silica.control_measures, measure];
+                                                                setData('silica', { ...data.silica, control_measures });
+                                                            }}
+                                                            className={cn(
+                                                                'flex w-full items-start gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
+                                                                'touch-manipulation active:scale-[0.98]',
+                                                                selected
+                                                                    ? 'border-amber-500 bg-amber-500/10'
+                                                                    : 'border-border bg-card hover:border-primary/30',
+                                                            )}
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
+                                                                    selected
+                                                                        ? 'border-amber-500 bg-amber-500 text-white'
+                                                                        : 'border-muted-foreground/40 bg-background',
+                                                                )}
+                                                            >
+                                                                {selected && <Check className="h-3 w-3" />}
+                                                            </div>
+                                                            <span className={cn('flex-1', selected && 'font-medium text-amber-700')}>{measure}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
 
-                            {/* Control Measures (when SWMS = No) */}
-                            {data.silica.swms_compliant === false && (
-                                <div>
-                                    <p className="text-foreground mb-2 text-sm font-semibold">Select control measures used</p>
-                                    <div className="space-y-2">
-                                        {silicaOptions.control_measures.map((measure) => {
-                                            const selected = data.silica.control_measures.includes(measure);
-                                            return (
-                                                <button
-                                                    key={measure}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const control_measures = selected
-                                                            ? data.silica.control_measures.filter((m) => m !== measure)
-                                                            : [...data.silica.control_measures, measure];
-                                                        setData('silica', { ...data.silica, control_measures });
-                                                    }}
-                                                    className={cn(
-                                                        'flex w-full items-start gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
-                                                        'touch-manipulation active:scale-[0.98]',
-                                                        selected
-                                                            ? 'border-amber-500 bg-amber-500/10'
-                                                            : 'border-border bg-card hover:border-primary/30',
-                                                    )}
-                                                >
-                                                    <div
-                                                        className={cn(
-                                                            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
-                                                            selected ? 'border-amber-500 bg-amber-500 text-white' : 'border-muted-foreground/40 bg-background',
-                                                        )}
-                                                    >
-                                                        {selected && <Check className="h-3 w-3" />}
-                                                    </div>
-                                                    <span className={cn('flex-1', selected && 'text-amber-700 font-medium')}>{measure}</span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Respirator Type (when SWMS = Yes) */}
-                            {data.silica.swms_compliant === true && (
-                                <div>
-                                    <p className="text-foreground mb-2 text-sm font-semibold">Select type of respirator</p>
-                                    <div className="space-y-2">
-                                        {silicaOptions.respirators.map((respirator) => {
-                                            const selected = data.silica.respirator_type === respirator;
-                                            return (
-                                                <button
-                                                    key={respirator}
-                                                    type="button"
-                                                    onClick={() => setData('silica', { ...data.silica, respirator_type: respirator })}
-                                                    className={cn(
-                                                        'flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
-                                                        'touch-manipulation active:scale-[0.98]',
-                                                        selected
-                                                            ? 'border-emerald-500 bg-emerald-500/10'
-                                                            : 'border-border bg-card hover:border-primary/30',
-                                                    )}
-                                                >
-                                                    <div
-                                                        className={cn(
-                                                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                                                            selected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-muted-foreground/40 bg-background',
-                                                        )}
-                                                    >
-                                                        {selected && <Check className="h-3 w-3" />}
-                                                    </div>
-                                                    <span className={cn('flex-1', selected && 'text-emerald-700 font-medium')}>{respirator}</span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                    {/* Respirator Type (when SWMS = Yes) */}
+                                    {data.silica.swms_compliant === true && (
+                                        <div>
+                                            <p className="text-foreground mb-2 text-sm font-semibold">Select type of respirator</p>
+                                            <div className="space-y-2">
+                                                {silicaOptions.respirators.map((respirator) => {
+                                                    const selected = data.silica.respirator_type === respirator;
+                                                    return (
+                                                        <button
+                                                            key={respirator}
+                                                            type="button"
+                                                            onClick={() => setData('silica', { ...data.silica, respirator_type: respirator })}
+                                                            className={cn(
+                                                                'flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm transition-all',
+                                                                'touch-manipulation active:scale-[0.98]',
+                                                                selected
+                                                                    ? 'border-emerald-500 bg-emerald-500/10'
+                                                                    : 'border-border bg-card hover:border-primary/30',
+                                                            )}
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                                                    selected
+                                                                        ? 'border-emerald-500 bg-emerald-500 text-white'
+                                                                        : 'border-muted-foreground/40 bg-background',
+                                                                )}
+                                                            >
+                                                                {selected && <Check className="h-3 w-3" />}
+                                                            </div>
+                                                            <span className={cn('flex-1', selected && 'font-medium text-emerald-700')}>
+                                                                {respirator}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    )}
-                </div>
+                    </>
+                )}
 
                 {/* Submit Button */}
                 <Button

@@ -5,7 +5,16 @@ use Illuminate\Support\Facades\Http;
 
 uses(Tests\TestCase::class);
 
+function skipGeocodingTestsWhenGoogleApiUnavailable(): void
+{
+    if (env('GITHUB_ACTIONS') || blank(config('services.google.geocoding_key'))) {
+        test()->markTestSkipped('Geocoding tests skipped: Google Geocoding API is not configured in this environment.');
+    }
+}
+
 test('geocode returns lat/lng for a valid address', function () {
+    skipGeocodingTestsWhenGoogleApiUnavailable();
+
     Http::fake([
         'maps.googleapis.com/maps/api/geocode/json*' => Http::response([
             'status' => 'OK',
@@ -31,6 +40,8 @@ test('geocode returns lat/lng for a valid address', function () {
 });
 
 test('geocode returns null for empty address', function () {
+    skipGeocodingTestsWhenGoogleApiUnavailable();
+
     $service = new GeocodingService;
     $result = $service->geocode('');
 
@@ -38,6 +49,8 @@ test('geocode returns null for empty address', function () {
 });
 
 test('geocode returns null for placeholder addresses', function (string $placeholder) {
+    skipGeocodingTestsWhenGoogleApiUnavailable();
+
     $service = new GeocodingService;
     $result = $service->geocode($placeholder);
 
@@ -45,6 +58,8 @@ test('geocode returns null for placeholder addresses', function (string $placeho
 })->with(['TBA', 'tba', 'TBC', 'N/A', 'NA', '-']);
 
 test('geocode returns null when API returns no results', function () {
+    skipGeocodingTestsWhenGoogleApiUnavailable();
+
     Http::fake([
         'maps.googleapis.com/maps/api/geocode/json*' => Http::response([
             'status' => 'ZERO_RESULTS',
@@ -59,6 +74,8 @@ test('geocode returns null when API returns no results', function () {
 });
 
 test('geocode returns null on API failure', function () {
+    skipGeocodingTestsWhenGoogleApiUnavailable();
+
     Http::fake([
         'maps.googleapis.com/maps/api/geocode/json*' => Http::response('Server Error', 500),
     ]);

@@ -4,7 +4,7 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { cn } from '@/lib/utils';
 import { type SharedData, type User } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Key, LogOut, Phone, Settings, Shield, UsersRound } from 'lucide-react';
+import { ArrowDown, ArrowUp, Key, LogOut, Phone, Settings, Shield, ToggleLeft, UsersRound } from 'lucide-react';
 
 interface TokenStats {
     total_tokens: number;
@@ -38,6 +38,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
 
     const canManageUsers = permissions.includes('users.view');
     const canManageRoles = permissions.includes('admin.roles');
+    const canManageFeatureFlags = permissions.includes('feature-flags.manage');
 
     const aiPercent = tokenStats ? Math.min((tokenStats.total_tokens / tokenStats.limit) * 100, 100) : 0;
     const aiRemaining = tokenStats ? Math.max(tokenStats.limit - tokenStats.total_tokens, 0) : 0;
@@ -64,7 +65,9 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                             <div className={cn('h-full transition-all duration-500', aiProgressColor)} style={{ width: `${aiPercent}%` }} />
                         </div>
                         <div className="text-muted-foreground flex items-center justify-between text-[10px] tabular-nums">
-                            <span>{aiPercent.toFixed(0)}% used · {formatNumber(aiRemaining)} left</span>
+                            <span>
+                                {aiPercent.toFixed(0)}% used · {formatNumber(aiRemaining)} left
+                            </span>
                             <span>${tokenStats.total_cost.toFixed(4)}</span>
                         </div>
                         <div className="text-muted-foreground flex items-center gap-3 text-[10px] tabular-nums">
@@ -93,7 +96,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                     Settings
                 </DropdownMenuItem>
             </DropdownMenuGroup>
-            {(canManageUsers || canManageRoles) && (
+            {(canManageUsers || canManageRoles || canManageFeatureFlags) && (
                 <>
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
@@ -105,15 +108,27 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                         )}
                         {canManageRoles && (
                             <>
-                                <DropdownMenuItem render={<Link className="block w-full" href="/admin/roles" as="button" prefetch onClick={cleanup} />}>
+                                <DropdownMenuItem
+                                    render={<Link className="block w-full" href="/admin/roles" as="button" prefetch onClick={cleanup} />}
+                                >
                                     <Shield className="mr-2" />
                                     Roles & Permissions
                                 </DropdownMenuItem>
-                                <DropdownMenuItem render={<Link className="block w-full" href="/admin/permissions" as="button" prefetch onClick={cleanup} />}>
+                                <DropdownMenuItem
+                                    render={<Link className="block w-full" href="/admin/permissions" as="button" prefetch onClick={cleanup} />}
+                                >
                                     <Key className="mr-2" />
                                     All Permissions
                                 </DropdownMenuItem>
                             </>
+                        )}
+                        {canManageFeatureFlags && (
+                            <DropdownMenuItem
+                                render={<Link className="block w-full" href="/admin/feature-flags" as="button" prefetch onClick={cleanup} />}
+                            >
+                                <ToggleLeft className="mr-2" />
+                                Feature Flags
+                            </DropdownMenuItem>
                         )}
                     </DropdownMenuGroup>
                 </>

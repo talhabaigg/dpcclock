@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\SilicaOption;
+use App\Support\FeatureFlags;
 use App\Services\KioskService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -56,14 +57,22 @@ class KioskAuthController extends Controller
     {
 
         $adminMode = $this->kioskService->isAdminModeActive();
+        $silicaQuestionEnabled = FeatureFlags::active(FeatureFlags::KIOSK_SILICA_QUESTION);
+
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
 
-            $silicaOptions = [
-                'tasks' => SilicaOption::active()->ofType(SilicaOptionType::Task)->orderBy('sort_order')->pluck('label'),
-                'control_measures' => SilicaOption::active()->ofType(SilicaOptionType::ControlMeasure)->orderBy('sort_order')->pluck('label'),
-                'respirators' => SilicaOption::active()->ofType(SilicaOptionType::Respirator)->orderBy('sort_order')->pluck('label'),
-            ];
+            $silicaOptions = $silicaQuestionEnabled
+                ? [
+                    'tasks' => SilicaOption::active()->ofType(SilicaOptionType::Task)->orderBy('sort_order')->pluck('label'),
+                    'control_measures' => SilicaOption::active()->ofType(SilicaOptionType::ControlMeasure)->orderBy('sort_order')->pluck('label'),
+                    'respirators' => SilicaOption::active()->ofType(SilicaOptionType::Respirator)->orderBy('sort_order')->pluck('label'),
+                ]
+                : [
+                    'tasks' => [],
+                    'control_measures' => [],
+                    'respirators' => [],
+                ];
 
             return Inertia::render('kiosks/clocking/out', [
                 'kioskId' => $kioskId,
@@ -75,6 +84,7 @@ class KioskAuthController extends Controller
                 'clockedIn' => $clockedIn,
                 'adminMode' => $adminMode,
                 'silicaOptions' => $silicaOptions,
+                'silicaQuestionEnabled' => $silicaQuestionEnabled,
             ]);
         }
 

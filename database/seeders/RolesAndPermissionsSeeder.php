@@ -278,6 +278,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'System' => [
             'queue-status.view' => 'View queue status',
             'admin.roles' => 'Manage roles and permissions',
+            'feature-flags.manage' => 'Manage application feature flags',
         ],
 
         // ============================================
