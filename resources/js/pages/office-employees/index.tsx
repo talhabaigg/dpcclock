@@ -1,12 +1,14 @@
 import InputSearch from '@/components/inputSearch';
+import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { type ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { type ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, type RowSelectionState, type SortingState, useReactTable } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, FilePlus2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface OfficeEmployee {
@@ -17,6 +19,22 @@ interface OfficeEmployee {
     employment_type: string | null;
     employment_agreement: string | null;
     start_date: string | null;
+}
+
+interface DocumentTemplate {
+    id: number;
+    name: string;
+    placeholders: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
+    body_html: string | null;
+}
+
+interface PageProps {
+    employees: OfficeEmployee[];
+    canSendDocuments: boolean;
+    documentTemplates: DocumentTemplate[];
+    savedSenderSignatureUrl: string | null;
+    appUsers: { id: number; name: string; position: string | null }[];
+    [key: string]: unknown;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Office Employees', href: '/office-employees' }];
@@ -32,9 +50,11 @@ function SortHeader({ label, column }: { label: string; column: any }) {
 }
 
 export default function OfficeEmployeesList() {
-    const { employees } = usePage<{ employees: OfficeEmployee[] }>().props;
+    const { employees, canSendDocuments, documentTemplates, savedSenderSignatureUrl, appUsers } = usePage<PageProps>().props;
     const [searchQuery, setSearchQuery] = useState('');
     const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    const [showBulkModal, setShowBulkModal] = useState(false);
 
     const filteredEmployees = useMemo(() => {
         if (!searchQuery) return employees;
@@ -49,6 +69,23 @@ export default function OfficeEmployeesList() {
 
     const columns: ColumnDef<OfficeEmployee>[] = useMemo(
         () => [
+            ...(canSendDocuments
+                ? [
+                      {
+                          id: 'select',
+                          header: ({ table }: any) => (
+                              <Checkbox
+                                  checked={table.getIsAllPageRowsSelected()}
+                                  onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                              />
+                          ),
+                          cell: ({ row }: any) => (
+                              <Checkbox checked={row.getIsSelected()} onCheckedChange={(v) => row.toggleSelected(!!v)} />
+                          ),
+                          enableSorting: false,
+                      } as ColumnDef<OfficeEmployee>,
+                  ]
+                : []),
             {
                 accessorKey: 'name',
                 header: ({ column }) => <SortHeader label="Employee" column={column} />,
@@ -90,17 +127,22 @@ export default function OfficeEmployeesList() {
                 cell: ({ row }) => row.original.start_date ?? '—',
             },
         ],
-        [],
+        [canSendDocuments],
     );
 
     const table = useReactTable({
         data: filteredEmployees,
         columns,
-        state: { sorting },
+        state: { sorting, rowSelection },
         onSortingChange: setSorting,
+        onRowSelectionChange: setRowSelection,
+        getRowId: (row) => String(row.id),
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
+        getFilteredRowModel: getFilteredRowModel(),
     });
+
+    const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k]).map(Number);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -113,10 +155,26 @@ export default function OfficeEmployeesList() {
                             Salaried staff — {employees.length} {employees.length === 1 ? 'person' : 'people'}
                         </p>
                     </div>
-                    <div className="relative w-full sm:max-w-xs">
-                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or email" />
+                    <div className="flex items-center gap-3">
+                        <div className="relative w-full sm:max-w-xs">
+                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or email" />
+                        </div>
                     </div>
                 </div>
+
+                {/* Bulk action bar */}
+                {selectedIds.length > 0 && canSendDocuments && (
+                    <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
+                        <span className="text-sm font-medium">{selectedIds.length} selected</span>
+                        <Button size="sm" className="gap-1.5" onClick={() => setShowBulkModal(true)}>
+                            <FilePlus2 className="h-3.5 w-3.5" />
+                            Send for Signing
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>
+                            Clear
+                        </Button>
+                    </div>
+                )}
 
                 <div className="rounded-md border">
                     <Table>
@@ -134,7 +192,7 @@ export default function OfficeEmployeesList() {
                         <TableBody>
                             {table.getRowModel().rows.length ? (
                                 table.getRowModel().rows.map((row) => (
-                                    <TableRow key={row.id}>
+                                    <TableRow key={row.id} data-state={row.getIsSelected() ? 'selected' : undefined}>
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                                         ))}
@@ -151,6 +209,25 @@ export default function OfficeEmployeesList() {
                     </Table>
                 </div>
             </div>
+
+            {/* Bulk send modal */}
+            {canSendDocuments && (
+                <SendForSigningModal
+                    open={showBulkModal}
+                    onOpenChange={(open) => {
+                        setShowBulkModal(open);
+                        if (!open) setRowSelection({});
+                    }}
+                    templates={documentTemplates ?? []}
+                    savedSenderSignatureUrl={savedSenderSignatureUrl}
+                    appUsers={appUsers ?? []}
+                    bulkEmployees={filteredEmployees.filter((e) => selectedIds.includes(e.id)).map((e) => ({
+                        id: e.id,
+                        name: e.preferred_name || e.name,
+                        email: e.email,
+                    }))}
+                />
+            )}
         </AppLayout>
     );
 }

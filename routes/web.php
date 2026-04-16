@@ -175,6 +175,10 @@ Route::post('/requisition/update-status', [PurchasingController::class, 'updateS
     ->name('requisition.updateStatusFromPowerAutomate');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // Internal document signing (authenticated user signs before doc goes to recipient)
+    Route::get('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'show'])->name('internal-sign.show');
+    Route::post('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'submit'])->name('internal-sign.submit');
+
     // Dashboard - requires dashboard.view permission
     Route::get('dashboard', function () {
         return Inertia::render('dashboard/main');
@@ -336,6 +340,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/signing-requests', [SigningRequestController::class, 'store'])->name('signing-requests.store');
     Route::post('/signing-requests/batch', [SigningRequestController::class, 'storeBatch'])->name('signing-requests.store-batch');
     Route::post('/signing-requests/one-off', [SigningRequestController::class, 'storeOneOff'])->name('signing-requests.store-one-off');
+    Route::post('/signing-requests/internal-signer', [SigningRequestController::class, 'storeWithInternalSigner'])->name('signing-requests.store-internal-signer');
+    Route::post('/signing-requests/bulk-employees', [SigningRequestController::class, 'storeBulkEmployees'])->name('signing-requests.store-bulk-employees');
     Route::post('/signing-requests/drafts', [SigningRequestController::class, 'storeDraft'])->name('signing-requests.drafts.store');
     Route::put('/signing-requests/{signingRequest}/draft', [SigningRequestController::class, 'updateDraft'])->name('signing-requests.drafts.update');
     Route::post('/signing-requests/{signingRequest}/finalize', [SigningRequestController::class, 'finalizeDraft'])->name('signing-requests.drafts.finalize');

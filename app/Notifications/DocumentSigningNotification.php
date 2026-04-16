@@ -23,15 +23,20 @@ class DocumentSigningNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $templateName = $this->signingRequest->documentTemplate?->name ?? 'Document';
+        $documentLabel = $this->signingRequest->documentTemplate?->name
+            ?? $this->signingRequest->document_title
+            ?? 'Document';
+
+        $senderName = $this->signingRequest->sentBy?->name ?? 'Your employer';
+        $recipientName = $this->signingRequest->recipient_name;
 
         return (new MailMessage)
-            ->subject("Please review and sign: {$templateName}")
-            ->greeting("Hi {$this->signingRequest->recipient_name},")
-            ->line("You have a document that requires your signature: **{$templateName}**.")
+            ->subject("{$senderName} has sent you \"{$documentLabel}\" to sign")
+            ->greeting("Hi {$recipientName},")
+            ->line("{$senderName} has sent you **{$documentLabel}** for your signature.")
             ->line('Please click the button below to review the document and provide your electronic signature.')
-            ->action('Review & Sign Document', $this->signingRequest->getSigningUrl())
+            ->action('Review & Sign', $this->signingRequest->getSigningUrl())
             ->line('This link will expire in 7 days.')
-            ->line('If you did not expect this document, please disregard this email.');
+            ->line('If you did not expect this, please contact the sender directly.');
     }
 }

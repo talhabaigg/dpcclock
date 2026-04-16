@@ -58,6 +58,10 @@ interface SendForSigningModalProps {
     draft?: DraftSeed | null;
     /** URL to the sender's saved signature (from their profile), if any. */
     savedSenderSignatureUrl?: string | null;
+    /** App users who can be selected as internal signers. */
+    appUsers?: { id: number; name: string; position: string | null }[];
+    /** When provided, the modal operates in bulk mode — sending to multiple employees at once. */
+    bulkEmployees?: { id: number; name: string; email: string | null }[];
     onSuccess?: () => void;
 }
 
@@ -76,8 +80,11 @@ export default function SendForSigningModal({
     availablePlaceholders = [],
     draft = null,
     savedSenderSignatureUrl = null,
+    appUsers = [],
+    bulkEmployees = [],
     onSuccess,
 }: SendForSigningModalProps) {
+    const isBulkMode = bulkEmployees.length > 0;
     const [mode, setMode] = useState<'template' | 'write'>('template');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
     const [selectedFormTemplateIds, setSelectedFormTemplateIds] = useState<number[]>([]);
@@ -89,8 +96,9 @@ export default function SendForSigningModal({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [senderFullName, setSenderFullName] = useState('');
     const [senderPosition, setSenderPosition] = useState('');
-    const [senderSigMode, setSenderSigMode] = useState<'saved' | 'draw'>(savedSenderSignatureUrl ? 'saved' : 'draw');
+    const [senderSigMode, setSenderSigMode] = useState<'saved' | 'draw' | 'request'>(savedSenderSignatureUrl ? 'saved' : 'draw');
     const [saveSenderSignature, setSaveSenderSignature] = useState(false);
+    const [internalSignerUserId, setInternalSignerUserId] = useState<string>('');
     const [oneOffTitle, setOneOffTitle] = useState('');
     const [oneOffJson, setOneOffJson] = useState('');
     const [oneOffHtml, setOneOffHtml] = useState('');
@@ -237,12 +245,18 @@ export default function SendForSigningModal({
             if (!plainText) newErrors.document_html = 'Write the document before sending.';
         }
 
-        if (!name.trim()) newErrors.name = 'Recipient name is required.';
-        if (deliveryMethod === 'email' && !email.trim()) newErrors.email = 'Email is required for email delivery.';
+        if (!isBulkMode) {
+            if (!name.trim()) newErrors.name = 'Recipient name is required.';
+            if (deliveryMethod === 'email' && !email.trim()) newErrors.email = 'Email is required for email delivery.';
+        }
         if (requiresSenderSignature) {
-            if (!senderFullName.trim()) newErrors.sender_full_name = 'Your full name is required.';
-            if (senderSigMode === 'draw' && senderSignaturePadRef.current?.isEmpty()) {
-                newErrors.sender_signature = 'Please draw your signature before sending.';
+            if (senderSigMode === 'request') {
+                if (!internalSignerUserId) newErrors.internal_signer = 'Please select a user to sign.';
+            } else {
+                if (!senderFullName.trim()) newErrors.sender_full_name = 'Your full name is required.';
+                if (senderSigMode === 'draw' && senderSignaturePadRef.current?.isEmpty()) {
+                    newErrors.sender_signature = 'Please draw your signature before sending.';
+                }
             }
         }
 
@@ -268,6 +282,71 @@ export default function SendForSigningModal({
 
         setProcessing(true);
         setErrors({});
+
+        // If requesting another user to sign, route to the internal-signer endpoint.
+        if (requiresSenderSignature && senderSigMode === 'request') {
+            setProcessing(true);
+            setErrors({});
+            const internalPayload: Record<string, any> = {
+                delivery_method: deliveryMethod,
+                recipient_name: name,
+                recipient_email: deliveryMethod === 'email' ? email : null,
+                internal_signer_user_id: Number(internalSignerUserId),
+                sender_full_name: senderFullName || null,
+                sender_position: senderPosition || null,
+                signable_type: signableType ?? null,
+                signable_id: signableId ?? null,
+            };
+            if (mode === 'write') {
+                internalPayload.document_title = oneOffTitle.trim();
+                internalPayload.document_html = oneOffHtml;
+            } else if (selectedTemplateIds.length === 1) {
+                internalPayload.document_template_id = selectedTemplateIds[0];
+                internalPayload.custom_fields = { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition };
+            }
+            router.post(route('signing-requests.store-internal-signer'), internalPayload, {
+                preserveScroll: true,
+                onSuccess: () => { setProcessing(false); onOpenChange(false); onSuccess?.(); },
+                onError: (errs) => { setProcessing(false); setErrors(errs); },
+            });
+            return;
+        }
+
+        // Bulk send to multiple employees
+        if (isBulkMode) {
+            setProcessing(true);
+            setErrors({});
+
+            const senderSigData =
+                requiresSenderSignature && senderSigMode === 'draw' && senderSignaturePadRef.current
+                    ? senderSignaturePadRef.current.toDataURL('image/png')
+                    : null;
+
+            const bulkPayload: Record<string, any> = {
+                employee_ids: bulkEmployees.map((e) => e.id),
+                delivery_method: deliveryMethod,
+                sender_signature: senderSigData,
+                use_saved_sender_signature: requiresSenderSignature && senderSigMode === 'saved',
+                save_sender_signature: requiresSenderSignature && senderSigMode === 'draw' && saveSenderSignature,
+                sender_full_name: requiresSenderSignature ? senderFullName : null,
+                sender_position: requiresSenderSignature ? (senderPosition || null) : null,
+            };
+
+            if (mode === 'write') {
+                bulkPayload.document_title = oneOffTitle.trim();
+                bulkPayload.document_html = oneOffHtml;
+            } else if (selectedTemplateIds.length >= 1) {
+                bulkPayload.document_template_id = selectedTemplateIds[0];
+                bulkPayload.custom_fields = customFields;
+            }
+
+            router.post(route('signing-requests.store-bulk-employees'), bulkPayload, {
+                preserveScroll: true,
+                onSuccess: () => { setProcessing(false); onOpenChange(false); onSuccess?.(); },
+                onError: (errs) => { setProcessing(false); setErrors(errs); },
+            });
+            return;
+        }
 
         const senderSignatureData =
             requiresSenderSignature && senderSigMode === 'draw' && senderSignaturePadRef.current
@@ -350,6 +429,7 @@ export default function SendForSigningModal({
         setSenderPosition('');
         setSenderSigMode(savedSenderSignatureUrl ? 'saved' : 'draw');
         setSaveSenderSignature(false);
+        setInternalSignerUserId('');
         setOneOffTitle(draft?.document_title ?? '');
         setOneOffJson(draft?.document_html ?? '');
         setOneOffHtml(draft?.document_html ?? '');
@@ -362,13 +442,17 @@ export default function SendForSigningModal({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-h-[85vh] min-w-96 sm:min-w-7xl overflow-hidden  max-w-5xl p-0">
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] sm:max-w-5xl overflow-hidden p-0">
                 <DialogHeader className="px-6 pt-6">
-                    <DialogTitle>Send Documents for Signing</DialogTitle>
-                    <DialogDescription>Select documents, fill in details, and choose a delivery method.</DialogDescription>
+                    <DialogTitle>{isBulkMode ? `Send to ${bulkEmployees.length} employees` : 'Send Documents for Signing'}</DialogTitle>
+                    <DialogDescription>
+                        {isBulkMode
+                            ? `Each employee will receive their own personalised copy with placeholders resolved.`
+                            : 'Select documents, fill in details, and choose a delivery method.'}
+                    </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[calc(85vh-10rem)] px-6">
+                <ScrollArea className="max-h-[calc(100dvh-14rem)] px-6">
                 <div className="space-y-4 py-2">
                     {/* Mode switcher: template vs one-off */}
                     <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
@@ -476,18 +560,33 @@ export default function SendForSigningModal({
                     )}
 
                     {/* Recipient Details */}
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    {isBulkMode ? (
                         <div className="space-y-2">
-                            <Label htmlFor="recipient-name">Recipient Name</Label>
-                            <Input id="recipient-name" value={name} onChange={(e) => setName(e.target.value)} />
-                            {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                            <Label>Recipients ({bulkEmployees.length})</Label>
+                            <div className="max-h-32 overflow-auto rounded-lg border p-3">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {bulkEmployees.map((e) => (
+                                        <span key={e.id} className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs font-medium">
+                                            {e.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="recipient-email">Email</Label>
-                            <Input id="recipient-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                            {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    ) : (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="recipient-name">Recipient Name</Label>
+                                <Input id="recipient-name" value={name} onChange={(e) => setName(e.target.value)} />
+                                {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="recipient-email">Email</Label>
+                                <Input id="recipient-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Custom Fields (merged from all selected template placeholders) */}
                     {mode === 'template' && mergedPlaceholders.length > 0 && (
@@ -593,20 +692,46 @@ export default function SendForSigningModal({
                                     />
                                 </div>
                             </div>
-                            {savedSenderSignatureUrl && (
-                                <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw')} className="grid grid-cols-2 gap-2">
+                            <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw' | 'request')} className={`grid gap-2 ${savedSenderSignatureUrl ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                {savedSenderSignatureUrl && (
                                     <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'saved' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
                                         <RadioGroupItem value="saved" />
-                                        Use saved signature
+                                        My signature
                                     </label>
-                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'draw' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                        <RadioGroupItem value="draw" />
-                                        Draw new
+                                )}
+                                <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'draw' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                    <RadioGroupItem value="draw" />
+                                    Draw signature
+                                </label>
+                                {appUsers.length > 0 && (
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'request' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                        <RadioGroupItem value="request" />
+                                        Request user
                                     </label>
-                                </RadioGroup>
-                            )}
+                                )}
+                            </RadioGroup>
 
-                            {senderSigMode === 'saved' && savedSenderSignatureUrl ? (
+                            {senderSigMode === 'request' ? (
+                                <div className="space-y-2">
+                                    <Label className="text-xs">Select user to sign</Label>
+                                    <Select value={internalSignerUserId} onValueChange={setInternalSignerUserId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Choose a user…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {appUsers.map((u) => (
+                                                <SelectItem key={u.id} value={String(u.id)}>
+                                                    {u.name}{u.position ? ` — ${u.position}` : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.internal_signer && <p className="text-sm text-destructive">{errors.internal_signer}</p>}
+                                    <p className="text-[11px] text-muted-foreground">
+                                        They'll receive an email and notification to sign. The document goes to the recipient after they sign.
+                                    </p>
+                                </div>
+                            ) : senderSigMode === 'saved' && savedSenderSignatureUrl ? (
                                 <div className="space-y-2">
                                     <Label className="text-xs">Your Saved Signature</Label>
                                     <div className="rounded-md border bg-white p-3">
@@ -683,17 +808,21 @@ export default function SendForSigningModal({
                     )}
                     <Button onClick={handleSubmit} disabled={processing}>
                         {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {deliveryMethod === 'email'
-                            ? (() => {
-                                if (mode === 'write') return 'Send Email';
-                                const totalCount = selectedTemplateIds.length + selectedFormTemplateIds.length;
-                                if (totalCount <= 1) return 'Send Email';
-                                const parts: string[] = [];
-                                if (selectedTemplateIds.length > 0) parts.push(`${selectedTemplateIds.length} Doc${selectedTemplateIds.length > 1 ? 's' : ''}`);
-                                if (selectedFormTemplateIds.length > 0) parts.push(`${selectedFormTemplateIds.length} Form${selectedFormTemplateIds.length > 1 ? 's' : ''}`);
-                                return `Send ${parts.join(' + ')}`;
-                            })()
-                            : 'Open for Signing'}
+                        {isBulkMode
+                            ? `Send to ${bulkEmployees.length} employees`
+                            : requiresSenderSignature && senderSigMode === 'request'
+                            ? 'Request Signature'
+                            : deliveryMethod === 'email'
+                                ? (() => {
+                                    if (mode === 'write') return 'Send Email';
+                                    const totalCount = selectedTemplateIds.length + selectedFormTemplateIds.length;
+                                    if (totalCount <= 1) return 'Send Email';
+                                    const parts: string[] = [];
+                                    if (selectedTemplateIds.length > 0) parts.push(`${selectedTemplateIds.length} Doc${selectedTemplateIds.length > 1 ? 's' : ''}`);
+                                    if (selectedFormTemplateIds.length > 0) parts.push(`${selectedFormTemplateIds.length} Form${selectedFormTemplateIds.length > 1 ? 's' : ''}`);
+                                    return `Send ${parts.join(' + ')}`;
+                                })()
+                                : 'Open for Signing'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

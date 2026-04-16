@@ -39,12 +39,23 @@ class EmployeeController extends Controller
 
     public function officeIndex()
     {
+        $user = Auth::user();
         $employees = Employee::officeStaff()
             ->orderBy('name')
             ->get();
 
+        $canSend = $user->can('employees.office.send-documents');
+
         return Inertia::render('office-employees/index', [
             'employees' => $employees,
+            'canSendDocuments' => $canSend,
+            'documentTemplates' => $canSend
+                ? \App\Models\DocumentTemplate::active()->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
+                : [],
+            'savedSenderSignatureUrl' => $canSend ? $user->savedSignatureUrl() : null,
+            'appUsers' => $canSend
+                ? \App\Models\User::query()->whereNull('disabled_at')->orderBy('name')->get(['id', 'name', 'position'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'position' => $u->position])->values()
+                : [],
         ]);
     }
 
@@ -162,6 +173,9 @@ class EmployeeController extends Controller
             'signingRequests' => $signingRequests,
             'availablePlaceholders' => $availablePlaceholders,
             'savedSenderSignatureUrl' => $canSendDocuments ? Auth::user()?->savedSignatureUrl() : null,
+            'appUsers' => $canSendDocuments
+                ? \App\Models\User::query()->whereNull('disabled_at')->orderBy('name')->get(['id', 'name', 'position'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'position' => $u->position])->values()
+                : [],
         ]);
     }
 

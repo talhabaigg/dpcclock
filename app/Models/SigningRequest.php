@@ -31,6 +31,9 @@ class SigningRequest extends Model implements HasMedia
         'sender_signature',
         'sender_full_name',
         'sender_position',
+        'internal_signer_user_id',
+        'internal_signer_token',
+        'internal_signed_at',
         'signer_full_name',
         'signer_ip_address',
         'signer_user_agent',
@@ -51,6 +54,7 @@ class SigningRequest extends Model implements HasMedia
             'opened_at' => 'datetime',
             'viewed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'internal_signed_at' => 'datetime',
         ];
     }
 
@@ -60,6 +64,7 @@ class SigningRequest extends Model implements HasMedia
         $this->addMediaCollection('initials')->singleFile();
         $this->addMediaCollection('preview_document')->singleFile();
         $this->addMediaCollection('signed_document')->singleFile();
+        $this->addMediaCollection('internal_signature')->singleFile();
     }
 
     public function documentTemplate(): BelongsTo
@@ -80,6 +85,21 @@ class SigningRequest extends Model implements HasMedia
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function internalSigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'internal_signer_user_id');
+    }
+
+    public function isAwaitingInternalSignature(): bool
+    {
+        return $this->status === 'awaiting_internal_signature';
+    }
+
+    public function getInternalSigningUrl(): string
+    {
+        return url("/internal-sign/{$this->internal_signer_token}");
     }
 
     public function auditLogs(): HasMany

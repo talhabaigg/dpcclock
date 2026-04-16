@@ -67,7 +67,7 @@ class SignedDocumentPdfService
         $certificate = $this->buildCertificateHtml($signingRequest);
         $html = $this->wrapInDocument($html, $certificate);
 
-        $pdfOutput = $this->renderWithBrowsershot($html);
+        $pdfOutput = $this->renderWithBrowsershot($html, self::resolveLogoFile($signingRequest));
 
         // Stamp initials on every page if provided
         if ($initialsBase64) {
@@ -89,9 +89,9 @@ class SignedDocumentPdfService
         return $this->renderWithBrowsershot($html);
     }
 
-    private function renderWithBrowsershot(string $html): string
+    private function renderWithBrowsershot(string $html, ?string $logoFile = null): string
     {
-        $logoBase64 = $this->getLogoBase64();
+        $logoBase64 = $this->getLogoBase64($logoFile);
 
         $headerHtml = <<<HEADER
         <div style="width: 100%; padding: 10px 19mm 8px;">
@@ -134,12 +134,31 @@ class SignedDocumentPdfService
             ->pdf();
     }
 
-    private function getLogoBase64(): string
+    private function getLogoBase64(?string $logoFile = null): string
     {
-        $logoPath = public_path('SWCPE_Logo.PNG');
+        $logoPath = public_path($logoFile ?? 'SWCPE_Logo.PNG');
+        if (! file_exists($logoPath)) {
+            $logoPath = public_path('SWCPE_Logo.PNG');
+        }
         $logoData = base64_encode(file_get_contents($logoPath));
 
         return 'data:image/png;base64,' . $logoData;
+    }
+
+    /**
+     * Determine the correct logo file for a signing request based on its signable.
+     */
+    public static function resolveLogoFile(SigningRequest $signingRequest): ?string
+    {
+        $signable = $signingRequest->signable;
+        if ($signable instanceof \App\Models\Employee) {
+            $cmsEntityId = (int) config('services.employment_hero.cms_entity_id');
+            if ((int) $signable->employing_entity_id === $cmsEntityId) {
+                return 'logo-cms.png';
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -98,7 +98,7 @@ class SigningRequestController extends Controller
                 ['value' => \App\Models\Employee::class, 'label' => 'Employee'],
                 ['value' => \App\Models\EmploymentApplication::class, 'label' => 'Employment Application'],
             ],
-            'statuses' => ['pending', 'sent', 'opened', 'viewed', 'signed', 'cancelled'],
+            'statuses' => ['pending', 'sent', 'opened', 'viewed', 'signed', 'cancelled', 'awaiting_internal_signature', 'draft'],
         ]);
     }
 
@@ -140,6 +140,53 @@ class SigningRequestController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Scan a document's HTML for {{employee.*}} tokens and check which ones
+     * resolve to empty for the given employee. Also flags missing email when
+     * delivery is via email.
+     *
+     * @return string[] List of human-readable gap descriptions (empty = all good).
+     */
+    private function detectPlaceholderGaps(\App\Models\Employee $employee, string $documentHtml, string $deliveryMethod): array
+    {
+        $gaps = [];
+
+        // Check delivery requirement
+        if ($deliveryMethod === 'email' && empty($employee->email)) {
+            $gaps[] = 'no email address';
+        }
+
+        // Find all {{employee.*}} tokens used in the document
+        preg_match_all('/\{\{(employee\.\w+)\}\}/', $documentHtml, $matches);
+        if (empty($matches[1])) {
+            return $gaps;
+        }
+
+        $placeholders = $employee->signingPlaceholders();
+        foreach (array_unique($matches[1]) as $token) {
+            if (isset($placeholders[$token])) {
+                $value = trim($placeholders[$token]['value'] ?? '');
+                if ($value === '') {
+                    $gaps[] = $placeholders[$token]['label'] ?? $token;
+                }
+            }
+        }
+
+        return $gaps;
+    }
+
+    /**
+     * Resolve the document HTML to scan — either from a template body or from one-off HTML.
+     */
+    private function resolveDocumentHtmlForValidation(?DocumentTemplate $template, ?string $oneOffHtml): string
+    {
+        if ($template) {
+            return $template->body_html ?? '';
+        }
+
+        return $oneOffHtml ?? '';
     }
 
     private function authorizeSignableAction(SigningRequest $signingRequest): void
@@ -231,6 +278,17 @@ class SigningRequestController extends Controller
             $signableClass = $validated['signable_type'];
             if (class_exists($signableClass)) {
                 $signable = $signableClass::find($validated['signable_id']);
+            }
+        }
+
+        // Validate placeholder completeness for employee signables
+        if ($signable instanceof \App\Models\Employee) {
+            $scanHtml = $this->resolveDocumentHtmlForValidation($template, null);
+            $gaps = $this->detectPlaceholderGaps($signable, $scanHtml, $validated['delivery_method']);
+            if (! empty($gaps)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'signable' => 'Missing data for ' . $signable->name . ': ' . implode(', ', $gaps) . '.',
+                ]);
             }
         }
 
@@ -386,6 +444,140 @@ class SigningRequestController extends Controller
         return redirect()->back()->with('success', "{$summary} sent via email.");
     }
 
+    public function storeBulkEmployees(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'exists:employees,id',
+            'document_template_id' => 'nullable|exists:document_templates,id',
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'delivery_method' => 'required|in:email,in_person',
+            'custom_fields' => 'nullable|array',
+            'sender_signature' => 'nullable|string',
+            'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
+        ]);
+
+        $template = null;
+        if (! empty($validated['document_template_id'])) {
+            $template = DocumentTemplate::findOrFail($validated['document_template_id']);
+        }
+
+        if ($template === null && empty($validated['document_html'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'document_html' => 'Please select a template or write a document.',
+            ]);
+        }
+
+        $senderSignature = $this->resolveSenderSignature($request);
+        $employees = \App\Models\Employee::whereIn('id', $validated['employee_ids'])->get();
+
+        // Pre-validate all employees for placeholder gaps before sending any
+        $scanHtml = $this->resolveDocumentHtmlForValidation($template, $validated['document_html'] ?? null);
+        $allGaps = [];
+        foreach ($employees as $employee) {
+            $gaps = $this->detectPlaceholderGaps($employee, $scanHtml, $validated['delivery_method']);
+            if (! empty($gaps)) {
+                $allGaps[] = $employee->name . ': ' . implode(', ', $gaps);
+            }
+        }
+        if (! empty($allGaps)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'employee_ids' => 'Cannot send to ' . count($allGaps) . ' employee(s) due to missing data: ' . implode('; ', $allGaps) . '.',
+            ]);
+        }
+
+        $created = 0;
+        foreach ($employees as $employee) {
+            \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $employee);
+
+            $this->signingService->createAndSend(
+                template: $template,
+                deliveryMethod: $validated['delivery_method'],
+                admin: $request->user(),
+                recipientName: $employee->display_name ?? $employee->name,
+                recipientEmail: $employee->email,
+                customFields: $validated['custom_fields'] ?? [],
+                signable: $employee,
+                senderSignature: $senderSignature,
+                senderFullName: $validated['sender_full_name'] ?? null,
+                documentHtml: $template ? null : ($validated['document_html'] ?? null),
+                documentTitle: $template ? null : ($validated['document_title'] ?? null),
+                senderPosition: $validated['sender_position'] ?? null,
+            );
+            $created++;
+        }
+
+        $this->maybePersistSenderSignature($request, $senderSignature);
+
+        return redirect()->back()->with('success', "Document sent to {$created} " . ($created === 1 ? 'employee' : 'employees') . '.');
+    }
+
+    public function storeWithInternalSigner(Request $request)
+    {
+        $validated = $request->validate([
+            'document_template_id' => 'nullable|exists:document_templates,id',
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'delivery_method' => 'required|in:email,in_person',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_email' => 'required_if:delivery_method,email|nullable|email|max:255',
+            'internal_signer_user_id' => 'required|exists:users,id',
+            'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
+            'custom_fields' => 'nullable|array',
+            'signable_type' => 'nullable|string',
+            'signable_id' => 'nullable|integer',
+        ]);
+
+        $template = null;
+        if (! empty($validated['document_template_id'])) {
+            $template = DocumentTemplate::findOrFail($validated['document_template_id']);
+        }
+
+        $signable = null;
+        if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
+            $signableClass = $validated['signable_type'];
+            if (class_exists($signableClass)) {
+                $signable = $signableClass::find($validated['signable_id']);
+                if ($signable instanceof \App\Models\Employee) {
+                    \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+                }
+            }
+        }
+
+        // Validate placeholder completeness for employee signables
+        if ($signable instanceof \App\Models\Employee) {
+            $scanHtml = $this->resolveDocumentHtmlForValidation($template, $validated['document_html'] ?? null);
+            $gaps = $this->detectPlaceholderGaps($signable, $scanHtml, $validated['delivery_method']);
+            if (! empty($gaps)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'signable' => 'Missing data for ' . $signable->name . ': ' . implode(', ', $gaps) . '.',
+                ]);
+            }
+        }
+
+        $internalSigner = \App\Models\User::findOrFail($validated['internal_signer_user_id']);
+
+        $this->signingService->createWithInternalSigner(
+            template: $template,
+            deliveryMethod: $validated['delivery_method'],
+            admin: $request->user(),
+            recipientName: $validated['recipient_name'],
+            recipientEmail: $validated['recipient_email'] ?? null,
+            internalSigner: $internalSigner,
+            customFields: $validated['custom_fields'] ?? [],
+            signable: $signable,
+            senderFullName: $validated['sender_full_name'] ?? null,
+            senderPosition: $validated['sender_position'] ?? null,
+            documentHtml: $validated['document_html'] ?? null,
+            documentTitle: $validated['document_title'] ?? null,
+        );
+
+        return redirect()->back()->with('success', "Signature request sent to {$internalSigner->name}. The document will be delivered to the recipient after they sign.");
+    }
+
     public function storeOneOff(Request $request)
     {
         $validated = $request->validate([
@@ -409,6 +601,16 @@ class SigningRequestController extends Controller
                 if ($signable instanceof \App\Models\Employee) {
                     \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
                 }
+            }
+        }
+
+        // Validate placeholder completeness for employee signables
+        if ($signable instanceof \App\Models\Employee) {
+            $gaps = $this->detectPlaceholderGaps($signable, $validated['document_html'], $validated['delivery_method']);
+            if (! empty($gaps)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'signable' => 'Missing data for ' . $signable->name . ': ' . implode(', ', $gaps) . '.',
+                ]);
             }
         }
 
@@ -514,6 +716,17 @@ class SigningRequestController extends Controller
             'sender_full_name' => 'nullable|string|max:255',
             'sender_position' => 'nullable|string|max:255',
         ]);
+
+        // Validate placeholder completeness for employee signables
+        $signable = $signingRequest->signable;
+        if ($signable instanceof \App\Models\Employee) {
+            $gaps = $this->detectPlaceholderGaps($signable, $validated['document_html'], $validated['delivery_method']);
+            if (! empty($gaps)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'signable' => 'Missing data for ' . $signable->name . ': ' . implode(', ', $gaps) . '.',
+                ]);
+            }
+        }
 
         $senderSignature = $this->resolveSenderSignature($request);
 

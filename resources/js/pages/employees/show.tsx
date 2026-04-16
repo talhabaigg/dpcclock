@@ -148,7 +148,7 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, auth } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
@@ -158,6 +158,7 @@ export default function EmployeeShow() {
         signingRequests: SigningRequestSummary[];
         availablePlaceholders: { key: string; label: string; preview?: string }[];
         savedSenderSignatureUrl: string | null;
+        appUsers: { id: number; name: string; position: string | null }[];
         auth: { user?: { id: number; name: string } };
     }>().props;
 
@@ -608,81 +609,139 @@ export default function EmployeeShow() {
                                     {signingRequests.length === 0 ? (
                                         <p className="text-muted-foreground text-sm italic">No documents sent yet.</p>
                                     ) : (
-                                        <div className="overflow-hidden rounded-lg border">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow className="bg-muted/50">
-                                                        <TableHead className="px-3 text-xs">Document</TableHead>
-                                                        <TableHead className="px-3 text-xs">Sent by</TableHead>
-                                                        <TableHead className="px-3 text-xs">Status</TableHead>
-                                                        <TableHead className="px-3 text-xs text-right">Actions</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {signingRequests.map((sr) => {
-                                                        const isSigned = sr.status === 'signed';
-                                                        const isDraft = sr.status === 'draft';
-                                                        const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
-                                                        const statusLabel = isDraft ? 'draft' : (isSigned ? 'signed' : 'sent');
-                                                        const statusTimestamp = isDraft
-                                                            ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
-                                                            : isSigned
-                                                                ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
-                                                                : (sr.created_at ? formatDateTime(sr.created_at) : '');
-                                                        const deliveryLabel = isDraft
-                                                            ? 'One-off · not yet sent'
-                                                            : (sr.delivery_method === 'email' ? 'Via email' : 'In-person');
-                                                        return (
-                                                            <TableRow key={sr.id}>
-                                                                <TableCell className="px-3 text-xs">
-                                                                    <p className="font-medium leading-tight">{docTitle}</p>
-                                                                    <p className="text-[10px] text-muted-foreground">{deliveryLabel}</p>
-                                                                </TableCell>
-                                                                <TableCell className="px-3 text-xs">{isDraft ? '—' : (sr.sent_by?.name ?? '—')}</TableCell>
-                                                                <TableCell className="px-3 text-xs">
-                                                                    <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
-                                                                    <span className="text-muted-foreground">{statusTimestamp}</span>
-                                                                </TableCell>
-                                                                <TableCell className="px-3 text-right">
-                                                                    <div className="flex justify-end gap-1">
-                                                                        {isDraft ? (
-                                                                            <>
-                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
-                                                                                    <Pencil className="h-3 w-3" />
-                                                                                    Edit
+                                        <>
+                                            {/* Desktop table */}
+                                            <div className="hidden overflow-hidden rounded-lg border md:block">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow className="bg-muted/50">
+                                                            <TableHead className="px-3 text-xs">Document</TableHead>
+                                                            <TableHead className="px-3 text-xs">Sent by</TableHead>
+                                                            <TableHead className="px-3 text-xs">Status</TableHead>
+                                                            <TableHead className="px-3 text-xs text-right">Actions</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {signingRequests.map((sr) => {
+                                                            const isSigned = sr.status === 'signed';
+                                                            const isDraft = sr.status === 'draft';
+                                                            const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
+                                                            const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
+                                                        const statusLabel = isDraft ? 'draft' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
+                                                            const statusTimestamp = isDraft
+                                                                ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
+                                                                : isSigned
+                                                                    ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
+                                                                    : (sr.created_at ? formatDateTime(sr.created_at) : '');
+                                                            const deliveryLabel = isDraft
+                                                                ? 'One-off · not yet sent'
+                                                                : (sr.delivery_method === 'email' ? 'Via email' : 'In-person');
+                                                            return (
+                                                                <TableRow key={sr.id}>
+                                                                    <TableCell className="px-3 text-xs">
+                                                                        <p className="font-medium leading-tight">{docTitle}</p>
+                                                                        <p className="text-[10px] text-muted-foreground">{deliveryLabel}</p>
+                                                                    </TableCell>
+                                                                    <TableCell className="px-3 text-xs">{isDraft ? '—' : (sr.sent_by?.name ?? '—')}</TableCell>
+                                                                    <TableCell className="px-3 text-xs">
+                                                                        <Badge variant={isDraft ? 'outline' : isAwaitingInternal ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                        <span className="text-muted-foreground">{statusTimestamp}</span>
+                                                                    </TableCell>
+                                                                    <TableCell className="px-3 text-right">
+                                                                        <div className="flex justify-end gap-1">
+                                                                            {isDraft ? (
+                                                                                <>
+                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
+                                                                                        <Pencil className="h-3 w-3" />
+                                                                                        Edit
+                                                                                    </Button>
+                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
+                                                                                        <Trash2 className="h-3 w-3" />
+                                                                                        Discard
+                                                                                    </Button>
+                                                                                </>
+                                                                            ) : isSigned ? (
+                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
+                                                                                    <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
+                                                                                        <Download className="h-3 w-3" />
+                                                                                        Download
+                                                                                    </a>
                                                                                 </Button>
-                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
-                                                                                    <Trash2 className="h-3 w-3" />
-                                                                                    Discard
-                                                                                </Button>
-                                                                            </>
-                                                                        ) : isSigned ? (
-                                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
-                                                                                <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
-                                                                                    <Download className="h-3 w-3" />
-                                                                                    Download
-                                                                                </a>
-                                                                            </Button>
-                                                                        ) : (
-                                                                            <>
-                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
-                                                                                    <RotateCcw className="h-3 w-3" />
-                                                                                    Resend
-                                                                                </Button>
-                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
-                                                                                    <X className="h-3 w-3" />
-                                                                                    Cancel
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
+                                                                                        <RotateCcw className="h-3 w-3" />
+                                                                                        Resend
+                                                                                    </Button>
+                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
+                                                                                        <X className="h-3 w-3" />
+                                                                                        Cancel
+                                                                                    </Button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+
+                                            {/* Mobile card layout */}
+                                            <div className="flex flex-col gap-2 md:hidden">
+                                                {signingRequests.map((sr) => {
+                                                    const isSigned = sr.status === 'signed';
+                                                    const isDraft = sr.status === 'draft';
+                                                    const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
+                                                    const statusLabel = isDraft ? 'draft' : (isSigned ? 'signed' : 'sent');
+                                                    const statusTimestamp = isDraft
+                                                        ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
+                                                        : isSigned
+                                                            ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
+                                                            : (sr.created_at ? formatDateTime(sr.created_at) : '');
+                                                    return (
+                                                        <div key={sr.id} className="rounded-md border p-3">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div>
+                                                                    <p className="text-sm font-medium">{docTitle}</p>
+                                                                    {!isDraft && <p className="text-[10px] text-muted-foreground">by {sr.sent_by?.name ?? '—'}</p>}
+                                                                </div>
+                                                                <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="shrink-0 text-[10px] capitalize">{statusLabel}</Badge>
+                                                            </div>
+                                                            <p className="mt-1 text-[10px] text-muted-foreground">{statusTimestamp}</p>
+                                                            <div className="mt-2 flex gap-1.5">
+                                                                {isDraft ? (
+                                                                    <>
+                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
+                                                                            <Pencil className="h-3 w-3" /> Edit
+                                                                        </Button>
+                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
+                                                                            <Trash2 className="h-3 w-3" /> Discard
+                                                                        </Button>
+                                                                    </>
+                                                                ) : isSigned ? (
+                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" asChild>
+                                                                        <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
+                                                                            <Download className="h-3 w-3" /> Download
+                                                                        </a>
+                                                                    </Button>
+                                                                ) : (
+                                                                    <>
+                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
+                                                                            <RotateCcw className="h-3 w-3" /> Resend
+                                                                        </Button>
+                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
+                                                                            <X className="h-3 w-3" /> Cancel
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
                                     )}
                                 </CardContent>
                             </Card>
@@ -891,6 +950,7 @@ export default function EmployeeShow() {
                     recipientEmail={emp.email ?? ''}
                     availablePlaceholders={availablePlaceholders ?? []}
                     savedSenderSignatureUrl={savedSenderSignatureUrl ?? null}
+                    appUsers={appUsers ?? []}
                     signableType="App\Models\Employee"
                     signableId={emp.id}
                     draft={editingDraft ? {

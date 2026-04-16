@@ -8,6 +8,11 @@
         $documentLabel = $signingRequest->documentTemplate?->name
             ?? $signingRequest->document_title
             ?? 'Document';
+
+        $cmsEntityId = (int) config('services.employment_hero.cms_entity_id');
+        $signable = $signingRequest->signable;
+        $isCms = $signable instanceof \App\Models\Employee && (int) $signable->employing_entity_id === $cmsEntityId;
+        $logoPath = $isCms ? 'logo-cms.png' : 'logo.png';
     @endphp
     <title>Sign {{ $documentLabel }}</title>
     @vite(['resources/js/signing.ts'])
@@ -18,7 +23,7 @@
 
         /* Header */
         .header { text-align: center; padding: 24px 0 20px; }
-        .header img { max-height: 44px; margin-bottom: 12px; }
+        .header img { max-height: 60px; max-width: 220px; width: auto; height: auto; object-fit: contain; margin-bottom: 12px; }
         .header h1 { font-size: 20px; font-weight: 600; color: #0f172a; }
         .header p { font-size: 14px; color: #64748b; margin-top: 2px; }
 
@@ -108,7 +113,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="{{ asset('logo.png') }}" alt="DPC">
+            <img src="{{ asset($logoPath) }}" alt="{{ $isCms ? 'CMS' : 'DPC' }}">
             <h1>{{ $documentLabel }}</h1>
             <p>Please review and sign below</p>
         </div>

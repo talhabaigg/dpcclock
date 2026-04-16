@@ -42,7 +42,9 @@ class DocumentSignedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $templateName = $this->signingRequest->documentTemplate?->name ?? 'Document';
+        $templateName = $this->signingRequest->documentTemplate?->name
+            ?? $this->signingRequest->document_title
+            ?? 'Document';
 
         return [
             'type' => 'DocumentSigned',

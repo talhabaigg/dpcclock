@@ -9,6 +9,7 @@ use App\Models\SigningRequest;
 use App\Models\User;
 use App\Notifications\DocumentSignedNotification;
 use App\Notifications\DocumentSigningNotification;
+use App\Notifications\InternalSignatureRequestedNotification;
 use App\Notifications\SignedDocumentNotification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -418,6 +419,199 @@ class DocumentSigningService
 
         $signingRequest->logEvent('draft_discarded', 'admin', $admin->id);
         $signingRequest->delete();
+    }
+
+    /**
+     * Create a signing request that requires an internal user to sign first.
+     * The document is NOT sent to the recipient until the internal signer completes.
+     */
+    public function createWithInternalSigner(
+        ?DocumentTemplate $template,
+        string $deliveryMethod,
+        User $admin,
+        string $recipientName,
+        ?string $recipientEmail,
+        User $internalSigner,
+        array $customFields = [],
+        ?Model $signable = null,
+        ?string $senderFullName = null,
+        ?string $senderPosition = null,
+        ?string $documentHtml = null,
+        ?string $documentTitle = null,
+    ): SigningRequest {
+        // Build placeholder values (same as createAndSend but without sender signature)
+        $placeholderValues = array_merge($customFields, [
+            'recipient_name' => $recipientName,
+            'recipient_email' => $recipientEmail ?? '',
+        ]);
+
+        if ($signable instanceof \App\Models\EmploymentApplication) {
+            $placeholderValues = array_merge($placeholderValues, [
+                'applicant_first_name' => $signable->first_name ?? '',
+                'applicant_surname' => $signable->surname ?? '',
+                'applicant_full_name' => $signable->full_name ?? '',
+                'applicant_email' => $signable->email ?? '',
+                'applicant_phone' => $signable->phone ?? '',
+            ]);
+        }
+
+        if ($signable instanceof ProvidesSigningPlaceholders) {
+            foreach ($signable->signingPlaceholders() as $key => $definition) {
+                $placeholderValues[$key] = $definition['value'] ?? '';
+            }
+        }
+
+        $placeholderValues = array_merge($placeholderValues, [
+            'sender_name' => $senderFullName ?? $internalSigner->name ?? '',
+            'sender_email' => $internalSigner->email ?? '',
+            'sender_phone' => $internalSigner->phone ?? '',
+            'sender_position' => $senderPosition ?? $internalSigner->position ?? '',
+            'sender_role' => $internalSigner->roles->first()?->name ?? '',
+        ]);
+
+        if ($template) {
+            $renderedHtml = $template->renderHtml($placeholderValues);
+        } else {
+            $renderedHtml = $documentHtml;
+            foreach ($placeholderValues as $key => $value) {
+                $renderedHtml = str_replace('{{' . $key . '}}', e($value), $renderedHtml);
+            }
+            if (! str_contains($renderedHtml, '{{signature_box}}')) {
+                $renderedHtml .= '<p>{{signature_box}}</p>';
+            }
+        }
+
+        // Leave {{sender_signature}} unresolved — the internal signer will fill it.
+
+        $signingRequest = SigningRequest::create([
+            'document_template_id' => $template?->id,
+            'document_title' => $template ? $template->name : $documentTitle,
+            'signable_type' => $signable ? get_class($signable) : null,
+            'signable_id' => $signable?->getKey(),
+            'delivery_method' => $deliveryMethod,
+            'token' => Str::random(64),
+            'status' => 'awaiting_internal_signature',
+            'sent_by' => $admin->id,
+            'document_html' => $renderedHtml,
+            'document_hash' => null, // Will be set after internal signer stamps
+            'recipient_name' => $recipientName,
+            'recipient_email' => $recipientEmail,
+            'custom_fields' => $customFields,
+            'sender_full_name' => $senderFullName,
+            'sender_position' => $senderPosition,
+            'internal_signer_user_id' => $internalSigner->id,
+            'internal_signer_token' => Str::random(64),
+            'expires_at' => null, // Clock starts after internal sign
+        ]);
+
+        $signingRequest->logEvent('created', 'admin', $admin->id, null, [
+            'internal_signer' => $internalSigner->name,
+        ]);
+
+        // Notify the internal signer
+        $internalSigner->notify(new InternalSignatureRequestedNotification($signingRequest));
+        $signingRequest->logEvent('internal_sign_requested', 'system', null, null, [
+            'to' => $internalSigner->email,
+        ]);
+
+        // System comment on signable
+        if ($signable && method_exists($signable, 'addSystemComment')) {
+            $signable->addSystemComment(
+                "Document awaiting internal signature from {$internalSigner->name} before sending to {$recipientName}",
+                ['type' => 'internal_sign_requested', 'signing_request_id' => $signingRequest->id],
+                $admin->id,
+            );
+        }
+
+        return $signingRequest;
+    }
+
+    /**
+     * Process the internal signer's signature, stamp it into the document,
+     * then deliver to the external recipient.
+     */
+    public function processInternalSignature(
+        SigningRequest $signingRequest,
+        string $signatureDataUrl,
+        string $signerFullName,
+        ?string $signerPosition,
+        Request $request,
+    ): void {
+        if (! $signingRequest->isAwaitingInternalSignature()) {
+            throw new \RuntimeException('This document is not awaiting an internal signature.');
+        }
+
+        // Store signature image
+        $signingRequest->addMediaFromBase64($signatureDataUrl)
+            ->usingFileName('internal-signature.png')
+            ->toMediaCollection('internal_signature');
+
+        // Stamp into document HTML
+        $positionLine = $signerPosition
+            ? '<span style="color: #475569;">' . e($signerPosition) . '</span><br>'
+            : '';
+        $senderSignatureHtml = '<div class="signature-box">'
+            . '<img src="' . $signatureDataUrl . '" style="max-width: 300px; max-height: 100px;" />'
+            . '<div class="signature-meta">'
+            . '<strong>' . e($signerFullName) . '</strong><br>'
+            . $positionLine
+            . 'Signed: ' . now()->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
+            . '</div></div>';
+
+        $html = $signingRequest->document_html;
+        $html = str_replace('{{sender_signature}}', $senderSignatureHtml, $html);
+
+        $documentHash = hash('sha256', $html);
+
+        $signingRequest->update([
+            'document_html' => $html,
+            'document_hash' => $documentHash,
+            'sender_signature' => $signatureDataUrl,
+            'sender_full_name' => $signerFullName,
+            'sender_position' => $signerPosition,
+            'internal_signed_at' => now(),
+            'expires_at' => now()->addDays(7),
+            'status' => 'pending',
+        ]);
+
+        $signingRequest->logEvent('internal_signed', 'admin', $signingRequest->internal_signer_user_id, $request, [
+            'signer_name' => $signerFullName,
+        ]);
+
+        // Now deliver to the external recipient
+        if ($signingRequest->delivery_method === 'email' && $signingRequest->recipient_email) {
+            Notification::route('mail', $signingRequest->recipient_email)
+                ->notify(new DocumentSigningNotification($signingRequest));
+            $signingRequest->update(['status' => 'sent']);
+            $signingRequest->logEvent('sent', 'system', null, null, ['method' => 'email', 'to' => $signingRequest->recipient_email]);
+        } else {
+            $signingRequest->update(['status' => 'sent']);
+            $signingRequest->logEvent('sent', 'system', null, null, ['method' => 'in_person']);
+        }
+
+        // Notify the admin who created the request
+        try {
+            $admin = $signingRequest->sentBy;
+            if ($admin) {
+                $internalSigner = $signingRequest->internalSigner;
+                $docLabel = $signingRequest->documentTemplate?->name ?? $signingRequest->document_title ?? 'Document';
+                $admin->notifications()->create([
+                    'id' => Str::uuid(),
+                    'type' => 'InternalSignatureCompleted',
+                    'data' => json_encode([
+                        'type' => 'InternalSignatureCompleted',
+                        'title' => 'Internal signature complete',
+                        'body' => ($internalSigner?->name ?? 'A user') . " has signed \"{$docLabel}\". The document has been sent to {$signingRequest->recipient_name}.",
+                        'signing_request_id' => $signingRequest->id,
+                    ]),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to notify admin after internal sign', [
+                'signing_request_id' => $signingRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function cancel(SigningRequest $signingRequest, User $admin): void
