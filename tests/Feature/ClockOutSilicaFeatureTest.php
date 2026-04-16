@@ -34,7 +34,7 @@ function createClockOutContext(): array
     Clock::create([
         'eh_kiosk_id' => $kiosk->eh_kiosk_id,
         'eh_employee_id' => $employee->eh_employee_id,
-        'clock_in' => Carbon::parse('2026-04-16 06:00:00', 'Australia/Brisbane'),
+        'clock_in' => Carbon::now('Australia/Brisbane')->setTime(6, 0, 0),
     ]);
 
     return [$employee, $kiosk];

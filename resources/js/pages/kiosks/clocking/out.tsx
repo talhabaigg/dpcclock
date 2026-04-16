@@ -226,8 +226,7 @@ export default function Clockout() {
                 hoursAllocated !== hoursWorked
             );
         }) ||
-        !safetyConfirmed ||
-        !silicaAnswered;
+        !safetyConfirmed;
     const toggleAllowance = (index: number, type: 'insulation' | 'setout') => {
         setTaskAllocations((prev) => {
             return prev.map((task, i) => {
@@ -859,6 +858,13 @@ export default function Clockout() {
                             )}
                         </div>
                     </>
+                )}
+
+                {silicaQuestionEnabled && !silicaAnswered && (
+                    <div className="flex items-center gap-2 rounded-xl border-2 border-amber-500 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>Silica question has not been fully answered.</span>
+                    </div>
                 )}
 
                 {/* Submit Button */}
