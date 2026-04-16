@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Contracts\ProvidesSigningPlaceholders;
 use App\Events\DocumentSigned;
 use App\Models\DocumentTemplate;
 use App\Models\SigningRequest;
 use App\Models\User;
 use App\Notifications\DocumentSignedNotification;
 use App\Notifications\DocumentSigningNotification;
+use App\Notifications\SignedDocumentNotification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -20,7 +22,7 @@ class DocumentSigningService
     ) {}
 
     public function createAndSend(
-        DocumentTemplate $template,
+        ?DocumentTemplate $template,
         string $deliveryMethod,
         User $admin,
         string $recipientName,
@@ -29,9 +31,16 @@ class DocumentSigningService
         ?Model $signable = null,
         ?string $senderSignature = null,
         ?string $senderFullName = null,
+        ?string $documentHtml = null,
+        ?string $documentTitle = null,
+        ?string $senderPosition = null,
     ): SigningRequest {
+        if ($template === null && ($documentHtml === null || trim($documentHtml) === '')) {
+            throw new \InvalidArgumentException('createAndSend requires either a template or raw document HTML.');
+        }
+
         // Cancel any existing pending requests for the same signable + template
-        if ($signable) {
+        if ($signable && $template) {
             SigningRequest::query()
                 ->where('signable_type', get_class($signable))
                 ->where('signable_id', $signable->getKey())
@@ -43,11 +52,13 @@ class DocumentSigningService
         }
 
         // Format date-type custom fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (Australian)
-        foreach ($template->placeholders ?? [] as $placeholder) {
-            $key = $placeholder['key'];
-            $type = $placeholder['type'] ?? 'text';
-            if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
-                $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
+        if ($template) {
+            foreach ($template->placeholders ?? [] as $placeholder) {
+                $key = $placeholder['key'];
+                $type = $placeholder['type'] ?? 'text';
+                if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
+                    $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
+                }
             }
         }
 
@@ -75,6 +86,14 @@ class DocumentSigningService
             ]);
         }
 
+        // Model-declared placeholders (namespaced, e.g. employee.first_name). Custom fields
+        // already merged above win on key collision by being applied first.
+        if ($signable instanceof ProvidesSigningPlaceholders) {
+            foreach ($signable->signingPlaceholders() as $key => $definition) {
+                $placeholderValues[$key] = $definition['value'] ?? '';
+            }
+        }
+
         // Auto-resolve sender (authenticated user) fields
         $placeholderValues = array_merge($placeholderValues, [
             'sender_name' => $admin->name ?? '',
@@ -84,14 +103,31 @@ class DocumentSigningService
             'sender_role' => $admin->roles->first()?->name ?? '',
         ]);
 
-        $documentHtml = $template->renderHtml($placeholderValues);
+        if ($template) {
+            $documentHtml = $template->renderHtml($placeholderValues);
+        } else {
+            // One-off: render provided HTML with the same placeholder substitution as templates.
+            $rendered = $documentHtml;
+            foreach ($placeholderValues as $key => $value) {
+                $rendered = str_replace('{{' . $key . '}}', e($value), $rendered);
+            }
+            // Auto-append a recipient signature block if the author didn't place one.
+            if (! str_contains($rendered, '{{signature_box}}')) {
+                $rendered .= '<p>{{signature_box}}</p>';
+            }
+            $documentHtml = $rendered;
+        }
 
         // Replace sender signature placeholder with rendered HTML if provided
         if ($senderSignature && str_contains($documentHtml, '{{sender_signature}}')) {
+            $positionLine = $senderPosition
+                ? '<span style="color: #475569;">' . e($senderPosition) . '</span><br>'
+                : '';
             $senderSignatureHtml = '<div class="signature-box">'
                 . '<img src="' . $senderSignature . '" style="max-width: 300px; max-height: 100px;" />'
                 . '<div class="signature-meta">'
                 . '<strong>' . e($senderFullName ?? $admin->name) . '</strong><br>'
+                . $positionLine
                 . 'Signed: ' . now()->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
                 . '</div></div>';
             $documentHtml = str_replace('{{sender_signature}}', $senderSignatureHtml, $documentHtml);
@@ -100,7 +136,8 @@ class DocumentSigningService
         $documentHash = hash('sha256', $documentHtml);
 
         $signingRequest = SigningRequest::create([
-            'document_template_id' => $template->id,
+            'document_template_id' => $template?->id,
+            'document_title' => $template ? $template->name : $documentTitle,
             'signable_type' => $signable ? get_class($signable) : null,
             'signable_id' => $signable?->getKey(),
             'delivery_method' => $deliveryMethod,
@@ -114,6 +151,7 @@ class DocumentSigningService
             'custom_fields' => $customFields,
             'sender_signature' => $senderSignature,
             'sender_full_name' => $senderFullName,
+            'sender_position' => $senderPosition,
             'expires_at' => now()->addDays(7),
         ]);
 
@@ -251,6 +289,135 @@ class DocumentSigningService
                 'error' => $e->getMessage(),
             ]);
         }
+
+        // Email the signer a copy of the fully-signed PDF (BCC the admin for their records)
+        try {
+            if ($signingRequest->recipient_email) {
+                $adminBcc = $signingRequest->sentBy?->email;
+                Notification::route('mail', $signingRequest->recipient_email)
+                    ->notify(new SignedDocumentNotification($signingRequest, $adminBcc));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to send signed-copy email', [
+                'signing_request_id' => $signingRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Save a one-off document as a draft. No delivery happens, no expiry is set,
+     * placeholders in the body stay unresolved so the author can continue editing.
+     */
+    public function createDraft(
+        User $admin,
+        string $documentTitle,
+        string $documentHtml,
+        ?Model $signable = null,
+        ?string $recipientName = null,
+        ?string $recipientEmail = null,
+    ): SigningRequest {
+        $signingRequest = SigningRequest::create([
+            'document_template_id' => null,
+            'document_title' => $documentTitle,
+            'signable_type' => $signable ? get_class($signable) : null,
+            'signable_id' => $signable?->getKey(),
+            'delivery_method' => 'email',
+            'token' => Str::random(64),
+            'status' => 'draft',
+            'sent_by' => $admin->id,
+            'document_html' => $documentHtml,
+            'document_hash' => null,
+            'recipient_name' => $recipientName ?: '',
+            'recipient_email' => $recipientEmail,
+            'custom_fields' => null,
+            'expires_at' => null,
+        ]);
+
+        $signingRequest->logEvent('draft_created', 'admin', $admin->id);
+
+        return $signingRequest;
+    }
+
+    /**
+     * Update an existing draft's fields without finalising it.
+     */
+    public function updateDraft(
+        SigningRequest $signingRequest,
+        User $admin,
+        ?string $documentTitle = null,
+        ?string $documentHtml = null,
+        ?string $recipientName = null,
+        ?string $recipientEmail = null,
+    ): SigningRequest {
+        if ($signingRequest->status !== 'draft') {
+            throw new \RuntimeException('Only drafts can be updated.');
+        }
+
+        $signingRequest->update(array_filter([
+            'document_title' => $documentTitle,
+            'document_html' => $documentHtml,
+            'recipient_name' => $recipientName,
+            'recipient_email' => $recipientEmail,
+        ], fn ($v) => $v !== null));
+
+        $signingRequest->logEvent('draft_updated', 'admin', $admin->id);
+
+        return $signingRequest;
+    }
+
+    /**
+     * Convert a draft into a live signing request, going through the same
+     * placeholder resolution, hashing, and delivery pipeline as a fresh send.
+     */
+    public function finalizeDraft(
+        SigningRequest $draft,
+        User $admin,
+        string $deliveryMethod,
+        string $recipientName,
+        ?string $recipientEmail,
+        ?string $senderSignature = null,
+        ?string $senderFullName = null,
+        ?string $senderPosition = null,
+        ?string $documentTitle = null,
+        ?string $documentHtml = null,
+    ): SigningRequest {
+        if ($draft->status !== 'draft') {
+            throw new \RuntimeException('Only drafts can be finalised.');
+        }
+
+        $signable = $draft->signable;
+        $title = $documentTitle ?? $draft->document_title;
+        $html = $documentHtml ?? $draft->document_html;
+
+        // Discard the draft shell; createAndSend writes a fresh row (new token, clean audit).
+        $draft->logEvent('draft_finalized', 'admin', $admin->id);
+        $draft->delete();
+
+        return $this->createAndSend(
+            template: null,
+            deliveryMethod: $deliveryMethod,
+            admin: $admin,
+            recipientName: $recipientName,
+            recipientEmail: $recipientEmail,
+            customFields: [],
+            signable: $signable,
+            senderSignature: $senderSignature,
+            senderFullName: $senderFullName,
+            documentHtml: $html,
+            documentTitle: $title,
+            senderPosition: $senderPosition,
+        );
+    }
+
+    public function discardDraft(SigningRequest $signingRequest, User $admin): void
+    {
+        if ($signingRequest->status !== 'draft') {
+            throw new \RuntimeException('Only drafts can be discarded.');
+        }
+
+        $signingRequest->logEvent('draft_discarded', 'admin', $admin->id);
+        $signingRequest->delete();
     }
 
     public function cancel(SigningRequest $signingRequest, User $admin): void
@@ -269,19 +436,22 @@ class DocumentSigningService
         // Cancel the old request
         $this->cancel($signingRequest, $admin);
 
-        // Create a new one with the same parameters
+        // Create a new one with the same parameters (works for both template and one-off)
         $template = $signingRequest->documentTemplate;
 
         return $this->createAndSend(
-            $template,
-            $signingRequest->delivery_method,
-            $admin,
-            $signingRequest->recipient_name,
-            $signingRequest->recipient_email,
-            $signingRequest->custom_fields ?? [],
-            $signingRequest->signable,
-            $signingRequest->sender_signature,
-            $signingRequest->sender_full_name,
+            template: $template,
+            deliveryMethod: $signingRequest->delivery_method,
+            admin: $admin,
+            recipientName: $signingRequest->recipient_name,
+            recipientEmail: $signingRequest->recipient_email,
+            customFields: $signingRequest->custom_fields ?? [],
+            signable: $signingRequest->signable,
+            senderSignature: $signingRequest->sender_signature,
+            senderFullName: $signingRequest->sender_full_name,
+            documentHtml: $template ? null : $signingRequest->document_html,
+            documentTitle: $template ? null : $signingRequest->document_title,
+            senderPosition: $signingRequest->sender_position,
         );
     }
 }

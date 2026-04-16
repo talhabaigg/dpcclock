@@ -38,6 +38,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'employees.view-all' => 'View all employees (across all kiosks)',
             'employees.sync' => 'Sync employees from external system',
             'employees.manage-worktypes' => 'Manage employee work types',
+            'employees.office.view' => 'View office (salaried) employees',
+            'employees.office.send-documents' => 'Send documents for signing to office employees',
         ],
 
         // ============================================
@@ -294,6 +296,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Document Templates' => [
             'document-templates.manage' => 'Create and manage document templates for signing',
+            'signing-requests.view' => 'View the central signing-requests tracking page',
         ],
 
         // ============================================

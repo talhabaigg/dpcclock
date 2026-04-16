@@ -9,6 +9,7 @@ use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -19,7 +20,7 @@ class EmployeeController extends Controller
     {
         $user = Auth::user();
 
-        $query = Employee::with('worktypes');
+        $query = Employee::with('worktypes')->fieldStaff();
 
         if (! $user->can('employees.view-all')) {
             $kioskEmployeeIds = $user->managedKiosks()
@@ -36,21 +37,20 @@ class EmployeeController extends Controller
         ]);
     }
 
+    public function officeIndex()
+    {
+        $employees = Employee::officeStaff()
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('office-employees/index', [
+            'employees' => $employees,
+        ]);
+    }
+
     public function show(Employee $employee)
     {
-        $user = Auth::user();
-
-        if (! $user->can('employees.view-all')) {
-            $kioskEmployeeIds = $user->managedKiosks()
-                ->with('employees')
-                ->get()
-                ->flatMap(fn ($kiosk) => $kiosk->employees->pluck('eh_employee_id'))
-                ->unique();
-
-            if (! $kioskEmployeeIds->contains($employee->eh_employee_id)) {
-                abort(403, 'You do not have access to this employee.');
-            }
-        }
+        Gate::authorize('view', $employee);
 
         $employee->load(['worktypes', 'kiosks.location', 'incidentReports.location', 'clocks' => function ($query) {
             $query->select('id', 'eh_employee_id', 'clock_in')->latest('clock_in')->limit(10);
@@ -92,11 +92,76 @@ class EmployeeController extends Controller
                 ]),
             ]);
 
+        $canSendDocuments = Gate::check('sendDocuments', $employee);
+
+        $documentTemplates = collect();
+        $signingRequests = collect();
+        $availablePlaceholders = [];
+        if ($canSendDocuments) {
+            $documentTemplates = \App\Models\DocumentTemplate::active()
+                ->orderBy('name')
+                ->get(['id', 'name', 'placeholders', 'body_html']);
+
+            // Shape placeholders for the UI — key, label, preview value for this employee.
+            $availablePlaceholders = collect($employee->signingPlaceholders())
+                ->map(fn ($def, $key) => [
+                    'key' => $key,
+                    'label' => $def['label'],
+                    'preview' => $def['value'],
+                ])
+                ->values()
+                ->all();
+
+            $viewerId = Auth::id();
+            $signingRequests = $employee->signingRequests()
+                ->whereNotIn('status', ['cancelled'])
+                // Drafts are private to the author; non-drafts are visible to any authorised viewer.
+                ->where(function ($q) use ($viewerId) {
+                    $q->where('status', '!=', 'draft')
+                        ->orWhere('sent_by', $viewerId);
+                })
+                ->with(['documentTemplate:id,name', 'sentBy:id,name'])
+                ->latest()
+                ->get()
+                ->map(fn ($sr) => [
+                    'id' => $sr->id,
+                    'status' => $sr->status,
+                    'delivery_method' => $sr->delivery_method,
+                    'recipient_name' => $sr->recipient_name,
+                    'recipient_email' => $sr->recipient_email,
+                    'document_title' => $sr->document_title,
+                    'document_html' => $sr->status === 'draft' ? $sr->document_html : null,
+                    'created_at' => $sr->created_at?->toISOString(),
+                    'updated_at' => $sr->updated_at?->toISOString(),
+                    'signed_at' => $sr->signed_at?->toISOString(),
+                    'opened_at' => $sr->opened_at?->toISOString(),
+                    'viewed_at' => $sr->viewed_at?->toISOString(),
+                    'expires_at' => $sr->expires_at?->toISOString(),
+                    'signer_full_name' => $sr->signer_full_name,
+                    'document_template' => $sr->documentTemplate ? [
+                        'id' => $sr->documentTemplate->id,
+                        'name' => $sr->documentTemplate->name,
+                    ] : null,
+                    'sent_by' => $sr->sentBy ? [
+                        'id' => $sr->sentBy->id,
+                        'name' => $sr->sentBy->name,
+                    ] : null,
+                ])
+                ->values();
+        }
+
         return Inertia::render('employees/show', [
-            'employee' => $employee,
+            'employee' => array_merge($employee->toArray(), [
+                'is_office_staff' => $employee->isOfficeStaff(),
+            ]),
             'projects' => $projects,
             'weekEnding' => $weekEnding,
             'journal' => $journal,
+            'canSendDocuments' => $canSendDocuments,
+            'documentTemplates' => $documentTemplates,
+            'signingRequests' => $signingRequests,
+            'availablePlaceholders' => $availablePlaceholders,
+            'savedSenderSignatureUrl' => $canSendDocuments ? Auth::user()?->savedSignatureUrl() : null,
         ]);
     }
 
@@ -198,10 +263,21 @@ class EmployeeController extends Controller
         // Filter only active employees (no endDate)
         $employeeData = array_filter($allEmployees, fn ($employee) => empty($employee['endDate']));
 
+        // Build employing entity id → name lookup (used to stamp the legal entity on each employee)
+        $entityResponse = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
+        ])->get("https://api.yourpayroll.com.au/api/v2/business/{$businessId}/employingentity");
+        $entityNameById = collect($entityResponse->json() ?? [])
+            ->pluck('name', 'id')
+            ->all();
+
         $apiEmployeeIds = [];
 
         foreach ($employeeData as $employeeInfo) {
             $apiEmployeeIds[] = $employeeInfo['id'];
+
+            $entityId = $employeeInfo['employingEntityId'] ?? null;
+            $entityId = $entityId !== null && $entityId !== '' ? (int) $entityId : null;
 
             // Find or create (does NOT include soft-deleted, so need withTrashed)
             $employee = Employee::withTrashed()->updateOrCreate(
@@ -213,6 +289,8 @@ class EmployeeController extends Controller
                     'email' => $employeeInfo['emailAddress'] ?? null,
                     'employment_type' => $employeeInfo['employmentType'] ?? null,
                     'employment_agreement' => $employeeInfo['employmentAgreement'] ?? null,
+                    'employing_entity_id' => $entityId,
+                    'employing_entity_name' => $entityId !== null ? ($entityNameById[$entityId] ?? null) : null,
                     'start_date' => isset($employeeInfo['startDate']) ? substr($employeeInfo['startDate'], 0, 10) : null,
                     'date_of_birth' => isset($employeeInfo['dateOfBirth']) ? substr($employeeInfo['dateOfBirth'], 0, 10) : null,
                     'pin' => 1234,

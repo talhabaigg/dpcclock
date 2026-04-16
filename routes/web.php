@@ -330,8 +330,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
     Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
 
+    Route::middleware('permission:signing-requests.view')->group(function () {
+        Route::get('/signing-requests', [SigningRequestController::class, 'index'])->name('signing-requests.index');
+    });
     Route::post('/signing-requests', [SigningRequestController::class, 'store'])->name('signing-requests.store');
     Route::post('/signing-requests/batch', [SigningRequestController::class, 'storeBatch'])->name('signing-requests.store-batch');
+    Route::post('/signing-requests/one-off', [SigningRequestController::class, 'storeOneOff'])->name('signing-requests.store-one-off');
+    Route::post('/signing-requests/drafts', [SigningRequestController::class, 'storeDraft'])->name('signing-requests.drafts.store');
+    Route::put('/signing-requests/{signingRequest}/draft', [SigningRequestController::class, 'updateDraft'])->name('signing-requests.drafts.update');
+    Route::post('/signing-requests/{signingRequest}/finalize', [SigningRequestController::class, 'finalizeDraft'])->name('signing-requests.drafts.finalize');
+    Route::delete('/signing-requests/{signingRequest}/draft', [SigningRequestController::class, 'discardDraft'])->name('signing-requests.drafts.discard');
     Route::post('/signing-requests/{signingRequest}/cancel', [SigningRequestController::class, 'cancel'])->name('signing-requests.cancel');
     Route::post('/signing-requests/{signingRequest}/resend', [SigningRequestController::class, 'resend'])->name('signing-requests.resend');
     Route::get('/signing-requests/{signingRequest}/download', [SigningRequestController::class, 'download'])->name('signing-requests.download');
@@ -374,6 +382,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+    });
+    Route::middleware('permission:employees.office.view')->group(function () {
+        Route::get('/office-employees', [EmployeeController::class, 'officeIndex'])->name('employees.office.index');
     });
     Route::middleware('permission:employees.sync')->group(function () {
         Route::get('/employees/worktypes/sync', [EmployeeController::class, 'syncEmployeeWorktypes'])->name('employees.worktypes.sync');

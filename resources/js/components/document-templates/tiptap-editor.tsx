@@ -51,17 +51,24 @@ interface Placeholder {
     label: string;
 }
 
-interface TiptapEditorProps {
-    content: string;
-    onChange: (json: string, html: string) => void;
-    placeholders?: Placeholder[];
-}
-
 type PlaceholderField = Placeholder | { divider: true };
 
 interface PlaceholderGroup {
     label: string;
     fields: PlaceholderField[];
+}
+
+interface TiptapEditorProps {
+    content: string;
+    onChange: (json: string, html: string) => void;
+    placeholders?: Placeholder[];
+    /**
+     * Override the context-specific placeholder group (defaults to "Applicant").
+     * Pass `null` to hide the context group entirely.
+     */
+    contextGroup?: PlaceholderGroup | null;
+    /** Label for the custom-placeholder group (defaults to "Custom"). */
+    customGroupLabel?: string;
 }
 
 const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
@@ -251,11 +258,28 @@ const PageBreak = Node.create({
     },
 });
 
-export default function TiptapEditor({ content, onChange, placeholders = [] }: TiptapEditorProps) {
+export default function TiptapEditor({ content, onChange, placeholders = [], contextGroup, customGroupLabel = 'Custom' }: TiptapEditorProps) {
+    // Base groups: replace the first ("Applicant") if a contextGroup is provided; remove it if null.
+    const baseGroups = contextGroup === undefined
+        ? PLACEHOLDER_GROUPS
+        : contextGroup === null
+            ? PLACEHOLDER_GROUPS.slice(1)
+            : [contextGroup, ...PLACEHOLDER_GROUPS.slice(1)];
+
     // Merge any custom placeholders passed from the create/edit form
     const allGroups = placeholders.length > 0
-        ? [...PLACEHOLDER_GROUPS, { label: 'Custom', fields: placeholders.filter((p) => !PLACEHOLDER_GROUPS.some((g) => g.fields.some((f) => 'key' in f && f.key === p.key))) as PlaceholderField[] }].filter((g) => g.fields.length > 0)
-        : PLACEHOLDER_GROUPS;
+        ? [...baseGroups, { label: customGroupLabel, fields: placeholders.filter((p) => !baseGroups.some((g) => g.fields.some((f) => 'key' in f && f.key === p.key))) as PlaceholderField[] }].filter((g) => g.fields.length > 0)
+        : baseGroups;
+
+    const parseContent = (raw: string): unknown => {
+        if (!raw) return undefined;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            // Not JSON — treat as HTML and let Tiptap parse it.
+            return raw;
+        }
+    };
 
     const editor = useEditor({
         extensions: [
@@ -271,7 +295,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
             IndentExtension,
             PageBreak,
         ],
-        content: content ? JSON.parse(content) : undefined,
+        content: parseContent(content) as never,
         onUpdate: ({ editor }) => {
             onChange(JSON.stringify(editor.getJSON()), editor.getHTML());
         },
@@ -284,13 +308,13 @@ export default function TiptapEditor({ content, onChange, placeholders = [] }: T
 
     useEffect(() => {
         if (editor && content && !editor.isFocused) {
-            try {
-                const json = JSON.parse(content);
-                if (JSON.stringify(editor.getJSON()) !== content) {
-                    editor.commands.setContent(json);
+            const parsed = parseContent(content);
+            if (typeof parsed === 'string') {
+                if (editor.getHTML() !== parsed) {
+                    editor.commands.setContent(parsed);
                 }
-            } catch {
-                // content might be empty or invalid on first load
+            } else if (parsed && JSON.stringify(editor.getJSON()) !== content) {
+                editor.commands.setContent(parsed as never);
             }
         }
     }, [content, editor]);

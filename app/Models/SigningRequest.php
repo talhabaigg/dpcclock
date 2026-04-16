@@ -16,6 +16,7 @@ class SigningRequest extends Model implements HasMedia
 
     protected $fillable = [
         'document_template_id',
+        'document_title',
         'signable_type',
         'signable_id',
         'delivery_method',
@@ -29,6 +30,7 @@ class SigningRequest extends Model implements HasMedia
         'custom_fields',
         'sender_signature',
         'sender_full_name',
+        'sender_position',
         'signer_full_name',
         'signer_ip_address',
         'signer_user_agent',
@@ -87,7 +89,12 @@ class SigningRequest extends Model implements HasMedia
 
     public function isExpired(): bool
     {
-        return $this->expires_at->isPast();
+        return $this->expires_at !== null && $this->expires_at->isPast();
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
     }
 
     public function isSigned(): bool

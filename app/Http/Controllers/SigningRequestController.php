@@ -19,6 +19,163 @@ class SigningRequestController extends Controller
 
     // ─── Admin actions (authenticated) ───────────────────────
 
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'status' => 'nullable|string',
+            'delivery_method' => 'nullable|in:email,in_person',
+            'signable_type' => 'nullable|string',
+            'sent_by' => 'nullable|integer',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date',
+            'q' => 'nullable|string|max:255',
+        ]);
+
+        $query = SigningRequest::query()
+            ->with(['documentTemplate:id,name', 'sentBy:id,name', 'signable'])
+            ->latest();
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['delivery_method'])) {
+            $query->where('delivery_method', $filters['delivery_method']);
+        }
+        if (! empty($filters['signable_type'])) {
+            $query->where('signable_type', $filters['signable_type']);
+        }
+        if (! empty($filters['sent_by'])) {
+            $query->where('sent_by', $filters['sent_by']);
+        }
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+        if (! empty($filters['q'])) {
+            $q = $filters['q'];
+            $query->where(function ($qq) use ($q) {
+                $qq->where('recipient_name', 'like', "%{$q}%")
+                    ->orWhere('recipient_email', 'like', "%{$q}%")
+                    ->orWhere('document_title', 'like', "%{$q}%")
+                    ->orWhereHas('documentTemplate', fn ($tq) => $tq->where('name', 'like', "%{$q}%"));
+            });
+        }
+
+        $signingRequests = $query->paginate(25)->withQueryString();
+
+        $senders = \App\Models\User::query()
+            ->whereIn('id', SigningRequest::query()->whereNotNull('sent_by')->distinct()->pluck('sent_by'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return \Inertia\Inertia::render('signing-requests/index', [
+            'signingRequests' => $signingRequests->through(fn ($sr) => [
+                'id' => $sr->id,
+                'status' => $sr->status,
+                'delivery_method' => $sr->delivery_method,
+                'recipient_name' => $sr->recipient_name,
+                'recipient_email' => $sr->recipient_email,
+                'document_title' => $sr->document_title,
+                'signer_full_name' => $sr->signer_full_name,
+                'created_at' => $sr->created_at?->toISOString(),
+                'signed_at' => $sr->signed_at?->toISOString(),
+                'expires_at' => $sr->expires_at?->toISOString(),
+                'signable_type' => $sr->signable_type,
+                'signable_id' => $sr->signable_id,
+                'signable_label' => $this->resolveSignableLabel($sr),
+                'signable_url' => $this->resolveSignableUrl($sr),
+                'document_template' => $sr->documentTemplate ? [
+                    'id' => $sr->documentTemplate->id,
+                    'name' => $sr->documentTemplate->name,
+                ] : null,
+                'sent_by' => $sr->sentBy ? ['id' => $sr->sentBy->id, 'name' => $sr->sentBy->name] : null,
+            ]),
+            'filters' => $filters,
+            'senders' => $senders,
+            'signableTypes' => [
+                ['value' => \App\Models\Employee::class, 'label' => 'Employee'],
+                ['value' => \App\Models\EmploymentApplication::class, 'label' => 'Employment Application'],
+            ],
+            'statuses' => ['pending', 'sent', 'opened', 'viewed', 'signed', 'cancelled'],
+        ]);
+    }
+
+    /**
+     * Resolve the sender's signature data URL. Either uses what was drawn now,
+     * or loads the user's saved signature if the UI requested it.
+     */
+    private function resolveSenderSignature(Request $request): ?string
+    {
+        if ($request->boolean('use_saved_sender_signature')) {
+            $media = $request->user()->getFirstMedia('signature');
+            if ($media) {
+                return 'data:image/png;base64,' . base64_encode(file_get_contents($media->getPath()));
+            }
+        }
+
+        $drawn = $request->input('sender_signature');
+        return is_string($drawn) && $drawn !== '' ? $drawn : null;
+    }
+
+    /**
+     * If the admin opted to save their drawn signature for future use, persist it.
+     */
+    private function maybePersistSenderSignature(Request $request, ?string $senderSignature): void
+    {
+        if (! $senderSignature) return;
+        if (! $request->boolean('save_sender_signature')) return;
+        if ($request->boolean('use_saved_sender_signature')) return;
+
+        try {
+            $user = $request->user();
+            $user->clearMediaCollection('signature');
+            $user->addMediaFromBase64($senderSignature)
+                ->usingFileName('signature.png')
+                ->toMediaCollection('signature');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to save sender signature to user profile', [
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function authorizeSignableAction(SigningRequest $signingRequest): void
+    {
+        $signable = $signingRequest->signable;
+        if ($signable instanceof \App\Models\Employee) {
+            \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+        }
+        // EmploymentApplication signables rely on the existing employment-applications permission gate at the route level.
+    }
+
+    private function resolveSignableLabel(SigningRequest $sr): ?string
+    {
+        $signable = $sr->signable;
+        if (! $signable) return null;
+        if ($signable instanceof \App\Models\Employee) {
+            return $signable->display_name ?? $signable->name;
+        }
+        if ($signable instanceof \App\Models\EmploymentApplication) {
+            return trim(($signable->first_name ?? '') . ' ' . ($signable->surname ?? '')) ?: null;
+        }
+        return null;
+    }
+
+    private function resolveSignableUrl(SigningRequest $sr): ?string
+    {
+        if (! $sr->signable_id) return null;
+        if ($sr->signable_type === \App\Models\Employee::class) {
+            return url("/employees/{$sr->signable_id}");
+        }
+        if ($sr->signable_type === \App\Models\EmploymentApplication::class) {
+            return url("/employment-applications/{$sr->signable_id}");
+        }
+        return null;
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -29,6 +186,7 @@ class SigningRequestController extends Controller
             'custom_fields' => 'nullable|array',
             'sender_signature' => 'nullable|string',
             'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
             'signable_type' => 'nullable|string',
             'signable_id' => 'nullable|integer',
         ]);
@@ -76,6 +234,8 @@ class SigningRequestController extends Controller
             }
         }
 
+        $senderSignature = $this->resolveSenderSignature($request);
+
         $signingRequest = $this->signingService->createAndSend(
             template: $template,
             deliveryMethod: $validated['delivery_method'],
@@ -84,9 +244,12 @@ class SigningRequestController extends Controller
             recipientEmail: $validated['recipient_email'] ?? null,
             customFields: $validated['custom_fields'] ?? [],
             signable: $signable,
-            senderSignature: $validated['sender_signature'] ?? null,
+            senderSignature: $senderSignature,
             senderFullName: $validated['sender_full_name'] ?? null,
+            senderPosition: $validated['sender_position'] ?? null,
         );
+
+        $this->maybePersistSenderSignature($request, $senderSignature);
 
         if ($validated['delivery_method'] === 'in_person') {
             return redirect()->back()->with([
@@ -111,6 +274,7 @@ class SigningRequestController extends Controller
             'custom_fields' => 'nullable|array',
             'sender_signature' => 'nullable|string',
             'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
             'signable_type' => 'nullable|string',
             'signable_id' => 'nullable|integer',
         ]);
@@ -166,6 +330,8 @@ class SigningRequestController extends Controller
             }
         }
 
+        $senderSignature = $this->resolveSenderSignature($request);
+
         $signingRequests = [];
         foreach ($templates as $template) {
             $signingRequests[] = $this->signingService->createAndSend(
@@ -176,10 +342,13 @@ class SigningRequestController extends Controller
                 recipientEmail: $validated['recipient_email'] ?? null,
                 customFields: $customFields,
                 signable: $signable,
-                senderSignature: $validated['sender_signature'] ?? null,
+                senderSignature: $senderSignature,
                 senderFullName: $validated['sender_full_name'] ?? null,
+                senderPosition: $validated['sender_position'] ?? null,
             );
         }
+
+        $this->maybePersistSenderSignature($request, $senderSignature);
 
         // Create form requests
         $formRequests = [];
@@ -217,8 +386,184 @@ class SigningRequestController extends Controller
         return redirect()->back()->with('success', "{$summary} sent via email.");
     }
 
+    public function storeOneOff(Request $request)
+    {
+        $validated = $request->validate([
+            'document_title' => 'required|string|max:255',
+            'document_html' => 'required|string',
+            'delivery_method' => 'required|in:email,in_person',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_email' => 'required_if:delivery_method,email|nullable|email|max:255',
+            'sender_signature' => 'nullable|string',
+            'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
+            'signable_type' => 'nullable|string',
+            'signable_id' => 'nullable|integer',
+        ]);
+
+        $signable = null;
+        if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
+            $signableClass = $validated['signable_type'];
+            if (class_exists($signableClass)) {
+                $signable = $signableClass::find($validated['signable_id']);
+                if ($signable instanceof \App\Models\Employee) {
+                    \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+                }
+            }
+        }
+
+        $senderSignature = $this->resolveSenderSignature($request);
+
+        $signingRequest = $this->signingService->createAndSend(
+            template: null,
+            deliveryMethod: $validated['delivery_method'],
+            admin: $request->user(),
+            recipientName: $validated['recipient_name'],
+            recipientEmail: $validated['recipient_email'] ?? null,
+            customFields: [],
+            signable: $signable,
+            senderSignature: $senderSignature,
+            senderFullName: $validated['sender_full_name'] ?? null,
+            senderPosition: $validated['sender_position'] ?? null,
+            documentHtml: $validated['document_html'],
+            documentTitle: $validated['document_title'],
+        );
+
+        $this->maybePersistSenderSignature($request, $senderSignature);
+
+        if ($validated['delivery_method'] === 'in_person') {
+            return redirect()->back()->with([
+                'success' => 'Document ready for in-person signing.',
+                'signing_url' => $signingRequest->getSigningUrl(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Document sent for signing via email.');
+    }
+
+    // ─── Drafts (one-off documents saved for later) ──────────
+
+    public function storeDraft(Request $request)
+    {
+        $validated = $request->validate([
+            'document_title' => 'required|string|max:255',
+            'document_html' => 'required|string',
+            'recipient_name' => 'nullable|string|max:255',
+            'recipient_email' => 'nullable|email|max:255',
+            'signable_type' => 'nullable|string',
+            'signable_id' => 'nullable|integer',
+        ]);
+
+        $signable = null;
+        if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
+            $signableClass = $validated['signable_type'];
+            if (class_exists($signableClass)) {
+                $signable = $signableClass::find($validated['signable_id']);
+                if ($signable instanceof \App\Models\Employee) {
+                    \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+                }
+            }
+        }
+
+        $this->signingService->createDraft(
+            admin: $request->user(),
+            documentTitle: $validated['document_title'],
+            documentHtml: $validated['document_html'],
+            signable: $signable,
+            recipientName: $validated['recipient_name'] ?? null,
+            recipientEmail: $validated['recipient_email'] ?? null,
+        );
+
+        return redirect()->back()->with('success', 'Draft saved.');
+    }
+
+    public function updateDraft(Request $request, SigningRequest $signingRequest)
+    {
+        $this->authorizeDraftAccess($signingRequest, $request->user());
+
+        $validated = $request->validate([
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'recipient_name' => 'nullable|string|max:255',
+            'recipient_email' => 'nullable|email|max:255',
+        ]);
+
+        $this->signingService->updateDraft(
+            signingRequest: $signingRequest,
+            admin: $request->user(),
+            documentTitle: $validated['document_title'] ?? null,
+            documentHtml: $validated['document_html'] ?? null,
+            recipientName: $validated['recipient_name'] ?? null,
+            recipientEmail: $validated['recipient_email'] ?? null,
+        );
+
+        return redirect()->back()->with('success', 'Draft updated.');
+    }
+
+    public function finalizeDraft(Request $request, SigningRequest $signingRequest)
+    {
+        $this->authorizeDraftAccess($signingRequest, $request->user());
+
+        $validated = $request->validate([
+            'document_title' => 'required|string|max:255',
+            'document_html' => 'required|string',
+            'delivery_method' => 'required|in:email,in_person',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_email' => 'required_if:delivery_method,email|nullable|email|max:255',
+            'sender_signature' => 'nullable|string',
+            'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
+        ]);
+
+        $senderSignature = $this->resolveSenderSignature($request);
+
+        $signingRequest = $this->signingService->finalizeDraft(
+            draft: $signingRequest,
+            admin: $request->user(),
+            deliveryMethod: $validated['delivery_method'],
+            recipientName: $validated['recipient_name'],
+            recipientEmail: $validated['recipient_email'] ?? null,
+            senderSignature: $senderSignature,
+            senderFullName: $validated['sender_full_name'] ?? null,
+            senderPosition: $validated['sender_position'] ?? null,
+            documentTitle: $validated['document_title'],
+            documentHtml: $validated['document_html'],
+        );
+
+        $this->maybePersistSenderSignature($request, $senderSignature);
+
+        if ($validated['delivery_method'] === 'in_person') {
+            return redirect()->back()->with([
+                'success' => 'Document ready for in-person signing.',
+                'signing_url' => $signingRequest->getSigningUrl(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Document sent for signing via email.');
+    }
+
+    public function discardDraft(Request $request, SigningRequest $signingRequest)
+    {
+        $this->authorizeDraftAccess($signingRequest, $request->user());
+        $this->signingService->discardDraft($signingRequest, $request->user());
+
+        return redirect()->back()->with('success', 'Draft discarded.');
+    }
+
+    private function authorizeDraftAccess(SigningRequest $signingRequest, $user): void
+    {
+        if ($signingRequest->status !== 'draft') {
+            abort(404);
+        }
+        if ($signingRequest->sent_by !== $user->id && ! $user->can('employees.view-all')) {
+            abort(403, 'This draft belongs to another user.');
+        }
+        $this->authorizeSignableAction($signingRequest);
+    }
+
     public function cancel(Request $request, SigningRequest $signingRequest)
     {
+        $this->authorizeSignableAction($signingRequest);
         $this->signingService->cancel($signingRequest, $request->user());
 
         return redirect()->back()->with('success', 'Signing request cancelled.');
@@ -226,6 +571,7 @@ class SigningRequestController extends Controller
 
     public function resend(Request $request, SigningRequest $signingRequest)
     {
+        $this->authorizeSignableAction($signingRequest);
         $this->signingService->resend($signingRequest, $request->user());
 
         return redirect()->back()->with('success', 'Document resent for signing.');
@@ -233,6 +579,7 @@ class SigningRequestController extends Controller
 
     public function download(SigningRequest $signingRequest)
     {
+        $this->authorizeSignableAction($signingRequest);
         $media = $signingRequest->getFirstMedia('signed_document');
 
         if (! $media) {
@@ -260,7 +607,7 @@ class SigningRequestController extends Controller
             return redirect()->route('signing.thank-you', $token);
         }
 
-        if ($signingRequest->isExpired() || $signingRequest->isCancelled()) {
+        if ($signingRequest->isDraft() || $signingRequest->isExpired() || $signingRequest->isCancelled()) {
             return view('signing.expired');
         }
 

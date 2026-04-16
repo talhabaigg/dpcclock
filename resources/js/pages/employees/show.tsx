@@ -11,7 +11,8 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
-import { AlertTriangle, BookOpen, Check, Clock, FileIcon, FolderOpen, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import SendForSigningModal from '@/components/signing/send-for-signing-modal';
+import { AlertTriangle, BookOpen, Check, Clock, Download, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -50,6 +51,32 @@ interface JournalAttachment {
     size: number;
 }
 
+interface DocumentTemplate {
+    id: number;
+    name: string;
+    placeholders: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
+    body_html: string | null;
+}
+
+interface SigningRequestSummary {
+    id: number;
+    status: string;
+    delivery_method: string;
+    recipient_name: string;
+    recipient_email: string | null;
+    document_title: string | null;
+    document_html: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    signed_at: string | null;
+    opened_at: string | null;
+    viewed_at: string | null;
+    expires_at: string | null;
+    signer_full_name: string | null;
+    document_template: { id: number; name: string } | null;
+    sent_by: { id: number; name: string } | null;
+}
+
 interface JournalEntry {
     id: number;
     body: string;
@@ -68,6 +95,11 @@ interface Employee {
     external_id?: string;
     eh_employee_id?: string;
     employment_type?: string;
+    employment_agreement?: string | null;
+    employing_entity_id?: number | null;
+    employing_entity_name?: string | null;
+    start_date?: string | null;
+    is_office_staff: boolean;
     display_name: string;
     worktypes?: Worktype[];
     clocks?: ClockEntry[];
@@ -94,6 +126,18 @@ function formatDate(dateStr: string | null): string {
     });
 }
 
+function formatDateTime(dateStr: string | null): string {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleString('en-AU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+    });
+}
+
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="py-3">
@@ -104,13 +148,37 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding, journal, auth } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
         journal: JournalEntry[];
+        canSendDocuments: boolean;
+        documentTemplates: DocumentTemplate[];
+        signingRequests: SigningRequestSummary[];
+        availablePlaceholders: { key: string; label: string; preview?: string }[];
+        savedSenderSignatureUrl: string | null;
         auth: { user?: { id: number; name: string } };
     }>().props;
+
+    const [showSigningModal, setShowSigningModal] = useState(false);
+    const [editingDraft, setEditingDraft] = useState<SigningRequestSummary | null>(null);
+    const [confirmDiscardDraftId, setConfirmDiscardDraftId] = useState<number | null>(null);
+
+    const openSendModal = useCallback(() => {
+        setEditingDraft(null);
+        setShowSigningModal(true);
+    }, []);
+
+    const openDraftModal = useCallback((draft: SigningRequestSummary) => {
+        setEditingDraft(draft);
+        setShowSigningModal(true);
+    }, []);
+
+    const discardDraft = useCallback((id: number) => {
+        router.delete(`/signing-requests/${id}/draft`, { preserveScroll: true });
+        setConfirmDiscardDraftId(null);
+    }, []);
 
     const currentUserId = auth?.user?.id;
 
@@ -152,7 +220,9 @@ export default function EmployeeShow() {
     }, []);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Employees', href: '/employees' },
+        emp.is_office_staff
+            ? { title: 'Office Employees', href: '/office-employees' }
+            : { title: 'Site Employees', href: '/employees' },
         { title: emp.display_name || emp.name, href: `/employees/${emp.id}` },
     ];
 
@@ -359,35 +429,37 @@ export default function EmployeeShow() {
                         </Card>
 
                         {/* Timesheets Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                    <Clock className="h-4 w-4" />
-                                    Timesheets
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-2 pt-0">
-                                <Separator className="mb-2" />
-                                <Link
-                                    href={`/timesheets?employeeId=${emp.eh_employee_id}&weekEnding=${weekEnding}`}
-                                    className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
-                                >
-                                    <LinkIcon className="h-3.5 w-3.5" />
-                                    This weeks timesheet
-                                </Link>
-                                {recentWeekEndings.length > 0 &&
-                                    recentWeekEndings.map((we) => (
-                                        <Link
-                                            key={we}
-                                            href={`/timesheets?employeeId=${emp.eh_employee_id}&weekEnding=${we}`}
-                                            className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
-                                        >
-                                            <LinkIcon className="h-3.5 w-3.5" />
-                                            {we}
-                                        </Link>
-                                    ))}
-                            </CardContent>
-                        </Card>
+                        {!emp.is_office_staff && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <Clock className="h-4 w-4" />
+                                        Timesheets
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-2 pt-0">
+                                    <Separator className="mb-2" />
+                                    <Link
+                                        href={`/timesheets?employeeId=${emp.eh_employee_id}&weekEnding=${weekEnding}`}
+                                        className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
+                                    >
+                                        <LinkIcon className="h-3.5 w-3.5" />
+                                        This weeks timesheet
+                                    </Link>
+                                    {recentWeekEndings.length > 0 &&
+                                        recentWeekEndings.map((we) => (
+                                            <Link
+                                                key={we}
+                                                href={`/timesheets?employeeId=${emp.eh_employee_id}&weekEnding=${we}`}
+                                                className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
+                                            >
+                                                <LinkIcon className="h-3.5 w-3.5" />
+                                                {we}
+                                            </Link>
+                                        ))}
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Journal Card */}
                         <Card>
@@ -516,42 +588,145 @@ export default function EmployeeShow() {
 
                     {/* RIGHT COLUMN */}
                     <div className="flex flex-col gap-4">
+                        {/* Documents (signing) — visible when the viewer can send documents to this employee */}
+                        {canSendDocuments && (
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <FileSignature className="h-4 w-4" />
+                                            Documents
+                                        </CardTitle>
+                                        <Button size="sm" variant="outline" className="gap-1.5" onClick={openSendModal}>
+                                            <FilePlus2 className="h-3.5 w-3.5" />
+                                            Send for Signing
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <Separator className="mb-4" />
+                                    {signingRequests.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm italic">No documents sent yet.</p>
+                                    ) : (
+                                        <div className="overflow-hidden rounded-lg border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow className="bg-muted/50">
+                                                        <TableHead className="px-3 text-xs">Document</TableHead>
+                                                        <TableHead className="px-3 text-xs">Sent by</TableHead>
+                                                        <TableHead className="px-3 text-xs">Status</TableHead>
+                                                        <TableHead className="px-3 text-xs text-right">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {signingRequests.map((sr) => {
+                                                        const isSigned = sr.status === 'signed';
+                                                        const isDraft = sr.status === 'draft';
+                                                        const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
+                                                        const statusLabel = isDraft ? 'draft' : (isSigned ? 'signed' : 'sent');
+                                                        const statusTimestamp = isDraft
+                                                            ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
+                                                            : isSigned
+                                                                ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
+                                                                : (sr.created_at ? formatDateTime(sr.created_at) : '');
+                                                        const deliveryLabel = isDraft
+                                                            ? 'One-off · not yet sent'
+                                                            : (sr.delivery_method === 'email' ? 'Via email' : 'In-person');
+                                                        return (
+                                                            <TableRow key={sr.id}>
+                                                                <TableCell className="px-3 text-xs">
+                                                                    <p className="font-medium leading-tight">{docTitle}</p>
+                                                                    <p className="text-[10px] text-muted-foreground">{deliveryLabel}</p>
+                                                                </TableCell>
+                                                                <TableCell className="px-3 text-xs">{isDraft ? '—' : (sr.sent_by?.name ?? '—')}</TableCell>
+                                                                <TableCell className="px-3 text-xs">
+                                                                    <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                    <span className="text-muted-foreground">{statusTimestamp}</span>
+                                                                </TableCell>
+                                                                <TableCell className="px-3 text-right">
+                                                                    <div className="flex justify-end gap-1">
+                                                                        {isDraft ? (
+                                                                            <>
+                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
+                                                                                    <Pencil className="h-3 w-3" />
+                                                                                    Edit
+                                                                                </Button>
+                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
+                                                                                    <Trash2 className="h-3 w-3" />
+                                                                                    Discard
+                                                                                </Button>
+                                                                            </>
+                                                                        ) : isSigned ? (
+                                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
+                                                                                <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
+                                                                                    <Download className="h-3 w-3" />
+                                                                                    Download
+                                                                                </a>
+                                                                            </Button>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
+                                                                                    <RotateCcw className="h-3 w-3" />
+                                                                                    Resend
+                                                                                </Button>
+                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
+                                                                                    <X className="h-3 w-3" />
+                                                                                    Cancel
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
                         {/* Licences, tickets & training */}
-                        <EmployeeFilesCard employeeId={emp.id} />
+                        {!emp.is_office_staff && <EmployeeFilesCard employeeId={emp.id} />}
 
                         {/* Projects Card */}
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="flex items-center gap-2 text-base">
-                                        <FolderOpen className="h-4 w-4" />
-                                        Projects
-                                    </CardTitle>
-                                    <Button variant="outline" size="sm" className="gap-1.5" onClick={openLocationDialog}>
-                                        <Pencil className="h-3.5 w-3.5" />
-                                        Edit Locations
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-0">
-                                <Separator className="mb-4" />
-                                {projects && projects.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                        {projects.map((project) => (
-                                            <Link key={project.id} href={`/kiosks/${project.kiosk_id}/edit`}>
-                                                <Badge variant="outline" className="text-sm hover:bg-accent cursor-pointer">
-                                                    {project.external_id || project.name}
-                                                </Badge>
-                                            </Link>
-                                        ))}
+                        {!emp.is_office_staff && (
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <FolderOpen className="h-4 w-4" />
+                                            Projects
+                                        </CardTitle>
+                                        <Button variant="outline" size="sm" className="gap-1.5" onClick={openLocationDialog}>
+                                            <Pencil className="h-3.5 w-3.5" />
+                                            Edit Locations
+                                        </Button>
                                     </div>
-                                ) : (
-                                    <p className="text-muted-foreground text-sm italic">No projects assigned</p>
-                                )}
-                            </CardContent>
-                        </Card>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <Separator className="mb-4" />
+                                    {projects && projects.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                            {projects.map((project) => (
+                                                <Link key={project.id} href={`/kiosks/${project.kiosk_id}/edit`}>
+                                                    <Badge variant="outline" className="text-sm hover:bg-accent cursor-pointer">
+                                                        {project.external_id || project.name}
+                                                    </Badge>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted-foreground text-sm italic">No projects assigned</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Injury Register Card */}
+                        {!emp.is_office_staff && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base">
@@ -599,6 +774,7 @@ export default function EmployeeShow() {
                                 )}
                             </CardContent>
                         </Card>
+                        )}
                     </div>
                 </div>
             </div>
@@ -701,6 +877,46 @@ export default function EmployeeShow() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Send for Signing Modal */}
+            {canSendDocuments && (
+                <SendForSigningModal
+                    open={showSigningModal}
+                    onOpenChange={(open) => {
+                        setShowSigningModal(open);
+                        if (!open) setEditingDraft(null);
+                    }}
+                    templates={documentTemplates ?? []}
+                    recipientName={emp.display_name || emp.name}
+                    recipientEmail={emp.email ?? ''}
+                    availablePlaceholders={availablePlaceholders ?? []}
+                    savedSenderSignatureUrl={savedSenderSignatureUrl ?? null}
+                    signableType="App\Models\Employee"
+                    signableId={emp.id}
+                    draft={editingDraft ? {
+                        id: editingDraft.id,
+                        document_title: editingDraft.document_title,
+                        document_html: editingDraft.document_html,
+                        recipient_name: editingDraft.recipient_name,
+                        recipient_email: editingDraft.recipient_email,
+                    } : null}
+                />
+            )}
+
+            {/* Discard draft confirmation */}
+            <Dialog open={confirmDiscardDraftId !== null} onOpenChange={(open) => !open && setConfirmDiscardDraftId(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Discard draft?</DialogTitle>
+                        <DialogDescription>This will permanently delete the draft. This can't be undone.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDiscardDraftId(null)}>Keep</Button>
+                        <Button variant="destructive" onClick={() => confirmDiscardDraftId !== null && discardDraft(confirmDiscardDraftId)}>Discard</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </AppLayout>
     );
 }

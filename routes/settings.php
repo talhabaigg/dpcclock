@@ -3,6 +3,7 @@
 use App\Http\Controllers\Settings\PasskeyController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\SignatureController;
 use App\Notifications\TestPushNotification;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -16,6 +17,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');
+
+    Route::get('settings/signature', [SignatureController::class, 'edit'])->name('signature.edit');
+    Route::post('settings/signature', [SignatureController::class, 'store'])->name('signature.store');
+    Route::delete('settings/signature', [SignatureController::class, 'destroy'])->name('signature.destroy');
 
     // Passkey Management Routes
     Route::get('settings/passkeys', [PasskeyController::class, 'index'])->name('passkeys.index');

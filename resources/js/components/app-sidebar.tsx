@@ -10,6 +10,7 @@ import {
     BadgeDollarSign,
     Briefcase,
     Building,
+    Building2,
     CalendarDays,
     ChartArea,
     ChartLine,
@@ -213,10 +214,32 @@ const workforce = [
                 permission: 'worker-screening.manage',
             },
             {
-                name: 'Employees',
+                name: 'Site Employees',
                 url: '/employees',
                 icon: UsersRound,
                 permission: 'employees.view',
+            },
+        ],
+    },
+];
+
+const office = [
+    {
+        name: 'Office',
+        icon: Building2,
+        permission: 'employees.office.view',
+        subItems: [
+            {
+                name: 'Office Employees',
+                url: '/office-employees',
+                icon: UsersRound,
+                permission: 'employees.office.view',
+            },
+            {
+                name: 'Signing Requests',
+                url: '/signing-requests',
+                icon: FileText,
+                permission: 'signing-requests.view',
             },
         ],
     },
@@ -446,13 +469,14 @@ export function AppSidebar() {
     const filteredFinance = filterGroup(finance);
     const filteredTimesheets = filterGroup(timesheets);
     const filteredWorkforce = filterGroup(workforce);
+    const filteredOffice = filterGroup(office);
     const filteredSafety = filterGroup(safety);
     const filteredDocuments = filterGroup(documents);
     const filteredReports = filterGroup(reports);
     const filteredConfiguration = filterGroup(configuration);
     const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
 
-    const allNavGroups = [filteredProjects, filteredFinance, filteredTimesheets, filteredWorkforce, filteredSafety, filteredDocuments, filteredReports, filteredConfiguration];
+    const allNavGroups = [filteredProjects, filteredFinance, filteredTimesheets, filteredWorkforce, filteredOffice, filteredSafety, filteredDocuments, filteredReports, filteredConfiguration];
     const allItems: FavoriteEntry[] = [
         ...filteredMainNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),
         ...filteredFooterNavItems.map((item) => ({ title: item.title, url: item.href, icon: item.icon! })),
@@ -484,6 +508,7 @@ export function AppSidebar() {
                 <NavDocuments items={filteredFinance} permissions={permissions} />
                 <NavDocuments items={filteredTimesheets} permissions={permissions} />
                 <NavDocuments items={filteredWorkforce} permissions={permissions} />
+                <NavDocuments items={filteredOffice} permissions={permissions} />
                 <NavDocuments items={filteredSafety} permissions={permissions} />
                 <NavDocuments items={filteredDocuments} permissions={permissions} />
                 <NavDocuments items={filteredReports} permissions={permissions} />

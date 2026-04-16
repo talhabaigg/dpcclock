@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Sign Agreement</title>
+    @php
+        $documentLabel = $signingRequest->documentTemplate?->name
+            ?? $signingRequest->document_title
+            ?? 'Document';
+    @endphp
+    <title>Sign {{ $documentLabel }}</title>
     @vite(['resources/js/signing.ts'])
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -104,12 +109,12 @@
     <div class="container">
         <div class="header">
             <img src="{{ asset('logo.png') }}" alt="DPC">
-            <h1>{{ $signingRequest->documentTemplate?->name ?? 'Agreement' }}</h1>
+            <h1>{{ $documentLabel }}</h1>
             <p>Please review and sign below</p>
         </div>
 
         <div class="greeting">
-            Hi <strong>{{ $signingRequest->recipient_name }}</strong>, please read through the agreement below and provide your signature at the end.
+            Hi <strong>{{ $signingRequest->recipient_name }}</strong>, please read through the document below and provide your signature at the end.
         </div>
 
         @php
@@ -123,7 +128,7 @@
 
         <div class="agreement-card">
             <div class="agreement-header">
-                <h2>Agreement</h2>
+                <h2>{{ $documentLabel }}</h2>
                 <span class="scroll-hint" id="scroll-hint">Scroll to read all &darr;</span>
             </div>
             <div class="agreement-body" id="agreement-body">
@@ -135,7 +140,7 @@
         <div class="read-confirmation" id="read-confirmation">
             <label>
                 <input type="checkbox" id="read-checkbox">
-                I have read and understood this agreement
+                I have read and understood this document
             </label>
         </div>
 
@@ -163,12 +168,12 @@
             <input type="hidden" name="signature_data" id="signature-data">
 
             <p class="consent-text">
-                By signing below, I confirm that I have read and agree to the terms of this agreement.
+                By signing below, I confirm that I have read and agree to the terms of this document.
                 I consent to signing this document electronically in accordance with the
                 Electronic Transactions Act 1999 (Cth).
             </p>
 
-            <button type="submit" class="submit-btn" id="submit-btn" disabled>Sign Agreement</button>
+            <button type="submit" class="submit-btn" id="submit-btn" disabled>Sign {{ $documentLabel }}</button>
         </form>
 
         <div class="footer">

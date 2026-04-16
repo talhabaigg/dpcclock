@@ -60,6 +60,7 @@ return [
         'api_key' => env('PAYROLL_API_KEY'),
         'base_url' => env('EH_BASE_URL', 'https://api.yourpayroll.com.au/api/v2'),
         'business_id' => env('EH_BUSINESS_ID', '431152'),
+        'cms_entity_id' => (int) env('EH_CMS_ENTITY_ID', 9768),
     ],
 
     'cv_comparison' => [

@@ -26,6 +26,12 @@ const sidebarNavItems: NavItem[] = [
         permission: undefined,
     },
     {
+        title: 'Signature',
+        href: '/settings/signature',
+        icon: null,
+        permission: undefined,
+    },
+    {
         title: 'Kiosk Admin PIN',
         href: '/settings/kiosk-admin-pin',
         icon: null,

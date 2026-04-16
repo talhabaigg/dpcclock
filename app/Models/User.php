@@ -11,13 +11,15 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
 use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\LaravelPasskeys\Models\Concerns\HasPasskeys;
 use Spatie\LaravelPasskeys\Models\Concerns\InteractsWithPasskeys;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements HasPasskeys
+class User extends Authenticatable implements HasMedia, HasPasskeys
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use CausesActivity, HasApiTokens, HasFactory, HasOneTimePasswords, HasPushSubscriptions, HasRoles, InteractsWithPasskeys, Notifiable;
+    use CausesActivity, HasApiTokens, HasFactory, HasOneTimePasswords, HasPushSubscriptions, HasRoles, InteractsWithMedia, InteractsWithPasskeys, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -61,6 +63,21 @@ class User extends Authenticatable implements HasPasskeys
             'receive_injury_alerts' => 'boolean',
             'disabled_at' => 'datetime',
         ];
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('signature')->singleFile();
+    }
+
+    public function savedSignatureUrl(): ?string
+    {
+        return $this->getFirstMediaUrl('signature') ?: null;
+    }
+
+    public function hasSavedSignature(): bool
+    {
+        return $this->getFirstMedia('signature') !== null;
     }
 
     public function isAdmin(): bool

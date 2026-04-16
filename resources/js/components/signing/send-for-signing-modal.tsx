@@ -1,3 +1,4 @@
+import TiptapEditor from '@/components/document-templates/tiptap-editor';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { router } from '@inertiajs/react';
-import { ClipboardList, FileText, Loader2, Mail, RotateCcw, Tablet, Trash2 } from 'lucide-react';
+import { ClipboardList, FileText, Loader2, Mail, PencilLine, RotateCcw, Tablet, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
 
@@ -26,6 +27,20 @@ interface FormTemplateOption {
     fields_count: number;
 }
 
+interface AvailablePlaceholder {
+    key: string;
+    label: string;
+    preview?: string;
+}
+
+interface DraftSeed {
+    id: number;
+    document_title: string | null;
+    document_html: string | null;
+    recipient_name: string | null;
+    recipient_email: string | null;
+}
+
 interface SendForSigningModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -38,6 +53,11 @@ interface SendForSigningModalProps {
     recipientPosition?: string;
     signableType?: string;
     signableId?: number;
+    availablePlaceholders?: AvailablePlaceholder[];
+    /** When provided, the modal opens in Write mode pre-filled from a saved draft. */
+    draft?: DraftSeed | null;
+    /** URL to the sender's saved signature (from their profile), if any. */
+    savedSenderSignatureUrl?: string | null;
     onSuccess?: () => void;
 }
 
@@ -53,8 +73,12 @@ export default function SendForSigningModal({
     recipientPosition = '',
     signableType,
     signableId,
+    availablePlaceholders = [],
+    draft = null,
+    savedSenderSignatureUrl = null,
     onSuccess,
 }: SendForSigningModalProps) {
+    const [mode, setMode] = useState<'template' | 'write'>('template');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
     const [selectedFormTemplateIds, setSelectedFormTemplateIds] = useState<number[]>([]);
     const [deliveryMethod, setDeliveryMethod] = useState<string>('email');
@@ -64,15 +88,42 @@ export default function SendForSigningModal({
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [senderFullName, setSenderFullName] = useState('');
-    const senderCanvasRef = useRef<HTMLCanvasElement>(null);
+    const [senderPosition, setSenderPosition] = useState('');
+    const [senderSigMode, setSenderSigMode] = useState<'saved' | 'draw'>(savedSenderSignatureUrl ? 'saved' : 'draw');
+    const [saveSenderSignature, setSaveSenderSignature] = useState(false);
+    const [oneOffTitle, setOneOffTitle] = useState('');
+    const [oneOffJson, setOneOffJson] = useState('');
+    const [oneOffHtml, setOneOffHtml] = useState('');
     const senderSignaturePadRef = useRef<SignaturePad | null>(null);
+
+    // Callback ref: creates a SignaturePad as soon as the canvas is mounted,
+    // and destroys it when the canvas unmounts. Avoids timing issues with
+    // conditional rendering vs. useEffect dependency arrays.
+    const attachSenderCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+        if (!canvas) {
+            senderSignaturePadRef.current?.off();
+            senderSignaturePadRef.current = null;
+            return;
+        }
+        if (senderSignaturePadRef.current) return;
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext('2d')?.scale(ratio, ratio);
+        senderSignaturePadRef.current = new SignaturePad(canvas, {
+            backgroundColor: 'rgb(255, 255, 255)',
+        });
+    }, []);
+
+    const oneOffPlaceholderPool = availablePlaceholders.map((p) => ({ key: p.key, label: p.label }));
+    const oneOffCustomLabel = signableType?.endsWith('Employee') ? 'Employee' : 'Recipient';
 
     const selectedTemplates = templates.filter((t) => selectedTemplateIds.includes(t.id));
 
     // Merge unique placeholders from all selected templates
     const mergedPlaceholders = (() => {
         const seen = new Set<string>();
-        const result: { key: string; label: string; type?: string; required?: boolean }[] = [];
+        const result: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] = [];
         for (const t of selectedTemplates) {
             for (const p of t.placeholders ?? []) {
                 if (!seen.has(p.key)) {
@@ -84,7 +135,9 @@ export default function SendForSigningModal({
         return result;
     })();
 
-    const requiresSenderSignature = selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}'));
+    const requiresSenderSignature = mode === 'template'
+        ? selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}'))
+        : oneOffHtml.includes('{{sender_signature}}');
 
     const toggleTemplate = (id: number) => {
         setSelectedTemplateIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -94,24 +147,6 @@ export default function SendForSigningModal({
         setSelectedFormTemplateIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     };
 
-    // Initialize/destroy SignaturePad when sender signature is required
-    useEffect(() => {
-        if (requiresSenderSignature && senderCanvasRef.current && !senderSignaturePadRef.current) {
-            const canvas = senderCanvasRef.current;
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            canvas.width = canvas.offsetWidth * ratio;
-            canvas.height = canvas.offsetHeight * ratio;
-            canvas.getContext('2d')?.scale(ratio, ratio);
-            senderSignaturePadRef.current = new SignaturePad(canvas, {
-                backgroundColor: 'rgb(255, 255, 255)',
-            });
-        }
-
-        if (!requiresSenderSignature && senderSignaturePadRef.current) {
-            senderSignaturePadRef.current.off();
-            senderSignaturePadRef.current = null;
-        }
-    }, [requiresSenderSignature]);
 
     const clearSenderSignature = useCallback(() => {
         senderSignaturePadRef.current?.clear();
@@ -149,26 +184,80 @@ export default function SendForSigningModal({
         }
     };
 
+    const handleSaveDraft = () => {
+        const newErrors: Record<string, string> = {};
+        if (!oneOffTitle.trim()) newErrors.document_title = 'Document title is required.';
+        const plainText = oneOffHtml.replace(/<[^>]*>/g, '').trim();
+        if (!plainText) newErrors.document_html = 'Write something before saving a draft.';
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+        }
+
+        setProcessing(true);
+        setErrors({});
+
+        const payload: Record<string, any> = {
+            document_title: oneOffTitle.trim(),
+            document_html: oneOffHtml,
+            recipient_name: name || null,
+            recipient_email: email || null,
+            signable_type: signableType ?? null,
+            signable_id: signableId ?? null,
+        };
+
+        const url = draft
+            ? route('signing-requests.drafts.update', draft.id)
+            : route('signing-requests.drafts.store');
+        const method = draft ? 'put' : 'post';
+
+        router[method](url, payload, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setProcessing(false);
+                onOpenChange(false);
+                onSuccess?.();
+            },
+            onError: (errs) => {
+                setProcessing(false);
+                setErrors(errs);
+            },
+        });
+    };
+
     const handleSubmit = () => {
         const newErrors: Record<string, string> = {};
-        if (selectedTemplateIds.length === 0 && selectedFormTemplateIds.length === 0) newErrors.templates = 'Please select at least one document or form.';
+
+        if (mode === 'template') {
+            if (selectedTemplateIds.length === 0 && selectedFormTemplateIds.length === 0) newErrors.templates = 'Please select at least one document or form.';
+        } else {
+            if (!oneOffTitle.trim()) newErrors.document_title = 'Document title is required.';
+            const plainText = oneOffHtml.replace(/<[^>]*>/g, '').trim();
+            if (!plainText) newErrors.document_html = 'Write the document before sending.';
+        }
+
         if (!name.trim()) newErrors.name = 'Recipient name is required.';
         if (deliveryMethod === 'email' && !email.trim()) newErrors.email = 'Email is required for email delivery.';
         if (requiresSenderSignature) {
             if (!senderFullName.trim()) newErrors.sender_full_name = 'Your full name is required.';
-            if (senderSignaturePadRef.current?.isEmpty()) newErrors.sender_signature = 'Please draw your signature before sending.';
+            if (senderSigMode === 'draw' && senderSignaturePadRef.current?.isEmpty()) {
+                newErrors.sender_signature = 'Please draw your signature before sending.';
+            }
         }
 
-        // Validate required and typed custom fields
-        for (const p of mergedPlaceholders) {
-            const val = customFields[p.key]?.trim() ?? '';
-            if (p.required && !val) {
-                newErrors[`cf_${p.key}`] = `${p.label} is required.`;
-                continue;
-            }
-            if (val && p.type) {
-                const typeError = validateFieldValue(val, p.type);
-                if (typeError) newErrors[`cf_${p.key}`] = typeError;
+        // Validate required and typed custom fields (template mode only)
+        if (mode === 'template') {
+            for (const p of mergedPlaceholders) {
+                const val = customFields[p.key]?.trim() ?? '';
+                if (p.required && !val) {
+                    newErrors[`cf_${p.key}`] = `${p.label} is required.`;
+                    continue;
+                }
+                if (val && p.type) {
+                    const typeError = validateFieldValue(val, p.type);
+                    if (typeError) newErrors[`cf_${p.key}`] = typeError;
+                }
             }
         }
 
@@ -181,29 +270,43 @@ export default function SendForSigningModal({
         setErrors({});
 
         const senderSignatureData =
-            requiresSenderSignature && senderSignaturePadRef.current ? senderSignaturePadRef.current.toDataURL('image/png') : null;
+            requiresSenderSignature && senderSigMode === 'draw' && senderSignaturePadRef.current
+                ? senderSignaturePadRef.current.toDataURL('image/png')
+                : null;
 
-        const isBatch = selectedTemplateIds.length > 1 || selectedFormTemplateIds.length > 0;
-        const url = isBatch ? route('signing-requests.store-batch') : route('signing-requests.store');
-
+        let url: string;
         const payload: Record<string, any> = {
             delivery_method: deliveryMethod,
             recipient_name: name,
             recipient_email: deliveryMethod === 'email' ? email : null,
-            custom_fields: { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition },
             sender_signature: senderSignatureData,
+            use_saved_sender_signature: requiresSenderSignature && senderSigMode === 'saved',
+            save_sender_signature: requiresSenderSignature && senderSigMode === 'draw' && saveSenderSignature,
             sender_full_name: requiresSenderSignature ? senderFullName : null,
+            sender_position: requiresSenderSignature ? (senderPosition || null) : null,
             signable_type: signableType ?? null,
             signable_id: signableId ?? null,
         };
 
-        if (isBatch) {
-            payload.document_template_ids = selectedTemplateIds;
-            if (selectedFormTemplateIds.length > 0) {
-                payload.form_template_ids = selectedFormTemplateIds;
-            }
+        if (mode === 'write') {
+            url = draft
+                ? route('signing-requests.drafts.finalize', draft.id)
+                : route('signing-requests.store-one-off');
+            payload.document_title = oneOffTitle.trim();
+            payload.document_html = oneOffHtml;
         } else {
-            payload.document_template_id = String(selectedTemplateIds[0]);
+            const isBatch = selectedTemplateIds.length > 1 || selectedFormTemplateIds.length > 0;
+            url = isBatch ? route('signing-requests.store-batch') : route('signing-requests.store');
+            payload.custom_fields = { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition };
+
+            if (isBatch) {
+                payload.document_template_ids = selectedTemplateIds;
+                if (selectedFormTemplateIds.length > 0) {
+                    payload.form_template_ids = selectedFormTemplateIds;
+                }
+            } else {
+                payload.document_template_id = String(selectedTemplateIds[0]);
+            }
         }
 
         router.post(url, payload, {
@@ -227,30 +330,39 @@ export default function SendForSigningModal({
         });
     };
 
-    // Reset state when modal opens
-    const handleOpenChange = (isOpen: boolean) => {
-        if (isOpen) {
-            setName(recipientName);
-            setEmail(recipientEmail);
-            setSelectedTemplateIds([]);
-            setSelectedFormTemplateIds([]);
-            setDeliveryMethod('email');
-            setCustomFields({});
-            setErrors({});
-            setSenderFullName('');
-            senderSignaturePadRef.current?.clear();
-        }
-        if (!isOpen) {
-            // Destroy pad on close
+    // Seed state every time the modal opens (or the draft it's editing changes).
+    useEffect(() => {
+        if (!open) {
             senderSignaturePadRef.current?.off();
             senderSignaturePadRef.current = null;
+            return;
         }
+        const isResuming = !!draft;
+        setMode(isResuming ? 'write' : 'template');
+        setName(draft?.recipient_name ?? recipientName);
+        setEmail(draft?.recipient_email ?? recipientEmail);
+        setSelectedTemplateIds([]);
+        setSelectedFormTemplateIds([]);
+        setDeliveryMethod('email');
+        setCustomFields({});
+        setErrors({});
+        setSenderFullName('');
+        setSenderPosition('');
+        setSenderSigMode(savedSenderSignatureUrl ? 'saved' : 'draw');
+        setSaveSenderSignature(false);
+        setOneOffTitle(draft?.document_title ?? '');
+        setOneOffJson(draft?.document_html ?? '');
+        setOneOffHtml(draft?.document_html ?? '');
+        senderSignaturePadRef.current?.clear();
+    }, [open, draft?.id]);
+
+    const handleOpenChange = (isOpen: boolean) => {
         onOpenChange(isOpen);
     };
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-lg p-0">
+            <DialogContent className="max-h-[85vh] min-w-96 sm:min-w-7xl overflow-hidden  max-w-5xl p-0">
                 <DialogHeader className="px-6 pt-6">
                     <DialogTitle>Send Documents for Signing</DialogTitle>
                     <DialogDescription>Select documents, fill in details, and choose a delivery method.</DialogDescription>
@@ -258,7 +370,28 @@ export default function SendForSigningModal({
 
                 <ScrollArea className="max-h-[calc(85vh-10rem)] px-6">
                 <div className="space-y-4 py-2">
-                    {/* Template Selection — Checkboxes */}
+                    {/* Mode switcher: template vs one-off */}
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+                        <button
+                            type="button"
+                            onClick={() => setMode('template')}
+                            className={`flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${mode === 'template' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                        >
+                            <FileText className="h-4 w-4" />
+                            From template
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMode('write')}
+                            className={`flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${mode === 'write' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                        >
+                            <PencilLine className="h-4 w-4" />
+                            Write document
+                        </button>
+                    </div>
+
+                    {/* Template mode: selection + custom fields */}
+                    {mode === 'template' && (
                     <div className="space-y-2">
                         <Label>Documents to Send</Label>
                         <div className="space-y-1.5 rounded-lg border p-3">
@@ -281,9 +414,43 @@ export default function SendForSigningModal({
                             <p className="text-xs text-muted-foreground">{selectedTemplateIds.length} documents selected — each will be sent as a separate signing request</p>
                         )}
                     </div>
+                    )}
+
+                    {/* Write mode: title + full Tiptap editor (same features as template editor) */}
+                    {mode === 'write' && (
+                        <div className="space-y-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="one-off-title">Document Title</Label>
+                                <Input
+                                    id="one-off-title"
+                                    value={oneOffTitle}
+                                    onChange={(e) => setOneOffTitle(e.target.value)}
+                                    placeholder="e.g. Position Description — Office Administrator"
+                                />
+                                {errors.document_title && <p className="text-sm text-destructive">{errors.document_title}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Content</Label>
+                                <TiptapEditor
+                                    content={oneOffJson}
+                                    onChange={(json, html) => {
+                                        setOneOffJson(json);
+                                        setOneOffHtml(html);
+                                    }}
+                                    placeholders={oneOffPlaceholderPool}
+                                    customGroupLabel={oneOffCustomLabel}
+                                />
+                                {errors.document_html && <p className="text-sm text-destructive">{errors.document_html}</p>}
+                                <p className="text-xs text-muted-foreground">
+                                    Tip: add <code className="bg-muted px-1 rounded">{'{{signature_box}}'}</code> where the recipient should sign. One is added automatically at the end if you don't.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Form Templates Selection */}
-                    {formTemplates.length > 0 && (
+                    {mode === 'template' && formTemplates.length > 0 && (
                         <div className="space-y-2">
                             <Label>Forms to Send</Label>
                             <div className="space-y-1.5 rounded-lg border p-3">
@@ -323,7 +490,7 @@ export default function SendForSigningModal({
                     </div>
 
                     {/* Custom Fields (merged from all selected template placeholders) */}
-                    {mergedPlaceholders.length > 0 && (
+                    {mode === 'template' && mergedPlaceholders.length > 0 && (
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -394,42 +561,84 @@ export default function SendForSigningModal({
                         </div>
                     )}
 
-                    {/* Sender Signature (shown when any selected template has {{sender_signature}}) */}
+                    {/* Sender Signature (shown when the document contains {{sender_signature}}) */}
                     {requiresSenderSignature && (
                         <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
                             <Label className="text-sm font-medium">Your Signature (Company)</Label>
                             <p className="text-xs text-muted-foreground">
                                 One or more selected documents require a company signature. Please sign below before sending.
                             </p>
-                            <div className="space-y-2">
-                                <Label htmlFor="sender-full-name" className="text-xs">
-                                    Your Full Name
-                                </Label>
-                                <Input
-                                    id="sender-full-name"
-                                    value={senderFullName}
-                                    onChange={(e) => setSenderFullName(e.target.value)}
-                                    placeholder="Enter your full legal name"
-                                />
-                                {errors.sender_full_name && <p className="text-sm text-destructive">{errors.sender_full_name}</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs">Draw Your Signature</Label>
-                                    <div className="flex gap-1">
-                                        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={undoSenderSignature}>
-                                            <RotateCcw className="mr-1 h-3 w-3" />
-                                            Undo
-                                        </Button>
-                                        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearSenderSignature}>
-                                            <Trash2 className="mr-1 h-3 w-3" />
-                                            Clear
-                                        </Button>
-                                    </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="sender-full-name" className="text-xs">
+                                        Full Name
+                                    </Label>
+                                    <Input
+                                        id="sender-full-name"
+                                        value={senderFullName}
+                                        onChange={(e) => setSenderFullName(e.target.value)}
+                                        placeholder="Full legal name"
+                                    />
+                                    {errors.sender_full_name && <p className="text-sm text-destructive">{errors.sender_full_name}</p>}
                                 </div>
-                                <canvas ref={senderCanvasRef} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
-                                {errors.sender_signature && <p className="text-sm text-destructive">{errors.sender_signature}</p>}
+                                <div className="space-y-2">
+                                    <Label htmlFor="sender-position" className="text-xs">
+                                        Position <span className="text-muted-foreground">(optional)</span>
+                                    </Label>
+                                    <Input
+                                        id="sender-position"
+                                        value={senderPosition}
+                                        onChange={(e) => setSenderPosition(e.target.value)}
+                                        placeholder="e.g. Director"
+                                    />
+                                </div>
                             </div>
+                            {savedSenderSignatureUrl && (
+                                <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw')} className="grid grid-cols-2 gap-2">
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'saved' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                        <RadioGroupItem value="saved" />
+                                        Use saved signature
+                                    </label>
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'draw' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                        <RadioGroupItem value="draw" />
+                                        Draw new
+                                    </label>
+                                </RadioGroup>
+                            )}
+
+                            {senderSigMode === 'saved' && savedSenderSignatureUrl ? (
+                                <div className="space-y-2">
+                                    <Label className="text-xs">Your Saved Signature</Label>
+                                    <div className="rounded-md border bg-white p-3">
+                                        <img src={savedSenderSignatureUrl} alt="Saved signature" className="mx-auto max-h-24" />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Manage your saved signature in <a href="/settings/signature" className="underline" target="_blank" rel="noreferrer">Settings → Signature</a>.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs">Draw Your Signature</Label>
+                                        <div className="flex gap-1">
+                                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={undoSenderSignature}>
+                                                <RotateCcw className="mr-1 h-3 w-3" />
+                                                Undo
+                                            </Button>
+                                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearSenderSignature}>
+                                                <Trash2 className="mr-1 h-3 w-3" />
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <canvas ref={attachSenderCanvas} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
+                                    {errors.sender_signature && <p className="text-sm text-destructive">{errors.sender_signature}</p>}
+                                    <label className="flex cursor-pointer items-center gap-2 text-xs">
+                                        <Checkbox checked={saveSenderSignature} onCheckedChange={(v) => setSaveSenderSignature(!!v)} />
+                                        {savedSenderSignatureUrl ? 'Replace my saved signature with this one' : 'Save this signature for next time'}
+                                    </label>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -466,10 +675,17 @@ export default function SendForSigningModal({
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
                         Cancel
                     </Button>
+                    {mode === 'write' && (
+                        <Button variant="secondary" onClick={handleSaveDraft} disabled={processing}>
+                            {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {draft ? 'Update Draft' : 'Save as Draft'}
+                        </Button>
+                    )}
                     <Button onClick={handleSubmit} disabled={processing}>
                         {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {deliveryMethod === 'email'
                             ? (() => {
+                                if (mode === 'write') return 'Send Email';
                                 const totalCount = selectedTemplateIds.length + selectedFormTemplateIds.length;
                                 if (totalCount <= 1) return 'Send Email';
                                 const parts: string[] = [];

@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Contracts\ProvidesSigningPlaceholders;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Employee extends Model
+class Employee extends Model implements ProvidesSigningPlaceholders
 {
     use \Illuminate\Database\Eloquent\SoftDeletes;
     use Concerns\HasComments;
+    use Concerns\HasSigningRequests;
 
     protected $fillable = [
         'eh_employee_id',
@@ -20,6 +23,8 @@ class Employee extends Model
         'pin',
         'employment_type',
         'employment_agreement',
+        'employing_entity_id',
+        'employing_entity_name',
         'start_date',
         'date_of_birth',
     ];
@@ -113,5 +118,73 @@ class Employee extends Model
     {
         return collect($this->fileComplianceStatus())
             ->every(fn (array $item) => $item['status'] === 'valid');
+    }
+
+    public function isOfficeStaff(): bool
+    {
+        return (int) $this->employing_entity_id === (int) config('services.employment_hero.cms_entity_id');
+    }
+
+    public function scopeOfficeStaff(Builder $query): Builder
+    {
+        return $query->where('employing_entity_id', (int) config('services.employment_hero.cms_entity_id'));
+    }
+
+    public function scopeFieldStaff(Builder $query): Builder
+    {
+        $cmsId = (int) config('services.employment_hero.cms_entity_id');
+
+        return $query->where(function (Builder $q) use ($cmsId) {
+            $q->whereNull('employing_entity_id')
+                ->orWhere('employing_entity_id', '!=', $cmsId);
+        });
+    }
+
+    public function signingPlaceholders(): array
+    {
+        [$firstName, $lastName] = $this->splitName();
+        $startDate = $this->start_date ? \Carbon\Carbon::parse($this->start_date)->format('d/m/Y') : '';
+
+        return [
+            'employee.first_name' => [
+                'label' => 'First name',
+                'value' => $firstName,
+            ],
+            'employee.last_name' => [
+                'label' => 'Last name',
+                'value' => $lastName,
+            ],
+            'employee.full_name' => [
+                'label' => 'Full name',
+                'value' => (string) ($this->preferred_name ?: $this->name),
+            ],
+            'employee.email' => [
+                'label' => 'Email',
+                'value' => (string) ($this->email ?? ''),
+            ],
+            'employee.employment_type' => [
+                'label' => 'Employment type',
+                'value' => (string) ($this->employment_type ?? ''),
+            ],
+            'employee.employing_entity' => [
+                'label' => 'Employing entity',
+                'value' => (string) ($this->employing_entity_name ?? ''),
+            ],
+            'employee.start_date' => [
+                'label' => 'Start date',
+                'value' => $startDate,
+            ],
+        ];
+    }
+
+    private function splitName(): array
+    {
+        $name = trim((string) $this->name);
+        if ($name === '') {
+            return ['', ''];
+        }
+        $parts = explode(' ', $name, 2);
+
+        return [$parts[0], $parts[1] ?? ''];
     }
 }
