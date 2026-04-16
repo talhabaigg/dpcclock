@@ -13,6 +13,7 @@ const PLACEHOLDER_TYPES = [
     { value: 'textarea', label: 'Long Text' },
     { value: 'date', label: 'Date' },
     { value: 'number', label: 'Number' },
+    { value: 'currency', label: 'Currency ($)' },
     { value: 'email', label: 'Email' },
     { value: 'phone', label: 'Phone' },
     { value: 'dropdown', label: 'Dropdown' },

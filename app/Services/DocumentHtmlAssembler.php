@@ -349,8 +349,8 @@ class DocumentHtmlAssembler
                 .signature-meta { margin-top: 10px; font-size: 11px; color: #4b5563; }
 
                 /* Lists */
-                ul { padding-left: 22px; list-style-position: outside; list-style-type: disc; }
-                ol { padding-left: 22px; list-style-position: outside; list-style-type: decimal; }
+                ul { padding-left: 16px; list-style-position: outside; list-style-type: disc; }
+                ol { padding-left: 16px; list-style-position: outside; list-style-type: decimal; }
                 ol[data-list-style="legal"] { padding-left: 0; list-style-type: none; counter-reset: legal; }
                 ol[data-list-style="legal"] > li { counter-increment: legal; position: relative; padding-left: 30px; }
                 ol[data-list-style="legal"] > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
@@ -359,6 +359,10 @@ class DocumentHtmlAssembler
                 ol[data-list-style="legal"] ol:not([data-list-style]) > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
                 ol[data-list-style="alpha"] { list-style-type: lower-alpha; }
                 li { margin: 2px 0; }
+                li > p { margin-left: 0 !important; }
+                li > ul { list-style-type: circle; margin: 2px 0; }
+                li > ul > li > ul { list-style-type: square; }
+                li > ol { margin: 2px 0; }
 
                 /* Print control */
                 h1, h2, h3 { page-break-after: avoid; }

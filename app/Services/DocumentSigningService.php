@@ -616,6 +616,9 @@ class DocumentSigningService
                 if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
                     $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
                 }
+                if ($type === 'currency' && isset($customFields[$key]) && $customFields[$key] !== '') {
+                    $customFields[$key] = '$' . number_format((float) $customFields[$key], 2);
+                }
             }
         }
 

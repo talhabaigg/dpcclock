@@ -320,6 +320,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/document-templates/{documentTemplate}', [DocumentTemplateController::class, 'destroy'])->name('document-templates.destroy');
         Route::post('/document-templates/{documentTemplate}/duplicate', [DocumentTemplateController::class, 'duplicate'])->name('document-templates.duplicate');
         Route::get('/document-templates/{documentTemplate}/preview-pdf', [DocumentTemplateController::class, 'previewPdf'])->name('document-templates.preview-pdf');
+        Route::get('/document-templates/{documentTemplate}/export', [DocumentTemplateController::class, 'export'])->name('document-templates.export');
+        Route::post('/document-templates/import', [DocumentTemplateController::class, 'import'])->name('document-templates.import');
     });
 
     // Form Templates CRUD

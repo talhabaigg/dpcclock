@@ -164,22 +164,47 @@
 .ProseMirror ul,
 .ai-preview ul,
 .prose ul {
-    list-style-type: disc;
-    padding-left: 1.5em;
+    list-style-type: disc !important;
+    padding-left: 1em !important;
     margin: 0.5em 0;
 }
 
 .ProseMirror ol,
 .ai-preview ol,
 .prose ol {
-    list-style-type: decimal;
-    padding-left: 1.5em;
+    list-style-type: decimal !important;
+    padding-left: 1em !important;
     margin: 0.5em 0;
 }
 
 .ProseMirror li,
 .ai-preview li,
 .prose li {
+    margin: 0.25em 0;
+}
+
+.ProseMirror li > p,
+.ai-preview li > p,
+.prose li > p {
+    margin-left: 0 !important;
+}
+
+.ProseMirror li > ul,
+.ai-preview li > ul,
+.prose li > ul {
+    list-style-type: circle;
+    margin: 0.25em 0;
+}
+
+.ProseMirror li > ul > li > ul,
+.ai-preview li > ul > li > ul,
+.prose li > ul > li > ul {
+    list-style-type: square;
+}
+
+.ProseMirror li > ol,
+.ai-preview li > ol,
+.prose li > ol {
     margin: 0.25em 0;
 }
 

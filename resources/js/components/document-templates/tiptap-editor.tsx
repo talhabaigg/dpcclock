@@ -199,7 +199,7 @@ const IndentExtension = Extension.create({
     addGlobalAttributes() {
         return [
             {
-                types: ['paragraph', 'heading'],
+                types: ['paragraph', 'heading', 'bulletList', 'orderedList'],
                 attributes: {
                     indent: {
                         default: 0,
@@ -220,14 +220,16 @@ const IndentExtension = Extension.create({
         return {
             increaseIndent: () => ({ tr, state, dispatch }) => {
                 const { from, to } = state.selection;
+                const indentableTypes = ['paragraph', 'heading', 'bulletList', 'orderedList'];
                 let changed = false;
                 state.doc.nodesBetween(from, to, (node, pos) => {
-                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                    if (indentableTypes.includes(node.type.name)) {
                         const current = node.attrs.indent || 0;
                         if (current < MAX_INDENT) {
                             tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current + 1 });
                             changed = true;
                         }
+                        return false; // don't descend into list children
                     }
                 });
                 if (changed && dispatch) dispatch(tr);
@@ -235,14 +237,16 @@ const IndentExtension = Extension.create({
             },
             decreaseIndent: () => ({ tr, state, dispatch }) => {
                 const { from, to } = state.selection;
+                const indentableTypes = ['paragraph', 'heading', 'bulletList', 'orderedList'];
                 let changed = false;
                 state.doc.nodesBetween(from, to, (node, pos) => {
-                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                    if (indentableTypes.includes(node.type.name)) {
                         const current = node.attrs.indent || 0;
                         if (current > 0) {
                             tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current - 1 });
                             changed = true;
                         }
+                        return false; // don't descend into list children
                     }
                 });
                 if (changed && dispatch) dispatch(tr);
@@ -254,13 +258,19 @@ const IndentExtension = Extension.create({
         return {
             Tab: ({ editor }) => {
                 if (editor.isActive('listItem')) {
-                    return editor.chain().sinkListItem('listItem').run();
+                    // Try to nest the list item first
+                    const sunk = editor.chain().sinkListItem('listItem').run();
+                    if (sunk) return true;
+                    // If can't nest (e.g. first item), indent the whole list
+                    return (editor.commands as any).increaseIndent();
                 }
                 return (editor.commands as any).increaseIndent();
             },
             'Shift-Tab': ({ editor }) => {
                 if (editor.isActive('listItem')) {
-                    return editor.chain().liftListItem('listItem').run();
+                    const lifted = editor.chain().liftListItem('listItem').run();
+                    if (lifted) return true;
+                    return (editor.commands as any).decreaseIndent();
                 }
                 return (editor.commands as any).decreaseIndent();
             },
@@ -540,7 +550,23 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                 <Toggle
                     size="sm"
                     pressed={editor.isActive('bulletList')}
-                    onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
+                    onPressedChange={() => {
+                        const { $from } = editor.state.selection;
+                        const parentNode = $from.parent;
+                        const indent = parentNode?.attrs?.indent || 0;
+                        editor.chain().focus().toggleBulletList().command(({ tr, state }) => {
+                            if (!indent) return true;
+                            const { $from: newFrom } = state.selection;
+                            for (let d = newFrom.depth; d > 0; d--) {
+                                const node = newFrom.node(d);
+                                if (node.type.name === 'bulletList') {
+                                    tr.setNodeMarkup(newFrom.before(d), undefined, { ...node.attrs, indent });
+                                    return true;
+                                }
+                            }
+                            return true;
+                        }).run();
+                    }}
                 >
                     <List className="h-4 w-4" />
                 </Toggle>
@@ -574,12 +600,14 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                                                 }
                                             }
                                         }
+                                        const { $from: curFrom } = editor.state.selection;
+                                        const curIndent = curFrom.parent?.attrs?.indent || 0;
                                         editor.chain().focus().toggleOrderedList().command(({ tr, state }) => {
                                             const { $from } = state.selection;
                                             for (let d = $from.depth; d > 0; d--) {
                                                 const node = $from.node(d);
                                                 if (node.type.name === 'orderedList') {
-                                                    tr.setNodeMarkup($from.before(d), undefined, { ...node.attrs, listStyle: style });
+                                                    tr.setNodeMarkup($from.before(d), undefined, { ...node.attrs, listStyle: style, ...(curIndent ? { indent: curIndent } : {}) });
                                                     return true;
                                                 }
                                             }
@@ -599,7 +627,8 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     pressed={false}
                     onPressedChange={() => {
                         if (editor.isActive('listItem')) {
-                            editor.chain().focus().sinkListItem('listItem').run();
+                            const sunk = editor.chain().focus().sinkListItem('listItem').run();
+                            if (!sunk) (editor.commands as any).increaseIndent();
                         } else {
                             (editor.commands as any).increaseIndent();
                         }
@@ -612,7 +641,8 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     pressed={false}
                     onPressedChange={() => {
                         if (editor.isActive('listItem')) {
-                            editor.chain().focus().liftListItem('listItem').run();
+                            const lifted = editor.chain().focus().liftListItem('listItem').run();
+                            if (!lifted) (editor.commands as any).decreaseIndent();
                         } else {
                             (editor.commands as any).decreaseIndent();
                         }
@@ -937,14 +967,19 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     margin: 4px 0 8px;
                 }
                 .ProseMirror ul {
-                    padding-left: 24px;
+                    padding-left: 16px !important;
                     margin: 6px 0 12px;
-                    list-style-type: disc;
+                    list-style-type: disc !important;
+                    list-style-position: outside;
                 }
                 .ProseMirror ol {
-                    padding-left: 24px;
+                    padding-left: 16px !important;
                     margin: 6px 0 12px;
                     list-style-type: decimal;
+                    list-style-position: outside;
+                }
+                .ProseMirror ol[data-list-style="alpha"] {
+                    list-style-type: lower-alpha !important;
                 }
                 /* Legal numbering: 1. / 1.1. / 1.2. */
                 .ProseMirror ol[data-list-style="legal"] {
@@ -980,12 +1015,21 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     position: absolute;
                     left: 0;
                 }
-                /* Letter numbering: a. b. c. */
-                .ProseMirror ol[data-list-style="alpha"] {
-                    list-style-type: lower-alpha;
-                }
                 .ProseMirror li {
                     margin: 2px 0;
+                }
+                .ProseMirror li > p {
+                    margin-left: 0 !important;
+                }
+                .ProseMirror li > ul,
+                .ProseMirror li > ol {
+                    margin: 4px 0 4px 0;
+                }
+                .ProseMirror li > ul {
+                    list-style-type: circle;
+                }
+                .ProseMirror li > ul > li > ul {
+                    list-style-type: square;
                 }
                 .ProseMirror table {
                     width: 100%;

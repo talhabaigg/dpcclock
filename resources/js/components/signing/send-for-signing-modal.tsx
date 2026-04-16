@@ -608,6 +608,22 @@ export default function SendForSigningModal({
                                                     />
                                                     <Label htmlFor={`cf-${p.key}`} className="text-sm font-normal">{p.label}</Label>
                                                 </div>
+                                            ) : p.type === 'currency' ? (
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                                                    <Input
+                                                        id={`cf-${p.key}`}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        className="pl-7"
+                                                        value={fieldValue}
+                                                        onChange={(e) => {
+                                                            const raw = e.target.value.replace(/[^0-9.]/g, '');
+                                                            setField(raw);
+                                                        }}
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
                                             ) : (
                                                 <Input
                                                     id={`cf-${p.key}`}

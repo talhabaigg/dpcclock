@@ -22,8 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { Copy, Download, FileText, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Copy, Download, FileText, MoreVertical, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
 interface DocumentTemplate {
     id: number;
@@ -43,6 +43,7 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const importRef = useRef<HTMLInputElement>(null);
 
     const filtered = useMemo(() => {
         return templates.filter((t) => {
@@ -107,6 +108,22 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
                                     ))}
                                 </SelectContent>
                             </Select>
+                            <Button variant="outline" onClick={() => importRef.current?.click()}>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Import
+                            </Button>
+                            <input
+                                ref={importRef}
+                                type="file"
+                                accept=".json"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    router.post(route('document-templates.import'), { file }, { forceFormData: true });
+                                    e.target.value = '';
+                                }}
+                            />
                             <Button asChild>
                                 <Link href={route('document-templates.create')}>
                                     <Plus className="mr-2 h-4 w-4" />
@@ -160,6 +177,15 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
                                                     >
                                                         <Download className="mr-2 h-3.5 w-3.5" />
                                                         Download PDF
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            window.open(route('document-templates.export', template.id), '_blank');
+                                                        }}
+                                                    >
+                                                        <Download className="mr-2 h-3.5 w-3.5" />
+                                                        Export JSON
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
                                                         onClick={(e) => {

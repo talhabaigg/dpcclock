@@ -35,7 +35,7 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
-            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,email,phone,dropdown,radio,checkbox',
+            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,currency,email,phone,dropdown,radio,checkbox',
             'placeholders.*.required' => 'nullable|boolean',
             'placeholders.*.options' => 'nullable|array',
             'placeholders.*.options.*' => 'string',
@@ -69,7 +69,7 @@ class DocumentTemplateController extends Controller
             'placeholders' => 'nullable|array',
             'placeholders.*.key' => 'required|string',
             'placeholders.*.label' => 'required|string',
-            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,email,phone,dropdown,radio,checkbox',
+            'placeholders.*.type' => 'nullable|string|in:text,textarea,date,number,currency,email,phone,dropdown,radio,checkbox',
             'placeholders.*.required' => 'nullable|boolean',
             'placeholders.*.options' => 'nullable|array',
             'placeholders.*.options.*' => 'string',
@@ -104,6 +104,47 @@ class DocumentTemplateController extends Controller
 
         return redirect()->route('document-templates.edit', $clone)
             ->with('success', 'Template duplicated successfully.');
+    }
+
+    public function export(DocumentTemplate $documentTemplate)
+    {
+        $data = $documentTemplate->only([
+            'name', 'category', 'body_json', 'body_html', 'placeholders', 'is_active', 'visibility',
+        ]);
+
+        $filename = str()->slug($documentTemplate->name) . '-template.json';
+
+        return response()->json($data, 200, [
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:json,txt',
+        ]);
+
+        $data = json_decode($request->file('file')->get(), true);
+
+        if (! $data || ! isset($data['name'], $data['body_json'], $data['body_html'])) {
+            return back()->with('error', 'Invalid template file.');
+        }
+
+        $template = DocumentTemplate::create([
+            'name' => $data['name'],
+            'category' => $data['category'] ?? null,
+            'body_json' => $data['body_json'],
+            'body_html' => $data['body_html'],
+            'placeholders' => $data['placeholders'] ?? null,
+            'is_active' => $data['is_active'] ?? true,
+            'visibility' => $data['visibility'] ?? 'all',
+            'created_by' => auth()->id(),
+            'updated_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('document-templates.edit', $template)
+            ->with('success', 'Template imported successfully.');
     }
 
     public function previewPdf(DocumentTemplate $documentTemplate, SignedDocumentPdfService $pdfService)
