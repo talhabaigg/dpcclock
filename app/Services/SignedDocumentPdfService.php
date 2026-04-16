@@ -111,7 +111,8 @@ class SignedDocumentPdfService
         </div>
         FOOTER;
 
-        $browsershot = Browsershot::html($html);
+        $browsershot = Browsershot::html($html)
+            ->writeOptionsToFile();
 
         if ($nodeBinary = env('BROWSERSHOT_NODE_BINARY')) {
             $browsershot->setNodeBinary($nodeBinary);

@@ -1140,21 +1140,36 @@ class SigningRequestController extends Controller
     public function download(SigningRequest $signingRequest)
     {
         $this->authorizeSignableAction($signingRequest);
-        $media = $signingRequest->getFirstMedia('signed_document');
 
-        if (! $media) {
-            abort(404, 'Signed document not found.');
+        // Try signed document first, then uploaded document (info-only deliveries)
+        $media = $signingRequest->getFirstMedia('signed_document')
+            ?? $signingRequest->getFirstMedia('uploaded_document');
+
+        if ($media) {
+            return response()->streamDownload(function () use ($media) {
+                $stream = $media->stream();
+                fpassthru($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }, $media->file_name, [
+                'Content-Type' => $media->mime_type,
+            ]);
         }
 
-        return response()->streamDownload(function () use ($media) {
-            $stream = $media->stream();
-            fpassthru($stream);
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }, 'signed-document.pdf', [
-            'Content-Type' => 'application/pdf',
-        ]);
+        // Fallback: generate PDF from stored HTML (template-based info-only deliveries)
+        if ($signingRequest->document_html) {
+            $pdfService = app(\App\Services\SignedDocumentPdfService::class);
+            $pdf = $pdfService->generateTemplatePreview($signingRequest->document_html);
+            $filename = str()->slug($signingRequest->document_title ?: 'document') . '.pdf';
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        }
+
+        abort(404, 'Document not found.');
     }
 
     // ─── Public actions (token-based, no auth) ───────────────

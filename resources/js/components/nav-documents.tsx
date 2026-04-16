@@ -198,8 +198,11 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
     const [openMap, setOpenMap] = useState<CollapseState>(() => loadCollapseState());
 
     const handleOpenChange = (name: string, open: boolean) => {
-        setOpenMap((prev) => {
-            const next = { ...prev, [name]: open };
+        setOpenMap(() => {
+            // Always read the latest state from localStorage to avoid
+            // stale overwrites from other NavDocuments instances.
+            const latest = loadCollapseState();
+            const next = { ...latest, [name]: open };
             saveCollapseState(next);
             return next;
         });
@@ -238,10 +241,12 @@ export function NavDocuments({ items, permissions = [] }: { items: NavItem[]; pe
                     return (
                         <SidebarMenuItem key={item.name}>
                             <Collapsible open={isOpen} onOpenChange={(open) => handleOpenChange(item.name, open)}>
-                                <SidebarMenuButton tooltip={item.name}>
-                                    <item.icon />
-                                    <span>{item.name}</span>
-                                </SidebarMenuButton>
+                                <CollapsibleTrigger asChild>
+                                    <SidebarMenuButton tooltip={item.name}>
+                                        <item.icon />
+                                        <span>{item.name}</span>
+                                    </SidebarMenuButton>
+                                </CollapsibleTrigger>
 
                                 {visibleSubItems?.length ? (
                                     <>

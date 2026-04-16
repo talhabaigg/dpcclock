@@ -191,6 +191,50 @@
     height: 0;
 }
 
+/* Placeholder chips inside the Tiptap editor */
+.placeholder-chip {
+    display: inline;
+    font-size: 0;            /* hide the raw {{key}} text */
+    line-height: 1;
+    vertical-align: baseline;
+}
+
+.placeholder-chip::before {
+    content: attr(data-label);
+    display: inline-block;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    vertical-align: baseline;
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.placeholder-chip--signature {
+    font-size: 0;
+}
+
+.placeholder-chip--signature::before {
+    content: attr(data-label);
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    padding: 20px;
+    margin: 16px 0;
+    text-align: center;
+    font-size: 13px;
+    font-style: italic;
+    font-weight: 400;
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+    background: #fff;
+    color: #94a3b8;
+}
+
+
 
 /* ================================
    Dashboard Grid — Edit Mode

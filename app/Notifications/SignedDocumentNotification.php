@@ -29,9 +29,11 @@ class SignedDocumentNotification extends Notification implements ShouldQueue
             ?? $this->signingRequest->document_title
             ?? 'Document';
 
+        $signerName = $this->signingRequest->signer_full_name ?? $this->signingRequest->recipient_name ?? 'Recipient';
+
         $message = (new MailMessage)
-            ->subject("Your signed copy: {$documentLabel}")
-            ->greeting("Hi {$this->signingRequest->signer_full_name},")
+            ->subject("Signed: {$documentLabel} — {$signerName}")
+            ->greeting("Hi {$signerName},")
             ->line("Thanks for signing **{$documentLabel}**. A copy of the fully-signed document is attached to this email for your records.")
             ->line('Signed on ' . $this->signingRequest->signed_at?->timezone('Australia/Brisbane')->format('d/m/Y h:i A T'))
             ->line('If you have any questions about this document, please contact the sender.');

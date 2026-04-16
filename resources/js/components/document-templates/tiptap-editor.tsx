@@ -27,6 +27,7 @@ import {
     Heading3,
     Indent,
     Italic,
+    ListFilter,
     List,
     ListOrdered,
     Minus,
@@ -69,6 +70,8 @@ interface TiptapEditorProps {
     contextGroup?: PlaceholderGroup | null;
     /** Label for the custom-placeholder group (defaults to "Custom"). */
     customGroupLabel?: string;
+    /** Callback to open a custom placeholders manager. When provided, a "Manage Placeholders" item appears in the Insert Field dropdown. */
+    onManagePlaceholders?: () => void;
 }
 
 const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
@@ -82,6 +85,11 @@ const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
             { key: 'employee.employment_type', label: 'Employment Type' },
             { key: 'employee.employing_entity', label: 'Employing Entity' },
             { key: 'employee.start_date', label: 'Start Date' },
+            { divider: true },
+            { key: 'employee.address', label: 'Address' },
+            { key: 'employee.suburb', label: 'Suburb' },
+            { key: 'employee.state', label: 'State' },
+            { key: 'employee.postcode', label: 'Postcode' },
         ],
     },
     {
@@ -117,43 +125,69 @@ const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
         label: 'General',
         fields: [
             { key: 'date_signed', label: 'Date Signed' },
+            { key: 'send_date', label: 'Send Date' },
         ],
     },
 ];
 
-const SIGNATURE_PLACEHOLDERS: Record<string, string> = {
-    '{{signature_box}}': 'Recipient Signature',
-    '{{sender_signature}}': 'Sender Signature',
-};
+// Build a flat key→label lookup from all built-in placeholder groups
+const PLACEHOLDER_LABEL_MAP: Record<string, string> = {};
+for (const group of PLACEHOLDER_GROUPS) {
+    for (const f of group.fields) {
+        if ('key' in f) PLACEHOLDER_LABEL_MAP[f.key] = f.label;
+    }
+}
+// Add signature placeholders
+PLACEHOLDER_LABEL_MAP['signature_box'] = 'Recipient Signature';
+PLACEHOLDER_LABEL_MAP['sender_signature'] = 'Sender Signature';
 
-const SignatureBoxDecoration = Extension.create({
-    name: 'signatureBoxDecoration',
+/**
+ * Shared ref that the decoration plugin reads on every render pass.
+ * Updated via a React effect so custom placeholders are always current.
+ */
+let _customPlaceholderRef: Placeholder[] = [];
+
+const placeholderDecorationPlugin = new Plugin({
+    key: new PluginKey('placeholderDecoration'),
+    props: {
+        decorations(state) {
+            // Merge custom placeholders into the lookup on every pass
+            const labelMap = { ...PLACEHOLDER_LABEL_MAP };
+            for (const p of _customPlaceholderRef) {
+                if (p.key && !labelMap[p.key]) labelMap[p.key] = p.label || p.key;
+            }
+
+            const decorations: Decoration[] = [];
+            const regex = /\{\{([^}]+)\}\}/g;
+
+            state.doc.descendants((node, pos) => {
+                if (!node.isText || !node.text) return;
+                let match: RegExpExecArray | null;
+                regex.lastIndex = 0;
+                while ((match = regex.exec(node.text)) !== null) {
+                    const key = match[1];
+                    const from = pos + match.index;
+                    const to = from + match[0].length;
+                    const isSignature = key === 'signature_box' || key === 'sender_signature';
+                    const label = labelMap[key] || key;
+
+                    decorations.push(
+                        Decoration.inline(from, to, {
+                            class: isSignature ? 'placeholder-chip placeholder-chip--signature' : 'placeholder-chip',
+                            'data-label': label,
+                        }),
+                    );
+                }
+            });
+            return DecorationSet.create(state.doc, decorations);
+        },
+    },
+});
+
+const PlaceholderDecorationExtension = Extension.create({
+    name: 'placeholderDecoration',
     addProseMirrorPlugins() {
-        return [
-            new Plugin({
-                key: new PluginKey('signatureBoxDecoration'),
-                props: {
-                    decorations(state) {
-                        const decorations: Decoration[] = [];
-                        state.doc.descendants((node, pos) => {
-                            if (!node.isText || !node.text) return;
-                            for (const [placeholder, label] of Object.entries(SIGNATURE_PLACEHOLDERS)) {
-                                const idx = node.text.indexOf(placeholder);
-                                if (idx !== -1) {
-                                    decorations.push(
-                                        Decoration.inline(pos + idx, pos + idx + placeholder.length, {
-                                            class: 'signature-box-preview',
-                                            'data-label': label,
-                                        }),
-                                    );
-                                }
-                            }
-                        });
-                        return DecorationSet.create(state.doc, decorations);
-                    },
-                },
-            }),
-        ];
+        return [placeholderDecorationPlugin];
     },
 });
 
@@ -270,7 +304,7 @@ const PageBreak = Node.create({
     },
 });
 
-export default function TiptapEditor({ content, onChange, placeholders = [], contextGroup, customGroupLabel = 'Custom' }: TiptapEditorProps) {
+export default function TiptapEditor({ content, onChange, placeholders = [], contextGroup, customGroupLabel = 'Custom', onManagePlaceholders }: TiptapEditorProps) {
     // Base groups: replace the first ("Applicant") if a contextGroup is provided; remove it if null.
     const baseGroups = contextGroup === undefined
         ? PLACEHOLDER_GROUPS
@@ -303,7 +337,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
             TableRow,
             TableHeader,
             TableCell,
-            SignatureBoxDecoration,
+            PlaceholderDecorationExtension,
             IndentExtension,
             PageBreak,
         ],
@@ -317,6 +351,15 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
             },
         },
     });
+
+    // Keep the decoration plugin's placeholder ref in sync
+    useEffect(() => {
+        _customPlaceholderRef = placeholders;
+        // Force ProseMirror to re-compute decorations
+        if (editor) {
+            editor.view.dispatch(editor.view.state.tr.setMeta('placeholderUpdate', true));
+        }
+    }, [placeholders, editor]);
 
     useEffect(() => {
         if (editor && content && !editor.isFocused) {
@@ -739,6 +782,15 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                                 </DropdownMenuSubContent>
                             </DropdownMenuSub>
                         ))}
+                        {onManagePlaceholders && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={onManagePlaceholders} className="text-xs">
+                                    <ListFilter className="mr-2 h-3.5 w-3.5" />
+                                    Manage Placeholders
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
 

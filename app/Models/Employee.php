@@ -27,6 +27,10 @@ class Employee extends Model implements ProvidesSigningPlaceholders
         'employing_entity_name',
         'start_date',
         'date_of_birth',
+        'residential_street_address',
+        'residential_suburb',
+        'residential_state',
+        'residential_postcode',
     ];
 
     protected $appends = ['display_name'];
@@ -173,6 +177,22 @@ class Employee extends Model implements ProvidesSigningPlaceholders
             'employee.start_date' => [
                 'label' => 'Start date',
                 'value' => $startDate,
+            ],
+            'employee.address' => [
+                'label' => 'Address',
+                'value' => (string) ($this->residential_street_address ?? ''),
+            ],
+            'employee.suburb' => [
+                'label' => 'Suburb',
+                'value' => (string) ($this->residential_suburb ?? ''),
+            ],
+            'employee.state' => [
+                'label' => 'State',
+                'value' => (string) ($this->residential_state ?? ''),
+            ],
+            'employee.postcode' => [
+                'label' => 'Postcode',
+                'value' => (string) ($this->residential_postcode ?? ''),
             ],
         ];
     }

@@ -1,15 +1,15 @@
+import PlaceholderEditor, { type PlaceholderItem } from '@/components/document-templates/placeholder-editor';
 import TiptapEditor from '@/components/document-templates/tiptap-editor';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Plus, Settings, Trash2 } from 'lucide-react';
+import { ArrowLeft, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -19,30 +19,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const CATEGORIES = ['employment', 'safety', 'subcontractor', 'general'];
 
-const PLACEHOLDER_TYPES = [
-    { value: 'text', label: 'Text' },
-    { value: 'textarea', label: 'Long Text' },
-    { value: 'date', label: 'Date' },
-    { value: 'number', label: 'Number' },
-    { value: 'email', label: 'Email' },
-    { value: 'phone', label: 'Phone' },
-    { value: 'dropdown', label: 'Dropdown' },
-    { value: 'radio', label: 'Radio' },
-    { value: 'checkbox', label: 'Checkbox' },
-];
-
-const TYPES_WITH_OPTIONS = ['dropdown', 'radio'];
-
-interface PlaceholderItem {
-    key: string;
-    label: string;
-    type: string;
-    required: boolean;
-    options: string[];
-}
-
 export default function CreateDocumentTemplate() {
     const [placeholders, setPlaceholders] = useState<PlaceholderItem[]>([]);
+    const [placeholderSheetOpen, setPlaceholderSheetOpen] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         name: '',
@@ -53,30 +32,7 @@ export default function CreateDocumentTemplate() {
         placeholders: [] as PlaceholderItem[],
     });
 
-    const addPlaceholder = () => {
-        const updated = [...placeholders, { key: '', label: '', type: 'text', required: false, options: [] }];
-        setPlaceholders(updated);
-        setData('placeholders', updated);
-    };
-
-    const updatePlaceholder = (index: number, field: keyof PlaceholderItem, value: string | boolean | string[]) => {
-        const updated = [...placeholders];
-        if (field === 'key') {
-            updated[index][field] = (value as string).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        } else if (field === 'type') {
-            updated[index].type = value as string;
-            if (!TYPES_WITH_OPTIONS.includes(value as string)) {
-                updated[index].options = [];
-            }
-        } else {
-            (updated[index] as any)[field] = value;
-        }
-        setPlaceholders(updated);
-        setData('placeholders', updated);
-    };
-
-    const removePlaceholder = (index: number) => {
-        const updated = placeholders.filter((_, i) => i !== index);
+    const handlePlaceholdersChange = (updated: PlaceholderItem[]) => {
         setPlaceholders(updated);
         setData('placeholders', updated);
     };
@@ -138,131 +94,48 @@ export default function CreateDocumentTemplate() {
                             <SheetContent className="overflow-y-auto p-6 sm:max-w-md">
                                 <SheetHeader>
                                     <SheetTitle>Template Settings</SheetTitle>
-                                    <SheetDescription>Configure template details and custom placeholders.</SheetDescription>
+                                    <SheetDescription>Configure template details.</SheetDescription>
                                 </SheetHeader>
-                                <div className="space-y-6 py-6">
-                                    {/* Template details */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-medium">Details</h3>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sheet-name">Template Name</Label>
-                                            <Input
-                                                id="sheet-name"
-                                                value={data.name}
-                                                onChange={(e) => setData('name', e.target.value)}
-                                                placeholder="e.g. Standard Employment Contract"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sheet-category">Category</Label>
-                                            <Select value={data.category} onValueChange={(v) => setData('category', v)}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select category" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {CATEGORIES.map((cat) => (
-                                                        <SelectItem key={cat} value={cat}>
-                                                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sheet-visibility">Visibility</Label>
-                                            <Select value={data.visibility} onValueChange={(v) => setData('visibility', v)}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select visibility" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="all">All employees</SelectItem>
-                                                    <SelectItem value="office_only">Office only</SelectItem>
-                                                    <SelectItem value="site_only">Site only</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-xs text-muted-foreground">
-                                                Controls which employee type this template appears for when sending documents.
-                                            </p>
-                                        </div>
+                                <div className="space-y-4 py-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="sheet-name">Template Name</Label>
+                                        <Input
+                                            id="sheet-name"
+                                            value={data.name}
+                                            onChange={(e) => setData('name', e.target.value)}
+                                            placeholder="e.g. Standard Employment Contract"
+                                        />
                                     </div>
-
-                                    <hr />
-
-                                    {/* Custom placeholders */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-medium">Custom Placeholders</h3>
-                                            <Button type="button" variant="ghost" size="sm" onClick={addPlaceholder}>
-                                                <Plus className="mr-1 h-3 w-3" />
-                                                Add
-                                            </Button>
-                                        </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="sheet-category">Category</Label>
+                                        <Select value={data.category} onValueChange={(v) => setData('category', v)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {CATEGORIES.map((cat) => (
+                                                    <SelectItem key={cat} value={cat}>
+                                                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="sheet-visibility">Visibility</Label>
+                                        <Select value={data.visibility} onValueChange={(v) => setData('visibility', v)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select visibility" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All employees</SelectItem>
+                                                <SelectItem value="office_only">Office only</SelectItem>
+                                                <SelectItem value="site_only">Site only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                         <p className="text-xs text-muted-foreground">
-                                            Define custom fields that will be filled in when sending the document. Default fields (Recipient Name,
-                                            Email, Date Signed) are always available.
+                                            Controls which employee type this template appears for when sending documents.
                                         </p>
-                                        {placeholders.map((p, i) => (
-                                            <div key={i} className="space-y-2 rounded-md border p-2">
-                                                <div className="flex items-start gap-2">
-                                                    <div className="flex-1 space-y-1">
-                                                        <Input
-                                                            placeholder="field_key"
-                                                            value={p.key}
-                                                            onChange={(e) => updatePlaceholder(i, 'key', e.target.value)}
-                                                            className="font-mono text-xs"
-                                                        />
-                                                        <Input
-                                                            placeholder="Display Label"
-                                                            value={p.label}
-                                                            onChange={(e) => updatePlaceholder(i, 'label', e.target.value)}
-                                                            className="text-xs"
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="mt-0.5 shrink-0"
-                                                        onClick={() => removePlaceholder(i)}
-                                                    >
-                                                        <Trash2 className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Select value={p.type || 'text'} onValueChange={(v) => updatePlaceholder(i, 'type', v)}>
-                                                        <SelectTrigger className="h-7 flex-1 text-xs">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {PLACEHOLDER_TYPES.map((t) => (
-                                                                <SelectItem key={t.value} value={t.value}>
-                                                                    {t.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs">
-                                                        <Checkbox
-                                                            checked={p.required || false}
-                                                            onCheckedChange={(v) => updatePlaceholder(i, 'required', !!v)}
-                                                        />
-                                                        Required
-                                                    </label>
-                                                </div>
-                                                {TYPES_WITH_OPTIONS.includes(p.type) && (
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] text-muted-foreground">Options (one per line)</Label>
-                                                        <Textarea
-                                                            value={(p.options ?? []).join('\n')}
-                                                            onChange={(e) => updatePlaceholder(i, 'options', e.target.value.split('\n'))}
-                                                            placeholder={'Option 1\nOption 2\nOption 3'}
-                                                            rows={3}
-                                                            className="text-xs"
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
                                     </div>
                                 </div>
                             </SheetContent>
@@ -281,9 +154,25 @@ export default function CreateDocumentTemplate() {
 
                 {/* Full-width editor */}
                 <div className="min-h-0 flex-1 p-4">
-                    <TiptapEditor content={data.body_json} onChange={handleEditorChange} placeholders={placeholders} />
+                    <TiptapEditor
+                        content={data.body_json}
+                        onChange={handleEditorChange}
+                        placeholders={placeholders}
+                        onManagePlaceholders={() => setPlaceholderSheetOpen(true)}
+                    />
                     {errors.body_html && <p className="mt-2 text-sm text-destructive">{errors.body_html}</p>}
                 </div>
+
+                {/* Placeholders dialog (triggered from toolbar) */}
+                <Dialog open={placeholderSheetOpen} onOpenChange={setPlaceholderSheetOpen}>
+                    <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Custom Placeholders</DialogTitle>
+                            <DialogDescription>Define custom fields that will be filled in when sending this document.</DialogDescription>
+                        </DialogHeader>
+                        <PlaceholderEditor placeholders={placeholders} onChange={handlePlaceholdersChange} />
+                    </DialogContent>
+                </Dialog>
             </form>
         </AppLayout>
     );

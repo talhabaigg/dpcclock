@@ -150,6 +150,7 @@ class EmployeeController extends Controller
                     'viewed_at' => $sr->viewed_at?->toISOString(),
                     'expires_at' => $sr->expires_at?->toISOString(),
                     'signer_full_name' => $sr->signer_full_name,
+                    'signing_url' => in_array($sr->status, ['pending', 'sent', 'viewed']) && $sr->requires_signature ? $sr->getSigningUrl() : null,
                     'document_template' => $sr->documentTemplate ? [
                         'id' => $sr->documentTemplate->id,
                         'name' => $sr->documentTemplate->name,
@@ -308,6 +309,10 @@ class EmployeeController extends Controller
                     'employing_entity_name' => $entityId !== null ? ($entityNameById[$entityId] ?? null) : null,
                     'start_date' => isset($employeeInfo['startDate']) ? substr($employeeInfo['startDate'], 0, 10) : null,
                     'date_of_birth' => isset($employeeInfo['dateOfBirth']) ? substr($employeeInfo['dateOfBirth'], 0, 10) : null,
+                    'residential_street_address' => $employeeInfo['residentialStreetAddress'] ?? null,
+                    'residential_suburb' => $employeeInfo['residentialSuburb'] ?? null,
+                    'residential_state' => $employeeInfo['residentialState'] ?? null,
+                    'residential_postcode' => $employeeInfo['residentialPostCode'] ?? null,
                     'pin' => 1234,
                 ]
             );

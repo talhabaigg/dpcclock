@@ -87,6 +87,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
+                'signing_url' => fn () => $request->session()->get('signing_url'),
                 'message' => fn () => $request->session()->get('message'),
                 'error' => fn () => $request->session()->get('error'),
                 'deletedItems' => fn () => $request->session()->get('deletedItems'),

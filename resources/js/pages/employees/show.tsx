@@ -12,7 +12,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
-import { AlertTriangle, BookOpen, Check, Clock, Download, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Clock, Download, ExternalLink, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -661,17 +661,25 @@ export default function EmployeeShow() {
                                                                                         Discard
                                                                                     </Button>
                                                                                 </>
-                                                                            ) : isSigned ? (
+                                                                            ) : isSigned || isDelivered ? (
                                                                                 <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
                                                                                     <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
                                                                                         <Download className="h-3 w-3" />
                                                                                         Download
                                                                                     </a>
                                                                                 </Button>
-                                                                            ) : isDelivered || isAwaitingInternal ? (
+                                                                            ) : isAwaitingInternal ? (
                                                                                 <span className="text-xs text-muted-foreground italic">No actions</span>
                                                                             ) : (
                                                                                 <>
+                                                                                    {sr.signing_url && (
+                                                                                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
+                                                                                            <a href={sr.signing_url} target="_blank" rel="noreferrer">
+                                                                                                <ExternalLink className="h-3 w-3" />
+                                                                                                Sign In Person
+                                                                                            </a>
+                                                                                        </Button>
+                                                                                    )}
                                                                                     <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
                                                                                         <RotateCcw className="h-3 w-3" />
                                                                                         Resend
@@ -725,14 +733,21 @@ export default function EmployeeShow() {
                                                                             <Trash2 className="h-3 w-3" /> Discard
                                                                         </Button>
                                                                     </>
-                                                                ) : isSigned ? (
+                                                                ) : isSigned || isDelivered ? (
                                                                     <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" asChild>
                                                                         <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
                                                                             <Download className="h-3 w-3" /> Download
                                                                         </a>
                                                                     </Button>
-                                                                ) : isDelivered || isAwaitingInternal ? null : (
+                                                                ) : isAwaitingInternal ? null : (
                                                                     <>
+                                                                        {sr.signing_url && (
+                                                                            <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" asChild>
+                                                                                <a href={sr.signing_url} target="_blank" rel="noreferrer">
+                                                                                    <ExternalLink className="h-3 w-3" /> Sign In Person
+                                                                                </a>
+                                                                            </Button>
+                                                                        )}
                                                                         <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
                                                                             <RotateCcw className="h-3 w-3" /> Resend
                                                                         </Button>

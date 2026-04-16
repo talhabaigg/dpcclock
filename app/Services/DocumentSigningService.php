@@ -103,6 +103,7 @@ class DocumentSigningService
             'sender_phone' => $admin->phone ?? '',
             'sender_position' => $admin->position ?? '',
             'sender_role' => $admin->roles->first()?->name ?? '',
+            'send_date' => now()->format('d/m/Y'),
         ]);
 
         if ($template) {
@@ -468,6 +469,7 @@ class DocumentSigningService
             'sender_phone' => $internalSigner->phone ?? '',
             'sender_position' => $senderPosition ?? $internalSigner->position ?? '',
             'sender_role' => $internalSigner->roles->first()?->name ?? '',
+            'send_date' => now()->format('d/m/Y'),
         ]);
 
         if ($template) {
@@ -646,6 +648,7 @@ class DocumentSigningService
             $placeholderValues = array_merge($placeholderValues, [
                 'sender_name' => $admin->name ?? '',
                 'sender_email' => $admin->email ?? '',
+                'send_date' => now()->format('d/m/Y'),
             ]);
 
             if ($template) {
