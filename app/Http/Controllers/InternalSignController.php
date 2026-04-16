@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\RenderStage;
 use App\Models\SigningRequest;
+use App\Services\DocumentHtmlAssembler;
 use App\Services\DocumentSigningService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -11,6 +13,7 @@ class InternalSignController extends Controller
 {
     public function __construct(
         private DocumentSigningService $signingService,
+        private DocumentHtmlAssembler $assembler,
     ) {}
 
     public function show(string $token, Request $request)
@@ -26,22 +29,7 @@ class InternalSignController extends Controller
             abort(403, 'You are not the designated signer for this document.');
         }
 
-        // Replace display-time placeholders
-        $displayHtml = str_replace(
-            ['{{signature_box}}', '{{date_signed}}'],
-            [
-                '<div class="signature-placeholder">Recipient signature will appear here after they sign</div>',
-                '<em style="color: #94a3b8;">Will be filled upon signing</em>',
-            ],
-            $signingRequest->document_html
-        );
-
-        // Replace sender_signature placeholder with visual marker
-        $displayHtml = str_replace(
-            '{{sender_signature}}',
-            '<div class="signature-placeholder" style="border-color: #f59e0b; background: #fffbeb;">Your signature will be placed here</div>',
-            $displayHtml
-        );
+        $displayHtml = $this->assembler->assemble($signingRequest->document_html, RenderStage::Internal);
 
         return view('signing.internal-sign', [
             'signingRequest' => $signingRequest,

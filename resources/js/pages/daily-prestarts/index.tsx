@@ -14,7 +14,7 @@ import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Lock, LockOpen, MoreHorizontal, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Lock, MoreHorizontal, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Daily Prestarts', href: '/daily-prestarts' }];
@@ -281,7 +281,7 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                                     <DropdownMenuItem
                                                         onClick={() => router.post(`/daily-prestarts/${p.id}/${p.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
                                                     >
-                                                        {p.is_locked ? <><LockOpen className="mr-2 h-4 w-4" /> Unlock</> : <><Lock className="mr-2 h-4 w-4" /> Lock</>}
+                                                        {p.is_locked ? 'Unlock' : 'Lock'}
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can('prestarts.delete') && !p.is_locked && (

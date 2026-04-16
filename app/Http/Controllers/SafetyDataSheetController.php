@@ -11,7 +11,7 @@ class SafetyDataSheetController extends Controller
 {
     public function index(Request $request)
     {
-        $query = SafetyDataSheet::with(['location', 'media']);
+        $query = SafetyDataSheet::with(['locations', 'media']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -26,7 +26,7 @@ class SafetyDataSheetController extends Controller
         }
 
         if ($request->filled('location_id')) {
-            $query->where('location_id', $request->location_id);
+            $query->whereHas('locations', fn ($q) => $q->where('locations.id', $request->location_id));
         }
 
         if ($request->filled('expiry')) {
@@ -43,7 +43,7 @@ class SafetyDataSheetController extends Controller
         $sds = $query->orderBy('product_name')->paginate(25)->withQueryString();
 
         $manufacturers = SafetyDataSheet::distinct()->orderBy('manufacturer')->pluck('manufacturer');
-        $locations = Location::whereNull('eh_parent_id')->orderBy('name')->get(['id', 'name']);
+        $locations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('sds/index', [
             'sds' => $sds,
@@ -63,7 +63,8 @@ class SafetyDataSheetController extends Controller
             'hazard_classifications' => 'nullable|array',
             'hazard_classifications.*' => 'string',
             'expires_at' => 'required|date',
-            'location_id' => 'nullable|exists:locations,id',
+            'location_ids' => 'nullable|array',
+            'location_ids.*' => 'integer|exists:locations,id',
             'sds_file' => 'required|file|max:20480',
             'other_files' => 'nullable|array',
             'other_files.*' => 'file|max:20480',
@@ -75,9 +76,12 @@ class SafetyDataSheetController extends Controller
             'description' => $validated['description'] ?? null,
             'hazard_classifications' => $validated['hazard_classifications'] ?? [],
             'expires_at' => $validated['expires_at'],
-            'location_id' => $validated['location_id'] ?? null,
             'created_by' => auth()->id(),
         ]);
+
+        if (!empty($validated['location_ids'])) {
+            $sds->locations()->sync($validated['location_ids']);
+        }
 
         $sds->addMedia($request->file('sds_file'))->toMediaCollection('sds_file');
 
@@ -99,7 +103,8 @@ class SafetyDataSheetController extends Controller
             'hazard_classifications' => 'nullable|array',
             'hazard_classifications.*' => 'string',
             'expires_at' => 'required|date',
-            'location_id' => 'nullable|exists:locations,id',
+            'location_ids' => 'nullable|array',
+            'location_ids.*' => 'integer|exists:locations,id',
             'sds_file' => 'nullable|file|max:20480',
             'other_files' => 'nullable|array',
             'other_files.*' => 'file|max:20480',
@@ -113,8 +118,9 @@ class SafetyDataSheetController extends Controller
             'description' => $validated['description'] ?? null,
             'hazard_classifications' => $validated['hazard_classifications'] ?? [],
             'expires_at' => $validated['expires_at'],
-            'location_id' => $validated['location_id'] ?? null,
         ]);
+
+        $sd->locations()->sync($validated['location_ids'] ?? []);
 
         if ($request->hasFile('sds_file')) {
             $sd->addMedia($request->file('sds_file'))->toMediaCollection('sds_file');

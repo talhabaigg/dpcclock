@@ -1091,6 +1091,7 @@ class LocationController extends Controller
             \App\Jobs\LoadApPostedInvoices::dispatch();
             \App\Jobs\LoadApPostedInvoiceLines::dispatch();
             \App\Jobs\LoadJobVendorCommitments::dispatch();
+            \App\Jobs\SyncJobAddressesFromPremier::dispatch();
 
             return redirect()->back()->with('success', 'Data download initiated. All jobs have been queued.');
         } catch (\Exception $e) {
@@ -1122,6 +1123,7 @@ class LocationController extends Controller
             'variations' => ['label' => 'Variations (Change Orders)', 'class' => null],
             'premier_vendors' => ['label' => 'Premier Vendors', 'class' => null],
             'premier_gl_accounts' => ['label' => 'Premier GL Accounts', 'class' => null],
+            'job_addresses' => ['label' => 'Job Addresses & Geocoding', 'class' => \App\Jobs\SyncJobAddressesFromPremier::class],
         ];
 
         $syncLogs = \App\Models\DataSyncLog::all()->keyBy('job_name');
@@ -1148,7 +1150,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
-            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations,premier_vendors,premier_gl_accounts',
+            'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations,premier_vendors,premier_gl_accounts,job_addresses',
             'force_full' => 'boolean',
         ]);
 
@@ -1165,6 +1167,7 @@ class LocationController extends Controller
             'job_vendor_commitments' => \App\Jobs\LoadJobVendorCommitments::class,
             'ap_purchase_orders' => \App\Jobs\LoadApPurchaseOrders::class,
             'gl_transaction_details' => \App\Jobs\LoadGlTransactionDetails::class,
+            'job_addresses' => \App\Jobs\SyncJobAddressesFromPremier::class,
         ];
 
         $dispatched = [];

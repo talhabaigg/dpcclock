@@ -72,25 +72,13 @@ class ToolboxTalkController extends Controller
             'near_misses.*.description' => 'required|string',
             'floor_comments' => 'nullable|array',
             'floor_comments.*.description' => 'required|string',
-            'topic_files' => 'nullable|array',
-            'topic_files.*' => 'file|max:10240',
-            'action_point_files' => 'nullable|array',
-            'action_point_files.*' => 'file|max:10240',
             'injuries' => 'nullable|array',
             'injuries.*.description' => 'required|string',
-            'injury_files' => 'nullable|array',
-            'injury_files.*' => 'file|max:10240',
-            'near_miss_files' => 'nullable|array',
-            'near_miss_files.*' => 'file|max:10240',
-            'floor_comment_files' => 'nullable|array',
-            'floor_comment_files.*' => 'file|max:10240',
         ]);
 
         $data['created_by'] = auth()->id();
-        unset($data['topic_files'], $data['action_point_files'], $data['injury_files'], $data['near_miss_files'], $data['floor_comment_files']);
 
         $talk = ToolboxTalk::create($data);
-        $this->handleMediaUploads($request, $talk);
 
         return redirect()->route('toolbox-talks.index')
             ->with('success', 'Toolbox talk created successfully.');
@@ -181,6 +169,22 @@ class ToolboxTalkController extends Controller
 
         return redirect()->route('toolbox-talks.index')
             ->with('success', 'Toolbox talk deleted successfully.');
+    }
+
+    public function duplicate(ToolboxTalk $toolboxTalk)
+    {
+        $newTalk = ToolboxTalk::create([
+            'location_id' => $toolboxTalk->location_id,
+            'meeting_date' => now()->toDateString(),
+            'called_by' => auth()->id(),
+            'meeting_subject' => $toolboxTalk->meeting_subject,
+            'key_topics' => $toolboxTalk->key_topics,
+            'action_points' => $toolboxTalk->action_points,
+            'created_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('toolbox-talks.edit', $newTalk)
+            ->with('success', 'Toolbox talk duplicated. You can now edit it.');
     }
 
     public function lock(ToolboxTalk $toolboxTalk)

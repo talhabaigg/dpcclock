@@ -33,8 +33,7 @@ interface SdsRecord {
     description: string | null;
     hazard_classifications: string[];
     expires_at: string;
-    location_id: number | null;
-    location?: { id: number; name: string } | null;
+    locations: { id: number; name: string }[];
     media: MediaFile[];
     created_at: string;
 }
@@ -74,7 +73,7 @@ interface FormState {
     description: string;
     hazard_classifications: string[];
     expires_at: Date | undefined;
-    location_id: string;
+    location_ids: number[];
     sds_file: File | null;
     other_files: File[];
     remove_other_files: number[];
@@ -86,7 +85,7 @@ const EMPTY_FORM: FormState = {
     description: '',
     hazard_classifications: [],
     expires_at: undefined,
-    location_id: '',
+    location_ids: [],
     sds_file: null,
     other_files: [],
     remove_other_files: [],
@@ -245,7 +244,7 @@ export default function SdsIndex() {
             description: record.description ?? '',
             hazard_classifications: record.hazard_classifications ?? [],
             expires_at: new Date(record.expires_at),
-            location_id: record.location_id ? String(record.location_id) : '',
+            location_ids: record.locations?.map((l) => l.id) ?? [],
             sds_file: null,
             other_files: [],
             remove_other_files: [],
@@ -273,6 +272,7 @@ export default function SdsIndex() {
             description: form.description || null,
             hazard_classifications: form.hazard_classifications,
             expires_at: format(form.expires_at, 'yyyy-MM-dd'),
+            location_ids: form.location_ids,
         };
 
         if (form.sds_file) data.sds_file = form.sds_file;
@@ -432,8 +432,10 @@ export default function SdsIndex() {
                                         <TableCell className="px-3">
                                             <div className="text-sm font-medium">{record.product_name}</div>
                                             <div className="text-muted-foreground text-xs">{record.manufacturer}</div>
-                                            {record.location && (
-                                                <div className="text-muted-foreground mt-0.5 text-xs">{record.location.name}</div>
+                                            {record.locations.length > 0 && (
+                                                <div className="text-muted-foreground mt-0.5 text-xs">
+                                                    {record.locations.map((l) => l.name).join(', ')}
+                                                </div>
                                             )}
                                         </TableCell>
                                         <TableCell className={`px-3 text-xs font-medium ${expired ? 'text-red-600' : ''}`}>
@@ -588,6 +590,60 @@ export default function SdsIndex() {
                                 value={form.expires_at ? format(form.expires_at, 'yyyy-MM-dd') : ''}
                                 onChange={(e) => setForm({ ...form, expires_at: e.target.value ? new Date(e.target.value) : undefined })}
                             />
+                        </div>
+
+                        {/* Locations */}
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-semibold">Projects / Locations</Label>
+                                <span className="text-muted-foreground text-xs">Optional</span>
+                            </div>
+                            {form.location_ids.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {form.location_ids.map((id) => {
+                                        const loc = locations.find((l) => l.id === id);
+                                        return loc ? (
+                                            <Badge key={id} variant="secondary" className="gap-1 text-xs">
+                                                {loc.name}
+                                                <button
+                                                    onClick={() => setForm((prev) => ({ ...prev, location_ids: prev.location_ids.filter((lid) => lid !== id) }))}
+                                                    className="hover:text-destructive ml-0.5"
+                                                >
+                                                    <X size={10} />
+                                                </button>
+                                            </Badge>
+                                        ) : null;
+                                    })}
+                                </div>
+                            )}
+                            <div className="rounded-md border">
+                                <div className="border-b px-3 py-2">
+                                    <span className="text-muted-foreground text-sm">Select locations to apply this SDS</span>
+                                </div>
+                                <div className="max-h-[140px] overflow-y-auto">
+                                    {locations.map((loc) => (
+                                        <label
+                                            key={loc.id}
+                                            className="hover:bg-accent flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={form.location_ids.includes(loc.id)}
+                                                onChange={() =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        location_ids: prev.location_ids.includes(loc.id)
+                                                            ? prev.location_ids.filter((lid) => lid !== loc.id)
+                                                            : [...prev.location_ids, loc.id],
+                                                    }))
+                                                }
+                                                className="rounded border-gray-300"
+                                            />
+                                            {loc.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         {/* SDS File */}

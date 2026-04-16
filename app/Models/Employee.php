@@ -67,6 +67,11 @@ class Employee extends Model implements ProvidesSigningPlaceholders
         return $this->hasMany(IncidentReport::class);
     }
 
+    public function silicaEntries(): HasMany
+    {
+        return $this->hasMany(SilicaEntry::class);
+    }
+
     public function employmentApplications()
     {
         return $this->belongsToMany(EmploymentApplication::class, 'employment_application_employee')

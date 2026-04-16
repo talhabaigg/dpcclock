@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\ProvidesSigningPlaceholders;
+use App\Enums\RenderStage;
 use App\Events\DocumentSigned;
 use App\Models\DocumentTemplate;
 use App\Models\SigningRequest;
@@ -21,6 +22,7 @@ class DocumentSigningService
 {
     public function __construct(
         private SignedDocumentPdfService $pdfService,
+        private DocumentHtmlAssembler $assembler,
     ) {}
 
     public function createAndSend(
@@ -53,88 +55,17 @@ class DocumentSigningService
                 });
         }
 
-        // Format date-type custom fields from YYYY-MM-DD (HTML input) to DD/MM/YYYY (Australian)
-        if ($template) {
-            foreach ($template->placeholders ?? [] as $placeholder) {
-                $key = $placeholder['key'];
-                $type = $placeholder['type'] ?? 'text';
-                if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
-                    $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
-                }
-            }
-        }
+        $placeholderValues = $this->buildPlaceholderValues($template, $customFields, $recipientName, $recipientEmail, $admin, $signable);
 
-        // Build placeholder values — auto-resolve applicant fields if signable is an employment application
-        $placeholderValues = array_merge($customFields, [
-            'recipient_name' => $recipientName,
-            'recipient_email' => $recipientEmail ?? '',
-        ]);
-
-        if ($signable instanceof \App\Models\EmploymentApplication) {
-            $placeholderValues = array_merge($placeholderValues, [
-                'applicant_first_name' => $signable->first_name ?? '',
-                'applicant_surname' => $signable->surname ?? '',
-                'applicant_full_name' => $signable->full_name ?? '',
-                'applicant_email' => $signable->email ?? '',
-                'applicant_phone' => $signable->phone ?? '',
-                'applicant_suburb' => $signable->suburb ?? '',
-                'applicant_date_of_birth' => $signable->date_of_birth?->format('d/m/Y') ?? '',
-                'applicant_referred_by' => $signable->referred_by ?? '',
-                'applicant_occupation' => $signable->occupation ?? '',
-                'applicant_apprentice_year' => $signable->apprentice_year ? (string) $signable->apprentice_year : '',
-                'applicant_trade_qualified' => $signable->trade_qualified ? 'Yes' : 'No',
-                'applicant_preferred_project_site' => $signable->preferred_project_site ?? '',
-                'applicant_status' => $signable->status ?? '',
-            ]);
-        }
-
-        // Model-declared placeholders (namespaced, e.g. employee.first_name). Custom fields
-        // already merged above win on key collision by being applied first.
-        if ($signable instanceof ProvidesSigningPlaceholders) {
-            foreach ($signable->signingPlaceholders() as $key => $definition) {
-                $placeholderValues[$key] = $definition['value'] ?? '';
-            }
-        }
-
-        // Auto-resolve sender (authenticated user) fields
-        $placeholderValues = array_merge($placeholderValues, [
-            'sender_name' => $admin->name ?? '',
-            'sender_email' => $admin->email ?? '',
-            'sender_phone' => $admin->phone ?? '',
-            'sender_position' => $admin->position ?? '',
-            'sender_role' => $admin->roles->first()?->name ?? '',
-            'send_date' => now()->format('d/m/Y'),
-        ]);
-
-        if ($template) {
-            $documentHtml = $template->renderHtml($placeholderValues);
-        } else {
-            // One-off: render provided HTML with the same placeholder substitution as templates.
-            $rendered = $documentHtml;
-            foreach ($placeholderValues as $key => $value) {
-                $rendered = str_replace('{{' . $key . '}}', e($value), $rendered);
-            }
-            // Auto-append a recipient signature block if the author didn't place one.
-            if (! str_contains($rendered, '{{signature_box}}')) {
-                $rendered .= '<p>{{signature_box}}</p>';
-            }
-            $documentHtml = $rendered;
-        }
-
-        // Replace sender signature placeholder with rendered HTML if provided
-        if ($senderSignature && str_contains($documentHtml, '{{sender_signature}}')) {
-            $positionLine = $senderPosition
-                ? '<span style="color: #475569;">' . e($senderPosition) . '</span><br>'
-                : '';
-            $senderSignatureHtml = '<div class="signature-box">'
-                . '<img src="' . $senderSignature . '" style="max-width: 300px; max-height: 100px;" />'
-                . '<div class="signature-meta">'
-                . '<strong>' . e($senderFullName ?? $admin->name) . '</strong><br>'
-                . $positionLine
-                . 'Signed: ' . now()->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
-                . '</div></div>';
-            $documentHtml = str_replace('{{sender_signature}}', $senderSignatureHtml, $documentHtml);
-        }
+        $sourceHtml = $template ? $template->body_html : $documentHtml;
+        $documentHtml = $this->assembler->assemble(
+            html: $sourceHtml,
+            stage: RenderStage::Final,
+            placeholders: $placeholderValues,
+            senderSignature: $senderSignature,
+            senderName: $senderFullName ?? $admin->name,
+            senderPosition: $senderPosition,
+        );
 
         $documentHash = hash('sha256', $documentHtml);
 
@@ -167,22 +98,11 @@ class DocumentSigningService
         }
 
         // Deliver based on method
-        if ($deliveryMethod === 'email' && $recipientEmail) {
-            Notification::route('mail', $recipientEmail)
-                ->notify(new DocumentSigningNotification($signingRequest));
-            $signingRequest->update(['status' => 'sent']);
-            $signingRequest->logEvent('sent', 'system', null, null, ['method' => 'email', 'to' => $recipientEmail]);
-        } else {
-            // in_person — no external delivery, admin opens URL on device
-            $signingRequest->update(['status' => 'sent']);
-            $signingRequest->logEvent('sent', 'admin', $admin->id, null, ['method' => 'in_person']);
-        }
+        $this->deliverToRecipient($signingRequest, $admin);
 
-        // Update signable status if applicable (e.g., EmploymentApplication -> contract_sent)
-        if ($signable && method_exists($signable, 'update') && property_exists($signable, 'status')) {
-            if ($signable instanceof \App\Models\EmploymentApplication) {
-                $signable->update(['status' => \App\Models\EmploymentApplication::STATUS_CONTRACT_SENT]);
-            }
+        // Update signable status if applicable
+        if ($signable instanceof \App\Models\EmploymentApplication) {
+            $signable->update(['status' => \App\Models\EmploymentApplication::STATUS_CONTRACT_SENT]);
         }
 
         // Add system comment on signable if it supports comments
@@ -266,7 +186,7 @@ class DocumentSigningService
                 ->toMediaCollection('initials');
         }
 
-        // Generate signed PDF (with initials stamped on every page)
+        // Generate signed PDF
         $pdfContent = $this->pdfService->generate($signingRequest, $signatureDataUrl, $initialsDataUrl);
 
         $signingRequest->addMediaFromString($pdfContent)
@@ -276,11 +196,10 @@ class DocumentSigningService
 
         $signingRequest->logEvent('pdf_generated', 'system');
 
-        // Fire event for listeners (e.g., update employment application status)
+        // Fire event for listeners
         DocumentSigned::dispatch($signingRequest);
 
-        // Notify admins — wrapped in try/catch so notification failures
-        // (e.g. web-push encryption issues) don't break the signing flow
+        // Notify admins
         try {
             $admin = $signingRequest->sentBy;
             if ($admin) {
@@ -293,7 +212,7 @@ class DocumentSigningService
             ]);
         }
 
-        // Email the signer a copy of the fully-signed PDF (BCC the admin for their records)
+        // Email the signer a copy of the fully-signed PDF
         try {
             if ($signingRequest->recipient_email) {
                 $adminBcc = $signingRequest->sentBy?->email;
@@ -309,8 +228,7 @@ class DocumentSigningService
     }
 
     /**
-     * Save a one-off document as a draft. No delivery happens, no expiry is set,
-     * placeholders in the body stay unresolved so the author can continue editing.
+     * Save a one-off document as a draft.
      */
     public function createDraft(
         User $admin,
@@ -370,8 +288,7 @@ class DocumentSigningService
     }
 
     /**
-     * Convert a draft into a live signing request, going through the same
-     * placeholder resolution, hashing, and delivery pipeline as a fresh send.
+     * Convert a draft into a live signing request.
      */
     public function finalizeDraft(
         SigningRequest $draft,
@@ -393,7 +310,6 @@ class DocumentSigningService
         $title = $documentTitle ?? $draft->document_title;
         $html = $documentHtml ?? $draft->document_html;
 
-        // Discard the draft shell; createAndSend writes a fresh row (new token, clean audit).
         $draft->logEvent('draft_finalized', 'admin', $admin->id);
         $draft->delete();
 
@@ -425,7 +341,6 @@ class DocumentSigningService
 
     /**
      * Create a signing request that requires an internal user to sign first.
-     * The document is NOT sent to the recipient until the internal signer completes.
      */
     public function createWithInternalSigner(
         ?DocumentTemplate $template,
@@ -441,50 +356,18 @@ class DocumentSigningService
         ?string $documentHtml = null,
         ?string $documentTitle = null,
     ): SigningRequest {
-        // Build placeholder values (same as createAndSend but without sender signature)
-        $placeholderValues = array_merge($customFields, [
-            'recipient_name' => $recipientName,
-            'recipient_email' => $recipientEmail ?? '',
-        ]);
+        $placeholderValues = $this->buildPlaceholderValues(
+            $template, $customFields, $recipientName, $recipientEmail, $internalSigner, $signable,
+            senderFullName: $senderFullName, senderPosition: $senderPosition,
+        );
 
-        if ($signable instanceof \App\Models\EmploymentApplication) {
-            $placeholderValues = array_merge($placeholderValues, [
-                'applicant_first_name' => $signable->first_name ?? '',
-                'applicant_surname' => $signable->surname ?? '',
-                'applicant_full_name' => $signable->full_name ?? '',
-                'applicant_email' => $signable->email ?? '',
-                'applicant_phone' => $signable->phone ?? '',
-            ]);
-        }
-
-        if ($signable instanceof ProvidesSigningPlaceholders) {
-            foreach ($signable->signingPlaceholders() as $key => $definition) {
-                $placeholderValues[$key] = $definition['value'] ?? '';
-            }
-        }
-
-        $placeholderValues = array_merge($placeholderValues, [
-            'sender_name' => $senderFullName ?? $internalSigner->name ?? '',
-            'sender_email' => $internalSigner->email ?? '',
-            'sender_phone' => $internalSigner->phone ?? '',
-            'sender_position' => $senderPosition ?? $internalSigner->position ?? '',
-            'sender_role' => $internalSigner->roles->first()?->name ?? '',
-            'send_date' => now()->format('d/m/Y'),
-        ]);
-
-        if ($template) {
-            $renderedHtml = $template->renderHtml($placeholderValues);
-        } else {
-            $renderedHtml = $documentHtml;
-            foreach ($placeholderValues as $key => $value) {
-                $renderedHtml = str_replace('{{' . $key . '}}', e($value), $renderedHtml);
-            }
-            if (! str_contains($renderedHtml, '{{signature_box}}')) {
-                $renderedHtml .= '<p>{{signature_box}}</p>';
-            }
-        }
-
-        // Leave {{sender_signature}} unresolved — the internal signer will fill it.
+        $sourceHtml = $template ? $template->body_html : $documentHtml;
+        $renderedHtml = $this->assembler->assemble(
+            html: $sourceHtml,
+            stage: RenderStage::Final,
+            placeholders: $placeholderValues,
+            // Leave {{sender_signature}} unresolved — the internal signer will fill it
+        );
 
         $signingRequest = SigningRequest::create([
             'document_template_id' => $template?->id,
@@ -496,7 +379,7 @@ class DocumentSigningService
             'status' => 'awaiting_internal_signature',
             'sent_by' => $admin->id,
             'document_html' => $renderedHtml,
-            'document_hash' => null, // Will be set after internal signer stamps
+            'document_hash' => null,
             'recipient_name' => $recipientName,
             'recipient_email' => $recipientEmail,
             'custom_fields' => $customFields,
@@ -504,7 +387,7 @@ class DocumentSigningService
             'sender_position' => $senderPosition,
             'internal_signer_user_id' => $internalSigner->id,
             'internal_signer_token' => Str::random(64),
-            'expires_at' => null, // Clock starts after internal sign
+            'expires_at' => null,
         ]);
 
         $signingRequest->logEvent('created', 'admin', $admin->id, null, [
@@ -549,20 +432,12 @@ class DocumentSigningService
             ->usingFileName('internal-signature.png')
             ->toMediaCollection('internal_signature');
 
-        // Stamp into document HTML
-        $positionLine = $signerPosition
-            ? '<span style="color: #475569;">' . e($signerPosition) . '</span><br>'
-            : '';
-        $senderSignatureHtml = '<div class="signature-box">'
-            . '<img src="' . $signatureDataUrl . '" style="max-width: 300px; max-height: 100px;" />'
-            . '<div class="signature-meta">'
-            . '<strong>' . e($signerFullName) . '</strong><br>'
-            . $positionLine
-            . 'Signed: ' . now()->timezone('Australia/Brisbane')->format('d/m/Y h:i A T')
-            . '</div></div>';
-
-        $html = $signingRequest->document_html;
-        $html = str_replace('{{sender_signature}}', $senderSignatureHtml, $html);
+        // Stamp sender signature into document HTML using the assembler
+        $html = str_replace(
+            '{{sender_signature}}',
+            $this->assembler->buildSignatureHtml($signatureDataUrl, $signerFullName, $signerPosition),
+            $signingRequest->document_html,
+        );
 
         $documentHash = hash('sha256', $html);
 
@@ -581,16 +456,8 @@ class DocumentSigningService
             'signer_name' => $signerFullName,
         ]);
 
-        // Now deliver to the external recipient
-        if ($signingRequest->delivery_method === 'email' && $signingRequest->recipient_email) {
-            Notification::route('mail', $signingRequest->recipient_email)
-                ->notify(new DocumentSigningNotification($signingRequest));
-            $signingRequest->update(['status' => 'sent']);
-            $signingRequest->logEvent('sent', 'system', null, null, ['method' => 'email', 'to' => $signingRequest->recipient_email]);
-        } else {
-            $signingRequest->update(['status' => 'sent']);
-            $signingRequest->logEvent('sent', 'system', null, null, ['method' => 'in_person']);
-        }
+        // Deliver to the external recipient
+        $this->deliverToRecipient($signingRequest);
 
         // Notify the admin who created the request
         try {
@@ -619,7 +486,6 @@ class DocumentSigningService
 
     /**
      * Send a document for information only — no signing required.
-     * The document (rendered PDF or uploaded file) is emailed as an attachment.
      */
     public function createAndDeliver(
         User $admin,
@@ -632,33 +498,19 @@ class DocumentSigningService
         array $customFields = [],
         ?string $uploadedFilePath = null,
     ): SigningRequest {
-        // Resolve placeholders for template/one-off HTML
+        $renderedHtml = '';
+
         if ($template || $documentHtml) {
-            $placeholderValues = array_merge($customFields, [
-                'recipient_name' => $recipientName,
-                'recipient_email' => $recipientEmail ?? '',
-            ]);
+            $placeholderValues = $this->buildPlaceholderValues(
+                $template, $customFields, $recipientName, $recipientEmail, $admin, $signable,
+            );
 
-            if ($signable instanceof ProvidesSigningPlaceholders) {
-                foreach ($signable->signingPlaceholders() as $key => $definition) {
-                    $placeholderValues[$key] = $definition['value'] ?? '';
-                }
-            }
-
-            $placeholderValues = array_merge($placeholderValues, [
-                'sender_name' => $admin->name ?? '',
-                'sender_email' => $admin->email ?? '',
-                'send_date' => now()->format('d/m/Y'),
-            ]);
-
-            if ($template) {
-                $renderedHtml = $template->renderHtml($placeholderValues);
-            } else {
-                $renderedHtml = $documentHtml;
-                foreach ($placeholderValues as $key => $value) {
-                    $renderedHtml = str_replace('{{' . $key . '}}', e($value), $renderedHtml);
-                }
-            }
+            $sourceHtml = $template ? $template->body_html : $documentHtml;
+            $renderedHtml = $this->assembler->assemble(
+                html: $sourceHtml,
+                stage: RenderStage::Final,
+                placeholders: $placeholderValues,
+            );
         }
 
         $signingRequest = SigningRequest::create([
@@ -671,15 +523,15 @@ class DocumentSigningService
             'token' => Str::random(64),
             'status' => 'delivered',
             'sent_by' => $admin->id,
-            'document_html' => $renderedHtml ?? '',
-            'document_hash' => hash('sha256', $renderedHtml ?? ''),
+            'document_html' => $renderedHtml,
+            'document_hash' => hash('sha256', $renderedHtml),
             'recipient_name' => $recipientName,
             'recipient_email' => $recipientEmail,
             'custom_fields' => ! empty($customFields) ? $customFields : null,
             'expires_at' => null,
         ]);
 
-        // Attach uploaded file before sending notification so it's available
+        // Attach uploaded file before sending notification
         if ($uploadedFilePath && file_exists($uploadedFilePath)) {
             $signingRequest->addMedia($uploadedFilePath)
                 ->preservingOriginal()
@@ -721,10 +573,8 @@ class DocumentSigningService
 
     public function resend(SigningRequest $signingRequest, User $admin): SigningRequest
     {
-        // Cancel the old request
         $this->cancel($signingRequest, $admin);
 
-        // Create a new one with the same parameters (works for both template and one-off)
         $template = $signingRequest->documentTemplate;
 
         return $this->createAndSend(
@@ -741,5 +591,96 @@ class DocumentSigningService
             documentTitle: $template ? null : $signingRequest->document_title,
             senderPosition: $signingRequest->sender_position,
         );
+    }
+
+    // ─── Private helpers ────────────────────────────────────────
+
+    /**
+     * Build the full placeholder values array from all sources.
+     */
+    private function buildPlaceholderValues(
+        ?DocumentTemplate $template,
+        array $customFields,
+        string $recipientName,
+        ?string $recipientEmail,
+        User $sender,
+        ?Model $signable = null,
+        ?string $senderFullName = null,
+        ?string $senderPosition = null,
+    ): array {
+        // Format date-type custom fields from YYYY-MM-DD to DD/MM/YYYY
+        if ($template) {
+            foreach ($template->placeholders ?? [] as $placeholder) {
+                $key = $placeholder['key'];
+                $type = $placeholder['type'] ?? 'text';
+                if ($type === 'date' && ! empty($customFields[$key]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $customFields[$key])) {
+                    $customFields[$key] = \Carbon\Carbon::parse($customFields[$key])->format('d/m/Y');
+                }
+            }
+        }
+
+        $placeholderValues = array_merge($customFields, [
+            'recipient_name' => $recipientName,
+            'recipient_email' => $recipientEmail ?? '',
+        ]);
+
+        // Auto-resolve applicant fields for employment applications
+        if ($signable instanceof \App\Models\EmploymentApplication) {
+            $placeholderValues = array_merge($placeholderValues, [
+                'applicant_first_name' => $signable->first_name ?? '',
+                'applicant_surname' => $signable->surname ?? '',
+                'applicant_full_name' => $signable->full_name ?? '',
+                'applicant_email' => $signable->email ?? '',
+                'applicant_phone' => $signable->phone ?? '',
+                'applicant_suburb' => $signable->suburb ?? '',
+                'applicant_date_of_birth' => $signable->date_of_birth?->format('d/m/Y') ?? '',
+                'applicant_referred_by' => $signable->referred_by ?? '',
+                'applicant_occupation' => $signable->occupation ?? '',
+                'applicant_apprentice_year' => $signable->apprentice_year ? (string) $signable->apprentice_year : '',
+                'applicant_trade_qualified' => $signable->trade_qualified ? 'Yes' : 'No',
+                'applicant_preferred_project_site' => $signable->preferred_project_site ?? '',
+                'applicant_status' => $signable->status ?? '',
+            ]);
+        }
+
+        // Model-declared placeholders (ProvidesSigningPlaceholders contract)
+        if ($signable instanceof ProvidesSigningPlaceholders) {
+            foreach ($signable->signingPlaceholders() as $key => $definition) {
+                $placeholderValues[$key] = $definition['value'] ?? '';
+            }
+        }
+
+        // Sender fields
+        $placeholderValues = array_merge($placeholderValues, [
+            'sender_name' => $senderFullName ?? $sender->name ?? '',
+            'sender_email' => $sender->email ?? '',
+            'sender_phone' => $sender->phone ?? '',
+            'sender_position' => $senderPosition ?? $sender->position ?? '',
+            'sender_role' => $sender->roles->first()?->name ?? '',
+            'send_date' => now()->format('d/m/Y'),
+        ]);
+
+        return $placeholderValues;
+    }
+
+    /**
+     * Deliver a signing request to its recipient (email or in-person).
+     */
+    private function deliverToRecipient(SigningRequest $signingRequest, ?User $admin = null): void
+    {
+        if ($signingRequest->delivery_method === 'email' && $signingRequest->recipient_email) {
+            Notification::route('mail', $signingRequest->recipient_email)
+                ->notify(new DocumentSigningNotification($signingRequest));
+            $signingRequest->update(['status' => 'sent']);
+            $signingRequest->logEvent('sent', 'system', null, null, [
+                'method' => 'email',
+                'to' => $signingRequest->recipient_email,
+            ]);
+        } else {
+            $signingRequest->update(['status' => 'sent']);
+            $signingRequest->logEvent('sent', $admin ? 'admin' : 'system', $admin?->id, null, [
+                'method' => 'in_person',
+            ]);
+        }
     }
 }

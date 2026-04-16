@@ -12,6 +12,10 @@ use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 
+use App\Contracts\RendersPdf;
+use App\Contracts\StampsPdfOverlay;
+use App\Services\Adapters\BrowsershotPdfRenderer;
+use App\Services\Adapters\FpdiPdfOverlay;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,7 +26,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(RendersPdf::class, BrowsershotPdfRenderer::class);
+        $this->app->bind(StampsPdfOverlay::class, FpdiPdfOverlay::class);
     }
 
     /**

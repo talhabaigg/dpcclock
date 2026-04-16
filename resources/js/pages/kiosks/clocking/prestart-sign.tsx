@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import WeatherWidget from '@/components/weather-widget';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -35,8 +36,7 @@ interface Prestart {
     id: string;
     work_date: string;
     work_date_formatted: string;
-    weather: string | null;
-    weather_impact: string | null;
+    weather: Record<string, unknown> | null;
     activities: { description: string }[] | null;
     safety_concerns: { description: string }[] | null;
     media: MediaItem[];
@@ -74,10 +74,10 @@ export default function PrestartSign() {
 
     const [acceptedActivities, setAcceptedActivities] = useState<boolean[]>(new Array(activityCount).fill(false));
     const [acceptedConcerns, setAcceptedConcerns] = useState<boolean[]>(new Array(safetyConcernCount).fill(false));
-    const [acceptedChecklist, setAcceptedChecklist] = useState<boolean[]>(new Array(DAILY_CHECKLIST.length).fill(false));
+    const [checklistAcknowledged, setChecklistAcknowledged] = useState(false);
 
     const allAccepted =
-        acceptedChecklist.every(Boolean) &&
+        checklistAcknowledged &&
         (totalItems === 0 || (acceptedActivities.every(Boolean) && acceptedConcerns.every(Boolean)));
 
     const toggleActivity = (i: number) => {
@@ -96,13 +96,6 @@ export default function PrestartSign() {
         });
     };
 
-    const toggleChecklist = (i: number) => {
-        setAcceptedChecklist((prev) => {
-            const next = [...prev];
-            next[i] = !next[i];
-            return next;
-        });
-    };
 
     const initPad = useCallback(() => {
         if (!canvasRef.current || padRef.current) return;
@@ -216,12 +209,7 @@ export default function PrestartSign() {
                         <CardTitle className="text-base">Prestart Summary</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
-                        {prestart.weather && (
-                            <div>
-                                <span className="font-medium text-muted-foreground">Weather:</span> {prestart.weather}
-                                {prestart.weather_impact && <span className="ml-2 text-muted-foreground">({prestart.weather_impact})</span>}
-                            </div>
-                        )}
+                        <WeatherWidget weather={prestart.weather as any} />
 
                         {prestart.activities && prestart.activities.length > 0 && (
                             <div>
@@ -255,14 +243,15 @@ export default function PrestartSign() {
                         <CardTitle className="text-base">Daily Checklist</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-2">
+                        <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                             {DAILY_CHECKLIST.map((item, i) => (
-                                <label key={i} className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', acceptedChecklist[i] ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
-                                    <Checkbox checked={acceptedChecklist[i]} onCheckedChange={() => toggleChecklist(i)} className="mt-0.5 h-5 w-5" />
-                                    <span className={cn('flex-1', acceptedChecklist[i] && 'text-emerald-800')}>{item}</span>
-                                </label>
+                                <li key={i}>{item}</li>
                             ))}
-                        </div>
+                        </ul>
+                        <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', checklistAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
+                            <Checkbox checked={checklistAcknowledged} onCheckedChange={() => setChecklistAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
+                            <span className={cn('flex-1 font-medium', checklistAcknowledged && 'text-emerald-800')}>I acknowledge and confirm all of the above</span>
+                        </label>
                     </CardContent>
                 </Card>
 

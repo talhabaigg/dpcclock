@@ -81,6 +81,7 @@ use App\Http\Controllers\EmployeeFileController;
 use App\Http\Controllers\FileComplianceDashboardController;
 use App\Http\Controllers\LocationSdsController;
 use App\Http\Controllers\SafetyDataSheetController;
+use App\Http\Controllers\SilicaRegisterController;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -1249,6 +1250,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ============================================
+    // SILICA REGISTER
+    // ============================================
+    Route::middleware('permission:silica-register.view')->group(function () {
+        Route::get('/silica-register', [SilicaRegisterController::class, 'index'])->name('silica-register.index');
+        Route::post('/silica-register/options', [SilicaRegisterController::class, 'storeOption'])->name('silica-register.options.store')
+            ->middleware('permission:silica-register.configure');
+        Route::put('/silica-register/options/{option}', [SilicaRegisterController::class, 'updateOption'])->name('silica-register.options.update')
+            ->middleware('permission:silica-register.configure');
+        Route::post('/silica-register/options/reorder', [SilicaRegisterController::class, 'reorderOptions'])->name('silica-register.options.reorder')
+            ->middleware('permission:silica-register.configure');
+    });
+
+    // ============================================
     // DAILY PRESTARTS
     // ============================================
     Route::middleware('permission:prestarts.view')->group(function () {
@@ -1289,6 +1303,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:prestarts.edit');
         Route::delete('/toolbox-talks/{toolboxTalk}', [ToolboxTalkController::class, 'destroy'])->name('toolbox-talks.destroy')
             ->middleware('permission:prestarts.delete');
+        Route::post('/toolbox-talks/{toolboxTalk}/duplicate', [ToolboxTalkController::class, 'duplicate'])->name('toolbox-talks.duplicate')
+            ->middleware('permission:prestarts.create');
         Route::post('/toolbox-talks/{toolboxTalk}/lock', [ToolboxTalkController::class, 'lock'])->name('toolbox-talks.lock')
             ->middleware('permission:prestarts.edit');
         Route::post('/toolbox-talks/{toolboxTalk}/unlock', [ToolboxTalkController::class, 'unlock'])->name('toolbox-talks.unlock')

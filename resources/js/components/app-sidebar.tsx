@@ -42,6 +42,7 @@ import {
     Scale,
     ShieldAlert,
     ShieldCheck,
+    Wind,
     ShoppingCart,
     SlidersHorizontal,
     Store,
@@ -281,6 +282,12 @@ const safety = [
                 url: '/sds',
                 icon: FlaskConical,
                 permission: 'sds.view',
+            },
+            {
+                name: 'Silica Register',
+                url: '/silica-register',
+                icon: Wind,
+                permission: 'silica-register.view',
             },
             {
                 name: 'Safety Dashboard',

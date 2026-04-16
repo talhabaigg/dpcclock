@@ -331,6 +331,14 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // SILICA REGISTER
+        // ============================================
+        'Silica Register' => [
+            'silica-register.view' => 'View silica register',
+            'silica-register.configure' => 'Configure silica options (tasks, control measures, respirator types)',
+        ],
+
+        // ============================================
         // CREDIT CARD RECEIPTS
         // ============================================
         'Credit Card Receipts' => [
@@ -443,6 +451,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.create',
             'prestarts.edit',
             'prestarts.delete',
+            // Silica Register
+            'silica-register.view',
+            'silica-register.configure',
         ],
 
         'site-supervisor' => [
@@ -486,6 +497,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.view',
             'prestarts.create',
             'prestarts.edit',
+            // Silica Register
+            'silica-register.view',
         ],
 
         'director' => [

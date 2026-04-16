@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\User;
+use App\Services\WeatherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -91,9 +92,11 @@ class DailyPrestartController extends Controller
     {
         $dailyPrestart->load('media');
 
-        // Clone data with tomorrow's date
+        // Clone data with tomorrow's date, clear stale weather
         $duplicate = $dailyPrestart->replicate(['id', 'created_at', 'updated_at', 'created_by']);
         $duplicate->work_date = now('Australia/Brisbane')->addDay()->format('Y-m-d');
+        $duplicate->weather = null;
+        $duplicate->weather_impact = null;
 
         return Inertia::render('daily-prestarts/form', [
             'prestart' => null,
@@ -109,8 +112,6 @@ class DailyPrestartController extends Controller
             'location_id' => 'required|exists:locations,id',
             'work_date' => 'required|date|unique:daily_prestarts,work_date,NULL,id,location_id,' . $request->location_id,
             'foreman_id' => 'nullable|exists:users,id',
-            'weather' => 'nullable|string',
-            'weather_impact' => 'nullable|string',
             'activities' => 'nullable|array',
             'activities.*.description' => 'required|string',
             'safety_concerns' => 'nullable|array',
@@ -124,6 +125,7 @@ class DailyPrestartController extends Controller
         ]);
 
         $data['created_by'] = auth()->id();
+        $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
         unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file']);
 
         $prestart = DailyPrestart::create($data);
@@ -164,8 +166,6 @@ class DailyPrestartController extends Controller
             'location_id' => 'required|exists:locations,id',
             'work_date' => 'required|date|unique:daily_prestarts,work_date,' . $dailyPrestart->id . ',id,location_id,' . $request->location_id,
             'foreman_id' => 'nullable|exists:users,id',
-            'weather' => 'nullable|string',
-            'weather_impact' => 'nullable|string',
             'activities' => 'nullable|array',
             'activities.*.description' => 'required|string',
             'safety_concerns' => 'nullable|array',
@@ -179,6 +179,13 @@ class DailyPrestartController extends Controller
             'removed_media_ids' => 'nullable|array',
             'removed_media_ids.*' => 'integer',
         ]);
+
+        // Re-fetch weather if location or date changed
+        $locationChanged = (int) $data['location_id'] !== $dailyPrestart->location_id;
+        $dateChanged = $data['work_date'] !== $dailyPrestart->work_date;
+        if ($locationChanged || $dateChanged || empty($dailyPrestart->weather)) {
+            $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
+        }
 
         unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file'], $data['removed_media_ids']);
 
@@ -380,6 +387,20 @@ class DailyPrestartController extends Controller
         return redirect()
             ->route('kiosks.show', $kiosk->id)
             ->with('success', 'Prestart signed & clocked in at ' . $clock->clock_in->format('g:i A'));
+    }
+
+    private function fetchWeatherForLocation(int $locationId): ?array
+    {
+        $location = Location::find($locationId);
+
+        if (! $location || ! $location->latitude || ! $location->longitude) {
+            return null;
+        }
+
+        return app(WeatherService::class)->getWeather(
+            (float) $location->latitude,
+            (float) $location->longitude
+        );
     }
 
     private function handleMediaUploads(Request $request, DailyPrestart $prestart): void

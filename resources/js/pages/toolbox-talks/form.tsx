@@ -114,9 +114,11 @@ export default function ToolboxTalkForm({ talk, locations, users, subjectOptions
             });
         });
 
-        (['topic_files', 'action_point_files', 'injury_files', 'near_miss_files', 'floor_comment_files'] as FileField[]).forEach((fileKey) => {
-            data[fileKey].forEach((f, i) => formData.append(`${fileKey}[${i}]`, f));
-        });
+        if (isEdit) {
+            (['topic_files', 'action_point_files', 'injury_files', 'near_miss_files', 'floor_comment_files'] as FileField[]).forEach((fileKey) => {
+                data[fileKey].forEach((f, i) => formData.append(`${fileKey}[${i}]`, f));
+            });
+        }
 
         if (isEdit) {
             removedMediaIds.forEach((id, i) => formData.append(`removed_media_ids[${i}]`, String(id)));
@@ -162,28 +164,32 @@ export default function ToolboxTalkForm({ talk, locations, users, subjectOptions
                     </Button>
                 </div>
 
-                {media.length > 0 && (
-                    <div className="space-y-1">
-                        {media.map((m) => (
-                            <div key={m.id} className="flex items-center gap-2 rounded border px-3 py-1 text-sm">
-                                <a href={m.original_url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 hover:underline">{m.file_name}</a>
-                                <button type="button" onClick={() => removeMedia(m.id)}><X className="h-4 w-4 text-destructive" /></button>
+                {isEdit && (
+                    <>
+                        {media.length > 0 && (
+                            <div className="space-y-1">
+                                {media.map((m) => (
+                                    <div key={m.id} className="flex items-center gap-2 rounded border px-3 py-1 text-sm">
+                                        <a href={m.original_url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 hover:underline">{m.file_name}</a>
+                                        <button type="button" onClick={() => removeMedia(m.id)}><X className="h-4 w-4 text-destructive" /></button>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                )}
-                <Dropzone onDrop={(files) => setData(fileKey, [...data[fileKey], ...files])} maxFiles={10} multiple />
-                {data[fileKey].length > 0 && (
-                    <div className="space-y-1">
-                        {data[fileKey].map((f, i) => (
-                            <div key={i} className="flex items-center gap-2 text-sm">
-                                <span className="flex-1">{f.name}</span>
-                                <button type="button" onClick={() => setData(fileKey, data[fileKey].filter((_, idx) => idx !== i))}>
-                                    <X className="h-4 w-4 text-destructive" />
-                                </button>
+                        )}
+                        <Dropzone onDrop={(files) => setData(fileKey, [...data[fileKey], ...files])} maxFiles={10} multiple />
+                        {data[fileKey].length > 0 && (
+                            <div className="space-y-1">
+                                {data[fileKey].map((f, i) => (
+                                    <div key={i} className="flex items-center gap-2 text-sm">
+                                        <span className="flex-1">{f.name}</span>
+                                        <button type="button" onClick={() => setData(fileKey, data[fileKey].filter((_, idx) => idx !== i))}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        )}
+                    </>
                 )}
             </div>
         );

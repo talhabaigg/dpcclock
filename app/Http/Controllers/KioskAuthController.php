@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\SilicaOptionType;
 use App\Models\Clock;
 use App\Models\DailyPrestart;
 use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
+use App\Models\SilicaOption;
 use App\Services\KioskService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -57,6 +59,12 @@ class KioskAuthController extends Controller
         if ($clockedIn) {
             $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
 
+            $silicaOptions = [
+                'tasks' => SilicaOption::active()->ofType(SilicaOptionType::Task)->orderBy('sort_order')->pluck('label'),
+                'control_measures' => SilicaOption::active()->ofType(SilicaOptionType::ControlMeasure)->orderBy('sort_order')->pluck('label'),
+                'respirators' => SilicaOption::active()->ofType(SilicaOptionType::Respirator)->orderBy('sort_order')->pluck('label'),
+            ];
+
             return Inertia::render('kiosks/clocking/out', [
                 'kioskId' => $kioskId,
                 'employeeId' => $employeeId,
@@ -66,6 +74,7 @@ class KioskAuthController extends Controller
                 'locations' => $locations,
                 'clockedIn' => $clockedIn,
                 'adminMode' => $adminMode,
+                'silicaOptions' => $silicaOptions,
             ]);
         }
 

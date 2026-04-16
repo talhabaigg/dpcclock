@@ -32,6 +32,7 @@ class DailyPrestart extends Model implements HasMedia
     protected $casts = [
         'activities' => 'array',
         'safety_concerns' => 'array',
+        'weather' => 'array',
         'is_active' => 'boolean',
         'locked_at' => 'datetime',
     ];

@@ -11,7 +11,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Lock, LockOpen, MoreHorizontal, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Copy, Lock, LockOpen, MoreHorizontal, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Toolbox Talks', href: '/toolbox-talks' }];
@@ -194,6 +194,13 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                                 {can('prestarts.edit') && !t.is_locked && (
                                                     <DropdownMenuItem asChild>
                                                         <Link href={`/toolbox-talks/${t.id}/edit`}>Edit</Link>
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {can('prestarts.create') && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => router.post(`/toolbox-talks/${t.id}/duplicate`, {}, { preserveScroll: true })}
+                                                    >
+                                                        <Copy className="mr-2 h-4 w-4" /> Duplicate
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuItem asChild>

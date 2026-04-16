@@ -3,9 +3,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import WeatherWidget from '@/components/weather-widget';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Download, Pencil } from 'lucide-react';
+import { CheckCircle2, Download, Pencil } from 'lucide-react';
 
 interface MediaItem {
     id: number;
@@ -24,11 +25,12 @@ interface Signature {
 interface Prestart {
     id: string;
     work_date: string;
-    weather: string | null;
-    weather_impact: string | null;
+    work_date_formatted: string;
+    weather: Record<string, unknown> | null;
     activities: { description: string }[] | null;
     safety_concerns: { description: string }[] | null;
     is_active: boolean;
+    is_locked: boolean;
     location: { id: number; name: string } | null;
     foreman: { id: number; name: string } | null;
     created_by: { id: number; name: string } | null;
@@ -40,6 +42,15 @@ interface Props {
     prestart: Prestart;
 }
 
+const DAILY_CHECKLIST = [
+    "Today's trade specific works discussed and understood",
+    'All SWMS reviewed and understood',
+    'Work permits in place as required and conditions understood',
+    'Tools and equipment in working order with Test & Tag up to date',
+    'Required PPE available and fit for purpose',
+    'Current Licences & Qualifications are relevant to work tasks',
+];
+
 export default function DailyPrestartShow({ prestart }: Props) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
@@ -47,7 +58,8 @@ export default function DailyPrestartShow({ prestart }: Props) {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Daily Prestarts', href: '/daily-prestarts' },
-        { title: `${prestart.work_date} - ${prestart.location?.name ?? ''}`, href: '#' },
+        { title: prestart.location?.name ?? 'Prestart', href: '/daily-prestarts' },
+        { title: prestart.work_date_formatted ?? prestart.work_date, href: '#' },
     ];
 
     const activityMedia = prestart.media.filter((m) => m.collection_name === 'activity_files');
@@ -56,65 +68,39 @@ export default function DailyPrestartShow({ prestart }: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Prestart - ${prestart.work_date}`} />
+            <Head title={`Prestart - ${prestart.location?.name ?? ''} ${prestart.work_date_formatted ?? prestart.work_date}`} />
             <div className="mx-auto w-full max-w-4xl space-y-6 p-4">
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Daily Prestart - {prestart.work_date}</h1>
-                    <div className="flex gap-2">
-                        {can('prestarts.edit') && (
-                            <Button variant="outline" asChild>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h1 className="text-lg font-semibold">Daily Prestart</h1>
+                        <p className="text-sm text-muted-foreground">
+                            {prestart.location?.name ?? '-'} &middot; {prestart.work_date_formatted ?? prestart.work_date}
+                            {prestart.foreman && <> &middot; {prestart.foreman.name}</>}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {prestart.is_locked && <Badge variant="outline">Locked</Badge>}
+                        <Badge variant={prestart.is_active ? 'default' : 'secondary'}>{prestart.is_active ? 'Active' : 'Inactive'}</Badge>
+                        {can('prestarts.edit') && !prestart.is_locked && (
+                            <Button variant="outline" size="sm" asChild>
                                 <Link href={`/daily-prestarts/${prestart.id}/edit`}>
-                                    <Pencil className="mr-2 h-4 w-4" />
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
                                     Edit
                                 </Link>
                             </Button>
                         )}
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <a href={`/daily-prestarts/${prestart.id}/sign-sheet`} target="_blank" rel="noreferrer">
-                                <Download className="mr-2 h-4 w-4" />
-                                Download PDF
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                PDF
                             </a>
                         </Button>
                     </div>
                 </div>
 
-                {/* Details */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Project</dt>
-                                <dd>{prestart.location?.name ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Foreman</dt>
-                                <dd>{prestart.foreman?.name ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Weather</dt>
-                                <dd>{prestart.weather ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Weather Impact</dt>
-                                <dd>{prestart.weather_impact ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
-                                <dd>
-                                    <Badge variant={prestart.is_active ? 'default' : 'secondary'}>{prestart.is_active ? 'Active' : 'Inactive'}</Badge>
-                                </dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Created By</dt>
-                                <dd>{prestart.created_by?.name ?? '-'}</dd>
-                            </div>
-                        </dl>
-                    </CardContent>
-                </Card>
+                {/* Weather */}
+                <WeatherWidget weather={prestart.weather as any} />
 
                 {/* Activities */}
                 {prestart.activities && prestart.activities.length > 0 && (
@@ -143,6 +129,23 @@ export default function DailyPrestartShow({ prestart }: Props) {
                         </CardContent>
                     </Card>
                 )}
+
+                {/* Daily Checklist */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Daily Checklist</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ol className="space-y-2">
+                            {DAILY_CHECKLIST.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm">
+                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                    <span>{item}</span>
+                                </li>
+                            ))}
+                        </ol>
+                    </CardContent>
+                </Card>
 
                 {/* Safety Concerns */}
                 {prestart.safety_concerns && prestart.safety_concerns.length > 0 && (

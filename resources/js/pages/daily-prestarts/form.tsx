@@ -3,13 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchSelect } from '@/components/search-select';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Plus, Trash2, X } from 'lucide-react';
-import Dropzone from 'shadcn-dropzone';
-import { useState } from 'react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { GripVertical, Plus, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Location {
     id: number;
@@ -21,23 +22,14 @@ interface UserOption {
     name: string;
 }
 
-interface MediaItem {
-    id: number;
-    file_name: string;
-    original_url: string;
-    collection_name: string;
-}
-
 interface Prestart {
     id: string;
     location_id: number;
     work_date: string;
     foreman_id: number | null;
-    weather: string | null;
-    weather_impact: string | null;
+    weather: Record<string, unknown> | null;
     activities: { description: string }[] | null;
     safety_concerns: { description: string }[] | null;
-    media: MediaItem[];
 }
 
 interface Props {
@@ -45,6 +37,31 @@ interface Props {
     duplicateFrom?: Prestart | null;
     locations: Location[];
     users: UserOption[];
+}
+
+function SortableItem({ id, description, onRemove }: { id: string; description: string; onRemove: () => void }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <li
+            ref={setNodeRef}
+            style={style}
+            className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${isDragging ? 'z-50 border-primary/40 bg-background shadow-lg' : ''}`}
+        >
+            <button type="button" className="cursor-grab touch-none text-muted-foreground" {...attributes} {...listeners}>
+                <GripVertical className="h-4 w-4" />
+            </button>
+            <span className="flex-1">{description}</span>
+            <button type="button" onClick={onRemove}>
+                <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+            </button>
+        </li>
+    );
 }
 
 export default function DailyPrestartForm({ prestart, duplicateFrom, locations, users }: Props) {
@@ -56,48 +73,77 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
         { title: isEdit ? 'Edit Prestart' : duplicateFrom ? 'Duplicate Prestart' : 'New Prestart', href: '#' },
     ];
 
-    const { data, setData, processing, errors } = useForm({
+    const { props } = usePage<{ errors: Record<string, string> }>();
+    const errors = props.errors ?? {};
+    const { data, setData, processing } = useForm({
         location_id: source?.location_id ? String(source.location_id) : '',
         work_date: source?.work_date ?? new Date().toISOString().slice(0, 10),
         foreman_id: source?.foreman_id ? String(source.foreman_id) : '',
-        weather: source?.weather ?? '',
-        weather_impact: source?.weather_impact ?? '',
         activities: source?.activities ?? ([] as { description: string }[]),
         safety_concerns: source?.safety_concerns ?? ([] as { description: string }[]),
-        activity_files: [] as File[],
-        safety_concern_files: [] as File[],
-        builders_prestart_file: [] as File[],
-        removed_media_ids: [] as number[],
     });
 
-    // Existing media grouped by collection
-    const existingMedia = prestart?.media ?? [];
-    const [removedMediaIds, setRemovedMediaIds] = useState<number[]>([]);
+    const nextId = useRef(
+        (source?.activities?.length ?? 0) + (source?.safety_concerns?.length ?? 0) + 1,
+    );
+    const getId = () => `item-${nextId.current++}`;
 
-    const activityMedia = existingMedia.filter((m) => m.collection_name === 'activity_files' && !removedMediaIds.includes(m.id));
-    const safetyConcernMedia = existingMedia.filter((m) => m.collection_name === 'safety_concern_files' && !removedMediaIds.includes(m.id));
-    const buildersPrestartMedia = existingMedia.filter((m) => m.collection_name === 'builders_prestart_file' && !removedMediaIds.includes(m.id));
+    const [activityInput, setActivityInput] = useState('');
+    const [safetyConcernInput, setSafetyConcernInput] = useState('');
+    const [activityKeys] = useState(() => (source?.activities ?? []).map(() => getId()));
+    const [concernKeys] = useState(() => (source?.safety_concerns ?? []).map(() => getId()));
 
-    const removeMedia = (id: number) => {
-        setRemovedMediaIds((prev) => [...prev, id]);
-        setData('removed_media_ids', [...removedMediaIds, id]);
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const addActivity = () => {
+        const trimmed = activityInput.trim();
+        if (!trimmed) return;
+        setData('activities', [...data.activities, { description: trimmed }]);
+        activityKeys.push(getId());
+        setActivityInput('');
     };
 
-    // Dynamic list helpers
-    const addActivity = () => setData('activities', [...data.activities, { description: '' }]);
-    const removeActivity = (i: number) => setData('activities', data.activities.filter((_, idx) => idx !== i));
-    const updateActivity = (i: number, value: string) => {
-        const updated = [...data.activities];
-        updated[i] = { description: value };
-        setData('activities', updated);
+    const addSafetyConcern = () => {
+        const trimmed = safetyConcernInput.trim();
+        if (!trimmed) return;
+        setData('safety_concerns', [...data.safety_concerns, { description: trimmed }]);
+        concernKeys.push(getId());
+        setSafetyConcernInput('');
     };
 
-    const addSafetyConcern = () => setData('safety_concerns', [...data.safety_concerns, { description: '' }]);
-    const removeSafetyConcern = (i: number) => setData('safety_concerns', data.safety_concerns.filter((_, idx) => idx !== i));
-    const updateSafetyConcern = (i: number, value: string) => {
-        const updated = [...data.safety_concerns];
-        updated[i] = { description: value };
-        setData('safety_concerns', updated);
+    const removeActivity = (i: number) => {
+        setData('activities', data.activities.filter((_, idx) => idx !== i));
+        activityKeys.splice(i, 1);
+    };
+
+    const removeConcern = (i: number) => {
+        setData('safety_concerns', data.safety_concerns.filter((_, idx) => idx !== i));
+        concernKeys.splice(i, 1);
+    };
+
+    const handleActivityDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = activityKeys.indexOf(String(active.id));
+        const newIndex = activityKeys.indexOf(String(over.id));
+        setData('activities', arrayMove(data.activities, oldIndex, newIndex));
+        const moved = arrayMove(activityKeys, oldIndex, newIndex);
+        activityKeys.length = 0;
+        activityKeys.push(...moved);
+    };
+
+    const handleConcernDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = concernKeys.indexOf(String(active.id));
+        const newIndex = concernKeys.indexOf(String(over.id));
+        setData('safety_concerns', arrayMove(data.safety_concerns, oldIndex, newIndex));
+        const moved = arrayMove(concernKeys, oldIndex, newIndex);
+        concernKeys.length = 0;
+        concernKeys.push(...moved);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -107,9 +153,6 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
         formData.append('location_id', data.location_id);
         formData.append('work_date', data.work_date);
         if (data.foreman_id) formData.append('foreman_id', data.foreman_id);
-        if (data.weather) formData.append('weather', data.weather);
-        if (data.weather_impact) formData.append('weather_impact', data.weather_impact);
-
         data.activities.forEach((a, i) => {
             formData.append(`activities[${i}][description]`, a.description);
         });
@@ -117,16 +160,19 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
             formData.append(`safety_concerns[${i}][description]`, s.description);
         });
 
-        data.activity_files.forEach((f, i) => formData.append(`activity_files[${i}]`, f));
-        data.safety_concern_files.forEach((f, i) => formData.append(`safety_concern_files[${i}]`, f));
-        data.builders_prestart_file.forEach((f, i) => formData.append(`builders_prestart_file[${i}]`, f));
-
         if (isEdit) {
-            removedMediaIds.forEach((id, i) => formData.append(`removed_media_ids[${i}]`, String(id)));
             formData.append('_method', 'PUT');
-            router.post(`/daily-prestarts/${prestart.id}`, formData, { forceFormData: true });
+            router.post(`/daily-prestarts/${prestart.id}`, formData, {
+                forceFormData: true,
+                preserveState: true,
+                preserveScroll: true,
+            });
         } else {
-            router.post('/daily-prestarts', formData, { forceFormData: true });
+            router.post('/daily-prestarts', formData, {
+                forceFormData: true,
+                preserveState: true,
+                preserveScroll: true,
+            });
         }
     };
 
@@ -172,14 +218,8 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
 
                     {/* Weather */}
                     <div>
-                        <Label>Weather</Label>
-                        <Input value={data.weather} onChange={(e) => setData('weather', e.target.value)} placeholder="e.g. Sunny, 28C" />
-                    </div>
-
-                    {/* Weather Impact */}
-                    <div>
-                        <Label>Weather Impact</Label>
-                        <Input value={data.weather_impact} onChange={(e) => setData('weather_impact', e.target.value)} placeholder="Impact on work..." />
+                        <Label className="mb-2 block">Weather</Label>
+                        <p className="text-xs text-muted-foreground mb-2">Weather will be fetched automatically when the prestart is saved.</p>
                     </div>
 
                     <Separator />
@@ -192,62 +232,34 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                                 Program, high risk activities, inspections, exclusion zones, work permits, deliveries, etc.
                             </p>
                         </div>
-                        {data.activities.map((activity, i) => (
-                            <div key={i} className="flex items-start gap-2">
-                                <Textarea
-                                    value={activity.description}
-                                    onChange={(e) => updateActivity(i, e.target.value)}
-                                    placeholder="Describe activity..."
-                                    rows={2}
-                                    className="flex-1"
-                                />
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeActivity(i)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
-                        ))}
-                        <Button type="button" variant="outline" size="sm" onClick={addActivity}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Activity
-                        </Button>
-
-                        <div>
-                            <Label>Activity Files</Label>
-                            {activityMedia.length > 0 && (
-                                <div className="mb-2 space-y-1">
-                                    {activityMedia.map((m) => (
-                                        <div key={m.id} className="flex items-center gap-2 rounded border px-3 py-1 text-sm">
-                                            <a href={m.original_url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 hover:underline">
-                                                {m.file_name}
-                                            </a>
-                                            <button type="button" onClick={() => removeMedia(m.id)}>
-                                                <X className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <Dropzone
-                                onDrop={(files) => setData('activity_files', [...data.activity_files, ...files])}
-                                maxFiles={10}
-                                multiple
+                        <div className="flex gap-2">
+                            <Input
+                                value={activityInput}
+                                onChange={(e) => setActivityInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addActivity(); } }}
+                                placeholder="Describe activity..."
+                                className="flex-1"
                             />
-                            {data.activity_files.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                    {data.activity_files.map((f, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-sm">
-                                            <span className="flex-1">{f.name}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setData('activity_files', data.activity_files.filter((_, idx) => idx !== i))}
-                                            >
-                                                <X className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <Button type="button" variant="outline" size="icon" onClick={addActivity}>
+                                <Plus className="h-4 w-4" />
+                            </Button>
                         </div>
+                        {data.activities.length > 0 && (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleActivityDragEnd}>
+                                <SortableContext items={activityKeys} strategy={verticalListSortingStrategy}>
+                                    <ul className="space-y-1">
+                                        {data.activities.map((activity, i) => (
+                                            <SortableItem
+                                                key={activityKeys[i]}
+                                                id={activityKeys[i]}
+                                                description={activity.description}
+                                                onRemove={() => removeActivity(i)}
+                                            />
+                                        ))}
+                                    </ul>
+                                </SortableContext>
+                            </DndContext>
+                        )}
                     </div>
 
                     <Separator />
@@ -258,109 +270,33 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                             <h3 className="text-base font-semibold">Safety Concerns / Incidents</h3>
                             <p className="text-sm text-muted-foreground">Items to be raised from the previous day.</p>
                         </div>
-                        {data.safety_concerns.map((concern, i) => (
-                            <div key={i} className="flex items-start gap-2">
-                                <Textarea
-                                    value={concern.description}
-                                    onChange={(e) => updateSafetyConcern(i, e.target.value)}
-                                    placeholder="Describe safety concern..."
-                                    rows={2}
-                                    className="flex-1"
-                                />
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeSafetyConcern(i)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
-                        ))}
-                        <Button type="button" variant="outline" size="sm" onClick={addSafetyConcern}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Safety Concern
-                        </Button>
-
-                        <div>
-                            <Label>Safety Concern Files</Label>
-                            {safetyConcernMedia.length > 0 && (
-                                <div className="mb-2 space-y-1">
-                                    {safetyConcernMedia.map((m) => (
-                                        <div key={m.id} className="flex items-center gap-2 rounded border px-3 py-1 text-sm">
-                                            <a href={m.original_url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 hover:underline">
-                                                {m.file_name}
-                                            </a>
-                                            <button type="button" onClick={() => removeMedia(m.id)}>
-                                                <X className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <Dropzone
-                                onDrop={(files) => setData('safety_concern_files', [...data.safety_concern_files, ...files])}
-                                maxFiles={10}
-                                multiple
+                        <div className="flex gap-2">
+                            <Input
+                                value={safetyConcernInput}
+                                onChange={(e) => setSafetyConcernInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSafetyConcern(); } }}
+                                placeholder="Describe safety concern..."
+                                className="flex-1"
                             />
-                            {data.safety_concern_files.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                    {data.safety_concern_files.map((f, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-sm">
-                                            <span className="flex-1">{f.name}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setData('safety_concern_files', data.safety_concern_files.filter((_, idx) => idx !== i))
-                                                }
-                                            >
-                                                <X className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <Button type="button" variant="outline" size="icon" onClick={addSafetyConcern}>
+                                <Plus className="h-4 w-4" />
+                            </Button>
                         </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Builders Daily Prestart */}
-                    <div className="space-y-3">
-                        <div>
-                            <h3 className="text-base font-semibold">Builders Daily Pre-Start</h3>
-                            <p className="text-sm text-muted-foreground">Upload your builders daily prestart file here.</p>
-                        </div>
-                        {buildersPrestartMedia.length > 0 && (
-                            <div className="space-y-1">
-                                {buildersPrestartMedia.map((m) => (
-                                    <div key={m.id} className="flex items-center gap-2 rounded border px-3 py-1 text-sm">
-                                        <a href={m.original_url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 hover:underline">
-                                            {m.file_name}
-                                        </a>
-                                        <button type="button" onClick={() => removeMedia(m.id)}>
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        <Dropzone
-                            onDrop={(files) => setData('builders_prestart_file', [...data.builders_prestart_file, ...files])}
-                            maxFiles={5}
-                            multiple
-                        />
-                        {data.builders_prestart_file.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                                {data.builders_prestart_file.map((f, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-sm">
-                                        <span className="flex-1">{f.name}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setData('builders_prestart_file', data.builders_prestart_file.filter((_, idx) => idx !== i))
-                                            }
-                                        >
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                        {data.safety_concerns.length > 0 && (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleConcernDragEnd}>
+                                <SortableContext items={concernKeys} strategy={verticalListSortingStrategy}>
+                                    <ul className="space-y-1">
+                                        {data.safety_concerns.map((concern, i) => (
+                                            <SortableItem
+                                                key={concernKeys[i]}
+                                                id={concernKeys[i]}
+                                                description={concern.description}
+                                                onRemove={() => removeConcern(i)}
+                                            />
+                                        ))}
+                                    </ul>
+                                </SortableContext>
+                            </DndContext>
                         )}
                     </div>
 

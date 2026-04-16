@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\RenderStage;
 use App\Models\DocumentTemplate;
 use App\Models\FormTemplate;
 use App\Models\SigningRequest;
+use App\Services\DocumentHtmlAssembler;
 use App\Services\DocumentSigningService;
 use App\Services\FormService;
 use Illuminate\Http\Request;
@@ -15,6 +17,7 @@ class SigningRequestController extends Controller
     public function __construct(
         private DocumentSigningService $signingService,
         private FormService $formService,
+        private DocumentHtmlAssembler $assembler,
     ) {}
 
     // ─── Admin actions (authenticated) ───────────────────────
@@ -1188,15 +1191,7 @@ class SigningRequestController extends Controller
 
         $this->signingService->markOpened($signingRequest, $request);
 
-        // Replace display-time placeholders for the signing page view
-        $displayHtml = str_replace(
-            ['{{signature_box}}', '{{date_signed}}'],
-            [
-                '<div class="signature-placeholder">Your signature will appear here after signing below</div>',
-                '<em style="color: #94a3b8;">Will be filled upon signing</em>',
-            ],
-            $signingRequest->document_html
-        );
+        $displayHtml = $this->assembler->assemble($signingRequest->document_html, RenderStage::Preview);
 
         // Find other pending items for the same formable + recipient (for step counter)
         $pendingDocs = collect();

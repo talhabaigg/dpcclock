@@ -141,13 +141,32 @@
             <div class="detail-label">Foreman</div>
             <div class="detail-value">{{ $foreman->name ?? '—' }}</div>
         </div>
-        <div class="detail-item">
-            <div class="detail-label">Weather</div>
-            <div class="detail-value">{{ $prestart->weather ?? '—' }}</div>
-        </div>
         <div class="detail-item" style="width: 100%">
-            <div class="detail-label">Weather Impact</div>
-            <div class="detail-value">{{ $prestart->weather_impact ?? '—' }}</div>
+            <div class="detail-label">Weather</div>
+            <div class="detail-value">
+                @php
+                    $weather = $prestart->weather;
+                @endphp
+                @if(is_array($weather) && (!empty($weather['current']) || !empty($weather['forecast'])))
+                    @if(!empty($weather['current']))
+                        @if(isset($weather['current']['temp'])){{ round($weather['current']['temp']) }}°C @endif
+                        @if(!empty($weather['current']['condition']))— {{ $weather['current']['condition'] }} @endif
+                        @if(isset($weather['current']['humidity']))| Humidity {{ $weather['current']['humidity'] }}% @endif
+                        @if(isset($weather['current']['wind_speed']))| Wind {{ round($weather['current']['wind_speed']) }} km/h @endif
+                    @endif
+                    @if(!empty($weather['forecast']))
+                        @if(!empty($weather['current']))&nbsp;•&nbsp;@endif
+                        Forecast:
+                        @if(isset($weather['forecast']['high'], $weather['forecast']['low'])){{ round($weather['forecast']['high']) }}°/{{ round($weather['forecast']['low']) }}° @endif
+                        @if(isset($weather['forecast']['rain_chance']))| {{ $weather['forecast']['rain_chance'] }}% rain @endif
+                    @endif
+                @elseif(is_string($weather) && !empty($weather))
+                    {{-- Legacy free-text weather --}}
+                    {{ $weather }}
+                @else
+                    —
+                @endif
+            </div>
         </div>
     </div>
 

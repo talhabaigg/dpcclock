@@ -24,12 +24,21 @@ class Location extends Model
         'variation_number_start',
         'variation_next_number',
         'project_group_id',
+        'address_line1',
+        'city',
+        'state_code',
+        'country_code',
+        'zip_code',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [
         'dashboard_settings' => 'array',
         'working_days' => 'array',
         'closed_at' => 'datetime',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
     ];
 
     /** JS day-of-week indices (0=Sun..6=Sat) considered working. Defaults to Mon-Fri. */
