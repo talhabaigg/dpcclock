@@ -73,6 +73,18 @@ interface TiptapEditorProps {
 
 const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
     {
+        label: 'Employee',
+        fields: [
+            { key: 'employee.first_name', label: 'First Name' },
+            { key: 'employee.last_name', label: 'Last Name' },
+            { key: 'employee.full_name', label: 'Full Name' },
+            { key: 'employee.email', label: 'Email' },
+            { key: 'employee.employment_type', label: 'Employment Type' },
+            { key: 'employee.employing_entity', label: 'Employing Entity' },
+            { key: 'employee.start_date', label: 'Start Date' },
+        ],
+    },
+    {
         label: 'Applicant',
         fields: [
             { key: 'applicant_first_name', label: 'First Name' },

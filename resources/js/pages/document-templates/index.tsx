@@ -30,6 +30,7 @@ interface DocumentTemplate {
     name: string;
     category: string | null;
     is_active: boolean;
+    visibility: string;
     created_at: string;
     updated_at: string;
 }
@@ -197,6 +198,11 @@ export default function DocumentTemplatesIndex({ templates }: { templates: Docum
                                             <Badge variant={template.is_active ? 'default' : 'outline'} className="text-xs">
                                                 {template.is_active ? 'Active' : 'Inactive'}
                                             </Badge>
+                                            {template.visibility !== 'all' && (
+                                                <Badge variant="outline" className="text-xs capitalize">
+                                                    {template.visibility.replace('_', ' ')}
+                                                </Badge>
+                                            )}
                                             <span className="ml-auto text-xs text-muted-foreground">
                                                 {new Date(template.updated_at).toLocaleDateString('en-AU')}
                                             </span>

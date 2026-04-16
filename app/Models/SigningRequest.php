@@ -20,6 +20,7 @@ class SigningRequest extends Model implements HasMedia
         'signable_type',
         'signable_id',
         'delivery_method',
+        'requires_signature',
         'token',
         'status',
         'sent_by',
@@ -55,6 +56,7 @@ class SigningRequest extends Model implements HasMedia
             'viewed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'internal_signed_at' => 'datetime',
+            'requires_signature' => 'boolean',
         ];
     }
 
@@ -65,6 +67,7 @@ class SigningRequest extends Model implements HasMedia
         $this->addMediaCollection('preview_document')->singleFile();
         $this->addMediaCollection('signed_document')->singleFile();
         $this->addMediaCollection('internal_signature')->singleFile();
+        $this->addMediaCollection('uploaded_document')->singleFile();
     }
 
     public function documentTemplate(): BelongsTo

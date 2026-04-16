@@ -9,6 +9,7 @@ use App\Models\SigningRequest;
 use App\Models\User;
 use App\Notifications\DocumentSignedNotification;
 use App\Notifications\DocumentSigningNotification;
+use App\Notifications\InfoDocumentNotification;
 use App\Notifications\InternalSignatureRequestedNotification;
 use App\Notifications\SignedDocumentNotification;
 use Illuminate\Database\Eloquent\Model;
@@ -612,6 +613,96 @@ class DocumentSigningService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Send a document for information only — no signing required.
+     * The document (rendered PDF or uploaded file) is emailed as an attachment.
+     */
+    public function createAndDeliver(
+        User $admin,
+        string $recipientName,
+        ?string $recipientEmail,
+        ?Model $signable = null,
+        ?DocumentTemplate $template = null,
+        ?string $documentHtml = null,
+        ?string $documentTitle = null,
+        array $customFields = [],
+        ?string $uploadedFilePath = null,
+    ): SigningRequest {
+        // Resolve placeholders for template/one-off HTML
+        if ($template || $documentHtml) {
+            $placeholderValues = array_merge($customFields, [
+                'recipient_name' => $recipientName,
+                'recipient_email' => $recipientEmail ?? '',
+            ]);
+
+            if ($signable instanceof ProvidesSigningPlaceholders) {
+                foreach ($signable->signingPlaceholders() as $key => $definition) {
+                    $placeholderValues[$key] = $definition['value'] ?? '';
+                }
+            }
+
+            $placeholderValues = array_merge($placeholderValues, [
+                'sender_name' => $admin->name ?? '',
+                'sender_email' => $admin->email ?? '',
+            ]);
+
+            if ($template) {
+                $renderedHtml = $template->renderHtml($placeholderValues);
+            } else {
+                $renderedHtml = $documentHtml;
+                foreach ($placeholderValues as $key => $value) {
+                    $renderedHtml = str_replace('{{' . $key . '}}', e($value), $renderedHtml);
+                }
+            }
+        }
+
+        $signingRequest = SigningRequest::create([
+            'document_template_id' => $template?->id,
+            'document_title' => $template ? $template->name : $documentTitle,
+            'signable_type' => $signable ? get_class($signable) : null,
+            'signable_id' => $signable?->getKey(),
+            'delivery_method' => 'email',
+            'requires_signature' => false,
+            'token' => Str::random(64),
+            'status' => 'delivered',
+            'sent_by' => $admin->id,
+            'document_html' => $renderedHtml ?? '',
+            'document_hash' => hash('sha256', $renderedHtml ?? ''),
+            'recipient_name' => $recipientName,
+            'recipient_email' => $recipientEmail,
+            'custom_fields' => ! empty($customFields) ? $customFields : null,
+            'expires_at' => null,
+        ]);
+
+        // Attach uploaded file before sending notification so it's available
+        if ($uploadedFilePath && file_exists($uploadedFilePath)) {
+            $signingRequest->addMedia($uploadedFilePath)
+                ->preservingOriginal()
+                ->toMediaCollection('uploaded_document');
+        }
+
+        $signingRequest->logEvent('created', 'admin', $admin->id, null, ['info_only' => true]);
+
+        // Deliver via email
+        if ($recipientEmail) {
+            Notification::route('mail', $recipientEmail)
+                ->notify(new InfoDocumentNotification($signingRequest));
+            $signingRequest->logEvent('delivered', 'system', null, null, ['method' => 'email', 'to' => $recipientEmail]);
+        }
+
+        // System comment on signable
+        if ($signable && method_exists($signable, 'addSystemComment')) {
+            $docLabel = $template?->name ?? $documentTitle ?? 'Document';
+            $signable->addSystemComment(
+                "Document \"{$docLabel}\" sent for information to {$recipientName}",
+                ['type' => 'info_document_sent', 'signing_request_id' => $signingRequest->id],
+                $admin->id,
+            );
+        }
+
+        return $signingRequest;
     }
 
     public function cancel(SigningRequest $signingRequest, User $admin): void

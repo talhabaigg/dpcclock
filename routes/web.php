@@ -342,6 +342,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/signing-requests/one-off', [SigningRequestController::class, 'storeOneOff'])->name('signing-requests.store-one-off');
     Route::post('/signing-requests/internal-signer', [SigningRequestController::class, 'storeWithInternalSigner'])->name('signing-requests.store-internal-signer');
     Route::post('/signing-requests/bulk-employees', [SigningRequestController::class, 'storeBulkEmployees'])->name('signing-requests.store-bulk-employees');
+    Route::post('/signing-requests/info-only', [SigningRequestController::class, 'storeInfoOnly'])->name('signing-requests.store-info-only');
+    Route::post('/signing-requests/bulk-info-only', [SigningRequestController::class, 'storeBulkInfoOnly'])->name('signing-requests.store-bulk-info-only');
+    Route::post('/signing-requests/combined', [SigningRequestController::class, 'storeCombined'])->name('signing-requests.store-combined');
     Route::post('/signing-requests/drafts', [SigningRequestController::class, 'storeDraft'])->name('signing-requests.drafts.store');
     Route::put('/signing-requests/{signingRequest}/draft', [SigningRequestController::class, 'updateDraft'])->name('signing-requests.drafts.update');
     Route::post('/signing-requests/{signingRequest}/finalize', [SigningRequestController::class, 'finalizeDraft'])->name('signing-requests.drafts.finalize');

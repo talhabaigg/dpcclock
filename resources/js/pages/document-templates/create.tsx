@@ -47,6 +47,7 @@ export default function CreateDocumentTemplate() {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         category: '',
+        visibility: 'all',
         body_json: '',
         body_html: '',
         placeholders: [] as PlaceholderItem[],
@@ -166,6 +167,22 @@ export default function CreateDocumentTemplate() {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="sheet-visibility">Visibility</Label>
+                                            <Select value={data.visibility} onValueChange={(v) => setData('visibility', v)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select visibility" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All employees</SelectItem>
+                                                    <SelectItem value="office_only">Office only</SelectItem>
+                                                    <SelectItem value="site_only">Site only</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Controls which employee type this template appears for when sending documents.
+                                            </p>
                                         </div>
                                     </div>
 

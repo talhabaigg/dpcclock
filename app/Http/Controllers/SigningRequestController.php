@@ -98,7 +98,7 @@ class SigningRequestController extends Controller
                 ['value' => \App\Models\Employee::class, 'label' => 'Employee'],
                 ['value' => \App\Models\EmploymentApplication::class, 'label' => 'Employment Application'],
             ],
-            'statuses' => ['pending', 'sent', 'opened', 'viewed', 'signed', 'cancelled', 'awaiting_internal_signature', 'draft'],
+            'statuses' => ['pending', 'sent', 'opened', 'viewed', 'signed', 'delivered', 'cancelled', 'awaiting_internal_signature', 'draft'],
         ]);
     }
 
@@ -576,6 +576,353 @@ class SigningRequestController extends Controller
         );
 
         return redirect()->back()->with('success', "Signature request sent to {$internalSigner->name}. The document will be delivered to the recipient after they sign.");
+    }
+
+    /**
+     * Combined send: templates + written doc + attachments in one request.
+     * Templates + written doc respect `requires_signature`; attachments are always info-only.
+     */
+    public function storeCombined(Request $request)
+    {
+        $validated = $request->validate([
+            'document_template_ids' => 'nullable|array',
+            'document_template_ids.*' => 'exists:document_templates,id',
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'file|mimes:pdf|max:20480',
+            'requires_signature' => 'nullable|boolean',
+            'delivery_method' => 'required|in:email,in_person',
+            'recipient_name' => 'nullable|string|max:255',
+            'recipient_email' => 'nullable|email|max:255',
+            'employee_ids' => 'nullable|array',
+            'employee_ids.*' => 'exists:employees,id',
+            'custom_fields' => 'nullable|array',
+            'sender_signature' => 'nullable|string',
+            'sender_full_name' => 'nullable|string|max:255',
+            'sender_position' => 'nullable|string|max:255',
+            'signable_type' => 'nullable|string',
+            'signable_id' => 'nullable|integer',
+            'internal_signer_user_id' => 'nullable|exists:users,id',
+        ]);
+
+        $templateIds = $validated['document_template_ids'] ?? [];
+        $hasWritten = ! empty($validated['document_html']);
+        $attachments = $request->file('attachments', []);
+        $requiresSig = (bool) ($validated['requires_signature'] ?? true);
+        $employeeIds = $validated['employee_ids'] ?? [];
+        $isBulk = ! empty($employeeIds);
+
+        if (empty($templateIds) && ! $hasWritten && empty($attachments)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'documents' => 'Please select a template, write a document, or upload an attachment.',
+            ]);
+        }
+
+        $templates = ! empty($templateIds)
+            ? DocumentTemplate::whereIn('id', $templateIds)->get()
+            : collect();
+
+        $senderSignature = $requiresSig ? $this->resolveSenderSignature($request) : null;
+        $internalSigner = ! empty($validated['internal_signer_user_id'])
+            ? \App\Models\User::findOrFail($validated['internal_signer_user_id'])
+            : null;
+
+        // Store attachments to temp for bulk reuse
+        $attachmentPaths = [];
+        foreach ($attachments as $file) {
+            $attachmentPaths[] = [
+                'path' => $file->store('temp-uploads', 'local'),
+                'name' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
+            ];
+        }
+
+        // Resolve recipients
+        $recipients = [];
+        if ($isBulk) {
+            $employees = \App\Models\Employee::whereIn('id', $employeeIds)->get();
+
+            // Pre-validate placeholder gaps for signable docs
+            if ($requiresSig) {
+                $allGaps = [];
+                foreach ($employees as $employee) {
+                    foreach ($templates as $t) {
+                        $gaps = $this->detectPlaceholderGaps($employee, $t->body_html ?? '', $validated['delivery_method']);
+                        if (! empty($gaps)) { $allGaps[] = $employee->name . ': ' . implode(', ', $gaps); }
+                    }
+                    if ($hasWritten) {
+                        $gaps = $this->detectPlaceholderGaps($employee, $validated['document_html'], $validated['delivery_method']);
+                        if (! empty($gaps)) { $allGaps[] = $employee->name . ': ' . implode(', ', $gaps); }
+                    }
+                }
+                if (! empty($allGaps)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'employee_ids' => 'Missing data: ' . implode('; ', array_unique($allGaps)) . '.',
+                    ]);
+                }
+            }
+
+            foreach ($employees as $emp) {
+                \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $emp);
+                $recipients[] = [
+                    'name' => $emp->display_name ?? $emp->name,
+                    'email' => $emp->email,
+                    'signable' => $emp,
+                ];
+            }
+        } else {
+            $signable = null;
+            if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
+                $signableClass = $validated['signable_type'];
+                if (class_exists($signableClass)) {
+                    $signable = $signableClass::find($validated['signable_id']);
+                    if ($signable instanceof \App\Models\Employee) {
+                        \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+                    }
+                }
+            }
+            $recipients[] = [
+                'name' => $validated['recipient_name'] ?? '',
+                'email' => $validated['recipient_email'] ?? null,
+                'signable' => $signable,
+            ];
+        }
+
+        $created = 0;
+        foreach ($recipients as $recipient) {
+            // 1. Templates
+            foreach ($templates as $template) {
+                if ($requiresSig && $internalSigner) {
+                    $this->signingService->createWithInternalSigner(
+                        template: $template,
+                        deliveryMethod: $validated['delivery_method'],
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        internalSigner: $internalSigner,
+                        customFields: $validated['custom_fields'] ?? [],
+                        signable: $recipient['signable'],
+                        senderFullName: $validated['sender_full_name'] ?? null,
+                        senderPosition: $validated['sender_position'] ?? null,
+                    );
+                } elseif ($requiresSig) {
+                    $this->signingService->createAndSend(
+                        template: $template,
+                        deliveryMethod: $validated['delivery_method'],
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        customFields: $validated['custom_fields'] ?? [],
+                        signable: $recipient['signable'],
+                        senderSignature: $senderSignature,
+                        senderFullName: $validated['sender_full_name'] ?? null,
+                        senderPosition: $validated['sender_position'] ?? null,
+                    );
+                } else {
+                    $this->signingService->createAndDeliver(
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        signable: $recipient['signable'],
+                        template: $template,
+                        customFields: $validated['custom_fields'] ?? [],
+                    );
+                }
+                $created++;
+            }
+
+            // 2. Written document
+            if ($hasWritten) {
+                if ($requiresSig && $internalSigner) {
+                    $this->signingService->createWithInternalSigner(
+                        template: null,
+                        deliveryMethod: $validated['delivery_method'],
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        internalSigner: $internalSigner,
+                        signable: $recipient['signable'],
+                        senderFullName: $validated['sender_full_name'] ?? null,
+                        senderPosition: $validated['sender_position'] ?? null,
+                        documentHtml: $validated['document_html'],
+                        documentTitle: $validated['document_title'] ?? 'Document',
+                    );
+                } elseif ($requiresSig) {
+                    $this->signingService->createAndSend(
+                        template: null,
+                        deliveryMethod: $validated['delivery_method'],
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        signable: $recipient['signable'],
+                        senderSignature: $senderSignature,
+                        senderFullName: $validated['sender_full_name'] ?? null,
+                        documentHtml: $validated['document_html'],
+                        documentTitle: $validated['document_title'] ?? 'Document',
+                        senderPosition: $validated['sender_position'] ?? null,
+                    );
+                } else {
+                    $this->signingService->createAndDeliver(
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        signable: $recipient['signable'],
+                        documentHtml: $validated['document_html'],
+                        documentTitle: $validated['document_title'] ?? 'Document',
+                    );
+                }
+                $created++;
+            }
+
+            // 3. Attachments (always info-only)
+            foreach ($attachmentPaths as $att) {
+                if (! $recipient['email']) continue;
+                $this->signingService->createAndDeliver(
+                    admin: $request->user(),
+                    recipientName: $recipient['name'],
+                    recipientEmail: $recipient['email'],
+                    signable: $recipient['signable'],
+                    documentTitle: $att['name'],
+                    uploadedFilePath: \Illuminate\Support\Facades\Storage::disk('local')->path($att['path']),
+                );
+                $created++;
+            }
+        }
+
+        // Cleanup temp files
+        foreach ($attachmentPaths as $att) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($att['path']);
+        }
+
+        if ($requiresSig) {
+            $this->maybePersistSenderSignature($request, $senderSignature);
+        }
+
+        $recipientLabel = $isBulk ? count($recipients) . ' employees' : ($recipients[0]['name'] ?? 'recipient');
+
+        return redirect()->back()->with('success', "{$created} document(s) sent to {$recipientLabel}.");
+    }
+
+    public function storeInfoOnly(Request $request)
+    {
+        $validated = $request->validate([
+            'document_template_id' => 'nullable|exists:document_templates,id',
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'uploaded_file' => 'nullable|file|mimes:pdf|max:20480',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_email' => 'required|email|max:255',
+            'custom_fields' => 'nullable|array',
+            'signable_type' => 'nullable|string',
+            'signable_id' => 'nullable|integer',
+        ]);
+
+        $template = null;
+        if (! empty($validated['document_template_id'])) {
+            $template = DocumentTemplate::findOrFail($validated['document_template_id']);
+        }
+
+        if ($template === null && empty($validated['document_html']) && ! $request->hasFile('uploaded_file')) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'document_html' => 'Please select a template, write a document, or upload a PDF.',
+            ]);
+        }
+
+        $signable = null;
+        if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
+            $signableClass = $validated['signable_type'];
+            if (class_exists($signableClass)) {
+                $signable = $signableClass::find($validated['signable_id']);
+                if ($signable instanceof \App\Models\Employee) {
+                    \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
+                }
+            }
+        }
+
+        $uploadPath = null;
+        if ($request->hasFile('uploaded_file')) {
+            $uploadPath = $request->file('uploaded_file')->store('temp-uploads', 'local');
+        }
+
+        $this->signingService->createAndDeliver(
+            admin: $request->user(),
+            recipientName: $validated['recipient_name'],
+            recipientEmail: $validated['recipient_email'],
+            signable: $signable,
+            template: $template,
+            documentHtml: $validated['document_html'] ?? null,
+            documentTitle: $validated['document_title'] ?? ($request->hasFile('uploaded_file') ? $request->file('uploaded_file')->getClientOriginalName() : null),
+            customFields: $validated['custom_fields'] ?? [],
+            uploadedFilePath: $uploadPath ? \Illuminate\Support\Facades\Storage::disk('local')->path($uploadPath) : null,
+        );
+
+        if ($uploadPath) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($uploadPath);
+        }
+
+        return redirect()->back()->with('success', 'Document sent for information.');
+    }
+
+    public function storeBulkInfoOnly(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'exists:employees,id',
+            'document_template_id' => 'nullable|exists:document_templates,id',
+            'document_title' => 'nullable|string|max:255',
+            'document_html' => 'nullable|string',
+            'uploaded_file' => 'nullable|file|mimes:pdf|max:20480',
+            'custom_fields' => 'nullable|array',
+        ]);
+
+        $template = null;
+        if (! empty($validated['document_template_id'])) {
+            $template = DocumentTemplate::findOrFail($validated['document_template_id']);
+        }
+
+        if ($template === null && empty($validated['document_html']) && ! $request->hasFile('uploaded_file')) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'document_html' => 'Please select a template, write a document, or upload a PDF.',
+            ]);
+        }
+
+        $employees = \App\Models\Employee::whereIn('id', $validated['employee_ids'])->get();
+
+        // For uploaded files, store once and reference for each request
+        $uploadedFilePath = null;
+        if ($request->hasFile('uploaded_file')) {
+            $uploadedFilePath = $request->file('uploaded_file')->store('temp-uploads', 'local');
+        }
+
+        $created = 0;
+        foreach ($employees as $employee) {
+            \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $employee);
+
+            if (! $employee->email) {
+                continue; // Can't email without an address
+            }
+
+            $this->signingService->createAndDeliver(
+                admin: $request->user(),
+                recipientName: $employee->display_name ?? $employee->name,
+                recipientEmail: $employee->email,
+                signable: $employee,
+                template: $template,
+                documentHtml: $template ? null : ($validated['document_html'] ?? null),
+                documentTitle: $template ? null : ($validated['document_title'] ?? ($request->hasFile('uploaded_file') ? $request->file('uploaded_file')->getClientOriginalName() : null)),
+                customFields: $validated['custom_fields'] ?? [],
+                uploadedFilePath: $uploadedFilePath ? \Illuminate\Support\Facades\Storage::disk('local')->path($uploadedFilePath) : null,
+            );
+
+            $created++;
+        }
+
+        // Clean up temp file
+        if ($uploadedFilePath) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($uploadedFilePath);
+        }
+
+        return redirect()->back()->with('success', "Document sent to {$created} " . ($created === 1 ? 'employee' : 'employees') . ' for information.');
     }
 
     public function storeOneOff(Request $request)

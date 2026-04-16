@@ -85,7 +85,9 @@ export default function SendForSigningModal({
     onSuccess,
 }: SendForSigningModalProps) {
     const isBulkMode = bulkEmployees.length > 0;
-    const [mode, setMode] = useState<'template' | 'write'>('template');
+    const [showWriteSection, setShowWriteSection] = useState(false);
+    const [requiresSignature, setRequiresSignature] = useState(true);
+    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
     const [selectedFormTemplateIds, setSelectedFormTemplateIds] = useState<number[]>([]);
     const [deliveryMethod, setDeliveryMethod] = useState<string>('email');
@@ -143,9 +145,10 @@ export default function SendForSigningModal({
         return result;
     })();
 
-    const requiresSenderSignature = mode === 'template'
-        ? selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}'))
-        : oneOffHtml.includes('{{sender_signature}}');
+    const requiresSenderSignature = requiresSignature && (
+        selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}'))
+        || (showWriteSection && oneOffHtml.includes('{{sender_signature}}'))
+    );
 
     const toggleTemplate = (id: number) => {
         setSelectedTemplateIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -236,13 +239,15 @@ export default function SendForSigningModal({
 
     const handleSubmit = () => {
         const newErrors: Record<string, string> = {};
+        const hasTemplates = selectedTemplateIds.length > 0;
+        const hasWritten = showWriteSection && oneOffHtml.replace(/<[^>]*>/g, '').trim() !== '';
+        const hasAttachments = uploadedFiles.length > 0;
 
-        if (mode === 'template') {
-            if (selectedTemplateIds.length === 0 && selectedFormTemplateIds.length === 0) newErrors.templates = 'Please select at least one document or form.';
-        } else {
-            if (!oneOffTitle.trim()) newErrors.document_title = 'Document title is required.';
-            const plainText = oneOffHtml.replace(/<[^>]*>/g, '').trim();
-            if (!plainText) newErrors.document_html = 'Write the document before sending.';
+        if (!hasTemplates && !hasWritten && !hasAttachments) {
+            newErrors.documents = 'Please select a template, write a document, or upload an attachment.';
+        }
+        if (showWriteSection && !oneOffTitle.trim() && (hasWritten || !hasTemplates)) {
+            if (hasWritten) newErrors.document_title = 'Document title is required.';
         }
 
         if (!isBulkMode) {
@@ -260,8 +265,8 @@ export default function SendForSigningModal({
             }
         }
 
-        // Validate required and typed custom fields (template mode only)
-        if (mode === 'template') {
+        // Validate required custom fields for templates
+        if (hasTemplates) {
             for (const p of mergedPlaceholders) {
                 const val = customFields[p.key]?.trim() ?? '';
                 if (p.required && !val) {
@@ -283,129 +288,64 @@ export default function SendForSigningModal({
         setProcessing(true);
         setErrors({});
 
-        // If requesting another user to sign, route to the internal-signer endpoint.
-        if (requiresSenderSignature && senderSigMode === 'request') {
-            setProcessing(true);
-            setErrors({});
-            const internalPayload: Record<string, any> = {
-                delivery_method: deliveryMethod,
-                recipient_name: name,
-                recipient_email: deliveryMethod === 'email' ? email : null,
-                internal_signer_user_id: Number(internalSignerUserId),
-                sender_full_name: senderFullName || null,
-                sender_position: senderPosition || null,
-                signable_type: signableType ?? null,
-                signable_id: signableId ?? null,
-            };
-            if (mode === 'write') {
-                internalPayload.document_title = oneOffTitle.trim();
-                internalPayload.document_html = oneOffHtml;
-            } else if (selectedTemplateIds.length === 1) {
-                internalPayload.document_template_id = selectedTemplateIds[0];
-                internalPayload.custom_fields = { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition };
-            }
-            router.post(route('signing-requests.store-internal-signer'), internalPayload, {
-                preserveScroll: true,
-                onSuccess: () => { setProcessing(false); onOpenChange(false); onSuccess?.(); },
-                onError: (errs) => { setProcessing(false); setErrors(errs); },
-            });
-            return;
-        }
+        // Build FormData for the combined endpoint (supports file uploads)
+        const formData = new FormData();
+        formData.append('delivery_method', deliveryMethod);
+        formData.append('requires_signature', requiresSignature ? '1' : '0');
+        formData.append('signable_type', signableType ?? '');
+        formData.append('signable_id', signableId ? String(signableId) : '');
 
-        // Bulk send to multiple employees
+        // Recipients
         if (isBulkMode) {
-            setProcessing(true);
-            setErrors({});
-
-            const senderSigData =
-                requiresSenderSignature && senderSigMode === 'draw' && senderSignaturePadRef.current
-                    ? senderSignaturePadRef.current.toDataURL('image/png')
-                    : null;
-
-            const bulkPayload: Record<string, any> = {
-                employee_ids: bulkEmployees.map((e) => e.id),
-                delivery_method: deliveryMethod,
-                sender_signature: senderSigData,
-                use_saved_sender_signature: requiresSenderSignature && senderSigMode === 'saved',
-                save_sender_signature: requiresSenderSignature && senderSigMode === 'draw' && saveSenderSignature,
-                sender_full_name: requiresSenderSignature ? senderFullName : null,
-                sender_position: requiresSenderSignature ? (senderPosition || null) : null,
-            };
-
-            if (mode === 'write') {
-                bulkPayload.document_title = oneOffTitle.trim();
-                bulkPayload.document_html = oneOffHtml;
-            } else if (selectedTemplateIds.length >= 1) {
-                bulkPayload.document_template_id = selectedTemplateIds[0];
-                bulkPayload.custom_fields = customFields;
-            }
-
-            router.post(route('signing-requests.store-bulk-employees'), bulkPayload, {
-                preserveScroll: true,
-                onSuccess: () => { setProcessing(false); onOpenChange(false); onSuccess?.(); },
-                onError: (errs) => { setProcessing(false); setErrors(errs); },
-            });
-            return;
-        }
-
-        const senderSignatureData =
-            requiresSenderSignature && senderSigMode === 'draw' && senderSignaturePadRef.current
-                ? senderSignaturePadRef.current.toDataURL('image/png')
-                : null;
-
-        let url: string;
-        const payload: Record<string, any> = {
-            delivery_method: deliveryMethod,
-            recipient_name: name,
-            recipient_email: deliveryMethod === 'email' ? email : null,
-            sender_signature: senderSignatureData,
-            use_saved_sender_signature: requiresSenderSignature && senderSigMode === 'saved',
-            save_sender_signature: requiresSenderSignature && senderSigMode === 'draw' && saveSenderSignature,
-            sender_full_name: requiresSenderSignature ? senderFullName : null,
-            sender_position: requiresSenderSignature ? (senderPosition || null) : null,
-            signable_type: signableType ?? null,
-            signable_id: signableId ?? null,
-        };
-
-        if (mode === 'write') {
-            url = draft
-                ? route('signing-requests.drafts.finalize', draft.id)
-                : route('signing-requests.store-one-off');
-            payload.document_title = oneOffTitle.trim();
-            payload.document_html = oneOffHtml;
+            bulkEmployees.forEach((e, i) => formData.append(`employee_ids[${i}]`, String(e.id)));
         } else {
-            const isBatch = selectedTemplateIds.length > 1 || selectedFormTemplateIds.length > 0;
-            url = isBatch ? route('signing-requests.store-batch') : route('signing-requests.store');
-            payload.custom_fields = { ...customFields, recipient_address: recipientAddress, recipient_phone: recipientPhone, recipient_position: recipientPosition };
-
-            if (isBatch) {
-                payload.document_template_ids = selectedTemplateIds;
-                if (selectedFormTemplateIds.length > 0) {
-                    payload.form_template_ids = selectedFormTemplateIds;
-                }
-            } else {
-                payload.document_template_id = String(selectedTemplateIds[0]);
-            }
+            formData.append('recipient_name', name);
+            formData.append('recipient_email', deliveryMethod === 'email' ? email : '');
         }
 
-        router.post(url, payload, {
+        // Templates
+        if (hasTemplates) {
+            selectedTemplateIds.forEach((id, i) => formData.append(`document_template_ids[${i}]`, String(id)));
+            for (const [k, v] of Object.entries(customFields)) {
+                formData.append(`custom_fields[${k}]`, v);
+            }
+            formData.append('custom_fields[recipient_address]', recipientAddress);
+            formData.append('custom_fields[recipient_phone]', recipientPhone);
+            formData.append('custom_fields[recipient_position]', recipientPosition);
+        }
+
+        // Written document
+        if (hasWritten) {
+            formData.append('document_title', oneOffTitle.trim());
+            formData.append('document_html', oneOffHtml);
+        }
+
+        // Attachments
+        uploadedFiles.forEach((file, i) => formData.append(`attachments[${i}]`, file));
+
+        // Sender signature
+        if (requiresSenderSignature && senderSigMode === 'request') {
+            formData.append('internal_signer_user_id', internalSignerUserId);
+        } else if (requiresSenderSignature) {
+            const sigData = senderSigMode === 'draw' && senderSignaturePadRef.current
+                ? senderSignaturePadRef.current.toDataURL('image/png') : '';
+            if (sigData) formData.append('sender_signature', sigData);
+            if (senderSigMode === 'saved') formData.append('use_saved_sender_signature', '1');
+            if (senderSigMode === 'draw' && saveSenderSignature) formData.append('save_sender_signature', '1');
+            if (senderFullName) formData.append('sender_full_name', senderFullName);
+            if (senderPosition) formData.append('sender_position', senderPosition);
+        }
+
+        router.post(route('signing-requests.store-combined'), formData, {
             preserveScroll: true,
             onSuccess: (page) => {
                 setProcessing(false);
                 onOpenChange(false);
-
-                // For in-person, open the signing URL in a new tab
                 const signingUrl = (page.props as any)?.flash?.signing_url;
-                if (deliveryMethod === 'in_person' && signingUrl) {
-                    window.open(signingUrl, '_blank');
-                }
-
+                if (deliveryMethod === 'in_person' && signingUrl) window.open(signingUrl, '_blank');
                 onSuccess?.();
             },
-            onError: (errs) => {
-                setProcessing(false);
-                setErrors(errs);
-            },
+            onError: (errs) => { setProcessing(false); setErrors(errs); },
         });
     };
 
@@ -417,7 +357,9 @@ export default function SendForSigningModal({
             return;
         }
         const isResuming = !!draft;
-        setMode(isResuming ? 'write' : 'template');
+        setShowWriteSection(isResuming);
+        setRequiresSignature(true);
+        setUploadedFiles([]);
         setName(draft?.recipient_name ?? recipientName);
         setEmail(draft?.recipient_email ?? recipientEmail);
         setSelectedTemplateIds([]);
@@ -454,30 +396,19 @@ export default function SendForSigningModal({
 
                 <ScrollArea className="max-h-[calc(100dvh-14rem)] px-6">
                 <div className="space-y-4 py-2">
-                    {/* Mode switcher: template vs one-off */}
-                    <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
-                        <button
-                            type="button"
-                            onClick={() => setMode('template')}
-                            className={`flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${mode === 'template' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                        >
-                            <FileText className="h-4 w-4" />
-                            From template
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMode('write')}
-                            className={`flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${mode === 'write' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                        >
-                            <PencilLine className="h-4 w-4" />
-                            Write document
-                        </button>
-                    </div>
+                    {/* Signature toggle */}
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <Checkbox checked={requiresSignature} onCheckedChange={(v) => setRequiresSignature(!!v)} />
+                        Requires signature
+                        {!requiresSignature && <span className="text-muted-foreground text-xs">(sent for information only)</span>}
+                    </label>
 
-                    {/* Template mode: selection + custom fields */}
-                    {mode === 'template' && (
+                    {errors.documents && <p className="text-sm text-destructive">{errors.documents}</p>}
+
+                    {/* Templates section — always visible */}
+                    {templates.length > 0 && (
                     <div className="space-y-2">
-                        <Label>Documents to Send</Label>
+                        <Label>Templates</Label>
                         <div className="space-y-1.5 rounded-lg border p-3">
                             {templates.map((t) => (
                                 <label
@@ -493,48 +424,83 @@ export default function SendForSigningModal({
                                 </label>
                             ))}
                         </div>
-                        {errors.templates && <p className="text-sm text-destructive">{errors.templates}</p>}
-                        {selectedTemplateIds.length > 1 && (
-                            <p className="text-xs text-muted-foreground">{selectedTemplateIds.length} documents selected — each will be sent as a separate signing request</p>
-                        )}
                     </div>
                     )}
 
-                    {/* Write mode: title + full Tiptap editor (same features as template editor) */}
-                    {mode === 'write' && (
-                        <div className="space-y-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="one-off-title">Document Title</Label>
-                                <Input
-                                    id="one-off-title"
-                                    value={oneOffTitle}
-                                    onChange={(e) => setOneOffTitle(e.target.value)}
-                                    placeholder="e.g. Position Description — Office Administrator"
-                                />
-                                {errors.document_title && <p className="text-sm text-destructive">{errors.document_title}</p>}
+                    {/* Write document — toggle to expand */}
+                    <div className="space-y-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowWriteSection(!showWriteSection)}
+                            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                        >
+                            <PencilLine className="h-4 w-4" />
+                            {showWriteSection ? 'Hide custom document' : 'Write a custom document'}
+                        </button>
+                        {showWriteSection && (
+                            <div className="space-y-3 rounded-lg border p-3">
+                                <div className="space-y-2">
+                                    <Label htmlFor="one-off-title">Document Title</Label>
+                                    <Input
+                                        id="one-off-title"
+                                        value={oneOffTitle}
+                                        onChange={(e) => setOneOffTitle(e.target.value)}
+                                        placeholder="e.g. Position Description — Office Administrator"
+                                    />
+                                    {errors.document_title && <p className="text-sm text-destructive">{errors.document_title}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Content</Label>
+                                    <TiptapEditor
+                                        content={oneOffJson}
+                                        onChange={(json, html) => { setOneOffJson(json); setOneOffHtml(html); }}
+                                        placeholders={oneOffPlaceholderPool}
+                                        customGroupLabel={oneOffCustomLabel}
+                                    />
+                                    {errors.document_html && <p className="text-sm text-destructive">{errors.document_html}</p>}
+                                </div>
                             </div>
+                        )}
+                    </div>
 
-                            <div className="space-y-2">
-                                <Label>Content</Label>
-                                <TiptapEditor
-                                    content={oneOffJson}
-                                    onChange={(json, html) => {
-                                        setOneOffJson(json);
-                                        setOneOffHtml(html);
-                                    }}
-                                    placeholders={oneOffPlaceholderPool}
-                                    customGroupLabel={oneOffCustomLabel}
-                                />
-                                {errors.document_html && <p className="text-sm text-destructive">{errors.document_html}</p>}
-                                <p className="text-xs text-muted-foreground">
-                                    Tip: add <code className="bg-muted px-1 rounded">{'{{signature_box}}'}</code> where the recipient should sign. One is added automatically at the end if you don't.
-                                </p>
+                    {/* Attachments — always visible, multiple files */}
+                    <div className="space-y-2">
+                        <Label>Attachments (info only, no signature)</Label>
+                        {uploadedFiles.length > 0 && (
+                            <div className="space-y-1.5">
+                                {uploadedFiles.map((file, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 rounded-md border p-2">
+                                        <FileText className="h-5 w-5 text-muted-foreground" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="truncate text-sm font-medium">{file.name}</p>
+                                            <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
+                                        </div>
+                                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setUploadedFiles((prev) => prev.filter((_, i) => i !== idx))}>
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                ))}
                             </div>
-                        </div>
-                    )}
+                        )}
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50">
+                            <FileText className="h-4 w-4" />
+                            {uploadedFiles.length > 0 ? 'Add another PDF' : 'Upload PDF attachment'}
+                            <input
+                                type="file"
+                                accept=".pdf"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    const files = Array.from(e.target.files ?? []);
+                                    if (files.length) setUploadedFiles((prev) => [...prev, ...files]);
+                                    e.target.value = '';
+                                }}
+                            />
+                        </label>
+                    </div>
 
                     {/* Form Templates Selection */}
-                    {mode === 'template' && formTemplates.length > 0 && (
+                    {formTemplates.length > 0 && (
                         <div className="space-y-2">
                             <Label>Forms to Send</Label>
                             <div className="space-y-1.5 rounded-lg border p-3">
@@ -589,7 +555,7 @@ export default function SendForSigningModal({
                     )}
 
                     {/* Custom Fields (merged from all selected template placeholders) */}
-                    {mode === 'template' && mergedPlaceholders.length > 0 && (
+                    {selectedTemplateIds.length > 0 && mergedPlaceholders.length > 0 && (
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -800,7 +766,7 @@ export default function SendForSigningModal({
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
                         Cancel
                     </Button>
-                    {mode === 'write' && (
+                    {showWriteSection && (
                         <Button variant="secondary" onClick={handleSaveDraft} disabled={processing}>
                             {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {draft ? 'Update Draft' : 'Save as Draft'}
@@ -814,7 +780,7 @@ export default function SendForSigningModal({
                             ? 'Request Signature'
                             : deliveryMethod === 'email'
                                 ? (() => {
-                                    if (mode === 'write') return 'Send Email';
+                                    if (showWriteSection && selectedTemplateIds.length === 0) return 'Send Email';
                                     const totalCount = selectedTemplateIds.length + selectedFormTemplateIds.length;
                                     if (totalCount <= 1) return 'Send Email';
                                     const parts: string[] = [];

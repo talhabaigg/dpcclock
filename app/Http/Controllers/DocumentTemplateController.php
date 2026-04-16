@@ -13,7 +13,7 @@ class DocumentTemplateController extends Controller
     {
         $templates = DocumentTemplate::query()
             ->orderBy('name')
-            ->get(['id', 'name', 'category', 'is_active', 'created_at', 'updated_at']);
+            ->get(['id', 'name', 'category', 'is_active', 'visibility', 'created_at', 'updated_at']);
 
         return Inertia::render('document-templates/index', [
             'templates' => $templates,
@@ -39,6 +39,7 @@ class DocumentTemplateController extends Controller
             'placeholders.*.required' => 'nullable|boolean',
             'placeholders.*.options' => 'nullable|array',
             'placeholders.*.options.*' => 'string',
+            'visibility' => 'nullable|string|in:all,office_only,site_only',
         ]);
 
         $template = DocumentTemplate::create([
@@ -73,6 +74,7 @@ class DocumentTemplateController extends Controller
             'placeholders.*.options' => 'nullable|array',
             'placeholders.*.options.*' => 'string',
             'is_active' => 'boolean',
+            'visibility' => 'nullable|string|in:all,office_only,site_only',
         ]);
 
         $documentTemplate->update([

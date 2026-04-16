@@ -50,7 +50,7 @@ class EmployeeController extends Controller
             'employees' => $employees,
             'canSendDocuments' => $canSend,
             'documentTemplates' => $canSend
-                ? \App\Models\DocumentTemplate::active()->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
+                ? \App\Models\DocumentTemplate::active()->forEmployeeType(true)->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
                 : [],
             'savedSenderSignatureUrl' => $canSend ? $user->savedSignatureUrl() : null,
             'appUsers' => $canSend
@@ -110,6 +110,7 @@ class EmployeeController extends Controller
         $availablePlaceholders = [];
         if ($canSendDocuments) {
             $documentTemplates = \App\Models\DocumentTemplate::active()
+                ->forEmployeeType($employee->isOfficeStaff())
                 ->orderBy('name')
                 ->get(['id', 'name', 'placeholders', 'body_html']);
 

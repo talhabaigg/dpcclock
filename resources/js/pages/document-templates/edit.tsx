@@ -21,6 +21,7 @@ interface DocumentTemplate {
     body_html: string;
     placeholders: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
     is_active: boolean;
+    visibility: string;
 }
 
 const CATEGORIES = ['employment', 'safety', 'subcontractor', 'general'];
@@ -65,6 +66,7 @@ export default function EditDocumentTemplate({ template }: { template: DocumentT
             options: p.options ?? [],
         })) as PlaceholderItem[],
         is_active: template.is_active,
+        visibility: template.visibility ?? 'all',
     });
 
     const addPlaceholder = () => {
@@ -185,6 +187,22 @@ export default function EditDocumentTemplate({ template }: { template: DocumentT
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="sheet-visibility">Visibility</Label>
+                                            <Select value={data.visibility} onValueChange={(v) => setData('visibility', v)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select visibility" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All employees</SelectItem>
+                                                    <SelectItem value="office_only">Office only</SelectItem>
+                                                    <SelectItem value="site_only">Site only</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Controls which employee type this template appears for when sending documents.
+                                            </p>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <Label htmlFor="is_active">Active</Label>

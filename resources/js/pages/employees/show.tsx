@@ -627,7 +627,8 @@ export default function EmployeeShow() {
                                                             const isDraft = sr.status === 'draft';
                                                             const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
                                                             const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
-                                                        const statusLabel = isDraft ? 'draft' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
+                                                        const isDelivered = sr.status === 'delivered';
+                                                        const statusLabel = isDraft ? 'draft' : isDelivered ? 'delivered' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
                                                             const statusTimestamp = isDraft
                                                                 ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
                                                                 : isSigned
@@ -644,7 +645,7 @@ export default function EmployeeShow() {
                                                                     </TableCell>
                                                                     <TableCell className="px-3 text-xs">{isDraft ? '—' : (sr.sent_by?.name ?? '—')}</TableCell>
                                                                     <TableCell className="px-3 text-xs">
-                                                                        <Badge variant={isDraft ? 'outline' : isAwaitingInternal ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                        <Badge variant={isDraft ? 'outline' : isDelivered ? 'default' : isAwaitingInternal ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
                                                                         <span className="text-muted-foreground">{statusTimestamp}</span>
                                                                     </TableCell>
                                                                     <TableCell className="px-3 text-right">
@@ -667,6 +668,8 @@ export default function EmployeeShow() {
                                                                                         Download
                                                                                     </a>
                                                                                 </Button>
+                                                                            ) : isDelivered || isAwaitingInternal ? (
+                                                                                <span className="text-xs text-muted-foreground italic">No actions</span>
                                                                             ) : (
                                                                                 <>
                                                                                     <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
@@ -693,8 +696,10 @@ export default function EmployeeShow() {
                                                 {signingRequests.map((sr) => {
                                                     const isSigned = sr.status === 'signed';
                                                     const isDraft = sr.status === 'draft';
+                                                    const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
+                                                    const isDelivered = sr.status === 'delivered';
                                                     const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
-                                                    const statusLabel = isDraft ? 'draft' : (isSigned ? 'signed' : 'sent');
+                                                    const statusLabel = isDraft ? 'draft' : isDelivered ? 'delivered' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
                                                     const statusTimestamp = isDraft
                                                         ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
                                                         : isSigned
@@ -726,7 +731,7 @@ export default function EmployeeShow() {
                                                                             <Download className="h-3 w-3" /> Download
                                                                         </a>
                                                                     </Button>
-                                                                ) : (
+                                                                ) : isDelivered || isAwaitingInternal ? null : (
                                                                     <>
                                                                         <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
                                                                             <RotateCcw className="h-3 w-3" /> Resend

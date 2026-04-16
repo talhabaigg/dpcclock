@@ -16,6 +16,7 @@ class DocumentTemplate extends Model
         'body_html',
         'placeholders',
         'is_active',
+        'visibility',
         'created_by',
         'updated_by',
     ];
@@ -51,6 +52,13 @@ class DocumentTemplate extends Model
     public function scopeCategory(Builder $query, string $category): Builder
     {
         return $query->where('category', $category);
+    }
+
+    public function scopeForEmployeeType(Builder $query, bool $isOfficeStaff): Builder
+    {
+        $allowed = $isOfficeStaff ? ['all', 'office_only'] : ['all', 'site_only'];
+
+        return $query->whereIn('visibility', $allowed);
     }
 
     public function getAvailablePlaceholders(): array
