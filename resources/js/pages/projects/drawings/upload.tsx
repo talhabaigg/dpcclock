@@ -1,12 +1,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, CheckCircle, Clock, Eye, FileText, Loader2, Upload, X, XCircle } from 'lucide-react';
+import { CheckCircle, Clock, Eye, FileText, Loader2, RefreshCw, Upload, X, XCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
@@ -36,15 +36,14 @@ type UploadEntry = {
 };
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; icon: typeof Loader2 }> = {
-    draft: { label: 'Draft', variant: 'secondary', icon: Clock },
+    draft: { label: 'Draft', variant: 'outline', icon: Clock },
     processing: { label: 'Processing', variant: 'default', icon: Loader2 },
     pending_review: { label: 'Needs Review', variant: 'outline', icon: Clock },
     active: { label: 'Active', variant: 'secondary', icon: CheckCircle },
 };
 
-
 function formatFileSize(bytes: number | null): string {
-    if (!bytes) return '-';
+    if (!bytes) return '—';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -135,18 +134,9 @@ export default function DrawingsUpload() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Upload Drawings - ${project.name}`} />
+            <Head title={`Upload Drawings — ${project.name}`} />
 
             <div className="min-w-full space-y-4 p-2 sm:p-4">
-                <div className="flex items-center gap-2">
-                    <Link href={`/projects/${project.id}/drawings`}>
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                    </Link>
-                </div>
-
-                {/* Drop Zone */}
                 <Card>
                     <CardContent className="p-3 sm:p-6">
                         <div
@@ -158,10 +148,9 @@ export default function DrawingsUpload() {
                             <input {...getInputProps()} />
                             <Upload className="text-muted-foreground mb-3 h-8 w-8 sm:h-10 sm:w-10" />
                             <p className="text-center text-sm font-medium">{isDragActive ? 'Drop files here' : 'Drag & drop drawing files, or click to select'}</p>
-                            <p className="text-muted-foreground mt-1 text-xs">PDF, PNG, JPG, TIFF - up to 50MB each</p>
+                            <p className="text-muted-foreground mt-1 text-xs">PDF, PNG, JPG, TIFF — up to 50MB each</p>
                         </div>
 
-                        {/* Upload Queue */}
                         {uploads.length > 0 && (
                             <div className="mt-4 space-y-2">
                                 <div className="flex items-center justify-between">
@@ -184,11 +173,19 @@ export default function DrawingsUpload() {
                                             {upload.status === 'success' && <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />}
                                             {upload.status === 'error' && <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
                                             {upload.status === 'pending' && <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400" />}
-                                            <span className="max-w-[120px] truncate sm:max-w-[200px]">{upload.file.name}</span>
+                                            <span className="max-w-[120px] truncate sm:max-w-[200px]" title={upload.file.name}>
+                                                {upload.file.name}
+                                            </span>
                                             {(upload.status === 'success' || upload.status === 'error') && (
-                                                <button onClick={() => removeUpload(index)} className="ml-1">
-                                                    <X className="h-3 w-3 text-gray-400 hover:text-gray-600" />
-                                                </button>
+                                                <Button
+                                                    onClick={() => removeUpload(index)}
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground hover:text-foreground ml-1 h-5 w-5"
+                                                    aria-label={`Dismiss ${upload.file.name}`}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </Button>
                                             )}
                                         </div>
                                     ))}
@@ -198,16 +195,15 @@ export default function DrawingsUpload() {
                     </CardContent>
                 </Card>
 
-                {/* Recent Drawings */}
-                <Card>
-                    <CardHeader className="py-3">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">Recent Drawings</CardTitle>
-                            <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 text-xs">
-                                Refresh
-                            </Button>
-                        </div>
-                    </CardHeader>
+                <div className="flex items-center justify-between pt-2">
+                    <h2 className="text-base font-semibold tracking-tight">Recent Drawings</h2>
+                    <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Refresh
+                    </Button>
+                </div>
+
+                <Card className="py-0">
                     <CardContent className="p-0">
                         {drawings.length === 0 ? (
                             <div className="text-muted-foreground flex flex-col items-center py-12 text-center">
@@ -217,14 +213,14 @@ export default function DrawingsUpload() {
                         ) : (
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="bg-muted/50">
                                         <TableRow>
-                                            <TableHead>File</TableHead>
+                                            <TableHead className="pl-3 sm:pl-6">File</TableHead>
                                             <TableHead className="hidden sm:table-cell">Title</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead className="hidden md:table-cell">Size</TableHead>
                                             <TableHead className="hidden lg:table-cell">Uploaded</TableHead>
-                                            <TableHead />
+                                            <TableHead className="w-16 pr-3 text-right sm:pr-6" />
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -234,17 +230,17 @@ export default function DrawingsUpload() {
 
                                             return (
                                                 <TableRow key={drawing.id}>
-                                                    <TableCell className="max-w-[150px] sm:max-w-[200px]">
+                                                    <TableCell className="max-w-[150px] pl-3 sm:max-w-[200px] sm:pl-6">
                                                         <p className="truncate text-sm font-medium" title={drawing.original_name || undefined}>
-                                                            {drawing.original_name || '-'}
+                                                            {drawing.original_name || '—'}
                                                         </p>
                                                         <p className="text-muted-foreground truncate text-xs sm:hidden">
-                                                            {drawing.title || drawing.drawing_title || '-'}
+                                                            {drawing.title || drawing.drawing_title || '—'}
                                                         </p>
                                                     </TableCell>
                                                     <TableCell className="hidden sm:table-cell">
                                                         <span className="text-muted-foreground text-xs">
-                                                            {drawing.title || drawing.drawing_title || '-'}
+                                                            {drawing.title || drawing.drawing_title || '—'}
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
@@ -255,15 +251,15 @@ export default function DrawingsUpload() {
                                                             {sConfig.label}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-muted-foreground hidden text-xs md:table-cell">
+                                                    <TableCell className="text-muted-foreground hidden text-xs tabular-nums md:table-cell">
                                                         {formatFileSize(drawing.file_size)}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
                                                         {formatDistanceToNow(new Date(drawing.created_at), { addSuffix: true })}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="pr-3 text-right sm:pr-6">
                                                         <Link href={`/drawings/${drawing.id}`}>
-                                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                                                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Open drawing">
                                                                 <Eye className="h-4 w-4" />
                                                             </Button>
                                                         </Link>

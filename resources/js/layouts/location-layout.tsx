@@ -26,21 +26,32 @@ import {
     DollarSign,
     Download,
     EllipsisVertical,
-    ExternalLink,
     FileImage,
     FlaskConical,
     FolderTree,
-    Hash,
     Heart,
-    Layers,
     Pencil,
-    RotateCcw,
     Star,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites' | 'production-data' | 'schedule';
+
+const formatVA = (n: number) => `VA-${String(n).padStart(3, '0')}`;
+
+function IdChip({ label, value }: { label: string; value: string | null | undefined }) {
+    return (
+        <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            {value ? (
+                <code className="bg-muted rounded px-2 py-0.5 font-mono text-xs">{value}</code>
+            ) : (
+                <span className="text-muted-foreground text-xs italic">Not set</span>
+            )}
+        </div>
+    );
+}
 
 const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey: string; permissionKey?: string }[] = [
     { key: 'sublocations', label: 'Sub-locations', icon: FolderTree, countKey: 'sublocations' },
@@ -207,9 +218,7 @@ export default function LocationLayout({ location, activeTab, children }: Locati
             </Dialog>
 
             <div className="flex flex-col gap-4 p-2 sm:gap-6 sm:p-4 md:p-6">
-                {/* Location Details Card */}
-                <div className="grid gap-6">
-                    <Card>
+                <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-4">
                             <CardTitle className="text-base">Location Details</CardTitle>
                             <DropdownMenu>
@@ -236,12 +245,6 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                         <Link href={`/projects/${location.id}/drawings`} className="gap-2">
                                             <FileImage className="h-4 w-4" />
                                             Drawings
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href={`/location/${location.id}/job-data`} method="get" className="gap-2">
-                                            <RotateCcw className="h-4 w-4" />
-                                            Load Job Cost
                                         </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -281,36 +284,13 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="divide-y">
-                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
-                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                                        <Hash className="h-4 w-4" />
-                                        Location ID
-                                    </div>
-                                    <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_location_id}</code>
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3">
+                                    <IdChip label="Location" value={location.eh_location_id} />
+                                    <IdChip label="External" value={location.external_id} />
+                                    <IdChip label="Parent" value={location.eh_parent_id} />
                                 </div>
                                 <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
-                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                                        <ExternalLink className="h-4 w-4" />
-                                        External ID
-                                    </div>
-                                    {location.external_id ? (
-                                        <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.external_id}</code>
-                                    ) : (
-                                        <span className="text-muted-foreground text-sm italic">Not set</span>
-                                    )}
-                                </div>
-                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
-                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                                        <Layers className="h-4 w-4" />
-                                        Parent ID
-                                    </div>
-                                    <code className="bg-muted rounded px-2 py-1 font-mono text-sm">{location.eh_parent_id}</code>
-                                </div>
-                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
-                                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                                        <Hash className="h-4 w-4" />
-                                        Variation Number Start
-                                    </div>
+                                    <div className="text-muted-foreground text-sm">Variation Number Start</div>
                                     {editingVarStart ? (
                                         <div className="flex items-center gap-2">
                                             <Input
@@ -335,17 +315,19 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                     ) : (
                                         <div className="flex items-center gap-2">
                                             {location.variation_number_start != null ? (
-                                                <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
-                                                    VA-{String(location.variation_number_start).padStart(3, '0')}
+                                                <>
+                                                    <code className="bg-muted rounded px-2 py-0.5 font-mono text-xs">
+                                                        {formatVA(location.variation_number_start)}
+                                                    </code>
                                                     {location.variation_next_number != null &&
                                                         location.variation_next_number !== location.variation_number_start && (
-                                                            <span className="text-muted-foreground ml-1 text-xs">
-                                                                (next: VA-{String(location.variation_next_number).padStart(3, '0')})
+                                                            <span className="text-muted-foreground text-xs">
+                                                                next {formatVA(location.variation_next_number)}
                                                             </span>
                                                         )}
-                                                </code>
+                                                </>
                                             ) : (
-                                                <span className="text-muted-foreground text-sm italic">Not set</span>
+                                                <span className="text-muted-foreground text-xs italic">Not set</span>
                                             )}
                                             {auth.isAdmin && (
                                                 <Button
@@ -407,12 +389,12 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                             </div>
                         </CardContent>
                     </Card>
-                </div>
 
-                {/* Tab Navigation */}
                 <div className="space-y-4">
                     <div className="bg-muted inline-flex h-auto items-center justify-start rounded-lg p-1">
-                        {TABS.filter((tab) => !tab.permissionKey || location.tab_permissions?.[tab.permissionKey as keyof typeof location.tab_permissions]).map((tab) => {
+                        {TABS.filter(
+                            (tab) => !tab.permissionKey || location.tab_permissions?.[tab.permissionKey as keyof typeof location.tab_permissions],
+                        ).map((tab) => {
                             const Icon = tab.icon;
                             const count = location.tab_counts?.[tab.countKey as keyof typeof location.tab_counts] ?? 0;
                             const isActive = activeTab === tab.key;
@@ -434,7 +416,6 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                         })}
                     </div>
 
-                    {/* Tab Content */}
                     {children}
                 </div>
             </div>

@@ -50,7 +50,7 @@ export default function LocationCostCodes() {
                                 <TableRow>
                                     <TableHead className="pl-3 sm:pl-6">Code</TableHead>
                                     <TableHead>Description</TableHead>
-                                    <TableHead className="w-20 pr-3 text-right sm:pr-6">Action</TableHead>
+                                    <TableHead className="w-24 pr-3 text-right sm:pr-6">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -71,7 +71,7 @@ export default function LocationCostCodes() {
                                     </TableRow>
                                 ) : (
                                     location.cost_codes.map((costCode) => (
-                                        <TableRow key={costCode.id} className="group">
+                                        <TableRow key={costCode.id}>
                                             <TableCell className="pl-3 sm:pl-6">
                                                 <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                                                     {costCode.code}
@@ -80,12 +80,9 @@ export default function LocationCostCodes() {
                                             <TableCell className="text-muted-foreground">{costCode.description}</TableCell>
                                             <TableCell className="pr-3 text-right sm:pr-6">
                                                 <Link href={`/locations/${location.id}/cost-codes/${costCode.id}/delete`}>
-                                                    <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="text-muted-foreground hover:text-destructive h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
+                                                    <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive gap-1.5">
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        Delete
                                                     </Button>
                                                 </Link>
                                             </TableCell>

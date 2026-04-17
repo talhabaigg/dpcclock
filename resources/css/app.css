@@ -276,26 +276,29 @@
 }
 
 
-/* AG Grid Total Row Styling */
+/* AG Grid Total Row Styling — aligned with shadcn muted token */
 .ag-row-total {
-    background-color: #e2e8f0 !important;
-    font-weight: 700 !important;
-    border-top: 2px solid #94a3b8 !important;
+    background-color: var(--muted) !important;
+    font-weight: 600 !important;
+    border-top: 1px solid var(--border) !important;
 }
 
 .ag-row-total .ag-cell {
-    background-color: #e2e8f0 !important;
-    color: #1e293b !important;
+    background-color: var(--muted) !important;
+    color: var(--foreground) !important;
 }
 
-.dark .ag-row-total {
-    background-color: #1f2937 !important;
-    border-top: 2px solid #4b5563 !important;
+/* AG Grid cell change flash — subtle theme-aware highlight on commit */
+.ag-cell.ag-cell-data-changed,
+.ag-cell.ag-cell-data-changed-animation {
+    background-color: color-mix(in oklch, var(--primary) 20%, transparent) !important;
+    transition: background-color 500ms ease-out !important;
 }
-
-.dark .ag-row-total .ag-cell {
-    background-color: #1f2937 !important;
-    color: #f3f4f6 !important;
+@media (prefers-reduced-motion: reduce) {
+    .ag-cell.ag-cell-data-changed,
+    .ag-cell.ag-cell-data-changed-animation {
+        transition: none !important;
+    }
 }
 
 

@@ -2,11 +2,32 @@
  * Job Forecast Page - Refactored for improved readability and maintainability
  */
 
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
@@ -29,18 +50,19 @@ import {
     Loader2,
     Lock,
     MessageSquare,
+    MoreHorizontal,
     Percent,
     Plus,
     Save,
     Scale,
     Send,
     Trash2,
-    TrendingUp,
     Unlock,
     Users,
     XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { AccrualSummaryChart, type AccrualDataPoint, type AccrualViewMode } from './AccrualSummaryChart';
 import { ExcelUploadDialog } from './ExcelUploadDialog';
 import { ForecastDialogChart, type ChartViewMode } from './ForecastDialogChart';
@@ -64,6 +86,24 @@ import type { ChartContext, GridRow, JobForecastProps } from './types';
 import { formatMonthHeader, withRowKeys } from './utils';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+function formatRelativeTime(value: string | Date): string {
+    const date = value instanceof Date ? value : new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    const diffSec = Math.round(diffMs / 1000);
+    if (diffSec < 45) return 'just now';
+    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    if (diffSec < 90) return rtf.format(-1, 'minute');
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 45) return rtf.format(-diffMin, 'minute');
+    const diffHour = Math.round(diffMin / 60);
+    if (diffHour < 22) return rtf.format(-diffHour, 'hour');
+    const diffDay = Math.round(diffHour / 24);
+    if (diffDay < 26) return rtf.format(-diffDay, 'day');
+    const diffMonth = Math.round(diffDay / 30);
+    if (diffMonth < 11) return rtf.format(-diffMonth, 'month');
+    return rtf.format(-Math.round(diffDay / 365), 'year');
+}
 
 const ShowJobForecastPage = ({
     costRowData,
@@ -105,8 +145,22 @@ const ShowJobForecastPage = ({
     const [topGridHeight, setTopGridHeight] = useState(50); // percentage
     const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('cumulative-percent');
     const [isSaving, setIsSaving] = useState(false);
-    const [saveSuccess, setSaveSuccess] = useState(false);
-    const [saveError, setSaveError] = useState<string | null>(null);
+    const saveToastId = useRef<string | number | null>(null);
+
+    type ConfirmState = {
+        open: boolean;
+        title: string;
+        description?: string;
+        confirmLabel: string;
+        destructive?: boolean;
+        onConfirm?: () => void;
+    };
+    const [confirmState, setConfirmState] = useState<ConfirmState>({
+        open: false,
+        title: '',
+        confirmLabel: 'Confirm',
+    });
+    const askConfirm = useCallback((opts: Omit<ConfirmState, 'open'>) => setConfirmState({ ...opts, open: true }), []);
     const [selectedForecastMonth, setSelectedForecastMonth] = useState(initialForecastMonth || currentMonth || new Date().toISOString().slice(0, 7));
     // Workflow state
     const [isWorkflowProcessing, setIsWorkflowProcessing] = useState(false);
@@ -198,17 +252,39 @@ const ShowJobForecastPage = ({
     const [isLoadingLabourCosts, setIsLoadingLabourCosts] = useState(false);
     const [labourCostError, setLabourCostError] = useState<string | null>(null);
     const [labourPopulateMode, setLabourPopulateMode] = useState<'merge' | 'replace'>('replace');
-    const [isPopulatingLabour, setIsPopulatingLabour] = useState(false);
     const [isLabourPopulated, setIsLabourPopulated] = useState(false);
 
     const gridOne = useRef<AgGridReact>(null);
     const gridTwo = useRef<AgGridReact>(null);
+    const saveForecastRef = useRef<() => void>(() => {});
 
     useEffect(() => {
         if (initialForecastMonth) {
             setSelectedForecastMonth(initialForecastMonth);
         }
     }, [initialForecastMonth]);
+
+    // Ctrl/Cmd+S → Save forecast (skip when editing a cell or input)
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            const isSaveChord = (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S');
+            if (!isSaveChord) return;
+
+            const target = e.target as HTMLElement | null;
+            const inEditor =
+                target?.closest('.ag-cell-edit-wrapper, .ag-large-text-input, [contenteditable="true"]') ||
+                target?.tagName === 'INPUT' ||
+                target?.tagName === 'TEXTAREA';
+            if (inEditor) return;
+
+            e.preventDefault();
+            if (!isSaving && !isEditingLocked) {
+                saveForecastRef.current?.();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isSaving, isEditingLocked]);
 
     // Sync summary comments when forecast workflow changes
     useEffect(() => {
@@ -267,15 +343,18 @@ const ShowJobForecastPage = ({
     const handleToggleLock = useCallback(() => {
         if (!locationId) return;
         const targetLock = !isEditingLocked;
-        const message = targetLock ? 'Lock this forecast? It will become view-only.' : 'Unlock this forecast to allow edits?';
-        if (!confirm(message)) return;
-
-        router.post(
-            `/location/${locationId}/job-forecast/lock`,
-            { forecast_month: selectedForecastMonth, is_locked: targetLock },
-            { preserveScroll: true },
-        );
-    }, [isEditingLocked, locationId, selectedForecastMonth]);
+        askConfirm({
+            title: targetLock ? 'Lock this forecast?' : 'Unlock this forecast?',
+            description: targetLock ? 'It will become view-only until unlocked.' : 'Edits will be allowed again.',
+            confirmLabel: targetLock ? 'Lock' : 'Unlock',
+            onConfirm: () =>
+                router.post(
+                    `/location/${locationId}/job-forecast/lock`,
+                    { forecast_month: selectedForecastMonth, is_locked: targetLock },
+                    { preserveScroll: true },
+                ),
+        });
+    }, [isEditingLocked, locationId, selectedForecastMonth, askConfirm]);
 
     const handleChartOpen = useCallback(
         (ctx: ChartContext) => {
@@ -293,35 +372,45 @@ const ShowJobForecastPage = ({
     // ===========================
     const handleSubmitForecast = useCallback(() => {
         if (!locationId || !forecastWorkflow?.canSubmit) return;
-        if (!confirm('Submit this forecast for review? You will not be able to edit it after submission.')) return;
-
-        setIsWorkflowProcessing(true);
-        router.post(
-            `/location/${locationId}/job-forecast/submit`,
-            { forecast_month: selectedForecastMonth },
-            {
-                preserveScroll: true,
-                onSuccess: () => setIsWorkflowProcessing(false),
-                onError: () => setIsWorkflowProcessing(false),
+        askConfirm({
+            title: 'Submit forecast for review?',
+            description: 'You will not be able to edit it after submission.',
+            confirmLabel: 'Submit',
+            onConfirm: () => {
+                setIsWorkflowProcessing(true);
+                router.post(
+                    `/location/${locationId}/job-forecast/submit`,
+                    { forecast_month: selectedForecastMonth },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => setIsWorkflowProcessing(false),
+                        onError: () => setIsWorkflowProcessing(false),
+                    },
+                );
             },
-        );
-    }, [locationId, forecastWorkflow?.canSubmit, selectedForecastMonth]);
+        });
+    }, [locationId, forecastWorkflow?.canSubmit, selectedForecastMonth, askConfirm]);
 
     const handleFinalizeForecast = useCallback(() => {
         if (!locationId || !forecastWorkflow?.canFinalize || !canUserFinalize) return;
-        if (!confirm('Finalize this forecast? It will be locked and no further changes will be allowed.')) return;
-
-        setIsWorkflowProcessing(true);
-        router.post(
-            `/location/${locationId}/job-forecast/finalize`,
-            { forecast_month: selectedForecastMonth },
-            {
-                preserveScroll: true,
-                onSuccess: () => setIsWorkflowProcessing(false),
-                onError: () => setIsWorkflowProcessing(false),
+        askConfirm({
+            title: 'Finalize this forecast?',
+            description: 'It will be locked and no further changes will be allowed.',
+            confirmLabel: 'Finalize',
+            onConfirm: () => {
+                setIsWorkflowProcessing(true);
+                router.post(
+                    `/location/${locationId}/job-forecast/finalize`,
+                    { forecast_month: selectedForecastMonth },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => setIsWorkflowProcessing(false),
+                        onError: () => setIsWorkflowProcessing(false),
+                    },
+                );
             },
-        );
-    }, [locationId, forecastWorkflow?.canFinalize, canUserFinalize, selectedForecastMonth]);
+        });
+    }, [locationId, forecastWorkflow?.canFinalize, canUserFinalize, selectedForecastMonth, askConfirm]);
 
     const handleRejectForecast = useCallback(() => {
         if (!locationId || !forecastWorkflow?.canReject || !canUserFinalize) return;
@@ -344,24 +433,25 @@ const ShowJobForecastPage = ({
 
     const handleCopyFromPreviousMonth = useCallback(() => {
         if (!locationId || !selectedForecastMonth) return;
-        if (
-            !confirm(
-                'Copy forecast data from the previous month? This will copy all cost and revenue forecasts, shifting them forward by one month. Any existing data for this month will be merged/updated.',
-            )
-        )
-            return;
-
-        setIsWorkflowProcessing(true);
-        router.post(
-            `/location/${locationId}/job-forecast/copy-from-previous`,
-            { target_month: selectedForecastMonth },
-            {
-                preserveScroll: true,
-                onSuccess: () => setIsWorkflowProcessing(false),
-                onError: () => setIsWorkflowProcessing(false),
+        askConfirm({
+            title: 'Copy forecast from previous month?',
+            description:
+                'This will copy all cost and revenue forecasts, shifting them forward by one month. Any existing data for this month will be merged or updated.',
+            confirmLabel: 'Copy',
+            onConfirm: () => {
+                setIsWorkflowProcessing(true);
+                router.post(
+                    `/location/${locationId}/job-forecast/copy-from-previous`,
+                    { target_month: selectedForecastMonth },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => setIsWorkflowProcessing(false),
+                        onError: () => setIsWorkflowProcessing(false),
+                    },
+                );
             },
-        );
-    }, [locationId, selectedForecastMonth]);
+        });
+    }, [locationId, selectedForecastMonth, askConfirm]);
 
     // ===========================
     // Labour Cost Population
@@ -392,41 +482,27 @@ const ShowJobForecastPage = ({
     const handlePopulateLabourCosts = useCallback(() => {
         if (!labourCostData) return;
 
-        setIsPopulatingLabour(true);
+        setCostGridData((prev) =>
+            prev.map((row) => {
+                const labourItem = labourCostData.forecast_data.find((item) => item.cost_item === row.cost_item);
+                if (!labourItem) return row;
 
-        // 3 second delay to give user perception that the system is working hard
-        setTimeout(() => {
-            setCostGridData((prev) =>
-                prev.map((row) => {
-                    // Find matching labour cost data for this cost item
-                    const labourItem = labourCostData.forecast_data.find((item) => item.cost_item === row.cost_item);
-
-                    if (!labourItem) return row;
-
-                    const updatedRow = { ...row };
-
-                    // Apply values to forecast months
-                    Object.entries(labourItem.months).forEach(([month, amount]) => {
-                        if (forecastMonths.includes(month)) {
-                            // Handle current month overlap scenario
-                            const fieldName = currentMonth === month && row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
-
-                            if (labourPopulateMode === 'replace') {
-                                updatedRow[fieldName] = amount;
-                            } else {
-                                // Merge: add to existing value
-                                updatedRow[fieldName] = (Number(updatedRow[fieldName]) || 0) + amount;
-                            }
+                const updatedRow = { ...row };
+                Object.entries(labourItem.months).forEach(([month, amount]) => {
+                    if (forecastMonths.includes(month)) {
+                        const fieldName = currentMonth === month && row[`forecast_${month}`] !== undefined ? `forecast_${month}` : month;
+                        if (labourPopulateMode === 'replace') {
+                            updatedRow[fieldName] = amount;
+                        } else {
+                            updatedRow[fieldName] = (Number(updatedRow[fieldName]) || 0) + amount;
                         }
-                    });
+                    }
+                });
+                return updatedRow;
+            }),
+        );
 
-                    return updatedRow;
-                }),
-            );
-
-            setIsPopulatingLabour(false);
-            setIsLabourPopulated(true);
-        }, 3000);
+        setIsLabourPopulated(true);
     }, [labourCostData, forecastMonths, currentMonth, labourPopulateMode]);
 
     const handleCloseLabourDialog = useCallback(() => {
@@ -438,6 +514,14 @@ const ShowJobForecastPage = ({
     // ===========================
     // Summary Comments
     // ===========================
+    const summaryPreview = useMemo(() => {
+        if (!summaryComments) return '';
+        if (typeof document === 'undefined') return summaryComments;
+        const div = document.createElement('div');
+        div.innerHTML = summaryComments;
+        return (div.textContent || div.innerText || '').trim();
+    }, [summaryComments]);
+
     const handleSaveSummaryComments = useCallback(() => {
         if (!locationId || !selectedForecastMonth) return;
 
@@ -450,8 +534,14 @@ const ShowJobForecastPage = ({
             },
             {
                 preserveScroll: true,
-                onSuccess: () => setIsSavingComments(false),
-                onError: () => setIsSavingComments(false),
+                onSuccess: () => {
+                    setIsSavingComments(false);
+                    toast.success('Comments saved');
+                },
+                onError: () => {
+                    setIsSavingComments(false);
+                    toast.error('Could not save comments. Please try again.');
+                },
             },
         );
     }, [locationId, selectedForecastMonth, summaryComments]);
@@ -523,20 +613,19 @@ const ShowJobForecastPage = ({
     // Save Forecast
     // ===========================
     const saveForecast = useCallback(() => {
-        setIsSaving(true);
-        setSaveError(null);
-
         if (isEditingLocked) {
-            setIsSaving(false);
-            setSaveError('This forecast is locked and cannot be edited.');
+            toast.error('This forecast is locked and cannot be edited.');
             return;
         }
 
         if (!isForecastProject && !selectedForecastMonth) {
-            setIsSaving(false);
-            setSaveError('Please select a forecast month before saving.');
+            toast.error('Select a forecast month before saving.');
             return;
         }
+
+        setIsSaving(true);
+        const savedSummary = `${costGridData.length} cost · ${revenueGridData.length} revenue`;
+        saveToastId.current = toast.loading('Saving forecast…', { description: savedSummary });
 
         // Prepare forecast data
         const costForecastData = costGridData.map((row) => {
@@ -602,20 +691,18 @@ const ShowJobForecastPage = ({
                 preserveScroll: true,
                 onSuccess: () => {
                     setIsSaving(false);
-                    setSaveSuccess(true);
+                    toast.success('Forecast saved', { id: saveToastId.current ?? undefined, description: savedSummary });
                     setPendingDeletedItemIds({ cost: [], revenue: [] });
                     setPendingOrphanedCostItemsToDelete({ cost: [], revenue: [] });
-                    setTimeout(() => {
-                        setSaveSuccess(false);
-                    }, 1500);
                 },
                 onError: (errors) => {
                     setIsSaving(false);
-                    // Format error messages
                     const errorMessages = Object.entries(errors)
                         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                         .join('\n');
-                    setSaveError(errorMessages || 'Failed to save forecast. Please try again.');
+                    toast.error(errorMessages || 'Failed to save forecast. Please try again.', {
+                        id: saveToastId.current ?? undefined,
+                    });
                 },
             });
         } else {
@@ -643,17 +730,16 @@ const ShowJobForecastPage = ({
                                 preserveScroll: true,
                                 onSuccess: () => {
                                     setIsSaving(false);
-                                    setSaveSuccess(true);
-                                    setTimeout(() => {
-                                        setSaveSuccess(false);
-                                    }, 1500);
+                                    toast.success('Forecast saved', { id: saveToastId.current ?? undefined, description: savedSummary });
                                 },
                                 onError: (errors) => {
                                     setIsSaving(false);
                                     const errorMessages = Object.entries(errors)
                                         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                                         .join('\n');
-                                    setSaveError(errorMessages || 'Failed to save revenue forecast.');
+                                    toast.error(errorMessages || 'Failed to save revenue forecast.', {
+                                        id: saveToastId.current ?? undefined,
+                                    });
                                 },
                             },
                         );
@@ -663,7 +749,9 @@ const ShowJobForecastPage = ({
                         const errorMessages = Object.entries(errors)
                             .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
                             .join('\n');
-                        setSaveError(errorMessages || 'Failed to save cost forecast.');
+                        toast.error(errorMessages || 'Failed to save cost forecast.', {
+                            id: saveToastId.current ?? undefined,
+                        });
                     },
                 },
             );
@@ -679,6 +767,9 @@ const ShowJobForecastPage = ({
         selectedForecastMonth,
         isEditingLocked,
     ]);
+
+    // Keep Ctrl/Cmd+S handler pointing at the latest saveForecast
+    saveForecastRef.current = saveForecast;
 
     // ===========================
     // Forecast Project Item Management
@@ -740,67 +831,75 @@ const ShowJobForecastPage = ({
     const handleDeleteSelectedCostItems = () => {
         const selectedNodes = gridOne.current?.api?.getSelectedNodes();
         if (!selectedNodes || selectedNodes.length === 0) {
-            alert('Please select items to delete');
+            toast.info('Select the rows you want to delete first.');
             return;
         }
 
-        if (!confirm(`Are you sure you want to delete ${selectedNodes.length} cost item(s)?`)) return;
+        const count = selectedNodes.length;
+        askConfirm({
+            title: `Delete ${count} cost item${count === 1 ? '' : 's'}?`,
+            description: 'This removes them from the grid. Changes save when you click Save.',
+            confirmLabel: 'Delete',
+            destructive: true,
+            onConfirm: () => {
+                const idsToDelete = selectedNodes.map((node) => node.data.id);
 
-        const idsToDelete = selectedNodes.map((node) => node.data.id);
+                setCostGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
 
-        // Remove from grid data
-        setCostGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
+                const existingIds = idsToDelete.filter((id: number) => id > 0);
+                if (existingIds.length > 0) {
+                    setPendingDeletedItemIds((prev) => ({
+                        ...prev,
+                        cost: [...prev.cost, ...existingIds],
+                    }));
+                }
 
-        // Track existing items for deletion on save
-        const existingIds = idsToDelete.filter((id: number) => id > 0);
-        if (existingIds.length > 0) {
-            setPendingDeletedItemIds((prev) => ({
-                ...prev,
-                cost: [...prev.cost, ...existingIds],
-            }));
-        }
-
-        // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
-        if (orphanedCostItems.length > 0) {
-            setPendingOrphanedCostItemsToDelete((prev) => ({
-                ...prev,
-                cost: [...prev.cost, ...orphanedCostItems],
-            }));
-        }
+                const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
+                if (orphanedCostItems.length > 0) {
+                    setPendingOrphanedCostItemsToDelete((prev) => ({
+                        ...prev,
+                        cost: [...prev.cost, ...orphanedCostItems],
+                    }));
+                }
+            },
+        });
     };
 
     const handleDeleteSelectedRevenueItems = () => {
         const selectedNodes = gridTwo.current?.api?.getSelectedNodes();
         if (!selectedNodes || selectedNodes.length === 0) {
-            alert('Please select items to delete');
+            toast.info('Select the rows you want to delete first.');
             return;
         }
 
-        if (!confirm(`Are you sure you want to delete ${selectedNodes.length} revenue item(s)?`)) return;
+        const count = selectedNodes.length;
+        askConfirm({
+            title: `Delete ${count} revenue item${count === 1 ? '' : 's'}?`,
+            description: 'This removes them from the grid. Changes save when you click Save.',
+            confirmLabel: 'Delete',
+            destructive: true,
+            onConfirm: () => {
+                const idsToDelete = selectedNodes.map((node) => node.data.id);
 
-        const idsToDelete = selectedNodes.map((node) => node.data.id);
+                setRevenueGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
 
-        // Remove from grid data
-        setRevenueGridData((prev) => prev.filter((row) => !idsToDelete.includes(row.id)));
+                const existingIds = idsToDelete.filter((id: number) => id > 0);
+                if (existingIds.length > 0) {
+                    setPendingDeletedItemIds((prev) => ({
+                        ...prev,
+                        revenue: [...prev.revenue, ...existingIds],
+                    }));
+                }
 
-        // Track existing items for deletion on save
-        const existingIds = idsToDelete.filter((id: number) => id > 0);
-        if (existingIds.length > 0) {
-            setPendingDeletedItemIds((prev) => ({
-                ...prev,
-                revenue: [...prev.revenue, ...existingIds],
-            }));
-        }
-
-        // Track orphaned rows for deletion (negative IDs with is_orphaned flag)
-        const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
-        if (orphanedCostItems.length > 0) {
-            setPendingOrphanedCostItemsToDelete((prev) => ({
-                ...prev,
-                revenue: [...prev.revenue, ...orphanedCostItems],
-            }));
-        }
+                const orphanedCostItems = selectedNodes.filter((node) => node.data.is_orphaned).map((node) => node.data.cost_item as string);
+                if (orphanedCostItems.length > 0) {
+                    setPendingOrphanedCostItemsToDelete((prev) => ({
+                        ...prev,
+                        revenue: [...prev.revenue, ...orphanedCostItems],
+                    }));
+                }
+            },
+        });
     };
 
     // ===========================
@@ -932,6 +1031,7 @@ const ShowJobForecastPage = ({
             sortable: false,
             filter: false,
             suppressMovable: true,
+            enableCellChangeFlash: true,
         }),
         [],
     );
@@ -1135,51 +1235,46 @@ const ShowJobForecastPage = ({
                     if (!open) setChartCtx({ open: false });
                 }}
             >
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] sm:rounded-xl lg:min-w-7xl dark:border-slate-700 dark:bg-slate-900">
-                    {/* Header - indigo accent with subtle gradient */}
-                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
-                        {/* Subtle decorative element */}
-                        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
-                        <div className="relative flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 flex-1 items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
-                                    <TrendingUp className="h-4 w-4 text-white" />
-                                </div>
-                                <div className="min-w-0">
-                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
-                                        {chartCtx.open ? chartCtx.title : ''}
-                                    </DialogTitle>
-                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Forecast Trend</p>
-                                </div>
+                <DialogContent className="bg-background flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-0 shadow-xl sm:h-[85vh] sm:max-h-[750px] sm:w-auto sm:max-w-5xl sm:min-w-[90vw] sm:rounded-xl lg:min-w-7xl">
+                    <DialogHeader className="flex-shrink-0 border-b px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                                <DialogTitle className="truncate text-base font-semibold">{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
+                                <DialogDescription>Forecast trend</DialogDescription>
                             </div>
-                            <div className="flex flex-shrink-0 gap-2">
-                                <div className="rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
-                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
-                                        {activeBudget ? `$${activeBudget.toLocaleString()}` : '-'}
+                            <div className="flex flex-shrink-0 items-start gap-6 pr-4 text-right">
+                                <div>
+                                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Budget</p>
+                                    <p className="mt-0.5 text-base font-semibold tabular-nums">
+                                        {activeBudget ? `$${activeBudget.toLocaleString()}` : '—'}
                                     </p>
-                                    <p className="text-[10px] font-medium tracking-wide text-indigo-500 uppercase dark:text-indigo-400">Budget</p>
                                 </div>
-                                <div className="rounded-lg border border-emerald-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-emerald-800 dark:bg-slate-800/80">
-                                    <p className={`text-sm font-bold sm:text-base ${activeRemaining !== undefined && activeRemaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
-                                        {activeRemaining !== undefined ? `$${activeRemaining.toLocaleString()}` : '-'}
+                                <div>
+                                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Remaining</p>
+                                    <p
+                                        className={`mt-0.5 text-base font-semibold tabular-nums ${
+                                            activeRemaining !== undefined && activeRemaining < 0 ? 'text-destructive' : ''
+                                        }`}
+                                    >
+                                        {activeRemaining !== undefined ? `$${activeRemaining.toLocaleString()}` : '—'}
                                     </p>
-                                    <p className="text-[10px] font-medium tracking-wide text-emerald-500 uppercase dark:text-emerald-400">Remaining</p>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </DialogHeader>
 
                     {/* View Mode Toggle - icon only */}
-                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                    <div className="flex-shrink-0 border-b px-4 py-2 sm:px-6">
                         <TooltipProvider delayDuration={300}>
-                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
+                            <div className="bg-muted inline-flex rounded-md p-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                            type="button"
+                                            className={`flex items-center justify-center rounded-sm px-3 py-1.5 transition-colors ${
                                                 chartViewMode === 'cumulative-percent'
-                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
-                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                             onClick={() => setChartViewMode('cumulative-percent')}
                                         >
@@ -1193,10 +1288,11 @@ const ShowJobForecastPage = ({
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                            type="button"
+                                            className={`flex items-center justify-center rounded-sm px-3 py-1.5 transition-colors ${
                                                 chartViewMode === 'monthly-amount'
-                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
-                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                             onClick={() => setChartViewMode('monthly-amount')}
                                         >
@@ -1211,11 +1307,7 @@ const ShowJobForecastPage = ({
                         </TooltipProvider>
                     </div>
 
-                    <DialogHeader className="sr-only">
-                        <DialogTitle>{chartCtx.open ? chartCtx.title : ''}</DialogTitle>
-                    </DialogHeader>
-
-                    <div className="min-h-0 flex-1 bg-white px-3 py-3 sm:px-5 sm:py-4 dark:bg-slate-900">
+                    <div className="bg-background min-h-0 flex-1 px-3 py-3 sm:px-5 sm:py-4">
                         <ForecastDialogChart
                             data={activeChartRows}
                             editable={chartCtx.open ? chartCtx.editable : false}
@@ -1227,9 +1319,9 @@ const ShowJobForecastPage = ({
                     </div>
 
                     {chartCtx.open && chartCtx.editable && (
-                        <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
-                            <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span>{' '}
+                        <div className="bg-muted/40 flex-shrink-0 border-t px-4 py-2.5 sm:px-6">
+                            <p className="text-muted-foreground text-xs">
+                                <span className="text-foreground font-medium">Tip:</span>{' '}
                                 <span className="hidden sm:inline">
                                     Click forecast points to edit values. In Monthly view, drag points to adjust. Actual data points are locked.
                                 </span>
@@ -1263,53 +1355,42 @@ const ShowJobForecastPage = ({
 
             {/* Accrual Summary Dialog */}
             <Dialog open={accrualDialogOpen} onOpenChange={setAccrualDialogOpen}>
-                <DialogContent className="flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden border border-slate-200 bg-white p-0 shadow-xl sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:rounded-xl dark:border-slate-700 dark:bg-slate-900">
-                    {/* Header - indigo accent with subtle gradient */}
-                    <div className="relative flex-shrink-0 overflow-hidden border-b-2 border-indigo-100 bg-gradient-to-r from-slate-50 via-indigo-50/50 to-violet-50/30 px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 dark:border-indigo-900/50 dark:from-slate-800 dark:via-indigo-950/30 dark:to-slate-800">
-                        {/* Subtle decorative element */}
-                        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10" />
-                        <div className="relative flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 flex-1 items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/30">
-                                    <BarChart3 className="h-4 w-4 text-white" />
-                                </div>
-                                <div className="min-w-0">
-                                    <DialogTitle className="truncate text-sm font-semibold text-slate-800 sm:text-base dark:text-slate-100">
-                                        Accrual Summary
-                                    </DialogTitle>
-                                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Job Progression</p>
-                                </div>
+                <DialogContent className="bg-background flex h-[95vh] w-[98vw] max-w-[98vw] flex-col overflow-hidden p-0 shadow-xl sm:h-[90vh] sm:w-[95vw] sm:max-w-[1600px] sm:rounded-xl">
+                    <DialogHeader className="flex-shrink-0 border-b px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                                <DialogTitle className="text-base font-semibold">Accrual Summary</DialogTitle>
+                                <DialogDescription>Job progression</DialogDescription>
                             </div>
-                            <div className="flex flex-shrink-0 gap-4 rounded-lg border border-indigo-200 bg-white/80 px-3 py-1.5 text-right backdrop-blur-sm dark:border-indigo-800 dark:bg-slate-800/80">
+                            <div className="flex flex-shrink-0 items-start gap-6 pr-4 text-right">
                                 <div>
-                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
-                                        {totalCostBudget ? `$${totalCostBudget.toLocaleString()}` : '-'}
+                                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Cost Budget</p>
+                                    <p className="mt-0.5 text-base font-semibold tabular-nums">
+                                        {totalCostBudget ? `$${totalCostBudget.toLocaleString()}` : '—'}
                                     </p>
-                                    <p className="text-[10px] font-medium tracking-wide text-blue-500 uppercase dark:text-blue-400">Cost Budget</p>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-slate-800 sm:text-base dark:text-slate-100">
-                                        {totalRevenueBudget ? `$${totalRevenueBudget.toLocaleString()}` : '-'}
-                                    </p>
-                                    <p className="text-[10px] font-medium tracking-wide text-green-500 uppercase dark:text-green-400">
-                                        Revenue Budget
+                                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Revenue Budget</p>
+                                    <p className="mt-0.5 text-base font-semibold tabular-nums">
+                                        {totalRevenueBudget ? `$${totalRevenueBudget.toLocaleString()}` : '—'}
                                     </p>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </DialogHeader>
 
                     {/* View Mode Toggle - icon only */}
-                    <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
+                    <div className="flex-shrink-0 border-b px-4 py-2 sm:px-6">
                         <TooltipProvider delayDuration={300}>
-                            <div className="inline-flex rounded-lg bg-slate-200/80 p-1 dark:bg-slate-700">
+                            <div className="bg-muted inline-flex rounded-md p-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                            type="button"
+                                            className={`flex items-center justify-center rounded-sm px-3 py-1.5 transition-colors ${
                                                 accrualViewMode === 'accrual-percent'
-                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
-                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                             onClick={() => setAccrualViewMode('accrual-percent')}
                                         >
@@ -1323,10 +1404,11 @@ const ShowJobForecastPage = ({
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
-                                            className={`flex items-center justify-center rounded-md px-3 py-1.5 transition-all ${
+                                            type="button"
+                                            className={`flex items-center justify-center rounded-sm px-3 py-1.5 transition-colors ${
                                                 accrualViewMode === 'accrual-dollar'
-                                                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-indigo-600 dark:text-white'
-                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                             onClick={() => setAccrualViewMode('accrual-dollar')}
                                         >
@@ -1341,11 +1423,7 @@ const ShowJobForecastPage = ({
                         </TooltipProvider>
                     </div>
 
-                    <DialogHeader className="sr-only">
-                        <DialogTitle>Accrual Summary</DialogTitle>
-                    </DialogHeader>
-
-                    <div className="min-h-0 flex-1 overflow-auto bg-white px-3 py-3 sm:px-5 sm:py-4 dark:bg-slate-900">
+                    <div className="bg-background min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-5 sm:py-4">
                         <AccrualSummaryChart
                             data={accrualData}
                             viewMode={accrualViewMode}
@@ -1357,10 +1435,10 @@ const ShowJobForecastPage = ({
                         />
                     </div>
 
-                    <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-6 dark:border-slate-700 dark:bg-slate-800/50">
-                        <p className="text-[10px] text-slate-500 sm:text-xs dark:text-slate-400">
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tip:</span> Solid lines represent actuals, dashed lines
-                            represent forecast values. Click legend items to toggle visibility.
+                    <div className="bg-muted/40 flex-shrink-0 border-t px-4 py-2.5 sm:px-6">
+                        <p className="text-muted-foreground text-xs">
+                            <span className="text-foreground font-medium">Tip:</span> Solid lines represent actuals, dashed lines represent forecast
+                            values. Click legend items to toggle visibility.
                         </p>
                     </div>
                 </DialogContent>
@@ -1373,59 +1451,48 @@ const ShowJobForecastPage = ({
                         <DialogHeader>
                             <DialogTitle>Add {itemDialogType === 'cost' ? 'Cost' : 'Revenue'} Item</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmitItem}>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <label htmlFor="cost_item" className="text-right text-sm font-medium">
-                                        Code *
-                                    </label>
-                                    <input
-                                        id="cost_item"
-                                        type="text"
-                                        value={itemFormData.cost_item}
-                                        onChange={(e) => setItemFormData({ ...itemFormData, cost_item: e.target.value })}
-                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
-                                        placeholder="e.g., 01-01"
-                                        required
-                                    />
-                                </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <label htmlFor="cost_item_description" className="text-right text-sm font-medium">
-                                        Description
-                                    </label>
-                                    <input
-                                        id="cost_item_description"
-                                        type="text"
-                                        value={itemFormData.cost_item_description}
-                                        onChange={(e) => setItemFormData({ ...itemFormData, cost_item_description: e.target.value })}
-                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <label htmlFor="amount" className="text-right text-sm font-medium">
-                                        {itemDialogType === 'cost' ? 'Budget *' : 'Amount *'}
-                                    </label>
-                                    <input
-                                        id="amount"
-                                        type="number"
-                                        step="0.01"
-                                        value={itemDialogType === 'cost' ? itemFormData.budget : itemFormData.contract_sum_to_date}
-                                        onChange={(e) =>
-                                            setItemFormData({
-                                                ...itemFormData,
-                                                [itemDialogType === 'cost' ? 'budget' : 'contract_sum_to_date']: e.target.value,
-                                            })
-                                        }
-                                        className="border-input bg-background col-span-3 rounded-md border px-3 py-2"
-                                        required
-                                    />
-                                </div>
+                        <form onSubmit={handleSubmitItem} className="space-y-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="cost_item">Code</Label>
+                                <Input
+                                    id="cost_item"
+                                    type="text"
+                                    value={itemFormData.cost_item}
+                                    onChange={(e) => setItemFormData({ ...itemFormData, cost_item: e.target.value })}
+                                    placeholder="e.g. 01-01"
+                                    required
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="cost_item_description">Description</Label>
+                                <Input
+                                    id="cost_item_description"
+                                    type="text"
+                                    value={itemFormData.cost_item_description}
+                                    onChange={(e) => setItemFormData({ ...itemFormData, cost_item_description: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="amount">{itemDialogType === 'cost' ? 'Budget' : 'Amount'}</Label>
+                                <Input
+                                    id="amount"
+                                    type="number"
+                                    step="0.01"
+                                    value={itemDialogType === 'cost' ? itemFormData.budget : itemFormData.contract_sum_to_date}
+                                    onChange={(e) =>
+                                        setItemFormData({
+                                            ...itemFormData,
+                                            [itemDialogType === 'cost' ? 'budget' : 'contract_sum_to_date']: e.target.value,
+                                        })
+                                    }
+                                    required
+                                />
                             </div>
                             <div className="flex justify-end gap-2">
                                 <Button type="button" variant="outline" onClick={() => setItemDialogOpen(false)}>
                                     Cancel
                                 </Button>
-                                <Button type="submit">Add Item</Button>
+                                <Button type="submit">Add item</Button>
                             </div>
                         </form>
                     </DialogContent>
@@ -1439,17 +1506,15 @@ const ShowJobForecastPage = ({
                         <DialogTitle>Reject Forecast</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Please provide a reason for rejecting this forecast. This will be sent to the submitter.
-                        </p>
+                        <p className="text-muted-foreground text-sm">Tell the submitter why this forecast is being sent back.</p>
                         <div className="grid gap-2">
-                            <Label htmlFor="rejection-note">Rejection Note</Label>
-                            <textarea
+                            <Label htmlFor="rejection-note">Rejection note</Label>
+                            <Textarea
                                 id="rejection-note"
                                 value={rejectionNote}
                                 onChange={(e) => setRejectionNote(e.target.value)}
-                                className="border-input bg-background min-h-[100px] w-full rounded-md border px-3 py-2 text-sm"
-                                placeholder="Enter the reason for rejection..."
+                                placeholder="Enter the reason for rejection…"
+                                className="min-h-[100px]"
                             />
                         </div>
                     </div>
@@ -1473,82 +1538,50 @@ const ShowJobForecastPage = ({
 
             {/* Labour Cost Populate Dialog */}
             <Dialog open={labourDialogOpen} onOpenChange={(open) => !open && handleCloseLabourDialog()}>
-                <DialogContent className={`w-full ${isPopulatingLabour ? 'max-w-sm' : 'min-w-96 sm:min-w-xl md:min-w-5xl lg:min-w-full'}`}>
-                    {/* Big Loading Overlay - uses negative margins to cover dialog padding */}
-                    {isPopulatingLabour && (
-                        <div className="absolute -inset-6 z-50 flex flex-col items-center justify-center rounded-lg bg-white dark:bg-slate-900">
-                            <div className="flex flex-col items-center gap-6">
-                                {/* Large spinning circle */}
-                                <div className="relative">
-                                    <div className="h-24 w-24 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600 dark:border-indigo-800 dark:border-t-indigo-400" />
-                                    <Users className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                {/* Loading text */}
-                                <div className="text-center">
-                                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Populating Labour Costs</h3>
-                                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                                        Calculating and distributing costs across forecast months...
-                                    </p>
-                                </div>
-                                {/* Progress dots */}
-                                <div className="flex gap-2">
-                                    <div
-                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
-                                        style={{ animationDelay: '0ms' }}
-                                    />
-                                    <div
-                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
-                                        style={{ animationDelay: '150ms' }}
-                                    />
-                                    <div
-                                        className="h-3 w-3 animate-bounce rounded-full bg-indigo-600 dark:bg-indigo-400"
-                                        style={{ animationDelay: '300ms' }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
+                <DialogContent className="w-full min-w-96 sm:min-w-xl md:min-w-5xl lg:min-w-full">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2">
                             <Users className="h-5 w-5" />
                             Populate Labour Costs
                         </DialogTitle>
+                        <DialogDescription>
+                            Review the approved labour forecast below, choose how to apply it, then populate the grid.
+                        </DialogDescription>
                     </DialogHeader>
 
                     {labourCostData && (
                         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
                             {/* Summary Info */}
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-                                <h4 className="mb-2 font-medium text-slate-700 dark:text-slate-300">Approved Labour Forecast</h4>
+                            <div className="bg-muted/40 rounded-md border p-4">
+                                <h4 className="mb-2 text-sm font-medium">Approved labour forecast</h4>
                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                     <div>
-                                        <span className="text-slate-500">Forecast Month:</span>{' '}
+                                        <span className="text-muted-foreground">Forecast month:</span>{' '}
                                         <span className="font-medium">{labourCostData.forecast_month}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-500">Approved:</span>{' '}
+                                        <span className="text-muted-foreground">Approved:</span>{' '}
                                         <span className="font-medium">{labourCostData.approved_at || 'N/A'}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-500">By:</span>{' '}
+                                        <span className="text-muted-foreground">By:</span>{' '}
                                         <span className="font-medium">{labourCostData.approved_by || 'N/A'}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-500">Cost Codes:</span>{' '}
+                                        <span className="text-muted-foreground">Cost codes:</span>{' '}
                                         <span className="font-medium">{labourCostData.summary.total_cost_codes}</span>
                                     </div>
                                     {labourCostData.summary.date_range && (
                                         <div className="col-span-2">
-                                            <span className="text-slate-500">Period:</span>{' '}
+                                            <span className="text-muted-foreground">Period:</span>{' '}
                                             <span className="font-medium">
                                                 {labourCostData.summary.date_range.start} to {labourCostData.summary.date_range.end}
                                             </span>
                                         </div>
                                     )}
                                     <div className="col-span-2">
-                                        <span className="text-slate-500">Total Amount:</span>{' '}
-                                        <span className="font-medium text-green-600">
+                                        <span className="text-muted-foreground">Total amount:</span>{' '}
+                                        <span className="font-semibold tabular-nums">
                                             ${labourCostData.summary.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </span>
                                     </div>
@@ -1576,17 +1609,17 @@ const ShowJobForecastPage = ({
                                 };
 
                                 return (
-                                    <div className="max-h-72 overflow-auto rounded-lg border">
+                                    <div className="max-h-72 overflow-auto rounded-md border">
                                         <table className="w-full text-sm">
-                                            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left whitespace-nowrap">Cost Code</th>
+                                            <thead className="bg-muted sticky top-0">
+                                                <tr className="text-muted-foreground">
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Cost code</th>
                                                     {allMonths.map((month) => (
-                                                        <th key={month} className="px-3 py-2 text-right whitespace-nowrap">
+                                                        <th key={month} className="px-3 py-2 text-right font-medium whitespace-nowrap">
                                                             {formatMonth(month)}
                                                         </th>
                                                     ))}
-                                                    <th className="px-3 py-2 text-right font-bold whitespace-nowrap">Total</th>
+                                                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Total</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1595,18 +1628,16 @@ const ShowJobForecastPage = ({
                                                     .map((item) => {
                                                         const rowTotal = Object.values(item.months).reduce((a, b) => a + b, 0);
                                                         return (
-                                                            <tr key={item.cost_item} className="border-t hover:bg-slate-50 dark:hover:bg-slate-800">
-                                                                <td className="px-3 py-2 font-mono whitespace-nowrap text-slate-700 dark:text-slate-300">
-                                                                    {item.cost_item}
-                                                                </td>
+                                                            <tr key={item.cost_item} className="hover:bg-muted/50 border-t">
+                                                                <td className="px-3 py-2 font-mono whitespace-nowrap">{item.cost_item}</td>
                                                                 {allMonths.map((month) => (
                                                                     <td key={month} className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
                                                                         {item.months[month]
                                                                             ? `$${item.months[month].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                                                                            : '-'}
+                                                                            : '—'}
                                                                     </td>
                                                                 ))}
-                                                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap text-slate-900 tabular-nums dark:text-slate-100">
+                                                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap tabular-nums">
                                                                     $
                                                                     {rowTotal.toLocaleString(undefined, {
                                                                         minimumFractionDigits: 0,
@@ -1617,14 +1648,11 @@ const ShowJobForecastPage = ({
                                                         );
                                                     })}
                                             </tbody>
-                                            <tfoot className="sticky bottom-0 bg-slate-100 dark:bg-slate-700">
-                                                <tr className="border-t-2 border-slate-300 font-bold dark:border-slate-600">
-                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">Total</td>
+                                            <tfoot className="bg-muted sticky bottom-0">
+                                                <tr className="border-t font-semibold">
+                                                    <td className="px-3 py-2">Total</td>
                                                     {allMonths.map((month) => (
-                                                        <td
-                                                            key={month}
-                                                            className="px-3 py-2 text-right text-green-700 tabular-nums dark:text-green-400"
-                                                        >
+                                                        <td key={month} className="px-3 py-2 text-right tabular-nums">
                                                             $
                                                             {monthTotals[month].toLocaleString(undefined, {
                                                                 minimumFractionDigits: 0,
@@ -1632,7 +1660,7 @@ const ShowJobForecastPage = ({
                                                             })}
                                                         </td>
                                                     ))}
-                                                    <td className="px-3 py-2 text-right text-green-700 tabular-nums dark:text-green-400">
+                                                    <td className="px-3 py-2 text-right tabular-nums">
                                                         $
                                                         {labourCostData.summary.total_amount.toLocaleString(undefined, {
                                                             minimumFractionDigits: 0,
@@ -1675,20 +1703,17 @@ const ShowJobForecastPage = ({
                                 </div>
                             </div>
 
-                            {/* Warning - show only before population */}
-                            {!isLabourPopulated && (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                                    <strong>Note:</strong> This will populate labour cost codes for months within your forecast period. Remember to
-                                    save the forecast after populating.
-                                </div>
-                            )}
-
-                            {/* Success message - show after population */}
-                            {isLabourPopulated && (
-                                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">
-                                    <strong>Success!</strong> Labour costs have been populated into the forecast grid. Please review the changes below
-                                    and save the forecast when ready.
-                                </div>
+                            {/* Note - shown before population, success - after */}
+                            {!isLabourPopulated ? (
+                                <p className="text-muted-foreground text-sm">
+                                    This populates labour cost codes for months within your forecast period. Remember to save the forecast after
+                                    populating.
+                                </p>
+                            ) : (
+                                <p className="text-sm">
+                                    <span className="font-medium">Populated.</span>{' '}
+                                    <span className="text-muted-foreground">Review the changes in the grid, then save the forecast.</span>
+                                </p>
                             )}
                         </div>
                     )}
@@ -1699,13 +1724,13 @@ const ShowJobForecastPage = ({
                                 <Button variant="outline" onClick={handleCloseLabourDialog}>
                                     Cancel
                                 </Button>
-                                <Button onClick={handlePopulateLabourCosts} disabled={!labourCostData || isPopulatingLabour}>
-                                    <Users className="mr-2 h-4 w-4" />
-                                    Populate Costs
+                                <Button onClick={handlePopulateLabourCosts} disabled={!labourCostData}>
+                                    <Users className="h-4 w-4" />
+                                    Populate costs
                                 </Button>
                             </>
                         ) : (
-                            <Button onClick={handleCloseLabourDialog}>Done - Review & Save</Button>
+                            <Button onClick={handleCloseLabourDialog}>Done — review &amp; save</Button>
                         )}
                     </div>
                 </DialogContent>
@@ -1718,7 +1743,7 @@ const ShowJobForecastPage = ({
                         <DialogHeader>
                             <DialogTitle className="text-red-600">Cannot Load Labour Costs</DialogTitle>
                         </DialogHeader>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">{labourCostError}</p>
+                        <p className="text-muted-foreground text-sm">{labourCostError}</p>
                         <div className="flex justify-end">
                             <Button variant="outline" onClick={() => setLabourCostError(null)}>
                                 Close
@@ -1728,269 +1753,62 @@ const ShowJobForecastPage = ({
                 </Dialog>
             )}
 
-            {/* Saving Loader Dialog */}
-            {isSaving && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="rounded-lg bg-white p-8 shadow-lg">
-                        <div className="flex flex-col items-center justify-center">
-                            <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600"></div>
-                            <p className="text-lg font-semibold">Saving forecast...</p>
-                            <p className="text-muted-foreground text-sm">Please wait, do not close this page</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Success Dialog */}
-            {saveSuccess && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="rounded-lg bg-white p-8 shadow-lg">
-                        <div className="flex flex-col items-center justify-center">
-                            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                            </div>
-                            <p className="text-lg font-semibold text-green-600">Saved successfully!</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Error Dialog */}
-            {saveError && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="max-w-md rounded-lg bg-white p-8 shadow-lg">
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                                <svg className="h-10 w-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </div>
-                            <p className="text-lg font-semibold text-red-600">Error Saving Forecast</p>
-                            <div className="max-h-48 w-full overflow-y-auto rounded bg-red-50 p-4">
-                                <pre className="text-sm whitespace-pre-wrap text-red-800">{saveError}</pre>
-                            </div>
-                            <Button onClick={() => setSaveError(null)} variant="outline">
-                                Close
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Confirmation Dialog (replaces window.confirm across the page) */}
+            <AlertDialog open={confirmState.open} onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{confirmState.title}</AlertDialogTitle>
+                        {confirmState.description && <AlertDialogDescription>{confirmState.description}</AlertDialogDescription>}
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant={confirmState.destructive ? 'destructive' : 'default'}
+                            onClick={() => {
+                                confirmState.onConfirm?.();
+                                setConfirmState((s) => ({ ...s, open: false }));
+                            }}
+                        >
+                            {confirmState.confirmLabel}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Main Content */}
             <div className="flex h-full flex-col">
-                {/* Responsive Toolbar */}
-                <div className="m-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                    {/* Top Row (mobile) / Left Section (desktop) */}
-                    <div className="flex items-center justify-between gap-1 lg:justify-start">
-                        {/* Navigation & Tool Buttons */}
-                        <div className="flex items-center gap-1">
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit('/turnover-forecast')}>
-                                            <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Back</TooltipContent>
-                                </Tooltip>
+                {/* Toolbar — quieted: primary controls + single overflow menu */}
+                <div className="m-2 flex flex-wrap items-center gap-2">
+                    <TooltipProvider delayDuration={300}>
+                        {/* Back */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit('/turnover-forecast')}>
+                                    <ArrowLeft className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Back to forecasts</TooltipContent>
+                        </Tooltip>
 
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAccrualDialogOpen(true)}>
-                                            <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Accrual Summary</TooltipContent>
-                                </Tooltip>
-
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRevenueReportOpen(true)}>
-                                            <FileText className="h-4 w-4 lg:h-5 lg:w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Revenue Report</TooltipContent>
-                                </Tooltip>
-
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExcelUploadOpen(true)}>
-                                            <FileSpreadsheet className="h-4 w-4 lg:h-5 lg:w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Excel Import/Export</TooltipContent>
-                                </Tooltip>
-
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Link
-                                            href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                <Scale className="h-4 w-4 lg:h-5 lg:w-5" />
-                                            </Button>
-                                        </Link>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Forecast v/s Actual</TooltipContent>
-                                </Tooltip>
-
-                                {/* Toggle: Use Actuals vs Forecast for current month remaining */}
-                                {!isForecastProject && currentMonth && (
-                                    <div className="flex flex-col items-center gap-0.5">
-                                        <span className="hidden text-[10px] text-muted-foreground lg:inline">Current month $ figures</span>
-                                        <ToggleGroup
-                                            type="single"
-                                            value={useActualsForCurrentMonth ? 'actuals' : 'forecast'}
-                                            onValueChange={(value) => {
-                                                if (value && value !== (useActualsForCurrentMonth ? 'actuals' : 'forecast')) {
-                                                    const newUseActuals = value === 'actuals';
-                                                    setUseActualsForCurrentMonth(newUseActuals);
-                                                    if (locationId && selectedForecastMonth) {
-                                                        router.post(
-                                                            `/location/${locationId}/job-forecast/toggle-use-actuals`,
-                                                            { forecast_month: selectedForecastMonth, use_actuals_for_current_month: newUseActuals },
-                                                            { preserveScroll: true, preserveState: true },
-                                                        );
-                                                    }
-                                                }
-                                            }}
-                                            className="h-5 rounded border dark:border-gray-600"
-                                        >
-                                            <ToggleGroupItem
-                                                value="forecast"
-                                                className="h-4 px-1 text-[9px] font-normal data-[state=on]:bg-blue-500 data-[state=on]:text-white"
-                                            >
-                                                Forecast
-                                            </ToggleGroupItem>
-                                            <ToggleGroupItem
-                                                value="actuals"
-                                                className="h-4 px-1 text-[9px] font-normal data-[state=on]:bg-amber-500 data-[state=on]:text-white"
-                                            >
-                                                Actuals
-                                            </ToggleGroupItem>
-                                        </ToggleGroup>
-                                    </div>
-                                )}
-                            </TooltipProvider>
-                        </div>
-
-                        {/* Last Refreshed - Hidden on mobile, shown on larger screens */}
-                        <div className="hidden flex-col md:flex">
-                            <p className="text-xs font-light text-gray-700 dark:text-gray-200">Job data last refreshed:</p>
-                            <Label className="text-xs font-bold">{lastUpdate ? `${new Date(lastUpdate).toLocaleString()}` : 'No Updates Yet'}</Label>
-                        </div>
-
-                        {/* Lock/Save buttons visible on mobile in top row */}
-                        <div className="flex items-center gap-1 lg:hidden">
-                            {!isForecastProject && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={handleToggleLock}
-                                                disabled={!selectedForecastMonth || isSaving}
-                                            >
-                                                {isEditingLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8"
-                                            onClick={saveForecast}
-                                            disabled={isSaving || isEditingLocked}
-                                        >
-                                            <Save className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{isEditingLocked ? 'Forecast Locked' : 'Save Forecast'}</TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </div>
-                    </div>
-
-                    {/* Bottom Row (mobile) / Right Section (desktop) */}
-                    <div className="flex flex-wrap items-center gap-2 lg:gap-3">
-                        {/* Workflow Status Badge */}
-                        {!isForecastProject && forecastWorkflow && (
-                            <div className="flex flex-wrap items-center gap-1 lg:gap-2">
-                                <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium lg:px-2.5 lg:text-xs ${
-                                        forecastWorkflow.statusColor === 'green'
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                            : forecastWorkflow.statusColor === 'blue'
-                                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                              : forecastWorkflow.statusColor === 'yellow'
-                                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                    }`}
-                                >
-                                    {forecastWorkflow.statusLabel}
-                                </span>
-                                {forecastWorkflow.submittedBy && forecastWorkflow.submittedAt && (
-                                    <span className="hidden text-xs text-gray-500 xl:inline dark:text-gray-400">
-                                        by {forecastWorkflow.submittedBy} on {new Date(forecastWorkflow.submittedAt).toLocaleDateString()}
-                                    </span>
-                                )}
-                                {forecastWorkflow.finalizedBy && forecastWorkflow.finalizedAt && (
-                                    <span className="hidden text-xs text-gray-500 xl:inline dark:text-gray-400">
-                                        by {forecastWorkflow.finalizedBy} on {new Date(forecastWorkflow.finalizedAt).toLocaleDateString()}
-                                    </span>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Rejection Note Display */}
-                        {!isForecastProject && forecastWorkflow?.rejectionNote && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span className="cursor-help text-[10px] text-red-600 lg:text-xs dark:text-red-400">Rejected</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                        <p className="text-sm">{forecastWorkflow.rejectionNote}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
-
-                        {/* Forecast Month Selector */}
+                        {/* Month scrubber */}
                         {!isForecastProject && (
-                            <div className="flex items-center gap-1 lg:gap-2">
-                                <Label htmlFor="forecast-month" className="hidden text-xs font-medium text-gray-700 sm:inline dark:text-gray-300">
-                                    Forecast Month
-                                </Label>
+                            <div className="flex items-center gap-1">
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 lg:h-8 lg:w-8"
+                                    className="h-8 w-8"
                                     onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, -1))}
                                     title="Previous month"
                                 >
-                                    <ChevronLeft className="h-3 w-3 lg:h-4 lg:w-4" />
+                                    <ChevronLeft className="h-4 w-4" />
                                 </Button>
                                 <input
                                     id="forecast-month"
                                     type="month"
                                     value={selectedForecastMonth}
                                     onChange={(e) => handleForecastMonthChange(e.target.value)}
-                                    className="border-input bg-background h-7 w-28 rounded-md border px-1 text-[10px] lg:h-8 lg:w-auto lg:px-2 lg:text-xs"
+                                    className="border-input bg-background h-8 w-32 rounded-md border px-2 text-xs"
                                     title={
                                         availableForecastMonths?.length
                                             ? `Saved months: ${availableForecastMonths.join(', ')}`
@@ -2001,277 +1819,261 @@ const ShowJobForecastPage = ({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 lg:h-8 lg:w-8"
+                                    className="h-8 w-8"
                                     onClick={() => handleForecastMonthChange(addMonths(selectedForecastMonth, 1))}
                                     title="Next month"
                                 >
-                                    <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4" />
+                                    <ChevronRight className="h-4 w-4" />
                                 </Button>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 lg:h-8 lg:w-8"
-                                                onClick={handleCopyFromPreviousMonth}
-                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked}
-                                                title="Copy from previous month"
-                                            >
-                                                <Copy className="h-3 w-3 lg:h-4 lg:w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Copy forecast data from previous month</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 lg:h-8 lg:w-8"
-                                                onClick={fetchLabourCosts}
-                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked || isLoadingLabourCosts}
-                                                title="Populate from Labour Forecast"
-                                            >
-                                                {isLoadingLabourCosts ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin lg:h-4 lg:w-4" />
-                                                ) : (
-                                                    <Users className="h-3 w-3 lg:h-4 lg:w-4" />
-                                                )}
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Populate labour costs from approved Labour Forecast</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
                             </div>
                         )}
 
-                        {/* Lock/Save buttons - Hidden on mobile, shown on desktop */}
-                        <div className="hidden items-center gap-1 lg:flex">
-                            {!isForecastProject && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={handleToggleLock}
-                                                disabled={!selectedForecastMonth || isSaving}
-                                            >
-                                                {isEditingLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>{isEditingLocked ? 'Unlock Forecast' : 'Lock Forecast'}</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                        {/* Spacer pushes the rest to the right */}
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
+                            {/* Status */}
+                            {!isForecastProject && forecastWorkflow && (
+                                <Badge
+                                    variant={
+                                        forecastWorkflow.statusColor === 'green'
+                                            ? 'default'
+                                            : forecastWorkflow.statusColor === 'blue'
+                                              ? 'secondary'
+                                              : 'outline'
+                                    }
+                                >
+                                    {forecastWorkflow.statusLabel}
+                                </Badge>
                             )}
-                            <Button onClick={saveForecast} disabled={isSaving || isEditingLocked}>
+                            {!isForecastProject && forecastWorkflow?.rejectionNote && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Badge variant="destructive" className="cursor-help">
+                                            Rejected
+                                        </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                        <p className="text-sm">{forecastWorkflow.rejectionNote}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
+
+                            {/* Last refreshed — subtle info */}
+                            {lastUpdate && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="text-muted-foreground hidden cursor-default text-xs lg:inline">
+                                            {formatRelativeTime(lastUpdate)}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Job data last refreshed {new Date(lastUpdate).toLocaleString()}</TooltipContent>
+                                </Tooltip>
+                            )}
+
+                            {/* Save */}
+                            <Button size="sm" onClick={saveForecast} disabled={isSaving || isEditingLocked}>
                                 <Save className="h-4 w-4" />
                                 {isEditingLocked ? 'Locked' : 'Save'}
                             </Button>
-                        </div>
 
-                        {/* Workflow Action Buttons */}
-                        {!isForecastProject && forecastWorkflow?.canSubmit && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className="group relative">
-                                            {/* Outer glow layer - full rainbow starting with blue */}
-                                            <div
-                                                className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
-                                                style={{
-                                                    background:
-                                                        'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
-                                                    backgroundSize: '300% 100%',
-                                                    animation: 'rainbow-flow 3s linear infinite',
-                                                }}
-                                            />
-                                            {/* Sharp border layer - full rainbow */}
-                                            <div
-                                                className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                                style={{
-                                                    background:
-                                                        'linear-gradient(90deg, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6)',
-                                                    backgroundSize: '300% 100%',
-                                                    animation: 'rainbow-flow 3s linear infinite',
-                                                }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleSubmitForecast}
-                                                disabled={isWorkflowProcessing || isSaving}
-                                                className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-blue-500 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-blue-400"
+                            {/* Workflow primary action */}
+                            {!isForecastProject && forecastWorkflow?.canSubmit && (
+                                <Button size="sm" onClick={handleSubmitForecast} disabled={isWorkflowProcessing || isSaving}>
+                                    <Send className="h-4 w-4" />
+                                    Submit
+                                </Button>
+                            )}
+
+                            {!isForecastProject && forecastWorkflow?.canFinalize && canUserFinalize && (
+                                <>
+                                    <Button size="sm" onClick={handleFinalizeForecast} disabled={isWorkflowProcessing || isSaving}>
+                                        <CheckCircle className="h-4 w-4" />
+                                        Finalize
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setRejectDialogOpen(true)}
+                                        disabled={isWorkflowProcessing || isSaving}
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                        Reject
+                                    </Button>
+                                </>
+                            )}
+
+                            {/* Overflow menu: secondary actions + display toggle + lock */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="More actions">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-60">
+                                    <DropdownMenuLabel className="text-muted-foreground text-xs">View</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => setAccrualDialogOpen(true)}>
+                                        <BarChart3 className="h-4 w-4" />
+                                        Accrual summary
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setRevenueReportOpen(true)}>
+                                        <FileText className="h-4 w-4" />
+                                        Revenue report
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link
+                                            href={`/location/${locationId}/compare-forecast-actuals?month=${selectedForecastMonth}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <Scale className="h-4 w-4" />
+                                            Forecast vs actual
+                                        </Link>
+                                    </DropdownMenuItem>
+
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="text-muted-foreground text-xs">Data</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => setExcelUploadOpen(true)}>
+                                        <FileSpreadsheet className="h-4 w-4" />
+                                        Excel import / export
+                                    </DropdownMenuItem>
+                                    {!isForecastProject && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onClick={handleCopyFromPreviousMonth}
+                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked}
                                             >
-                                                <Send className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
-                                                <span>Submit</span>
-                                            </button>
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Submit forecast for review</TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
+                                                <Copy className="h-4 w-4" />
+                                                Copy from previous month
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={fetchLabourCosts}
+                                                disabled={isWorkflowProcessing || isSaving || isEditingLocked || isLoadingLabourCosts}
+                                            >
+                                                {isLoadingLabourCosts ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+                                                Populate labour costs
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
 
-                        {!isForecastProject && forecastWorkflow?.canFinalize && canUserFinalize && (
-                            <div className="flex items-center gap-2 lg:gap-3">
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <div className="group relative">
-                                                {/* Outer glow layer - full rainbow */}
-                                                <div
-                                                    className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
-                                                    style={{
-                                                        background:
-                                                            'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
-                                                        backgroundSize: '300% 100%',
-                                                        animation: 'rainbow-flow 3s linear infinite',
-                                                    }}
-                                                />
-                                                {/* Sharp border layer - full rainbow */}
-                                                <div
-                                                    className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                                    style={{
-                                                        background:
-                                                            'linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #f97316, #eab308, #22c55e)',
-                                                        backgroundSize: '300% 100%',
-                                                        animation: 'rainbow-flow 3s linear infinite',
-                                                    }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={handleFinalizeForecast}
-                                                    disabled={isWorkflowProcessing || isSaving}
-                                                    className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-green-500 bg-white px-3 py-1.5 text-xs font-medium text-green-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-green-400"
-                                                >
-                                                    <CheckCircle className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
-                                                    <span>Finalize</span>
-                                                </button>
-                                            </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Approve and finalize forecast</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                                    {!isForecastProject && currentMonth && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel className="text-muted-foreground text-xs">Current-month $ figures</DropdownMenuLabel>
+                                            <DropdownMenuItem
+                                                onClick={() => {
+                                                    if (useActualsForCurrentMonth) return;
+                                                    setUseActualsForCurrentMonth(true);
+                                                    if (locationId && selectedForecastMonth) {
+                                                        router.post(
+                                                            `/location/${locationId}/job-forecast/toggle-use-actuals`,
+                                                            { forecast_month: selectedForecastMonth, use_actuals_for_current_month: true },
+                                                            { preserveScroll: true, preserveState: true },
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                <CheckCircle className={`h-4 w-4 ${useActualsForCurrentMonth ? 'opacity-100' : 'opacity-0'}`} />
+                                                Use actuals
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={() => {
+                                                    if (!useActualsForCurrentMonth) return;
+                                                    setUseActualsForCurrentMonth(false);
+                                                    if (locationId && selectedForecastMonth) {
+                                                        router.post(
+                                                            `/location/${locationId}/job-forecast/toggle-use-actuals`,
+                                                            { forecast_month: selectedForecastMonth, use_actuals_for_current_month: false },
+                                                            { preserveScroll: true, preserveState: true },
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                <CheckCircle className={`h-4 w-4 ${!useActualsForCurrentMonth ? 'opacity-100' : 'opacity-0'}`} />
+                                                Use forecast
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
 
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <div className="group relative">
-                                                {/* Outer glow layer - full rainbow */}
-                                                <div
-                                                    className="absolute -inset-1 rounded-full opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
-                                                    style={{
-                                                        background:
-                                                            'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
-                                                        backgroundSize: '300% 100%',
-                                                        animation: 'rainbow-flow 3s linear infinite',
-                                                    }}
-                                                />
-                                                {/* Sharp border layer - full rainbow */}
-                                                <div
-                                                    className="absolute -inset-[2px] rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                                                    style={{
-                                                        background:
-                                                            'linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #d946ef, #f43f5e, #ef4444)',
-                                                        backgroundSize: '300% 100%',
-                                                        animation: 'rainbow-flow 3s linear infinite',
-                                                    }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRejectDialogOpen(true)}
-                                                    disabled={isWorkflowProcessing || isSaving}
-                                                    className="relative inline-flex items-center gap-1.5 rounded-full border-2 border-red-500 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-all duration-300 group-hover:border-transparent disabled:cursor-not-allowed disabled:opacity-50 lg:px-4 lg:py-2 lg:text-sm dark:bg-gray-950 dark:text-red-400"
-                                                >
-                                                    <XCircle className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110 lg:h-4 lg:w-4" />
-                                                    <span>Reject</span>
-                                                </button>
-                                            </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Reject and send back for revision</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </div>
-                        )}
-
-                        {/* CSS Keyframes for rainbow gradient animation */}
-                        <style>{`
-                            @keyframes rainbow-flow {
-                                0% { background-position: 0% 50%; }
-                                50% { background-position: 150% 50%; }
-                                100% { background-position: 300% 50%; }
-                            }
-                        `}</style>
-                    </div>
+                                    {!isForecastProject && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={handleToggleLock} disabled={!selectedForecastMonth || isSaving}>
+                                                {isEditingLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                                {isEditingLocked ? 'Unlock forecast' : 'Lock forecast'}
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </TooltipProvider>
                 </div>
 
                 {/* Forecast Summary Comments Section */}
                 {!isForecastProject && (
-                    <div className="mx-2 mb-2">
-                        <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800">
-                            <button
-                                type="button"
-                                className="flex w-full items-center justify-between px-4 py-2"
-                                onClick={() => setSummaryCommentsExpanded(!summaryCommentsExpanded)}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Forecast Summary</span>
-                                    {summaryComments && !summaryCommentsExpanded && (
-                                        <span className="max-w-md truncate text-xs text-slate-500 dark:text-slate-400">
-                                            - {summaryComments.substring(0, 60)}
-                                            {summaryComments.length > 60 ? '...' : ''}
-                                        </span>
-                                    )}
-                                </div>
-                                {summaryCommentsExpanded ? (
-                                    <ChevronUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                ) : (
-                                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                    <div className="bg-card mx-2 mb-2 rounded-md border">
+                        <button
+                            type="button"
+                            className="hover:bg-muted/50 flex w-full items-center justify-between px-4 py-2 text-left"
+                            onClick={() => setSummaryCommentsExpanded(!summaryCommentsExpanded)}
+                        >
+                            <div className="flex items-center gap-2">
+                                <MessageSquare className="text-muted-foreground h-4 w-4" />
+                                <span className="text-sm font-medium">Forecast summary</span>
+                                {summaryPreview && !summaryCommentsExpanded && (
+                                    <span className="text-muted-foreground max-w-md truncate text-xs">
+                                        — {summaryPreview.substring(0, 60)}
+                                        {summaryPreview.length > 60 ? '…' : ''}
+                                    </span>
                                 )}
-                            </button>
-
-                            {summaryCommentsExpanded && (
-                                <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-700">
-                                    <textarea
-                                        value={summaryComments}
-                                        onChange={(e) => setSummaryComments(e.target.value)}
-                                        placeholder="Add comments about this forecast (key assumptions, risks, notes for reviewers...)"
-                                        className="min-h-[80px] w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500"
-                                        disabled={isEditingLocked}
-                                    />
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                                            {isEditingLocked ? 'Forecast is locked' : 'Comments are saved when you click Save'}
-                                        </span>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={handleSaveSummaryComments}
-                                            disabled={isEditingLocked || isSavingComments}
-                                            className="h-7"
-                                        >
-                                            {isSavingComments ? 'Saving...' : 'Save Comments'}
-                                        </Button>
-                                    </div>
-                                </div>
+                            </div>
+                            {summaryCommentsExpanded ? (
+                                <ChevronUp className="text-muted-foreground h-4 w-4" />
+                            ) : (
+                                <ChevronDown className="text-muted-foreground h-4 w-4" />
                             )}
-                        </div>
+                        </button>
+
+                        {summaryCommentsExpanded && (
+                            <div className="bg-background border-t px-4 py-3">
+                                {isEditingLocked ? (
+                                    <div
+                                        className="prose prose-sm bg-muted/50 text-muted-foreground dark:prose-invert max-w-none rounded-md border px-3 py-2 text-sm"
+                                        dangerouslySetInnerHTML={{
+                                            __html: summaryComments || '<p class="italic opacity-60">No comments</p>',
+                                        }}
+                                    />
+                                ) : (
+                                    <AiRichTextEditor
+                                        content={summaryComments}
+                                        onChange={setSummaryComments}
+                                        placeholder="Key assumptions, risks, notes for reviewers…"
+                                    />
+                                )}
+                                <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-muted-foreground text-xs">
+                                        {isEditingLocked ? 'Forecast is locked' : 'Comments save when you click Save comments or Save.'}
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleSaveSummaryComments}
+                                        disabled={isEditingLocked || isSavingComments}
+                                    >
+                                        {isSavingComments ? 'Saving…' : 'Save comments'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 <div className="mx-2 flex h-full flex-col gap-3">
                     {/* Cost Grid */}
-                    <Card className="flex flex-col py-0" style={{ height: `${topGridHeight}%` }}>
-                        <CardContent className="flex h-full flex-col p-2">
+                    <Card className="flex flex-col overflow-hidden py-0" style={{ height: `${topGridHeight}%` }}>
+                        <CardContent className="flex h-full flex-col p-0">
                             {isForecastProject && (
-                                <div className="flex items-center gap-1 pb-2">
-                                    <span className="text-sm font-semibold text-gray-700">Cost</span>
+                                <div className="flex items-center gap-1 border-b px-2 py-1">
+                                    <span className="text-sm font-semibold">Cost</span>
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
@@ -2285,7 +2087,12 @@ const ShowJobForecastPage = ({
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSelectedCostItems()}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7"
+                                                    onClick={() => handleDeleteSelectedCostItems()}
+                                                >
                                                     <Trash2 className="h-4 w-4 text-red-600" />
                                                 </Button>
                                             </TooltipTrigger>
@@ -2338,19 +2145,19 @@ const ShowJobForecastPage = ({
 
                     {/* Drag Handle */}
                     <div
-                        className="group relative flex h-2 shrink-0 cursor-row-resize items-center justify-center hover:bg-blue-100"
+                        className="group hover:bg-muted relative flex h-2 shrink-0 cursor-row-resize items-center justify-center"
                         onMouseDown={handleDragStart}
                         title="Drag to resize grids"
                     >
-                        <div className="bg-border h-0.5 w-12 rounded-full group-hover:bg-blue-500" />
+                        <div className="bg-border group-hover:bg-foreground/40 h-0.5 w-12 rounded-full" />
                     </div>
 
                     {/* Revenue Grid */}
-                    <Card className="flex flex-col py-0" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
-                        <CardContent className="flex h-full flex-col p-2">
+                    <Card className="flex flex-col overflow-hidden py-0" style={{ height: `calc(${80 - topGridHeight}% - 0.5rem)` }}>
+                        <CardContent className="flex h-full flex-col p-0">
                             {isForecastProject && (
-                                <div className="flex items-center gap-1 pb-2">
-                                    <span className="text-sm font-semibold text-gray-700">Revenue</span>
+                                <div className="flex items-center gap-1 border-b px-2 py-1">
+                                    <span className="text-sm font-semibold">Revenue</span>
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
