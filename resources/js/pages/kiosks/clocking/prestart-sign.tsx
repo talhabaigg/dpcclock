@@ -6,7 +6,7 @@ import WeatherWidget from '@/components/weather-widget';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, FileText, LogIn } from 'lucide-react';
+import { ArrowLeft, FileText, GraduationCap, LogIn } from 'lucide-react';
 import SignaturePad from 'signature_pad';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
@@ -32,6 +32,15 @@ interface MediaItem {
     collection_name: string;
 }
 
+interface TrainingItem {
+    id: number;
+    title: string;
+    time: string | null;
+    room: string | null;
+    notes: string | null;
+    employees: { id: number; name: string; preferred_name: string | null; display_name: string }[];
+}
+
 interface Prestart {
     id: string;
     work_date: string;
@@ -52,12 +61,13 @@ const DAILY_CHECKLIST = [
 ];
 
 export default function PrestartSign() {
-    const { kiosk, employee, prestart, employees, adminMode } = usePage<{
+    const { kiosk, employee, prestart, employees, adminMode, trainings } = usePage<{
         kiosk: Kiosk;
         employee: Employee;
         prestart: Prestart;
         employees: Employee[];
         adminMode: boolean;
+        trainings: TrainingItem[];
     }>().props;
 
     const getInitials = useInitials();
@@ -236,6 +246,35 @@ export default function PrestartSign() {
 
                     </CardContent>
                 </Card>
+
+                {/* Training Booked */}
+                {trainings && trainings.length > 0 && (
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <GraduationCap className="h-4 w-4" />
+                                Training Booked
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                            {trainings.map((t) => (
+                                <div key={t.id} className="rounded-lg border bg-blue-50/50 p-3 dark:bg-blue-950/20">
+                                    <p className="font-medium">
+                                        {t.title}
+                                        {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
+                                    </p>
+                                    {t.room && <p className="text-xs text-muted-foreground">{t.room}</p>}
+                                    {t.employees.length > 0 && (
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
+                                        </p>
+                                    )}
+                                    {t.notes && <p className="mt-1 text-xs italic text-muted-foreground">{t.notes}</p>}
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Daily Checklist */}
                 <Card>

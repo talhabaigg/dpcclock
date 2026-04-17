@@ -201,6 +201,25 @@
         </ul>
     @endif
 
+    {{-- Trainings --}}
+    @if(isset($trainings) && $trainings->count() > 0)
+        <h2>Training Booked</h2>
+        <ul>
+            @foreach($trainings as $training)
+                <li>
+                    <strong>{{ $training->title }}</strong>@if($training->time) at {{ $training->time }}@endif
+                    @if($training->room) — {{ $training->room }}@endif
+                    @if($training->employees->count() > 0)
+                        <br><span style="color: #6b7280;">{{ $training->employees->map(fn($e) => $e->preferred_name ?? $e->name)->join(', ') }}</span>
+                    @endif
+                    @if($training->notes)
+                        <br><em style="color: #6b7280;">{{ $training->notes }}</em>
+                    @endif
+                </li>
+            @endforeach
+        </ul>
+    @endif
+
     {{-- Signatures --}}
     <h2>Signatures ({{ $signatures->count() }})</h2>
     <table class="signatures">

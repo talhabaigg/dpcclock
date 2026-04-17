@@ -91,6 +91,15 @@ class LocationController extends Controller
             'tasks' => $location->projectTasks()->count(),
         ];
 
+        $user = auth()->user();
+        $location->tab_permissions = [
+            'cost_codes' => $user->can('locations.cost-codes'),
+            'price_list' => $user->can('locations.price-list'),
+            'favourites' => $user->can('locations.favourites'),
+            'production_data' => $user->can('locations.production-data'),
+            'schedule' => $user->can('locations.schedule'),
+        ];
+
         return $location;
     }
 

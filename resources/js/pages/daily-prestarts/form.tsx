@@ -1,12 +1,16 @@
 import AppLayout from '@/layouts/app-layout';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { SearchSelect } from '@/components/search-select';
+import { TimePicker } from '@/components/time-picker';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { GripVertical, Plus, X } from 'lucide-react';
+import { ChevronDown, GripVertical, GraduationCap, Plus, Trash2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -17,9 +21,27 @@ interface Location {
     name: string;
 }
 
-interface UserOption {
+interface EmployeeOption {
     id: number;
     name: string;
+}
+
+interface TrainingData {
+    id?: number;
+    title: string;
+    time: string;
+    room: string;
+    notes: string;
+    employee_ids: number[];
+}
+
+interface TrainingFromServer {
+    id: number;
+    title: string;
+    time: string | null;
+    room: string | null;
+    notes: string | null;
+    employees: { id: number; name: string; preferred_name: string | null }[];
 }
 
 interface Prestart {
@@ -32,11 +54,19 @@ interface Prestart {
     safety_concerns: { description: string }[] | null;
 }
 
+interface LocationKioskData {
+    [locationId: string]: {
+        employees: EmployeeOption[];
+        managers: EmployeeOption[];
+    };
+}
+
 interface Props {
     prestart: Prestart | null;
     duplicateFrom?: Prestart | null;
     locations: Location[];
-    users: UserOption[];
+    locationKioskData: LocationKioskData;
+    trainings: TrainingFromServer[];
 }
 
 function SortableItem({ id, description, onRemove }: { id: string; description: string; onRemove: () => void }) {
@@ -64,7 +94,65 @@ function SortableItem({ id, description, onRemove }: { id: string; description: 
     );
 }
 
-export default function DailyPrestartForm({ prestart, duplicateFrom, locations, users }: Props) {
+function EmployeeMultiSelect({
+    employees,
+    selectedIds,
+    onChange,
+}: {
+    employees: EmployeeOption[];
+    selectedIds: number[];
+    onChange: (ids: number[]) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const filtered = employees.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
+
+    const toggle = (id: number) => {
+        onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+    };
+
+    return (
+        <div className="space-y-2">
+            <Button type="button" variant="outline" className="w-full justify-between" onClick={() => setOpen(!open)}>
+                <span className="text-sm">
+                    {selectedIds.length > 0 ? `${selectedIds.length} employee${selectedIds.length > 1 ? 's' : ''} selected` : 'Select employees...'}
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </Button>
+            {open && (
+                <div className="rounded-md border">
+                    <div className="border-b px-3 py-2">
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search employees..."
+                            className="h-8"
+                        />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto p-1">
+                        {filtered.length === 0 && (
+                            <p className="px-2 py-3 text-center text-sm text-muted-foreground">No employees found.</p>
+                        )}
+                        {filtered.map((emp) => (
+                            <label
+                                key={emp.id}
+                                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                            >
+                                <Checkbox
+                                    checked={selectedIds.includes(emp.id)}
+                                    onCheckedChange={() => toggle(emp.id)}
+                                />
+                                <span>{emp.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function DailyPrestartForm({ prestart, duplicateFrom, locations, locationKioskData, trainings: initialTrainings }: Props) {
     const isEdit = !!prestart;
     const source = prestart ?? duplicateFrom;
 
@@ -92,6 +180,35 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
     const [safetyConcernInput, setSafetyConcernInput] = useState('');
     const [activityKeys] = useState(() => (source?.activities ?? []).map(() => getId()));
     const [concernKeys] = useState(() => (source?.safety_concerns ?? []).map(() => getId()));
+
+    // --- Location-scoped employees & managers ---
+    const kioskData = data.location_id ? locationKioskData[data.location_id] : null;
+    const locationEmployees = kioskData?.employees ?? [];
+    const locationManagers = kioskData?.managers ?? [];
+
+    // --- Trainings state ---
+    const [trainingsList, setTrainingsList] = useState<TrainingData[]>(
+        initialTrainings.map((t) => ({
+            id: t.id,
+            title: t.title,
+            time: t.time ?? '',
+            room: t.room ?? '',
+            notes: t.notes ?? '',
+            employee_ids: t.employees.map((e) => e.id),
+        })),
+    );
+
+    const addTraining = () => {
+        setTrainingsList([...trainingsList, { title: '', time: '', room: '', notes: '', employee_ids: [] }]);
+    };
+
+    const updateTraining = (index: number, field: keyof TrainingData, value: unknown) => {
+        setTrainingsList((prev) => prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)));
+    };
+
+    const removeTraining = (index: number) => {
+        setTrainingsList((prev) => prev.filter((_, i) => i !== index));
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -159,6 +276,16 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
         data.safety_concerns.forEach((s, i) => {
             formData.append(`safety_concerns[${i}][description]`, s.description);
         });
+        trainingsList.forEach((t, i) => {
+            if (t.id) formData.append(`trainings[${i}][id]`, String(t.id));
+            formData.append(`trainings[${i}][title]`, t.title);
+            if (t.time) formData.append(`trainings[${i}][time]`, t.time);
+            if (t.room) formData.append(`trainings[${i}][room]`, t.room);
+            if (t.notes) formData.append(`trainings[${i}][notes]`, t.notes);
+            t.employee_ids.forEach((eid, j) => {
+                formData.append(`trainings[${i}][employee_ids][${j}]`, String(eid));
+            });
+        });
 
         if (isEdit) {
             formData.append('_method', 'PUT');
@@ -177,7 +304,7 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
     };
 
     const locationOptions = locations.map((l) => ({ value: String(l.id), label: l.name }));
-    const userOptions = users.map((u) => ({ value: String(u.id), label: u.name }));
+    const managerOptions = locationManagers.map((m: EmployeeOption) => ({ value: String(m.id), label: m.name }));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -209,7 +336,7 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                     <div>
                         <Label>Foreman</Label>
                         <SearchSelect
-                            options={userOptions}
+                            options={managerOptions}
                             selectedOption={data.foreman_id}
                             onValueChange={(val) => setData('foreman_id', val)}
                             optionName="foreman"
@@ -298,6 +425,102 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                                 </SortableContext>
                             </DndContext>
                         )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Trainings */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-base font-semibold">Trainings</h3>
+                                <p className="text-sm text-muted-foreground">Schedule training sessions for employees on this day.</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={addTraining} disabled={!data.location_id}>
+                                <Plus className="mr-1.5 h-4 w-4" />
+                                Add Training
+                            </Button>
+                        </div>
+
+                        {!data.location_id && trainingsList.length === 0 && (
+                            <p className="text-sm text-muted-foreground italic">Select a project to add trainings.</p>
+                        )}
+
+
+                        {trainingsList.map((training, index) => (
+                            <div key={index} className="space-y-3 rounded-lg border p-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">Training {index + 1}</span>
+                                    </div>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeTraining(index)}>
+                                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                    </Button>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="sm:col-span-2">
+                                        <Label>Title *</Label>
+                                        <Input
+                                            value={training.title}
+                                            onChange={(e) => updateTraining(index, 'title', e.target.value)}
+                                            placeholder="e.g. First Aid Refresh Training"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Time</Label>
+                                        <TimePicker
+                                            value={training.time}
+                                            onChange={(val) => updateTraining(index, 'time', val)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Room / Location</Label>
+                                        <Input
+                                            value={training.room}
+                                            onChange={(e) => updateTraining(index, 'room', e.target.value)}
+                                            placeholder="e.g. Meeting Room B"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <Label>Notes</Label>
+                                        <Textarea
+                                            value={training.notes}
+                                            onChange={(e) => updateTraining(index, 'notes', e.target.value)}
+                                            placeholder="Additional notes..."
+                                            rows={2}
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <Label>Employees</Label>
+                                        <EmployeeMultiSelect
+                                            employees={locationEmployees}
+                                            selectedIds={training.employee_ids}
+                                            onChange={(ids) => updateTraining(index, 'employee_ids', ids)}
+                                        />
+                                        {training.employee_ids.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap gap-1">
+                                                {training.employee_ids.map((id) => {
+                                                    const emp = locationEmployees.find((e) => e.id === id);
+                                                    return emp ? (
+                                                        <Badge key={id} variant="secondary" className="gap-1">
+                                                            {emp.name}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateTraining(index, 'employee_ids', training.employee_ids.filter((x) => x !== id))}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        </Badge>
+                                                    ) : null;
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <Separator />

@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchSelect } from '@/components/search-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import PaginationComponent, { type PaginationData } from '@/components/index-pagination';
 import AppLayout from '@/layouts/app-layout';
@@ -72,21 +71,24 @@ interface Filters {
     user_id?: string;
     category?: string;
     search?: string;
-    show_reconciled?: string;
+    status?: string;
 }
+
+type StatusTab = 'pending' | 'sent' | 'failed' | 'all';
 
 interface Props {
     receipts: {
         data: ReceiptType[];
     } & PaginationData;
     filters: Filters;
+    statusCounts: Record<StatusTab, number>;
     categories: string[];
     users: UserType[];
     vendors: PremierVendorType[];
     glAccounts: PremierGlAccountType[];
 }
 
-export default function ManageReceipts({ receipts, filters, categories, users, vendors, glAccounts }: Props) {
+export default function ManageReceipts({ receipts, filters, statusCounts, categories, users, vendors, glAccounts }: Props) {
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props;
 
     const [selectedReceipt, setSelectedReceipt] = useState<ReceiptType | null>(null);
@@ -98,6 +100,12 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
     const [invoiceForm, setInvoiceForm] = useState({ vendor_id: '', gl_account_id: '' });
     const [showProcessedImage, setShowProcessedImage] = useState(true);
     const [localFilters, setLocalFilters] = useState<Filters>(filters);
+    const activeStatus: StatusTab = (filters.status as StatusTab) || 'pending';
+
+    const switchStatus = (status: StatusTab) => {
+        const params = { ...filters, status };
+        router.get('/manage-receipts', Object.fromEntries(Object.entries(params).filter(([, v]) => v)), { preserveState: true });
+    };
 
     const [editForm, setEditForm] = useState({
         merchant_name: '',
@@ -212,17 +220,18 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
     };
 
     const applyFilters = () => {
-        router.get('/manage-receipts', Object.fromEntries(Object.entries(localFilters).filter(([, v]) => v)), { preserveState: true });
+        const params = { ...localFilters, status: activeStatus };
+        router.get('/manage-receipts', Object.fromEntries(Object.entries(params).filter(([, v]) => v)), { preserveState: true });
         setIsFilterOpen(false);
     };
 
     const clearFilters = () => {
         setLocalFilters({});
-        router.get('/manage-receipts', {}, { preserveState: true });
+        router.get('/manage-receipts', { status: activeStatus }, { preserveState: true });
         setIsFilterOpen(false);
     };
 
-    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+    const activeFilterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'status').length;
 
     const formatAmount = (value: string | null, currency: string = 'AUD') => {
         if (!value) return '-';
@@ -564,6 +573,34 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
             <div className="hidden md:flex h-[calc(100vh-4rem)] flex-col">
                 {/* Top bar */}
                 <div className="border-b px-4 py-2 flex items-center gap-2 shrink-0">
+                    {/* Status tabs */}
+                    <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
+                        {([
+                            { key: 'pending', label: 'Pending' },
+                            { key: 'sent', label: 'Sent' },
+                            { key: 'failed', label: 'Failed' },
+                            { key: 'all', label: 'All' },
+                        ] as { key: StatusTab; label: string }[]).map(({ key, label }) => (
+                            <button
+                                key={key}
+                                onClick={() => switchStatus(key)}
+                                className={`relative rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                    activeStatus === key
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {label}
+                                {statusCounts[key] > 0 && (
+                                    <span className={`ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold ${
+                                        activeStatus === key ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                                    }`}>
+                                        {statusCounts[key]}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
                     <Button variant="outline" size="sm" className="rounded-full" onClick={() => setIsFilterOpen(true)}>
                         <Filter className="mr-1.5 h-4 w-4" />
                         Filters
@@ -619,19 +656,49 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
             {/* ========== MOBILE LAYOUT (< md) ========== */}
             <div className="flex flex-col md:hidden h-[calc(100vh-4rem)]">
                 {/* Top bar */}
-                <div className="border-b px-3 py-2 flex items-center gap-2 shrink-0 overflow-x-auto">
-                    <Button variant="outline" size="sm" className="shrink-0 rounded-full" onClick={() => setIsFilterOpen(true)}>
-                        <Filter className="mr-1.5 h-4 w-4" />
-                        Filters
-                        {activeFilterCount > 0 && <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 rounded-full px-1.5 text-xs">{activeFilterCount}</Badge>}
-                    </Button>
-                    <Button variant="outline" size="sm" className="shrink-0 rounded-full" asChild>
-                        <a href={`/manage-receipts/export?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString()}`}>
-                            <Download className="mr-1.5 h-4 w-4" />
-                            Export
-                        </a>
-                    </Button>
-                    <span className="text-muted-foreground ml-auto shrink-0 text-xs">{receipts.total} receipt{receipts.total !== 1 ? 's' : ''}</span>
+                <div className="border-b px-3 py-2 flex flex-col gap-2 shrink-0">
+                    {/* Status tabs */}
+                    <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 overflow-x-auto">
+                        {([
+                            { key: 'pending', label: 'Pending' },
+                            { key: 'sent', label: 'Sent' },
+                            { key: 'failed', label: 'Failed' },
+                            { key: 'all', label: 'All' },
+                        ] as { key: StatusTab; label: string }[]).map(({ key, label }) => (
+                            <button
+                                key={key}
+                                onClick={() => switchStatus(key)}
+                                className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                    activeStatus === key
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {label}
+                                {statusCounts[key] > 0 && (
+                                    <span className={`ml-1 text-[10px] font-semibold ${
+                                        activeStatus === key ? 'text-primary' : 'text-muted-foreground'
+                                    }`}>
+                                        {statusCounts[key]}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto">
+                        <Button variant="outline" size="sm" className="shrink-0 rounded-full" onClick={() => setIsFilterOpen(true)}>
+                            <Filter className="mr-1.5 h-4 w-4" />
+                            Filters
+                            {activeFilterCount > 0 && <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 rounded-full px-1.5 text-xs">{activeFilterCount}</Badge>}
+                        </Button>
+                        <Button variant="outline" size="sm" className="shrink-0 rounded-full" asChild>
+                            <a href={`/manage-receipts/export?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString()}`}>
+                                <Download className="mr-1.5 h-4 w-4" />
+                                Export
+                            </a>
+                        </Button>
+                        <span className="text-muted-foreground ml-auto shrink-0 text-xs">{receipts.total} receipt{receipts.total !== 1 ? 's' : ''}</span>
+                    </div>
                 </div>
 
                 {/* Receipt list */}
@@ -792,17 +859,6 @@ export default function ManageReceipts({ receipts, filters, categories, users, v
                                 <SelectTrigger><SelectValue placeholder="All employees" /></SelectTrigger>
                                 <SelectContent>{users.map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.name}</SelectItem>)}</SelectContent>
                             </Select>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                            <div>
-                                <Label htmlFor="show_reconciled" className="text-sm font-medium">Show Reconciled</Label>
-                                <p className="text-muted-foreground text-xs">Include receipts already marked as reconciled</p>
-                            </div>
-                            <Switch
-                                id="show_reconciled"
-                                checked={localFilters.show_reconciled === '1'}
-                                onCheckedChange={(checked) => setLocalFilters({ ...localFilters, show_reconciled: checked ? '1' : undefined })}
-                            />
                         </div>
                     </div>
                     <DialogFooter>

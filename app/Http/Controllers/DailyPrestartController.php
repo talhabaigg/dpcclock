@@ -8,6 +8,7 @@ use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
+use App\Models\Training;
 use App\Models\User;
 use App\Services\WeatherService;
 use Carbon\Carbon;
@@ -84,7 +85,8 @@ class DailyPrestartController extends Controller
         return Inertia::render('daily-prestarts/form', [
             'prestart' => null,
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
-            'users' => User::orderBy('name')->get(['id', 'name']),
+            'locationKioskData' => $this->getLocationKioskData(),
+            'trainings' => [],
         ]);
     }
 
@@ -102,7 +104,8 @@ class DailyPrestartController extends Controller
             'prestart' => null,
             'duplicateFrom' => $duplicate,
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
-            'users' => User::orderBy('name')->get(['id', 'name']),
+            'locationKioskData' => $this->getLocationKioskData(),
+            'trainings' => [],
         ]);
     }
 
@@ -122,15 +125,24 @@ class DailyPrestartController extends Controller
             'safety_concern_files.*' => 'file|max:10240',
             'builders_prestart_file' => 'nullable|array',
             'builders_prestart_file.*' => 'file|max:10240',
+            'trainings' => 'nullable|array',
+            'trainings.*.title' => 'required|string',
+            'trainings.*.time' => 'nullable|string',
+            'trainings.*.room' => 'nullable|string',
+            'trainings.*.notes' => 'nullable|string',
+            'trainings.*.employee_ids' => 'nullable|array',
+            'trainings.*.employee_ids.*' => 'integer|exists:employees,id',
         ]);
 
         $data['created_by'] = auth()->id();
         $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
-        unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file']);
+        $trainingsData = $data['trainings'] ?? [];
+        unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file'], $data['trainings']);
 
         $prestart = DailyPrestart::create($data);
 
         $this->handleMediaUploads($request, $prestart);
+        $this->syncTrainings($trainingsData, $data['location_id'], $data['work_date']);
 
         return redirect()->route('daily-prestarts.index')
             ->with('success', 'Daily prestart created successfully.');
@@ -140,8 +152,14 @@ class DailyPrestartController extends Controller
     {
         $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee']);
 
+        $trainings = Training::with('employees')
+            ->forLocation($dailyPrestart->location_id)
+            ->forDate($dailyPrestart->work_date)
+            ->get();
+
         return Inertia::render('daily-prestarts/show', [
             'prestart' => $dailyPrestart,
+            'trainings' => $trainings,
         ]);
     }
 
@@ -149,10 +167,16 @@ class DailyPrestartController extends Controller
     {
         $dailyPrestart->load('media');
 
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+            ->forLocation($dailyPrestart->location_id)
+            ->forDate($dailyPrestart->work_date)
+            ->get();
+
         return Inertia::render('daily-prestarts/form', [
             'prestart' => $dailyPrestart,
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
-            'users' => User::orderBy('name')->get(['id', 'name']),
+            'locationKioskData' => $this->getLocationKioskData(),
+            'trainings' => $trainings,
         ]);
     }
 
@@ -178,6 +202,14 @@ class DailyPrestartController extends Controller
             'builders_prestart_file.*' => 'file|max:10240',
             'removed_media_ids' => 'nullable|array',
             'removed_media_ids.*' => 'integer',
+            'trainings' => 'nullable|array',
+            'trainings.*.id' => 'nullable|integer|exists:trainings,id',
+            'trainings.*.title' => 'required|string',
+            'trainings.*.time' => 'nullable|string',
+            'trainings.*.room' => 'nullable|string',
+            'trainings.*.notes' => 'nullable|string',
+            'trainings.*.employee_ids' => 'nullable|array',
+            'trainings.*.employee_ids.*' => 'integer|exists:employees,id',
         ]);
 
         // Re-fetch weather if location or date changed
@@ -187,7 +219,8 @@ class DailyPrestartController extends Controller
             $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
         }
 
-        unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file'], $data['removed_media_ids']);
+        $trainingsData = $data['trainings'] ?? [];
+        unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file'], $data['removed_media_ids'], $data['trainings']);
 
         // FormData doesn't send empty arrays, so default to [] when not present
         $data['activities'] = $data['activities'] ?? [];
@@ -201,6 +234,7 @@ class DailyPrestartController extends Controller
         }
 
         $this->handleMediaUploads($request, $dailyPrestart);
+        $this->syncTrainings($trainingsData, $data['location_id'], $data['work_date']);
 
         return redirect()->route('daily-prestarts.index')
             ->with('success', 'Daily prestart updated successfully.');
@@ -245,10 +279,16 @@ class DailyPrestartController extends Controller
         $signedIds = $dailyPrestart->signatures->pluck('employee_id')->toArray();
         $absentees = $kioskEmployees->filter(fn ($emp) => ! in_array($emp->id, $signedIds));
 
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+            ->forLocation($dailyPrestart->location_id)
+            ->forDate($dailyPrestart->work_date)
+            ->get();
+
         $html = view('pdf.prestart-sign-sheet', [
             'prestart' => $dailyPrestart,
             'totalWorkers' => $kioskEmployees->count(),
             'absentees' => $absentees,
+            'trainings' => $trainings,
         ])->render();
 
         $browsershot = Browsershot::html($html);
@@ -320,10 +360,16 @@ class DailyPrestartController extends Controller
             ]);
         }
 
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+            ->forLocation($location->id)
+            ->forDate(now('Australia/Brisbane')->toDateString())
+            ->get();
+
         return Inertia::render('kiosks/clocking/prestart-sign', [
             'kiosk' => $kiosk,
             'employee' => $employee,
             'prestart' => $prestart,
+            'trainings' => $trainings,
         ]);
     }
 
@@ -338,7 +384,24 @@ class DailyPrestartController extends Controller
         $employee = Employee::findOrFail($employeeId);
         $prestart = DailyPrestart::findOrFail($request->prestart_id);
 
-        // Store signature with content snapshot
+        // Store signature with content snapshot (including trainings)
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+            ->forLocation($prestart->location_id)
+            ->forDate($prestart->work_date)
+            ->get();
+
+        $snapshot = $prestart->getContentSnapshot();
+        $snapshot['trainings'] = $trainings->map(fn ($t) => [
+            'title' => $t->title,
+            'time' => $t->time,
+            'room' => $t->room,
+            'notes' => $t->notes,
+            'employees' => $t->employees->map(fn ($e) => [
+                'id' => $e->id,
+                'name' => $e->display_name,
+            ])->values(),
+        ])->toArray();
+
         DailyPrestartSignature::updateOrCreate(
             [
                 'daily_prestart_id' => $prestart->id,
@@ -346,7 +409,7 @@ class DailyPrestartController extends Controller
             ],
             [
                 'signature' => $request->signature,
-                'content_snapshot' => $prestart->getContentSnapshot(),
+                'content_snapshot' => $snapshot,
                 'signed_at' => now(),
             ]
         );
@@ -401,6 +464,79 @@ class DailyPrestartController extends Controller
             (float) $location->latitude,
             (float) $location->longitude
         );
+    }
+
+    private function getLocationKioskData(): array
+    {
+        $locations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get();
+        $data = [];
+
+        foreach ($locations as $location) {
+            $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
+            if (! $kiosk) {
+                $data[$location->id] = ['employees' => [], 'managers' => []];
+
+                continue;
+            }
+
+            $data[$location->id] = [
+                'employees' => $kiosk->employees()->get(['employees.id', 'name', 'preferred_name'])->map(fn ($e) => [
+                    'id' => $e->id,
+                    'name' => $e->display_name ?? $e->preferred_name ?? $e->name,
+                ])->sortBy('name')->values(),
+                'managers' => $kiosk->managers()->get(['users.id', 'users.name'])->map(fn ($m) => [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                ])->sortBy('name')->values(),
+            ];
+        }
+
+        return $data;
+    }
+
+    private function syncTrainings(array $trainingsData, int $locationId, string $date): void
+    {
+        $existingIds = Training::forLocation($locationId)->forDate($date)->pluck('id')->toArray();
+        $submittedIds = [];
+
+        foreach ($trainingsData as $trainingData) {
+            if (! empty($trainingData['id'])) {
+                $training = Training::find($trainingData['id']);
+                if ($training) {
+                    $training->update([
+                        'title' => $trainingData['title'],
+                        'time' => $trainingData['time'] ?? null,
+                        'room' => $trainingData['room'] ?? null,
+                        'notes' => $trainingData['notes'] ?? null,
+                    ]);
+                    $training->employees()->sync($trainingData['employee_ids'] ?? []);
+                    $submittedIds[] = $training->id;
+                }
+            } else {
+                $training = Training::create([
+                    'location_id' => $locationId,
+                    'date' => $date,
+                    'title' => $trainingData['title'],
+                    'time' => $trainingData['time'] ?? null,
+                    'room' => $trainingData['room'] ?? null,
+                    'notes' => $trainingData['notes'] ?? null,
+                    'created_by' => auth()->id(),
+                ]);
+                $training->employees()->sync($trainingData['employee_ids'] ?? []);
+                $submittedIds[] = $training->id;
+            }
+        }
+
+        // Soft-delete trainings that were removed from the form
+        $toDelete = array_diff($existingIds, $submittedIds);
+        if (! empty($toDelete)) {
+            Training::whereIn('id', $toDelete)->each(function ($training) {
+                $training->employees()->each(function ($employee) use ($training) {
+                    $training->employees()->updateExistingPivot($employee->id, ['deleted_at' => now()]);
+                });
+                $training->delete();
+            });
+        }
     }
 
     private function handleMediaUploads(Request $request, DailyPrestart $prestart): void

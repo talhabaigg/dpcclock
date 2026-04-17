@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import WeatherWidget from '@/components/weather-widget';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CheckCircle2, Download, Pencil } from 'lucide-react';
+import { CheckCircle2, Download, GraduationCap, Pencil } from 'lucide-react';
 
 interface MediaItem {
     id: number;
@@ -38,8 +38,18 @@ interface Prestart {
     media: MediaItem[];
 }
 
+interface TrainingItem {
+    id: number;
+    title: string;
+    time: string | null;
+    room: string | null;
+    notes: string | null;
+    employees: { id: number; name: string; preferred_name: string | null; display_name: string }[];
+}
+
 interface Props {
     prestart: Prestart;
+    trainings: TrainingItem[];
 }
 
 const DAILY_CHECKLIST = [
@@ -51,7 +61,7 @@ const DAILY_CHECKLIST = [
     'Current Licences & Qualifications are relevant to work tasks',
 ];
 
-export default function DailyPrestartShow({ prestart }: Props) {
+export default function DailyPrestartShow({ prestart, trainings }: Props) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
@@ -171,6 +181,35 @@ export default function DailyPrestartShow({ prestart }: Props) {
                                     </div>
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Trainings */}
+                {trainings && trainings.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <GraduationCap className="h-5 w-5" />
+                                Training Booked
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {trainings.map((t) => (
+                                <div key={t.id} className="rounded-lg border p-3">
+                                    <p className="font-medium">
+                                        {t.title}
+                                        {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
+                                    </p>
+                                    {t.room && <p className="text-sm text-muted-foreground">{t.room}</p>}
+                                    {t.employees.length > 0 && (
+                                        <p className="mt-1 text-sm">
+                                            {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
+                                        </p>
+                                    )}
+                                    {t.notes && <p className="mt-1 text-sm italic text-muted-foreground">{t.notes}</p>}
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 )}

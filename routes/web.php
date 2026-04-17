@@ -479,38 +479,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/dashboard-layouts/{layout}/activate', [DashboardLayoutController::class, 'activate'])->name('dashboard-layouts.activate');
         });
 
-        Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes');
-        Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list');
-        Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites');
-        Route::get('/locations/{location}/production-data', [ProductionUploadController::class, 'index'])->name('locations.production-data');
-        Route::post('/locations/{location}/production-data/preview', [ProductionUploadController::class, 'preview'])->name('locations.production-data.preview');
-        Route::post('/locations/{location}/production-data/upload', [ProductionUploadController::class, 'upload'])->name('locations.production-data.upload');
-        Route::get('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'show'])->name('locations.production-data.show');
-        Route::delete('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'destroy'])->name('locations.production-data.destroy');
+        Route::get('/locations/{location}/cost-codes', [LocationController::class, 'costCodes'])->name('locations.cost-codes')
+            ->middleware('permission:locations.cost-codes');
+        Route::get('/locations/{location}/price-list', [LocationController::class, 'priceList'])->name('locations.price-list')
+            ->middleware('permission:locations.price-list');
+        Route::get('/locations/{location}/favourites', [LocationController::class, 'favourites'])->name('locations.favourites')
+            ->middleware('permission:locations.favourites');
+
+        Route::middleware('permission:locations.production-data')->group(function () {
+            Route::get('/locations/{location}/production-data', [ProductionUploadController::class, 'index'])->name('locations.production-data');
+            Route::post('/locations/{location}/production-data/preview', [ProductionUploadController::class, 'preview'])->name('locations.production-data.preview');
+            Route::post('/locations/{location}/production-data/upload', [ProductionUploadController::class, 'upload'])->name('locations.production-data.upload');
+            Route::get('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'show'])->name('locations.production-data.show');
+            Route::delete('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'destroy'])->name('locations.production-data.destroy');
+        });
 
         // Schedule / Gantt
-        Route::get('/locations/{location}/schedule', [LocationController::class, 'schedule'])->name('locations.schedule');
-        Route::post('/locations/{location}/tasks', [ProjectTaskController::class, 'store'])->name('project-tasks.store');
-        Route::post('/locations/{location}/tasks/reorder', [ProjectTaskController::class, 'reorder'])->name('project-tasks.reorder');
-        Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');
-        Route::patch('/tasks/{task}/dates', [ProjectTaskController::class, 'updateDates'])->name('project-tasks.update-dates');
-        Route::patch('/tasks/{task}/hierarchy', [ProjectTaskController::class, 'moveHierarchy'])->name('project-tasks.move-hierarchy');
-        Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
-        Route::delete('/locations/{location}/tasks', [ProjectTaskController::class, 'destroyAll'])->name('project-tasks.destroy-all');
+        Route::middleware('permission:locations.schedule')->group(function () {
+            Route::get('/locations/{location}/schedule', [LocationController::class, 'schedule'])->name('locations.schedule');
+            Route::post('/locations/{location}/tasks', [ProjectTaskController::class, 'store'])->name('project-tasks.store');
+            Route::post('/locations/{location}/tasks/reorder', [ProjectTaskController::class, 'reorder'])->name('project-tasks.reorder');
+            Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');
+            Route::patch('/tasks/{task}/dates', [ProjectTaskController::class, 'updateDates'])->name('project-tasks.update-dates');
+            Route::patch('/tasks/{task}/hierarchy', [ProjectTaskController::class, 'moveHierarchy'])->name('project-tasks.move-hierarchy');
+            Route::delete('/tasks/{task}', [ProjectTaskController::class, 'destroy'])->name('project-tasks.destroy');
+            Route::delete('/locations/{location}/tasks', [ProjectTaskController::class, 'destroyAll'])->name('project-tasks.destroy-all');
 
-        // Task import + baseline + bulk
-        Route::post('/locations/{location}/tasks/import', [ProjectTaskController::class, 'import'])->name('project-tasks.import');
-        Route::post('/locations/{location}/tasks/bulk-ownership', [ProjectTaskController::class, 'bulkOwnership'])->name('project-tasks.bulk-ownership');
-        Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
-        Route::post('/locations/{location}/tasks/revert-to-baseline', [ProjectTaskController::class, 'revertToBaseline'])->name('project-tasks.revert-to-baseline');
-        Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
-        Route::get('/locations/{location}/tasks/export-ms-project', [ProjectTaskController::class, 'exportMsProject'])->name('project-tasks.export-ms-project');
-        Route::get('/locations/{location}/tasks/export-debug', [ProjectTaskController::class, 'exportMsProjectDebug']);
+            // Task import + baseline + bulk
+            Route::post('/locations/{location}/tasks/import', [ProjectTaskController::class, 'import'])->name('project-tasks.import');
+            Route::post('/locations/{location}/tasks/bulk-ownership', [ProjectTaskController::class, 'bulkOwnership'])->name('project-tasks.bulk-ownership');
+            Route::post('/locations/{location}/tasks/set-baseline', [ProjectTaskController::class, 'setBaseline'])->name('project-tasks.set-baseline');
+            Route::post('/locations/{location}/tasks/revert-to-baseline', [ProjectTaskController::class, 'revertToBaseline'])->name('project-tasks.revert-to-baseline');
+            Route::get('/schedule-template', [ProjectTaskController::class, 'downloadTemplate'])->name('project-tasks.template');
+            Route::get('/locations/{location}/tasks/export-ms-project', [ProjectTaskController::class, 'exportMsProject'])->name('project-tasks.export-ms-project');
+            Route::get('/locations/{location}/tasks/export-debug', [ProjectTaskController::class, 'exportMsProjectDebug']);
 
-        // Task dependency links
-        Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');
-        Route::patch('/task-links/{link}', [ProjectTaskController::class, 'updateLink'])->name('task-links.update');
-        Route::delete('/task-links/{link}', [ProjectTaskController::class, 'destroyLink'])->name('task-links.destroy');
+            // Task dependency links
+            Route::post('/locations/{location}/task-links', [ProjectTaskController::class, 'storeLink'])->name('task-links.store');
+            Route::patch('/task-links/{link}', [ProjectTaskController::class, 'updateLink'])->name('task-links.update');
+            Route::delete('/task-links/{link}', [ProjectTaskController::class, 'destroyLink'])->name('task-links.destroy');
+        });
 
         // Project Calendar
         Route::middleware('permission:project-calendar.view')->group(function () {

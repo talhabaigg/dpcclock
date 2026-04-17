@@ -46,6 +46,8 @@ class CreditCardInvoiceService
                             'Amount' => $netAmount,
                             'CompanyId' => $this->getCompanyId(),
                             'AccountId' => $glAccount->premier_account_id,
+                            'DivisionId' => config('premier.headoffice_division_id'),
+                            'TaxGroup' => 'GST',
                             'Tax1' => (float) ($receipt->gst_amount ?? 0),
                             'Tax2' => 0,
                         ],

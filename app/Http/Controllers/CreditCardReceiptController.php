@@ -5,10 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCreditCardReceiptRequest;
 use App\Jobs\ExtractReceiptData;
 use App\Models\CreditCardReceipt;
-use App\Models\PremierGlAccount;
 use App\Models\PremierVendor;
 use App\Models\User;
-use App\Services\CreditCardInvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -65,11 +63,25 @@ class CreditCardReceiptController extends Controller
         $query = CreditCardReceipt::with(['user', 'media'])
             ->orderByDesc('created_at');
 
-        // Only show reconciled if explicitly requested
-        if ($request->input('show_reconciled') === '1') {
-            // show all
-        } else {
-            $query->where('is_reconciled', false);
+        // Status filter: pending (default), sent, failed, all
+        $status = $request->input('status', 'pending');
+        switch ($status) {
+            case 'pending':
+                $query->where('is_reconciled', false)
+                    ->where(function ($q) {
+                        $q->whereNull('invoice_status')
+                            ->orWhere('invoice_status', 'processing');
+                    });
+                break;
+            case 'sent':
+                $query->where('invoice_status', 'success');
+                break;
+            case 'failed':
+                $query->where('invoice_status', 'failed');
+                break;
+            case 'all':
+                // no filtering
+                break;
         }
 
         if ($request->filled('date_from')) {
@@ -97,9 +109,21 @@ class CreditCardReceiptController extends Controller
         $receipts = $query->paginate(50)->withQueryString();
         $this->transformMediaUrls($receipts);
 
+        // Get counts for each status tab
+        $statusCounts = [
+            'pending' => CreditCardReceipt::where('is_reconciled', false)
+                ->where(function ($q) {
+                    $q->whereNull('invoice_status')->orWhere('invoice_status', 'processing');
+                })->count(),
+            'sent' => CreditCardReceipt::where('invoice_status', 'success')->count(),
+            'failed' => CreditCardReceipt::where('invoice_status', 'failed')->count(),
+            'all' => CreditCardReceipt::count(),
+        ];
+
         return Inertia::render('credit-card-receipts/manage', [
             'receipts' => $receipts,
-            'filters' => $request->only(['date_from', 'date_to', 'amount_min', 'amount_max', 'user_id', 'category', 'search', 'show_reconciled']),
+            'filters' => $request->only(['date_from', 'date_to', 'amount_min', 'amount_max', 'user_id', 'category', 'search', 'status']),
+            'statusCounts' => $statusCounts,
             'categories' => CreditCardReceipt::CATEGORIES,
             'users' => User::select('id', 'name')->orderBy('name')->get(),
             'vendors' => PremierVendor::where('code', 'like', 'CC%')

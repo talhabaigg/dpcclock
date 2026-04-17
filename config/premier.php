@@ -45,6 +45,8 @@ return [
 
     'swcp_company_id' => env('PREMIER_SWCP_COMPANY_ID', '3341c7c6-2abb-49e1-8a59-839d1bcff972'),
 
+    'headoffice_division_id' => env('PREMIER_HEADOFFICE_DIVISION_ID', '9966d8e6-a48f-46f6-a3ed-09cbcebd7142'),
+
     'web' => [
         'url' => env('PREMIER_WEB_URL'),
         'client_id' => env('PREMIER_WEB_CLIENT_ID', '324204'),

@@ -34,7 +34,7 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
      */
     public function handle(): void
     {
-        $kiosk = Kiosk::find($this->kioskId)->load('employees', 'location');
+        $kiosk = Kiosk::find($this->kioskId)->load('employees', 'location.worktypes');
         if (! $kiosk) {
             Log::warning("Kiosk not found with ID: {$this->kioskId}");
 
@@ -99,12 +99,22 @@ class GenerateTimesheetForTodaysEvent implements ShouldQueue
         // Travel zone logic
         $zone = $employee->pivot->zone;
         $top_up = $employee->pivot->top_up ?? false;
+        $travelIds = [2516899, 2516901, 2516902];
         $travel = [
             '1' => 2516899,
             '2' => 2516901,
             '3' => 2516902,
         ];
-        $shiftConditionIds = [$zone && isset($travel[$zone]) ? $travel[$zone] : 2516899];
+        $zoneShiftConditionId = $zone && isset($travel[$zone]) ? $travel[$zone] : 2516899;
+
+        // Get location default shift conditions, exclude travel IDs, then add zone-based travel
+        $locationDefaults = $kiosk->location?->worktypes?->pluck('eh_worktype_id')->toArray() ?? [];
+        $shiftConditionIds = array_values(array_filter(
+            array_unique(array_merge(
+                array_diff($locationDefaults, $travelIds),
+                [$zoneShiftConditionId]
+            ))
+        ));
 
         // Public holiday
         if ($event->type === 'public_holiday') {

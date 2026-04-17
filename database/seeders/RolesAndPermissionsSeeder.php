@@ -54,6 +54,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.close' => 'Close and reopen projects',
             'locations.sync' => 'Sync locations from external system',
             'locations.load-job-data' => 'Load job data from Premier',
+            'locations.cost-codes' => 'View location cost codes tab',
+            'locations.price-list' => 'View location price list tab',
+            'locations.favourites' => 'View location favourites tab',
+            'locations.production-data' => 'View location DPC data tab',
+            'locations.schedule' => 'View location schedule tab',
             'project-dashboard.view' => 'View project dashboard',
             'locations.dashboard.view' => 'View individual location dashboard',
         ],
@@ -87,6 +92,16 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.create' => 'Create daily prestarts',
             'prestarts.edit' => 'Edit daily prestarts',
             'prestarts.delete' => 'Delete daily prestarts',
+        ],
+
+        // ============================================
+        // TRAININGS
+        // ============================================
+        'Trainings' => [
+            'trainings.view' => 'View trainings',
+            'trainings.create' => 'Create trainings',
+            'trainings.edit' => 'Edit trainings',
+            'trainings.delete' => 'Delete trainings',
         ],
 
         // ============================================
@@ -373,6 +388,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'locations.create',
             'locations.edit',
             'locations.sync',
+            'locations.cost-codes',
+            'locations.price-list',
             // Kiosks
             'kiosks.view',
             'kiosks.view-all',
@@ -454,6 +471,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.create',
             'prestarts.edit',
             'prestarts.delete',
+            // Trainings
+            'trainings.view',
+            'trainings.create',
+            'trainings.edit',
+            'trainings.delete',
             // Silica Register
             'silica-register.view',
             'silica-register.configure',
@@ -466,6 +488,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'employees.view',
             // Locations
             'locations.view',
+            'locations.cost-codes',
             'project-dashboard.view',
             'locations.dashboard.view',
             // SDS (read only)
@@ -500,6 +523,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.view',
             'prestarts.create',
             'prestarts.edit',
+            // Trainings
+            'trainings.view',
+            'trainings.create',
+            'trainings.edit',
             // Silica Register
             'silica-register.view',
         ],
@@ -510,6 +537,11 @@ class RolesAndPermissionsSeeder extends Seeder
             // Locations (full visibility)
             'locations.view',
             'locations.view-all',
+            'locations.cost-codes',
+            'locations.price-list',
+            'locations.favourites',
+            'locations.production-data',
+            'locations.schedule',
             'project-dashboard.view',
             'locations.dashboard.view',
             // Employees

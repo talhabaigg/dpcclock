@@ -16,7 +16,7 @@ import {
 } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { endOfMonth, endOfQuarter, format, startOfMonth, startOfQuarter, subMonths, addMonths } from 'date-fns';
+import { endOfMonth, endOfQuarter, endOfWeek, format, startOfMonth, startOfQuarter, startOfWeek, subMonths, addMonths } from 'date-fns';
 import { ChevronRight, Filter, FolderOpen, Plus } from 'lucide-react';
 import { forwardRef, useCallback, useMemo, useState } from 'react';
 import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode } from './types';
@@ -67,6 +67,7 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
     const isActive = !!(range.from || range.to);
 
     const presets = [
+        { label: 'This Week', fn: () => { const now = new Date(); return { from: fmtDate(startOfWeek(now, { weekStartsOn: 1 })), to: fmtDate(endOfWeek(now, { weekStartsOn: 1 })) }; } },
         { label: 'This Month', fn: () => { const now = new Date(); return { from: fmtDate(startOfMonth(now)), to: fmtDate(endOfMonth(now)) }; } },
         { label: 'Last Month', fn: () => { const d = subMonths(new Date(), 1); return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) }; } },
         { label: 'Next Month', fn: () => { const d = addMonths(new Date(), 1); return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) }; } },

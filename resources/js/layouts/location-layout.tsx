@@ -42,13 +42,13 @@ import { toast } from 'sonner';
 
 export type LocationTab = 'sublocations' | 'cost-codes' | 'price-list' | 'favourites' | 'production-data' | 'schedule';
 
-const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey: string }[] = [
+const TABS: { key: LocationTab; label: string; icon: typeof FolderTree; countKey: string; permissionKey?: string }[] = [
     { key: 'sublocations', label: 'Sub-locations', icon: FolderTree, countKey: 'sublocations' },
-    { key: 'cost-codes', label: 'Cost Codes', icon: Code2, countKey: 'cost_codes' },
-    { key: 'price-list', label: 'Price List', icon: DollarSign, countKey: 'price_list' },
-    { key: 'favourites', label: 'Favorites', icon: Heart, countKey: 'favourites' },
-    { key: 'production-data', label: 'DPC Data', icon: ChartColumnIncreasing, countKey: 'production_data' },
-    { key: 'schedule', label: 'Schedule', icon: CalendarDays, countKey: 'tasks' },
+    { key: 'cost-codes', label: 'Cost Codes', icon: Code2, countKey: 'cost_codes', permissionKey: 'cost_codes' },
+    { key: 'price-list', label: 'Price List', icon: DollarSign, countKey: 'price_list', permissionKey: 'price_list' },
+    { key: 'favourites', label: 'Favorites', icon: Heart, countKey: 'favourites', permissionKey: 'favourites' },
+    { key: 'production-data', label: 'DPC Data', icon: ChartColumnIncreasing, countKey: 'production_data', permissionKey: 'production_data' },
+    { key: 'schedule', label: 'Schedule', icon: CalendarDays, countKey: 'tasks', permissionKey: 'schedule' },
 ];
 
 export type LocationBase = {
@@ -71,6 +71,13 @@ export type LocationBase = {
         favourites: number;
         production_data: number;
         tasks: number;
+    };
+    tab_permissions: {
+        cost_codes: boolean;
+        price_list: boolean;
+        favourites: boolean;
+        production_data: boolean;
+        schedule: boolean;
     };
 };
 
@@ -405,7 +412,7 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                 {/* Tab Navigation */}
                 <div className="space-y-4">
                     <div className="bg-muted inline-flex h-auto items-center justify-start rounded-lg p-1">
-                        {TABS.map((tab) => {
+                        {TABS.filter((tab) => !tab.permissionKey || location.tab_permissions?.[tab.permissionKey as keyof typeof location.tab_permissions]).map((tab) => {
                             const Icon = tab.icon;
                             const count = location.tab_counts?.[tab.countKey as keyof typeof location.tab_counts] ?? 0;
                             const isActive = activeTab === tab.key;
