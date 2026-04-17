@@ -1,3 +1,5 @@
+import CsvImporterDialog from '@/components/csv-importer';
+import { SearchSelect } from '@/components/search-select';
 import TiptapEditor from '@/components/document-templates/tiptap-editor';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,9 +10,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { router } from '@inertiajs/react';
-import { ClipboardList, FileText, Loader2, Mail, PencilLine, RotateCcw, Tablet, Trash2 } from 'lucide-react';
+import { SharedData } from '@/types';
+import { router, usePage } from '@inertiajs/react';
+import { ChevronsDown, ClipboardList, FileText, Loader2, Mail, PencilLine, RotateCcw, Tablet, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Dropzone from 'shadcn-dropzone';
 import SignaturePad from 'signature_pad';
 
 interface DocumentTemplate {
@@ -84,6 +88,9 @@ export default function SendForSigningModal({
     bulkEmployees = [],
     onSuccess,
 }: SendForSigningModalProps) {
+    const { auth } = usePage<SharedData>().props;
+    const currentUser = auth.user;
+    const currentUserPosition = appUsers?.find((u) => u.id === currentUser.id)?.position ?? '';
     const isBulkMode = bulkEmployees.length > 0;
     const [showWriteSection, setShowWriteSection] = useState(false);
     const [requiresSignature, setRequiresSignature] = useState(true);
@@ -94,6 +101,8 @@ export default function SendForSigningModal({
     const [name, setName] = useState(recipientName);
     const [email, setEmail] = useState(recipientEmail);
     const [customFields, setCustomFields] = useState<Record<string, string>>({});
+    // Per-employee custom fields for mail-merge in bulk mode: { employeeId: { placeholderKey: value } }
+    const [employeeCustomFields, setEmployeeCustomFields] = useState<Record<number, Record<string, string>>>({});
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [senderFullName, setSenderFullName] = useState('');
@@ -266,16 +275,36 @@ export default function SendForSigningModal({
         }
 
         // Validate required custom fields for templates
-        if (hasTemplates) {
-            for (const p of mergedPlaceholders) {
-                const val = customFields[p.key]?.trim() ?? '';
-                if (p.required && !val) {
-                    newErrors[`cf_${p.key}`] = `${p.label} is required.`;
-                    continue;
+        if (hasTemplates && mergedPlaceholders.length > 0) {
+            if (isBulkMode) {
+                // Mail merge: validate per-employee fields
+                for (const emp of bulkEmployees) {
+                    for (const p of mergedPlaceholders) {
+                        const val = employeeCustomFields[emp.id]?.[p.key]?.trim() ?? '';
+                        if (p.required && !val) {
+                            newErrors[`ecf_${emp.id}_${p.key}`] = 'Required';
+                            if (!newErrors.employee_custom_fields) {
+                                newErrors.employee_custom_fields = `Some required fields are missing. Fill in all required fields for each employee.`;
+                            }
+                            continue;
+                        }
+                        if (val && p.type) {
+                            const typeError = validateFieldValue(val, p.type);
+                            if (typeError) newErrors[`ecf_${emp.id}_${p.key}`] = typeError;
+                        }
+                    }
                 }
-                if (val && p.type) {
-                    const typeError = validateFieldValue(val, p.type);
-                    if (typeError) newErrors[`cf_${p.key}`] = typeError;
+            } else {
+                for (const p of mergedPlaceholders) {
+                    const val = customFields[p.key]?.trim() ?? '';
+                    if (p.required && !val) {
+                        newErrors[`cf_${p.key}`] = `${p.label} is required.`;
+                        continue;
+                    }
+                    if (val && p.type) {
+                        const typeError = validateFieldValue(val, p.type);
+                        if (typeError) newErrors[`cf_${p.key}`] = typeError;
+                    }
                 }
             }
         }
@@ -306,8 +335,18 @@ export default function SendForSigningModal({
         // Templates
         if (hasTemplates) {
             selectedTemplateIds.forEach((id, i) => formData.append(`document_template_ids[${i}]`, String(id)));
-            for (const [k, v] of Object.entries(customFields)) {
-                formData.append(`custom_fields[${k}]`, v);
+            if (isBulkMode && mergedPlaceholders.length > 0) {
+                // Mail merge: send per-employee custom fields
+                for (const emp of bulkEmployees) {
+                    const fields = employeeCustomFields[emp.id] ?? {};
+                    for (const [k, v] of Object.entries(fields)) {
+                        formData.append(`employee_custom_fields[${emp.id}][${k}]`, v);
+                    }
+                }
+            } else {
+                for (const [k, v] of Object.entries(customFields)) {
+                    formData.append(`custom_fields[${k}]`, v);
+                }
             }
             formData.append('custom_fields[recipient_address]', recipientAddress);
             formData.append('custom_fields[recipient_phone]', recipientPhone);
@@ -366,9 +405,10 @@ export default function SendForSigningModal({
         setSelectedFormTemplateIds([]);
         setDeliveryMethod('email');
         setCustomFields({});
+        setEmployeeCustomFields({});
         setErrors({});
-        setSenderFullName('');
-        setSenderPosition('');
+        setSenderFullName(currentUser.name ?? '');
+        setSenderPosition(currentUserPosition);
         setSenderSigMode(savedSenderSignatureUrl ? 'saved' : 'draw');
         setSaveSenderSignature(false);
         setInternalSignerUserId('');
@@ -465,12 +505,12 @@ export default function SendForSigningModal({
 
                     {/* Attachments — always visible, multiple files */}
                     <div className="space-y-2">
-                        <Label>Attachments (info only, no signature)</Label>
+                        <Label>Attachments <span className="text-muted-foreground font-normal">(info only, no signature)</span></Label>
                         {uploadedFiles.length > 0 && (
                             <div className="space-y-1.5">
                                 {uploadedFiles.map((file, idx) => (
                                     <div key={idx} className="flex items-center gap-3 rounded-md border p-2">
-                                        <FileText className="h-5 w-5 text-muted-foreground" />
+                                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <p className="truncate text-sm font-medium">{file.name}</p>
                                             <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
@@ -482,21 +522,13 @@ export default function SendForSigningModal({
                                 ))}
                             </div>
                         )}
-                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-muted/50">
-                            <FileText className="h-4 w-4" />
-                            {uploadedFiles.length > 0 ? 'Add another PDF' : 'Upload PDF attachment'}
-                            <input
-                                type="file"
-                                accept=".pdf"
-                                multiple
-                                className="hidden"
-                                onChange={(e) => {
-                                    const files = Array.from(e.target.files ?? []);
-                                    if (files.length) setUploadedFiles((prev) => [...prev, ...files]);
-                                    e.target.value = '';
-                                }}
-                            />
-                        </label>
+                        <Dropzone
+                            onDrop={(files) => {
+                                if (files.length) setUploadedFiles((prev) => [...prev, ...files]);
+                            }}
+                            accept={{ 'application/pdf': ['.pdf'] }}
+                            multiple
+                        />
                     </div>
 
                     {/* Form Templates Selection */}
@@ -554,8 +586,151 @@ export default function SendForSigningModal({
                         </div>
                     )}
 
-                    {/* Custom Fields (merged from all selected template placeholders) */}
+                    {/* Custom Fields — single mode: form inputs; bulk mode: mail-merge table */}
                     {selectedTemplateIds.length > 0 && mergedPlaceholders.length > 0 && (
+                        isBulkMode ? (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-sm font-medium">Mail Merge Fields</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Each employee can have unique values. Upload a CSV/Excel or fill in manually.
+                                    </p>
+                                </div>
+                                <CsvImporterDialog
+                                    requiredColumns={['Employee', ...mergedPlaceholders.map((p) => p.label)]}
+                                    onSubmit={(rows) => {
+                                        const updated: Record<number, Record<string, string>> = {};
+                                        for (const row of rows) {
+                                            const csvName = (row['Employee'] ?? '').trim().toLowerCase();
+                                            if (!csvName) continue;
+                                            const match = bulkEmployees.find(
+                                                (e) => e.name.toLowerCase() === csvName || (e.email ?? '').toLowerCase() === csvName,
+                                            );
+                                            if (!match) continue;
+                                            const fields: Record<string, string> = {};
+                                            for (const p of mergedPlaceholders) {
+                                                fields[p.key] = row[p.label] ?? '';
+                                            }
+                                            updated[match.id] = fields;
+                                        }
+                                        setEmployeeCustomFields((prev) => ({ ...prev, ...updated }));
+                                    }}
+                                />
+                            </div>
+                            {errors.employee_custom_fields && <p className="text-xs text-destructive">{errors.employee_custom_fields}</p>}
+                            <div className="overflow-x-auto rounded-lg border">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="border-b bg-muted/60">
+                                            <th className="sticky left-0 z-10 bg-muted/60 whitespace-nowrap border-r px-2 py-1 text-left text-[11px] font-medium">Employee</th>
+                                            {mergedPlaceholders.map((p) => (
+                                                <th key={p.key} className="whitespace-nowrap border-r last:border-r-0 px-1.5 py-1 text-left text-[11px] font-medium">
+                                                    <div className="flex items-center gap-0.5">
+                                                        {p.label}
+                                                        {p.required && <span className="text-destructive">*</span>}
+                                                        <button
+                                                            type="button"
+                                                            className="inline-flex items-center rounded p-0.5 text-muted-foreground/50 hover:text-foreground"
+                                                            title={`Copy first row down to all`}
+                                                            onClick={() => {
+                                                                const firstId = bulkEmployees[0]?.id;
+                                                                const val = employeeCustomFields[firstId]?.[p.key] ?? '';
+                                                                if (!val) return;
+                                                                setEmployeeCustomFields((prev) => {
+                                                                    const next = { ...prev };
+                                                                    for (const emp of bulkEmployees) {
+                                                                        next[emp.id] = { ...next[emp.id], [p.key]: val };
+                                                                    }
+                                                                    return next;
+                                                                });
+                                                            }}
+                                                        >
+                                                            <ChevronsDown className="h-2.5 w-2.5" />
+                                                        </button>
+                                                    </div>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bulkEmployees.map((emp) => (
+                                            <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/20">
+                                                <td className="sticky left-0 z-10 bg-background whitespace-nowrap border-r px-2 py-0 text-[11px] font-medium">{emp.name}</td>
+                                                {mergedPlaceholders.map((p) => {
+                                                    const cellVal = employeeCustomFields[emp.id]?.[p.key] ?? '';
+                                                    const setCellVal = (v: string) => setEmployeeCustomFields((prev) => ({
+                                                        ...prev,
+                                                        [emp.id]: { ...prev[emp.id], [p.key]: v },
+                                                    }));
+                                                    const options = (p.options ?? []).filter((o) => o.trim() !== '');
+                                                    const cellCls = "border-r last:border-r-0 p-0";
+                                                    const inputCls = "h-full w-full min-w-[100px] bg-transparent px-1.5 py-[3px] text-[11px] outline-none focus:bg-primary/5";
+
+                                                    return (
+                                                        <td key={p.key} className={cellCls}>
+                                                            {p.type === 'dropdown' && options.length > 0 ? (
+                                                                <select
+                                                                    className={`${inputCls} cursor-pointer appearance-none`}
+                                                                    value={cellVal}
+                                                                    onChange={(e) => setCellVal(e.target.value)}
+                                                                >
+                                                                    <option value="">{p.label}</option>
+                                                                    {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                                                </select>
+                                                            ) : p.type === 'checkbox' ? (
+                                                                <label className="flex items-center justify-center px-1.5 py-[3px] cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="h-3.5 w-3.5"
+                                                                        checked={cellVal === 'Yes'}
+                                                                        onChange={(e) => setCellVal(e.target.checked ? 'Yes' : 'No')}
+                                                                    />
+                                                                </label>
+                                                            ) : p.type === 'currency' ? (
+                                                                <div className="flex items-center">
+                                                                    <span className="pl-1.5 text-[11px] text-muted-foreground">$</span>
+                                                                    <input
+                                                                        className={`${inputCls} pl-0.5`}
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={cellVal}
+                                                                        onChange={(e) => setCellVal(e.target.value.replace(/[^0-9.]/g, ''))}
+                                                                        placeholder="0.00"
+                                                                    />
+                                                                </div>
+                                                            ) : p.type === 'radio' && options.length > 0 ? (
+                                                                <select
+                                                                    className={`${inputCls} cursor-pointer appearance-none`}
+                                                                    value={cellVal}
+                                                                    onChange={(e) => setCellVal(e.target.value)}
+                                                                >
+                                                                    <option value="">{p.label}</option>
+                                                                    {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                                                </select>
+                                                            ) : (
+                                                                <input
+                                                                    className={inputCls}
+                                                                    type={p.type === 'date' ? 'date' : p.type === 'number' ? 'number' : p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : 'text'}
+                                                                    inputMode={p.type === 'number' ? 'decimal' : undefined}
+                                                                    value={cellVal}
+                                                                    onChange={(e) => setCellVal(e.target.value)}
+                                                                    placeholder={p.type === 'date' ? '' : p.label}
+                                                                />
+                                                            )}
+                                                            {errors[`ecf_${emp.id}_${p.key}`] && (
+                                                                <p className="px-1.5 text-[10px] leading-none text-destructive">{errors[`ecf_${emp.id}_${p.key}`]}</p>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        ) : (
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">Document Fields</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -640,6 +815,7 @@ export default function SendForSigningModal({
                                 })}
                             </div>
                         </div>
+                        )
                     )}
 
                     {/* Sender Signature (shown when the document contains {{sender_signature}}) */}
@@ -649,6 +825,25 @@ export default function SendForSigningModal({
                             <p className="text-xs text-muted-foreground">
                                 One or more selected documents require a company signature. Please sign below before sending.
                             </p>
+                            <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw' | 'request')} className={`grid gap-2 ${savedSenderSignatureUrl ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                {savedSenderSignatureUrl && (
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'saved' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                        <RadioGroupItem value="saved" />
+                                        My signature
+                                    </label>
+                                )}
+                                <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'draw' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                    <RadioGroupItem value="draw" />
+                                    Draw signature
+                                </label>
+                                {appUsers.length > 0 && (
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'request' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                                        <RadioGroupItem value="request" />
+                                        Request user
+                                    </label>
+                                )}
+                            </RadioGroup>
+                            {senderSigMode !== 'request' && (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="sender-full-name" className="text-xs">
@@ -674,40 +869,20 @@ export default function SendForSigningModal({
                                     />
                                 </div>
                             </div>
-                            <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw' | 'request')} className={`grid gap-2 ${savedSenderSignatureUrl ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                                {savedSenderSignatureUrl && (
-                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'saved' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                        <RadioGroupItem value="saved" />
-                                        My signature
-                                    </label>
-                                )}
-                                <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'draw' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                    <RadioGroupItem value="draw" />
-                                    Draw signature
-                                </label>
-                                {appUsers.length > 0 && (
-                                    <label className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-xs ${senderSigMode === 'request' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                        <RadioGroupItem value="request" />
-                                        Request user
-                                    </label>
-                                )}
-                            </RadioGroup>
+                            )}
 
                             {senderSigMode === 'request' ? (
                                 <div className="space-y-2">
                                     <Label className="text-xs">Select user to sign</Label>
-                                    <Select value={internalSignerUserId} onValueChange={setInternalSignerUserId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Choose a user…" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {appUsers.map((u) => (
-                                                <SelectItem key={u.id} value={String(u.id)}>
-                                                    {u.name}{u.position ? ` — ${u.position}` : ''}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchSelect
+                                        options={appUsers.map((u) => ({
+                                            value: String(u.id),
+                                            label: u.name + (u.position ? ` — ${u.position}` : ''),
+                                        }))}
+                                        optionName="user"
+                                        selectedOption={internalSignerUserId}
+                                        onValueChange={setInternalSignerUserId}
+                                    />
                                     {errors.internal_signer && <p className="text-sm text-destructive">{errors.internal_signer}</p>}
                                     <p className="text-[11px] text-muted-foreground">
                                         They'll receive an email and notification to sign. The document goes to the recipient after they sign.
@@ -749,7 +924,8 @@ export default function SendForSigningModal({
                         </div>
                     )}
 
-                    {/* Delivery Method */}
+                    {/* Delivery Method — hide in bulk mode (always email) */}
+                    {!isBulkMode && (
                     <div className="space-y-2">
                         <Label>Delivery Method</Label>
                         <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod} className="grid grid-cols-2 gap-3">
@@ -775,6 +951,7 @@ export default function SendForSigningModal({
                             </label>
                         </RadioGroup>
                     </div>
+                    )}
                 </div>
                 </ScrollArea>
 

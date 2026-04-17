@@ -369,6 +369,7 @@ class DocumentSigningService
         ?string $senderPosition = null,
         ?string $documentHtml = null,
         ?string $documentTitle = null,
+        ?string $batchId = null,
     ): SigningRequest {
         $placeholderValues = $this->buildPlaceholderValues(
             $template, $customFields, $recipientName, $recipientEmail, $internalSigner, $signable,
@@ -401,6 +402,7 @@ class DocumentSigningService
             'sender_position' => $senderPosition,
             'internal_signer_user_id' => $internalSigner->id,
             'internal_signer_token' => Str::random(64),
+            'batch_id' => $batchId,
             'expires_at' => null,
         ]);
 

@@ -137,6 +137,12 @@ const finance = [
                 permission: 'reports.wip',
             },
             {
+                name: 'Retention Report',
+                url: '/retention-report',
+                icon: Scale,
+                permission: 'reports.retention',
+            },
+            {
                 name: 'Manage Receipts',
                 url: '/manage-receipts',
                 icon: ReceiptText,

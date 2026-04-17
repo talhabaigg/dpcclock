@@ -96,4 +96,11 @@ class SilicaRegisterController extends Controller
 
         return back();
     }
+
+    public function destroyOption(SilicaOption $option)
+    {
+        $option->delete();
+
+        return back();
+    }
 }

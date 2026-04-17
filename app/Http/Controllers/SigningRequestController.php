@@ -601,6 +601,8 @@ class SigningRequestController extends Controller
             'employee_ids' => 'nullable|array',
             'employee_ids.*' => 'exists:employees,id',
             'custom_fields' => 'nullable|array',
+            'employee_custom_fields' => 'nullable|array',
+            'employee_custom_fields.*' => 'nullable|array',
             'sender_signature' => 'nullable|string',
             'sender_full_name' => 'nullable|string|max:255',
             'sender_position' => 'nullable|string|max:255',
@@ -609,6 +611,7 @@ class SigningRequestController extends Controller
             'internal_signer_user_id' => 'nullable|exists:users,id',
         ]);
 
+        $employeeCustomFields = $validated['employee_custom_fields'] ?? [];
         $templateIds = $validated['document_template_ids'] ?? [];
         $hasWritten = ! empty($validated['document_html']);
         $attachments = $request->file('attachments', []);
@@ -671,6 +674,7 @@ class SigningRequestController extends Controller
                     'name' => $emp->display_name ?? $emp->name,
                     'email' => $emp->email,
                     'signable' => $emp,
+                    'employee_id' => $emp->id,
                 ];
             }
         } else {
@@ -691,8 +695,16 @@ class SigningRequestController extends Controller
             ];
         }
 
+        $batchId = ($isBulk && $internalSigner) ? (string) \Illuminate\Support\Str::uuid() : null;
+
         $created = 0;
         foreach ($recipients as $recipient) {
+            // Resolve custom fields: per-employee (mail merge) or shared
+            $recipientCustomFields = $validated['custom_fields'] ?? [];
+            if (! empty($recipient['employee_id']) && ! empty($employeeCustomFields[$recipient['employee_id']])) {
+                $recipientCustomFields = array_merge($recipientCustomFields, $employeeCustomFields[$recipient['employee_id']]);
+            }
+
             // 1. Templates
             foreach ($templates as $template) {
                 if ($requiresSig && $internalSigner) {
@@ -703,10 +715,11 @@ class SigningRequestController extends Controller
                         recipientName: $recipient['name'],
                         recipientEmail: $recipient['email'],
                         internalSigner: $internalSigner,
-                        customFields: $validated['custom_fields'] ?? [],
+                        customFields: $recipientCustomFields,
                         signable: $recipient['signable'],
                         senderFullName: $validated['sender_full_name'] ?? null,
                         senderPosition: $validated['sender_position'] ?? null,
+                        batchId: $batchId,
                     );
                 } elseif ($requiresSig) {
                     $this->signingService->createAndSend(
@@ -715,7 +728,7 @@ class SigningRequestController extends Controller
                         admin: $request->user(),
                         recipientName: $recipient['name'],
                         recipientEmail: $recipient['email'],
-                        customFields: $validated['custom_fields'] ?? [],
+                        customFields: $recipientCustomFields,
                         signable: $recipient['signable'],
                         senderSignature: $senderSignature,
                         senderFullName: $validated['sender_full_name'] ?? null,
@@ -728,7 +741,7 @@ class SigningRequestController extends Controller
                         recipientEmail: $recipient['email'],
                         signable: $recipient['signable'],
                         template: $template,
-                        customFields: $validated['custom_fields'] ?? [],
+                        customFields: $recipientCustomFields,
                     );
                 }
                 $created++;
@@ -749,6 +762,7 @@ class SigningRequestController extends Controller
                         senderPosition: $validated['sender_position'] ?? null,
                         documentHtml: $validated['document_html'],
                         documentTitle: $validated['document_title'] ?? 'Document',
+                        batchId: $batchId,
                     );
                 } elseif ($requiresSig) {
                     $this->signingService->createAndSend(

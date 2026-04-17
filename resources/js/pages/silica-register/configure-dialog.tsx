@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Plus, Settings } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowDown, ArrowUp, Check, MoreVertical, Pencil, Plus, Settings, Trash2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface SilicaOption {
     id: number;
@@ -27,6 +28,9 @@ interface Props {
 function OptionSection({ type, label, items }: { type: string; label: string; items: SilicaOption[] }) {
     const [newLabel, setNewLabel] = useState('');
     const [adding, setAdding] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editLabel, setEditLabel] = useState('');
+    const editInputRef = useRef<HTMLInputElement>(null);
 
     const handleAdd = () => {
         if (!newLabel.trim()) return;
@@ -57,6 +61,31 @@ function OptionSection({ type, label, items }: { type: string; label: string; it
         });
 
         router.post(route('silica-register.options.reorder'), { options: reordered }, {
+            preserveScroll: true,
+            preserveState: true,
+        });
+    };
+
+    const handleStartEdit = (option: SilicaOption) => {
+        setEditingId(option.id);
+        setEditLabel(option.label);
+        setTimeout(() => editInputRef.current?.focus(), 0);
+    };
+
+    const handleSaveEdit = (option: SilicaOption) => {
+        if (!editLabel.trim() || editLabel.trim() === option.label) {
+            setEditingId(null);
+            return;
+        }
+        router.put(route('silica-register.options.update', option.id), { label: editLabel.trim() }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => setEditingId(null),
+        });
+    };
+
+    const handleDelete = (option: SilicaOption) => {
+        router.delete(route('silica-register.options.destroy', option.id), {
             preserveScroll: true,
             preserveState: true,
         });
@@ -101,7 +130,28 @@ function OptionSection({ type, label, items }: { type: string; label: string; it
                             onCheckedChange={() => handleToggle(option)}
                             className="scale-75"
                         />
-                        <span className="min-w-0 flex-1 break-words">{option.label}</span>
+                        {editingId === option.id ? (
+                            <div className="flex min-w-0 flex-1 items-center gap-1">
+                                <Input
+                                    ref={editInputRef}
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    className="h-7 text-sm"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveEdit(option);
+                                        if (e.key === 'Escape') setEditingId(null);
+                                    }}
+                                />
+                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleSaveEdit(option)}>
+                                    <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setEditingId(null)}>
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <span className="min-w-0 flex-1 break-words">{option.label}</span>
+                        )}
                         <div className="flex gap-1">
                             <Button
                                 variant="ghost"
@@ -121,6 +171,23 @@ function OptionSection({ type, label, items }: { type: string; label: string; it
                             >
                                 <ArrowDown className="h-3.5 w-3.5" />
                             </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <MoreVertical className="h-3.5 w-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleStartEdit(option)}>
+                                        <Pencil className="mr-2 h-3.5 w-3.5" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(option)}>
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     </div>
                 ))}

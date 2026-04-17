@@ -269,6 +269,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.missing-sign-out' => 'View missing sign-out report',
             'reports.safety-dashboard' => 'View safety dashboard',
             'reports.wip' => 'View WIP report',
+            'reports.retention' => 'View retention report',
+            'reports.retention.edit' => 'Edit manual retention values',
             'reports.timesheet-vs-dpc' => 'View timesheet vs DPC report',
         ],
 

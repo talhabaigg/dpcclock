@@ -85,7 +85,11 @@
       "Bash(gh auth:*)",
       "Bash(python3 -c \"import json; json.load\\(open\\('/Users/talhabaig/Documents/Laravel/dpcclock/.claude/settings.local.json'\\)\\); print\\('Valid JSON'\\)\")",
       "Bash(git stash:*)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(npm run *)",
+      "Bash(brew list *)",
+      "Bash(brew install *)",
+      "Bash(xargs kill *)"
     ]
   }
 }

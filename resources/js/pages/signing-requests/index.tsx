@@ -1,3 +1,4 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { format, parse } from 'date-fns';
 import { Download, Mail, RotateCcw, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -119,17 +121,10 @@ export default function SigningRequestsIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Signing Requests" />
             <div className="flex flex-col gap-4 p-4">
-                <div>
-                    <h1 className="text-2xl font-semibold">Signing Requests</h1>
-                    <p className="text-sm text-muted-foreground">
-                        {signingRequests.total} total{filters.status || filters.delivery_method || filters.signable_type || filters.sent_by || filters.q ? ' (filtered)' : ''}
-                    </p>
-                </div>
-
                 {/* Filter bar */}
                 <div className="rounded-lg border bg-card p-3">
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-7">
-                        <Input placeholder="Search recipient / document…" value={q} onChange={(e) => setQ(e.target.value)} className="lg:col-span-2" />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <Input placeholder="Search recipient / document…" value={q} onChange={(e) => setQ(e.target.value)} className="sm:col-span-2" />
 
                         <Select value={status} onValueChange={(v) => { setStatus(v); applyFilters({ status: v }); }}>
                             <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
@@ -164,10 +159,18 @@ export default function SigningRequestsIndex() {
                             </SelectContent>
                         </Select>
 
-                        <div className="flex gap-2">
-                            <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); applyFilters({ date_from: e.target.value }); }} />
-                            <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); applyFilters({ date_to: e.target.value }); }} />
-                        </div>
+                        <DatePickerDemo
+                            value={dateFrom ? parse(dateFrom, 'yyyy-MM-dd', new Date()) : undefined}
+                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateFrom(v); applyFilters({ date_from: v }); }}
+                            placeholder="From date"
+                            displayFormat="dd/MM/yyyy"
+                        />
+                        <DatePickerDemo
+                            value={dateTo ? parse(dateTo, 'yyyy-MM-dd', new Date()) : undefined}
+                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateTo(v); applyFilters({ date_to: v }); }}
+                            placeholder="To date"
+                            displayFormat="dd/MM/yyyy"
+                        />
                     </div>
                     <div className="mt-2 flex justify-end">
                         <Button variant="ghost" size="sm" onClick={resetFilters}>Reset filters</Button>
@@ -275,12 +278,13 @@ export default function SigningRequestsIndex() {
                         <div>Showing {signingRequests.from}–{signingRequests.to} of {signingRequests.total}</div>
                         <div className="flex gap-1">
                             {signingRequests.links.map((link, idx) => (
-                                <button
+                                <Button
                                     key={idx}
-                                    type="button"
+                                    variant={link.active ? 'default' : 'ghost'}
+                                    size="sm"
                                     disabled={!link.url}
                                     onClick={() => link.url && router.get(link.url, {}, { preserveState: true, preserveScroll: true })}
-                                    className={`rounded px-2 py-1 ${link.active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'} ${!link.url ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                    className="h-7 px-2 text-xs"
                                     dangerouslySetInnerHTML={{ __html: link.label }}
                                 />
                             ))}

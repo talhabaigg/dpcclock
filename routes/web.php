@@ -66,6 +66,7 @@ use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
+use App\Http\Controllers\RetentionReportController;
 use App\Http\Controllers\WipReportController;
 use App\Http\Controllers\WorkerScreeningController;
 use App\Http\Controllers\ChecklistController;
@@ -180,6 +181,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Internal document signing (authenticated user signs before doc goes to recipient)
     Route::get('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'show'])->name('internal-sign.show');
     Route::post('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'submit'])->name('internal-sign.submit');
+    Route::post('/internal-sign/{token}/batch', [\App\Http\Controllers\InternalSignController::class, 'submitBatch'])->name('internal-sign.submit-batch');
 
     // Dashboard - requires dashboard.view permission
     Route::get('dashboard', function () {
@@ -1207,6 +1209,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reports/wip', [WipReportController::class, 'index'])->name('reports.wip')
         ->middleware('permission:reports.wip');
 
+    // Retention Report
+    Route::get('/retention-report', [RetentionReportController::class, 'index'])->name('reports.retention')
+        ->middleware('permission:reports.retention');
+    Route::post('/retention-report/manual', [RetentionReportController::class, 'updateManualRetention'])->name('reports.retention.updateManual')
+        ->middleware('permission:reports.retention.edit');
+    Route::delete('/retention-report/manual', [RetentionReportController::class, 'deleteManualRetention'])->name('reports.retention.deleteManual')
+        ->middleware('permission:reports.retention.edit');
+
     // Safety Dashboard
     Route::middleware('permission:reports.safety-dashboard')->group(function () {
         Route::get('/safety-dashboard', [SafetyDashboardController::class, 'index'])->name('reports.safetyDashboard');
@@ -1263,6 +1273,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/silica-register/options/{option}', [SilicaRegisterController::class, 'updateOption'])->name('silica-register.options.update')
             ->middleware('permission:silica-register.configure');
         Route::post('/silica-register/options/reorder', [SilicaRegisterController::class, 'reorderOptions'])->name('silica-register.options.reorder')
+            ->middleware('permission:silica-register.configure');
+        Route::delete('/silica-register/options/{option}', [SilicaRegisterController::class, 'destroyOption'])->name('silica-register.options.destroy')
             ->middleware('permission:silica-register.configure');
     });
 

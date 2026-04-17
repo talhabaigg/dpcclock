@@ -69,6 +69,12 @@
             <strong>{{ $signingRequest->sentBy?->name ?? 'A colleague' }}</strong> has requested your signature on this document before it is sent to <strong>{{ $signingRequest->recipient_name }}</strong>.
         </div>
 
+        @if($batchCount > 0)
+        <div class="info-banner" style="background: #fef3c7; border-color: #fcd34d; color: #92400e;">
+            This document is part of a batch of <strong>{{ $batchCount + 1 }}</strong> documents awaiting your signature. You can sign all of them at once below.
+        </div>
+        @endif
+
         <div class="agreement-card">
             <div class="agreement-header">
                 <h2>{{ $documentLabel }}</h2>
@@ -114,7 +120,17 @@
 
             <input type="hidden" name="signature_data" id="signature-data">
 
+            @if($batchCount > 0)
+            <button type="submit" class="submit-btn" id="submit-batch-btn" style="margin-bottom: 10px; background: #1e3a5f;"
+                    onclick="this.form.action='{{ route('internal-sign.submit-batch', $token) }}'">
+                Sign All {{ $batchCount + 1 }} Documents
+            </button>
+            <button type="submit" class="submit-btn" id="submit-btn" style="background: #64748b;">
+                Sign This Document Only
+            </button>
+            @else
             <button type="submit" class="submit-btn" id="submit-btn">Sign & Send to Recipient</button>
+            @endif
         </form>
     </div>
 

@@ -44,6 +44,7 @@ class SigningRequest extends Model implements HasMedia
         'viewed_at',
         'cancelled_at',
         'cancelled_by',
+        'batch_id',
     ];
 
     protected function casts(): array
