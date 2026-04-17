@@ -1,98 +1,116 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { closestCenter, DndContext, DragEndEvent, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Building, EyeOff, GripVertical, Hourglass, Loader, Truck, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { EyeOff, GripVertical, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import RequisitionCard from './requisitionCard';
+import { getStatus } from './statusConfig';
 import { Requisition } from './types';
 
 interface CardsIndexProps {
     filteredRequisitions: Requisition[];
 }
 
-const statusMap = {
-    pending: { label: 'Pending', icon: <Loader className="h-4 w-4" /> },
-    office_review: { label: 'Waiting for Review', icon: <Building className="h-4 w-4" /> },
-    success: { label: 'Awaiting', icon: <Hourglass className="h-4 w-4" /> },
-    sent: { label: 'Sent', icon: <Truck className="h-4 w-4" /> },
-};
-
-type StatusKey = keyof typeof statusMap;
+type StatusKey = 'pending' | 'office_review' | 'success' | 'sent';
 const allStatuses: StatusKey[] = ['pending', 'office_review', 'success', 'sent'];
 
 const SortableColumn = ({
     id,
-    label,
-    count,
-    icon,
     cards,
     onTogglePin,
     isPinned,
+    columnIndex,
 }: {
-    id: string;
-    label: string;
-    icon: React.ReactNode;
-    count: number;
+    id: StatusKey;
     cards: Requisition[];
     onTogglePin: (id: StatusKey) => void;
     isPinned: boolean;
+    columnIndex: number;
 }) => {
-    const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition } = useSortable({ id });
+    const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id });
+    const status = getStatus(id);
 
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
+        ['--card-index' as string]: columnIndex,
     };
+
+    // Pulse the count badge when the card count changes
+    const [bump, setBump] = useState(false);
+    const prevCount = useRef(cards.length);
+    useEffect(() => {
+        if (prevCount.current !== cards.length) {
+            setBump(true);
+            prevCount.current = cards.length;
+            const t = setTimeout(() => setBump(false), 320);
+            return () => clearTimeout(t);
+        }
+    }, [cards.length]);
 
     return (
         <div
             ref={setNodeRef}
             style={style}
-            className="dark:bg-card/80 mx-0 flex max-w-full min-w-0 flex-col rounded-lg bg-slate-100/50 md:mx-1 md:h-full md:w-full"
+            className={cn(
+                'card-enter bg-muted/20 flex max-w-full min-w-0 flex-col overflow-hidden rounded-lg border transition-shadow duration-200 ease-out md:h-full md:w-full',
+                isDragging && 'z-10 shadow-md ring-1 ring-foreground/5',
+            )}
         >
             {/* Column Header */}
-            <div className="dark:bg-muted/30 flex shrink-0 items-center justify-between rounded-t-lg bg-slate-100 px-3 py-2.5 md:py-2">
-                <div className="flex items-center gap-2">
-                    <span className="text-slate-500 dark:text-slate-400">{icon}</span>
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-                    <span className="dark:bg-muted rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-600 dark:text-slate-300">
-                        {count}
+            <div className="flex shrink-0 items-center justify-between border-b px-2 py-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs font-semibold" title={status.columnLabel}>
+                        {status.columnLabel}
                     </span>
+                    <Badge
+                        variant="secondary"
+                        className={cn(
+                            'ml-1 h-4 shrink-0 overflow-hidden rounded-full px-1.5 text-xs leading-none tabular-nums transition-colors',
+                            bump && 'animate-count-pop',
+                        )}
+                    >
+                        {cards.length}
+                    </Badge>
                 </div>
-                <div className="flex items-center">
+                <div className="flex items-center gap-0.5">
                     <Button
                         variant="ghost"
-                        size="sm"
-                        onClick={() => onTogglePin(id as StatusKey)}
+                        size="icon"
+                        onClick={() => onTogglePin(id)}
                         title={isPinned ? 'Hide column' : 'Show column'}
-                        className="h-8 w-8 rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 md:h-7 md:w-7 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        className="text-muted-foreground hover:text-foreground h-6 w-6"
                     >
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                         ref={setActivatorNodeRef}
                         {...attributes}
                         {...listeners}
                         variant="ghost"
-                        size="sm"
-                        className="hidden h-7 w-7 cursor-grab rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 active:cursor-grabbing md:flex dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        size="icon"
+                        className="text-muted-foreground hover:text-foreground hidden h-6 w-6 cursor-grab active:cursor-grabbing md:flex"
                     >
-                        <GripVertical className="h-4 w-4" />
+                        <GripVertical className="h-3.5 w-3.5" />
                     </Button>
                 </div>
             </div>
 
-            {/* Cards container - scrollable on desktop, max-height on mobile */}
-            <div className="max-h-[400px] min-h-0 max-w-full min-w-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-2 md:max-h-none">
+            {/* Cards container */}
+            <div className="flex max-h-[400px] flex-1 flex-col gap-1.5 overflow-x-hidden overflow-y-auto p-1.5 md:max-h-none">
                 {cards.length === 0 ? (
-                    <div className="dark:border-border rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
+                    <div className="text-muted-foreground/70 flex h-12 items-center justify-center text-xs">
                         No requisitions
                     </div>
                 ) : (
-                    cards.map((requisition) => <RequisitionCard key={requisition.id} requisition={requisition} />)
+                    cards.map((requisition, i) => (
+                        <RequisitionCard key={requisition.id} requisition={requisition} index={i} />
+                    ))
                 )}
             </div>
         </div>
@@ -160,37 +178,33 @@ const CardsIndex = ({ filteredRequisitions }: CardsIndexProps) => {
         <div className="flex h-auto w-full max-w-full flex-col overflow-hidden md:h-[calc(100vh-280px)]">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
-                    {/* Mobile: vertical stack with collapsible sections, Desktop: horizontal columns */}
-                    <div className="flex min-h-0 w-full max-w-full flex-1 flex-col gap-3 overflow-x-hidden md:flex-row md:gap-2">
+                    {/* Mobile: vertical stack, Desktop: horizontal columns */}
+                    <div className="flex min-h-0 w-full max-w-full flex-1 flex-col gap-1.5 overflow-x-hidden md:flex-row">
                         {columnOrder
                             .filter((statusKey) => !hidden.includes(statusKey))
-                            .map((statusKey) => {
-                                const { label, icon } = statusMap[statusKey];
+                            .map((statusKey, i) => {
                                 const cards = filteredRequisitions.filter((r) => r.status === statusKey);
-                                const count = filteredRequisitions.filter((r) => r.status === statusKey).length;
                                 return (
                                     <SortableColumn
                                         key={statusKey}
                                         id={statusKey}
-                                        label={label}
-                                        count={count}
-                                        icon={icon}
                                         cards={cards}
                                         onTogglePin={togglePin}
-                                        isPinned={!hidden.includes(statusKey)} // visible means pinned
+                                        isPinned={!hidden.includes(statusKey)}
+                                        columnIndex={i}
                                     />
                                 );
                             })}
                     </div>
                 </SortableContext>
             </DndContext>
-            <div className="dark:border-border mt-3 flex shrink-0 justify-end border-t border-slate-200 pt-3">
+            <div className="mt-3 flex shrink-0 justify-end border-t pt-3">
                 <Button
                     onClick={resetSettings}
                     variant="ghost"
                     size="sm"
                     title="Reset column order and visibility"
-                    className="h-7 gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    className="text-muted-foreground hover:text-foreground h-7 gap-1.5 text-xs"
                 >
                     <X className="h-3.5 w-3.5" />
                     Reset Layout

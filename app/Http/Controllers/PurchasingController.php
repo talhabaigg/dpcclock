@@ -182,15 +182,20 @@ class PurchasingController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+        $canViewAll = $user->hasPermissionTo('requisitions.view-all');
+        $location_ids = [];
+
+        if (! $canViewAll) {
+            $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
+            $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+        }
 
         // Build base query
         $query = Requisition::with('supplier', 'creator', 'location', 'notes.creator')
             ->withSum('lineItems', 'total_cost');
 
         // Apply permission-based filtering
-        if (! $user->hasPermissionTo('requisitions.view-all')) {
-            $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
-            $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+        if (! $canViewAll) {
             $query->whereIn('project_number', $location_ids);
         }
 
@@ -253,27 +258,62 @@ class PurchasingController extends Controller
             $query->where('is_template', true);
         }
 
-        // Apply cost range filter (withSum already called above)
-        if ($request->filled('min_cost')) {
-            $query->having('line_items_sum_total_cost', '>=', $request->input('min_cost'));
-        }
-        if ($request->filled('max_cost')) {
-            $query->having('line_items_sum_total_cost', '<=', $request->input('max_cost'));
+        // Apply cost range filter via correlated subquery (avoids groupBy/having pitfalls)
+        if ($request->filled('min_cost') || $request->filled('max_cost')) {
+            $lineItemSum = 'COALESCE((SELECT SUM(total_cost) FROM requisition_line_items WHERE requisition_line_items.requisition_id = requisitions.id), 0)';
+
+            if ($request->filled('min_cost')) {
+                $query->whereRaw("{$lineItemSum} >= ?", [$request->input('min_cost')]);
+            }
+            if ($request->filled('max_cost')) {
+                $query->whereRaw("{$lineItemSum} <= ?", [$request->input('max_cost')]);
+            }
         }
 
-        // Order and paginate
-        $requisitions = $query->orderByDesc('id')->paginate(50)->withQueryString();
+        // Apply sorting
+        $sortableColumns = [
+            'id' => 'requisitions.id',
+            'po_number' => 'requisitions.po_number',
+            'status' => 'requisitions.status',
+            'date_required' => 'requisitions.date_required',
+            'created_at' => 'requisitions.created_at',
+            'order_reference' => 'requisitions.order_reference',
+            'deliver_to' => 'requisitions.deliver_to',
+            'delivery_contact' => 'requisitions.delivery_contact',
+            'is_template' => 'requisitions.is_template',
+            'value' => 'line_items_sum_total_cost',
+        ];
+        $sort = $request->input('sort', 'id');
+        $direction = strtolower($request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sort === 'supplier') {
+            $query->leftJoin('suppliers', 'requisitions.supplier_number', '=', 'suppliers.id')
+                ->orderBy('suppliers.name', $direction)
+                ->select('requisitions.*');
+        } elseif ($sort === 'location') {
+            $query->leftJoin('locations', 'requisitions.project_number', '=', 'locations.id')
+                ->orderBy('locations.name', $direction)
+                ->select('requisitions.*');
+        } elseif ($sort === 'creator') {
+            $query->leftJoin('users', 'requisitions.created_by', '=', 'users.id')
+                ->orderBy('users.name', $direction)
+                ->select('requisitions.*');
+        } elseif (isset($sortableColumns[$sort])) {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        } else {
+            $query->orderByDesc('requisitions.id');
+        }
+
+        $requisitions = $query->paginate(50)->withQueryString();
 
         // Get filter options for dropdowns
         $filterOptionsQuery = Requisition::query();
-        if (! $user->hasPermissionTo('requisitions.view-all')) {
-            $eh_location_ids = $user->managedKiosks()->pluck('eh_location_id')->toArray();
-            $location_ids = Location::whereIn('eh_location_id', $eh_location_ids)->pluck('id')->toArray();
+        if (! $canViewAll) {
             $filterOptionsQuery->whereIn('project_number', $location_ids);
         }
 
         $filterOptions = [
-            'statuses' => Requisition::distinct()->pluck('status')->filter()->values(),
+            'statuses' => $filterOptionsQuery->clone()->distinct()->pluck('status')->filter()->values(),
             'suppliers' => Supplier::whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('supplier_number'))
                 ->pluck('name')->filter()->values(),
             'locations' => Location::open()->whereIn('id', $filterOptionsQuery->clone()->distinct()->pluck('project_number'))
@@ -284,14 +324,19 @@ class PurchasingController extends Controller
             'contacts' => $filterOptionsQuery->clone()->distinct()->pluck('delivery_contact')->filter()->values(),
         ];
 
-        // Get cost range for slider
-        $costStats = DB::table('requisitions')
+        // Get cost range for slider (scoped to user's accessible requisitions)
+        $costRangeQuery = DB::table('requisitions')
             ->selectRaw('
                 MIN((SELECT COALESCE(SUM(total_cost), 0) FROM requisition_line_items WHERE requisition_line_items.requisition_id = requisitions.id)) as min_cost,
                 MAX((SELECT COALESCE(SUM(total_cost), 0) FROM requisition_line_items WHERE requisition_line_items.requisition_id = requisitions.id)) as max_cost
             ')
-            ->whereNull('deleted_at')
-            ->first();
+            ->whereNull('deleted_at');
+
+        if (! $canViewAll) {
+            $costRangeQuery->whereIn('project_number', $location_ids);
+        }
+
+        $costStats = $costRangeQuery->first();
 
         return Inertia::render('purchasing/index', [
             'requisitions' => $requisitions,
@@ -311,6 +356,9 @@ class PurchasingController extends Controller
                 'templates_only' => $request->boolean('templates_only'),
                 'min_cost' => $request->input('min_cost', ''),
                 'max_cost' => $request->input('max_cost', ''),
+                'sort' => $sort,
+                'direction' => $direction,
+                'view' => in_array($request->input('view'), ['table', 'cards']) ? $request->input('view') : 'table',
             ],
         ]);
     }
@@ -544,6 +592,18 @@ class PurchasingController extends Controller
         $requisition->delete();
 
         return redirect()->route('requisition.index')->with('success', 'Requisition deleted successfully.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids) || ! is_array($ids)) {
+            return redirect()->back()->with('error', 'No requisitions selected.');
+        }
+
+        $count = Requisition::whereIn('id', $ids)->delete();
+
+        return redirect()->back()->with('success', "{$count} requisition(s) deleted successfully.");
     }
 
     private function getPONumber($requisition)

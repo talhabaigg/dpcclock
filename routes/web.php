@@ -644,7 +644,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/order-builder', [PurchasingController::class, 'orderBuilder'])->name('requisition.order-builder');
 
         Route::post('/requisition/store', [PurchasingController::class, 'store'])->name('requisition.store');
-        Route::get('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
+        Route::post('/requisition/{id}/copy', [PurchasingController::class, 'copy'])->name('requisition.copy');
     });
     // Note: {id} route must come AFTER /create to avoid matching "create" as an id
     Route::get('/requisition/{id}', [PurchasingController::class, 'show'])->name('requisition.show')
@@ -653,12 +653,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/edit', [PurchasingController::class, 'edit'])->name('requisition.edit');
         Route::put('/requisition/{requisition}', [PurchasingController::class, 'update'])->name('requisition.update');
         Route::post('/requisition/{id}/delivery-organization', [PurchasingController::class, 'saveDeliveryOrganization'])->name('requisition.saveDeliveryOrganization');
-        Route::get('/requisition/{id}/toggle-requisition-template', [PurchasingController::class, 'toggleRequisitionTemplate'])->name('requisition.toggle-template');
+        Route::post('/requisition/{id}/toggle-requisition-template', [PurchasingController::class, 'toggleRequisitionTemplate'])->name('requisition.toggle-template');
         Route::post('/requisition/{id}/notes', [RequisitionNoteController::class, 'store'])->name('requisition.addNote');
         Route::get('/location/{locationId}/req-header/edit', [RequisitionHeaderTemplateController::class, 'edit'])->name('location.req-header.edit');
         Route::put('/location/{locationId}/req-header/update', [RequisitionHeaderTemplateController::class, 'update'])->name('location.req-header.update');
     });
-    Route::get('/requisition/{id}/delete', [PurchasingController::class, 'destroy'])->name('requisition.delete')
+    Route::delete('/requisition/{id}', [PurchasingController::class, 'destroy'])->name('requisition.delete')
+        ->middleware('permission:requisitions.delete');
+    Route::post('/requisitions/bulk-delete', [PurchasingController::class, 'bulkDestroy'])->name('requisition.bulk-delete')
         ->middleware('permission:requisitions.delete');
     Route::middleware('permission:requisitions.process')->group(function () {
         Route::get('/requisition/{id}/process', [PurchasingController::class, 'process'])->name('requisition.process');

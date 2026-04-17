@@ -1,5 +1,5 @@
 export interface Requisition {
-    line_items_sum_total_cost: any;
+    line_items_sum_total_cost: number | null;
     id: number;
     supplier: { name: string; code: string };
     location: { name: string } | null;
@@ -13,7 +13,7 @@ export interface Requisition {
     deliver_to: string | null;
     creator: { name: string } | null;
     created_at: string;
-    notes?: { id: number; note: string; created_at: string; user: { name: string } }[];
+    notes?: { id: number; note: string; created_at: string; creator: { name: string } }[];
 }
 
 export interface RequisitionData {
@@ -21,6 +21,8 @@ export interface RequisitionData {
     current_page: number;
     first_page_url: string;
     from: number;
+    to: number;
+    total: number;
     last_page: number;
     last_page_url: string;
     links: { url: string | null; label: string; active: boolean }[];
@@ -53,4 +55,7 @@ export interface Filters {
     templates_only: boolean;
     min_cost: string;
     max_cost: string;
+    sort: string;
+    direction: 'asc' | 'desc';
+    view: 'table' | 'cards';
 }

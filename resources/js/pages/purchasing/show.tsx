@@ -1,11 +1,29 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -13,16 +31,13 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertCircleIcon,
+    ArrowDown,
+    ArrowUp,
     ArrowUpDown,
-
     Building,
-    Building2,
-    Calendar,
     ChevronDown,
     ChevronRight,
-    CircleCheck,
     CirclePlus,
-    Clock,
     Copy,
     Cuboid,
     Edit3,
@@ -33,19 +48,15 @@ import {
     History,
     Loader2,
     Lock,
-    MapPin,
+    MoreHorizontal,
     Package,
     Pencil,
-    Phone,
     RefreshCw,
     RotateCcw,
     Send,
-
     Trash2,
-    User,
-    UserCheck,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
 import ComparisonTab from './show-partials/ComparisonTab';
@@ -123,6 +134,7 @@ export default function RequisitionShow() {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
     const [expandedActivities, setExpandedActivities] = useState<Set<number>>(new Set());
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
     // Smart Pricing state
     const [smartPricingWizardOpen, setSmartPricingWizardOpen] = useState(false);
     const [smartPricingProblems, setSmartPricingProblems] = useState<any[]>([]);
@@ -202,104 +214,75 @@ export default function RequisitionShow() {
     };
 
     const getStatusConfig = (status: string) => {
+        const neutral = {
+            bgLight: 'bg-slate-50 dark:bg-slate-900/50',
+            textColor: 'text-slate-700 dark:text-slate-300',
+            border: 'border-slate-200 dark:border-slate-700',
+        };
         switch (status) {
-            case 'success':
-                return {
-                    bg: 'bg-amber-500',
-                    bgLight: 'bg-amber-50 dark:bg-amber-950',
-                    text: 'Awaiting',
-                    textColor: 'text-amber-600 dark:text-amber-400',
-                    border: 'border-amber-200 dark:border-amber-800',
-                };
-            case 'sent':
-                return {
-                    bg: 'bg-emerald-500',
-                    bgLight: 'bg-emerald-50 dark:bg-emerald-950',
-                    text: 'Sent',
-                    textColor: 'text-emerald-600 dark:text-emerald-400',
-                    border: 'border-emerald-200 dark:border-emerald-800',
-                };
             case 'pending':
                 return {
+                    ...neutral,
                     bg: 'bg-slate-400',
-                    bgLight: 'bg-slate-50 dark:bg-slate-900',
                     text: 'Pending',
-                    textColor: 'text-slate-600 dark:text-slate-400',
-                    border: 'border-slate-200 dark:border-slate-700',
-                };
-            case 'failed':
-                return {
-                    bg: 'bg-red-500',
-                    bgLight: 'bg-red-50 dark:bg-red-950',
-                    text: 'Failed',
-                    textColor: 'text-red-600 dark:text-red-400',
-                    border: 'border-red-200 dark:border-red-800',
+                    description: 'Not yet sent. Edit line items and send to office or Premier.',
                 };
             case 'office_review':
                 return {
+                    ...neutral,
                     bg: 'bg-purple-500',
-                    bgLight: 'bg-purple-50 dark:bg-purple-950',
                     text: 'Waiting for Review',
-                    textColor: 'text-purple-600 dark:text-purple-400',
-                    border: 'border-purple-200 dark:border-purple-800',
+                    description: 'An office admin is verifying pricing before sending to Premier.',
+                };
+            case 'processed':
+            case 'success':
+                return {
+                    ...neutral,
+                    bg: 'bg-amber-500',
+                    text: 'Awaiting in Premier',
+                    description: 'Sent to Premier. An admin will convert it into a purchase order.',
+                };
+            case 'sent':
+                return {
+                    ...neutral,
+                    bg: 'bg-emerald-500',
+                    text: 'Sent',
+                    description: 'Purchase order has been sent to the supplier.',
+                };
+            case 'failed':
+                return {
+                    ...neutral,
+                    bg: 'bg-red-500',
+                    text: 'Failed',
+                    description: 'The last send attempt failed. Use Retry once the issue is fixed.',
                 };
             default:
                 return {
+                    ...neutral,
                     bg: 'bg-slate-400',
-                    bgLight: 'bg-slate-50 dark:bg-slate-900',
-                    text: status,
-                    textColor: 'text-slate-600 dark:text-slate-400',
-                    border: 'border-slate-200 dark:border-slate-700',
+                    text: 'Unknown',
+                    description: `Unrecognised status: ${status}`,
                 };
         }
     };
 
     const getEventConfig = (event: string) => {
+        const base = {
+            bg: 'bg-slate-100 dark:bg-slate-800',
+            lineColor: 'bg-slate-200 dark:bg-slate-700',
+            badgeBg: 'bg-slate-50 dark:bg-slate-900/50',
+            badgeText: 'text-slate-700 dark:text-slate-300',
+            badgeBorder: 'border-slate-200 dark:border-slate-700',
+        };
         switch (event) {
             case 'created':
-                return {
-                    icon: CirclePlus,
-                    bg: 'bg-emerald-100 dark:bg-emerald-950',
-                    iconColor: 'text-emerald-600 dark:text-emerald-400',
-                    lineColor: 'bg-emerald-200 dark:bg-emerald-800',
-                    label: 'Created',
-                    badgeBg: 'bg-emerald-50 dark:bg-emerald-950',
-                    badgeText: 'text-emerald-700 dark:text-emerald-400',
-                    badgeBorder: 'border-emerald-200 dark:border-emerald-800',
-                };
+                return { ...base, icon: CirclePlus, iconColor: 'text-emerald-600 dark:text-emerald-500', label: 'Created' };
             case 'updated':
-                return {
-                    icon: Edit3,
-                    bg: 'bg-blue-100 dark:bg-blue-950',
-                    iconColor: 'text-blue-600 dark:text-blue-400',
-                    lineColor: 'bg-blue-200 dark:bg-blue-800',
-                    label: 'Updated',
-                    badgeBg: 'bg-blue-50 dark:bg-blue-950',
-                    badgeText: 'text-blue-700 dark:text-blue-400',
-                    badgeBorder: 'border-blue-200 dark:border-blue-800',
-                };
+                return { ...base, icon: Edit3, iconColor: 'text-blue-600 dark:text-blue-500', label: 'Updated' };
             case 'deleted':
-                return {
-                    icon: Trash2,
-                    bg: 'bg-red-100 dark:bg-red-950',
-                    iconColor: 'text-red-600 dark:text-red-400',
-                    lineColor: 'bg-red-200 dark:bg-red-800',
-                    label: 'Deleted',
-                    badgeBg: 'bg-red-50 dark:bg-red-950',
-                    badgeText: 'text-red-700 dark:text-red-400',
-                    badgeBorder: 'border-red-200 dark:border-red-800',
-                };
+                return { ...base, icon: Trash2, iconColor: 'text-red-600 dark:text-red-500', label: 'Deleted' };
             default:
-                return {
-                    icon: History,
-                    bg: 'bg-slate-100 dark:bg-slate-800',
-                    iconColor: 'text-slate-600 dark:text-slate-400',
-                    lineColor: 'bg-slate-200 dark:bg-slate-700',
-                    label: event,
-                    badgeBg: 'bg-slate-50 dark:bg-slate-900',
-                    badgeText: 'text-slate-700 dark:text-slate-400',
-                    badgeBorder: 'border-slate-200 dark:border-slate-700',
-                };
+                return { ...base, icon: History, iconColor: 'text-slate-500 dark:text-slate-400', label: event };
         }
     };
 
@@ -307,6 +290,22 @@ export default function RequisitionShow() {
     const totalCost =
         Number(requisition.line_items_sum_total_cost) || requisition.line_items?.reduce((sum, item) => sum + Number(item.total_cost || 0), 0) || 0;
     const itemCount = requisition.line_items?.length || 0;
+
+    const renderSortIcon = (key: string) => {
+        if (sortKey !== key) {
+            return <ArrowUpDown className="h-3 w-3 shrink-0 opacity-40 transition-opacity group-hover:opacity-70" />;
+        }
+        return sortDirection === 'asc' ? (
+            <ArrowUp className="h-3 w-3 shrink-0" />
+        ) : (
+            <ArrowDown className="h-3 w-3 shrink-0" />
+        );
+    };
+
+    const getAriaSort = (key: string): 'ascending' | 'descending' | 'none' => {
+        if (sortKey !== key) return 'none';
+        return sortDirection === 'asc' ? 'ascending' : 'descending';
+    };
 
     useEffect(() => {
         if (flash.error) {
@@ -333,30 +332,53 @@ export default function RequisitionShow() {
         }
     };
 
-    // Detail items
-    const detailItems = [
-        { icon: Building2, label: 'Project', value: requisition.location?.name },
-        { icon: Package, label: 'Supplier', value: requisition.supplier?.name },
-        { icon: MapPin, label: 'Deliver To', value: requisition.deliver_to },
-        { icon: User, label: 'Requested By', value: requisition.requested_by },
-        { icon: Phone, label: 'Contact', value: requisition.delivery_contact },
-        { icon: FileText, label: 'Reference', value: requisition.order_reference },
-        { icon: Calendar, label: 'Required', value: requisition.date_required },
-        { icon: User, label: 'Created By', value: requisition.creator?.name },
-        { icon: Clock, label: 'Created At', value: formatDateTime(requisition.created_at) },
-        { icon: UserCheck, label: 'Submitted By', value: requisition.submitter?.name },
-        { icon: Clock, label: 'Submitted At', value: formatDateTime(requisition.submitted_at) },
-        { icon: UserCheck, label: 'Processed By', value: requisition.processor?.name },
-        { icon: Clock, label: 'Processed At', value: formatDateTime(requisition.processed_at) },
+    // Grouped detail items
+    const orderDetails = [
+        { label: 'Project', value: requisition.location?.name },
+        { label: 'Supplier', value: requisition.supplier?.name },
+        { label: 'Deliver To', value: requisition.deliver_to },
+        { label: 'Contact', value: requisition.delivery_contact },
+        { label: 'Reference', value: requisition.order_reference },
+        { label: 'Required', value: requisition.date_required },
     ];
+
+    const peopleDetails = [
+        { label: 'Requested By', value: requisition.requested_by },
+        { label: 'Created By', value: requisition.creator?.name },
+        { label: 'Submitted By', value: requisition.submitter?.name },
+        { label: 'Processed By', value: requisition.processor?.name },
+    ];
+
+    const timelineDetails = [
+        { label: 'Created', value: formatDateTime(requisition.created_at) },
+        { label: 'Submitted', value: formatDateTime(requisition.submitted_at) },
+        { label: 'Processed', value: formatDateTime(requisition.processed_at) },
+    ];
+
+    const renderDetailRow = (
+        { label, value }: { label: string; value: ReactNode },
+        tabular = false,
+    ) => (
+        <div key={label} className="flex items-start justify-between gap-3 px-4 py-2">
+            <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
+            <span
+                className={cn(
+                    'break-words text-right text-sm font-medium text-slate-700 dark:text-slate-200',
+                    tabular && 'tabular-nums',
+                )}
+            >
+                {value || <span className="text-slate-400">—</span>}
+            </span>
+        </div>
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />
 
-            <div className="dark:from-background dark:via-background dark:to-background flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/50 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0 [&_[data-slot=card-content]]:px-0 [&_[data-slot=card-footer]]:px-0 [&_[data-slot=card-header]]:px-0">
+            <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-slate-50/40 dark:bg-background [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0 [&_[data-slot=card-content]]:px-0 [&_[data-slot=card-footer]]:px-0 [&_[data-slot=card-header]]:px-0">
                 {/* Compact Header Bar */}
-                <div className="dark:border-border dark:bg-background/95 sticky top-0 z-10 border-b border-slate-200/60 bg-white/95 backdrop-blur-xl">
+                <div className="sticky top-0 z-10 border-b border-slate-200 bg-white dark:border-border dark:bg-background">
                     <div className="max-w-full px-3 py-3 sm:px-6 md:px-8">
                         {/* Top row: ID, Status, Key Stats */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -369,10 +391,24 @@ export default function RequisitionShow() {
                                         </Badge>
                                     )}
                                 </div>
-                                <Badge className={cn('font-medium', statusConfig.bgLight, statusConfig.textColor, statusConfig.border)}>
-                                    <div className={cn('mr-1.5 h-1.5 w-1.5 rounded-full', statusConfig.bg)} />
-                                    {statusConfig.text}
-                                </Badge>
+                                <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Badge
+                                                className={cn(
+                                                    'cursor-default font-medium',
+                                                    statusConfig.bgLight,
+                                                    statusConfig.textColor,
+                                                    statusConfig.border,
+                                                )}
+                                            >
+                                                <div className={cn('mr-1.5 h-1.5 w-1.5 rounded-full', statusConfig.bg)} />
+                                                {statusConfig.text}
+                                            </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">{statusConfig.description}</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
 
                             </div>
 
@@ -393,57 +429,60 @@ export default function RequisitionShow() {
 
                         {/* Actions */}
                         <div className="-mx-1 mt-3 flex flex-wrap items-center gap-1.5 sm:mx-0 sm:gap-2">
-                            <Link
-                                href={`/requisition/${requisition.id}/edit`}
-                                className={
-                                    requisition.status !== 'pending' &&
-                                    requisition.status !== 'failed' &&
-                                    !(requisition.status === 'office_review' && canApprovePricing)
-                                        ? 'pointer-events-none'
-                                        : ''
-                                }
-                            >
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={
-                                        requisition.status !== 'pending' &&
-                                        requisition.status !== 'failed' &&
-                                        !(requisition.status === 'office_review' && canApprovePricing)
-                                    }
-                                    className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
-                                >
-                                    <Pencil className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    Edit
-                                </Button>
-                            </Link>
-                            <a href={`/requisition/excel/${requisition.id}`}>
-                                <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                    <FileSpreadsheet className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="hidden sm:inline">Excel</span>
-                                </Button>
-                            </a>
-                            <Link href={`/requisition/${requisition.id}/print`}>
-                                <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                    <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="hidden sm:inline">Print</span>
-                                </Button>
-                            </Link>
-                            <Link href={`/requisition/${requisition.id}/copy`}>
-                                <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                    <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="hidden sm:inline">Duplicate</span>
-                                </Button>
-                            </Link>
-                            {canProcessRequisitions &&
-                                (requisition.status === 'pending' || requisition.status === 'failed' || requisition.status === 'office_review') && (
-                                    <Link href={`/requisition/${requisition.id}/refresh-pricing`}>
-                                        <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                            <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            <span className="hidden sm:inline">Refresh Pricing</span>
-                                        </Button>
-                                    </Link>
-                                )}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
+                                    >
+                                        <MoreHorizontal className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                        <span className="hidden sm:inline">More</span>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-48">
+                                    <DropdownMenuItem
+                                        onSelect={() => router.visit(`/requisition/${requisition.id}/edit`)}
+                                        disabled={
+                                            requisition.status !== 'pending' &&
+                                            requisition.status !== 'failed' &&
+                                            !(requisition.status === 'office_review' && canApprovePricing)
+                                        }
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                    {canProcessRequisitions &&
+                                        (requisition.status === 'pending' ||
+                                            requisition.status === 'failed' ||
+                                            requisition.status === 'office_review') && (
+                                            <DropdownMenuItem
+                                                onSelect={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                                Refresh Pricing
+                                            </DropdownMenuItem>
+                                        )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                        <a href={`/requisition/excel/${requisition.id}`}>
+                                            <FileSpreadsheet className="h-4 w-4" />
+                                            Excel
+                                        </a>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        onSelect={() => router.visit(`/requisition/${requisition.id}/print`)}
+                                    >
+                                        <FileText className="h-4 w-4" />
+                                        Print
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => setDuplicateOpen(true)}>
+                                        <Copy className="h-4 w-4" />
+                                        Duplicate
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
 
                             <div className="flex-1" />
 
@@ -451,7 +490,7 @@ export default function RequisitionShow() {
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
                                     <Button
                                         size="sm"
-                                        className="h-8 gap-1 bg-amber-500 px-2 text-xs text-white hover:bg-amber-600 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
+                                        className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
                                     >
                                         <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Retry
@@ -464,7 +503,7 @@ export default function RequisitionShow() {
                                         size="sm"
                                         onClick={handleSendToOffice}
                                         disabled={smartPricingChecking}
-                                        className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-purple-600 to-violet-600 px-3 text-xs text-white shadow-lg shadow-purple-600/30 transition-all hover:from-purple-700 hover:to-violet-700 hover:shadow-xl hover:shadow-purple-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                        className="h-8 gap-1.5 rounded-r-none px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
                                     >
                                         {smartPricingChecking ? (
                                             <Loader2 className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5" />
@@ -482,7 +521,7 @@ export default function RequisitionShow() {
                                         <DialogContent className="sm:max-w-md">
                                             <DialogHeader>
                                                 <DialogTitle className="flex items-center gap-2">
-                                                    <Building className="h-5 w-5 text-purple-600" />
+                                                    <Building className="h-5 w-5 text-slate-500" />
                                                     Why Send to Office?
                                                 </DialogTitle>
                                                 <DialogDescription>This requisition requires office review</DialogDescription>
@@ -492,9 +531,9 @@ export default function RequisitionShow() {
                                                     This requisition contains items with <strong>base prices</strong> (not from the project price
                                                     list). These orders require review by an office administrator before being sent to Premier.
                                                 </p>
-                                                <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950/50">
-                                                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300">What happens next:</p>
-                                                    <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-purple-600 dark:text-purple-400">
+                                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                                    <p className="text-xs font-medium text-slate-700 dark:text-slate-300">What happens next:</p>
+                                                    <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-slate-600 dark:text-slate-400">
                                                         <li>Order is sent to the office for review</li>
                                                         <li>An admin will verify pricing and details</li>
                                                         <li>Admin sends the order to Premier</li>
@@ -510,7 +549,7 @@ export default function RequisitionShow() {
                                     <Link href={`/requisition/${requisition.id}/api-send`}>
                                         <Button
                                             size="sm"
-                                            className="h-8 gap-1.5 rounded-r-none bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                            className="h-8 gap-1.5 rounded-r-none px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
                                         >
                                             <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             Send to Premier
@@ -525,7 +564,7 @@ export default function RequisitionShow() {
                                         <DialogContent className="sm:max-w-md">
                                             <DialogHeader>
                                                 <DialogTitle className="flex items-center gap-2">
-                                                    <Send className="h-5 w-5 text-blue-600" />
+                                                    <Send className="h-5 w-5 text-slate-500" />
                                                     What happens next?
                                                 </DialogTitle>
                                                 <DialogDescription>Understanding the purchase order workflow</DialogDescription>
@@ -533,7 +572,7 @@ export default function RequisitionShow() {
                                             <div className="mt-4 space-y-4">
                                                 {/* Step 1 */}
                                                 <div className="flex gap-3">
-                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                                         1
                                                     </div>
                                                     <div>
@@ -547,7 +586,7 @@ export default function RequisitionShow() {
 
                                                 {/* Step 2 */}
                                                 <div className="flex gap-3">
-                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                                         2
                                                     </div>
                                                     <div>
@@ -560,7 +599,7 @@ export default function RequisitionShow() {
 
                                                 {/* Step 3 */}
                                                 <div className="flex gap-3">
-                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                                         3
                                                     </div>
                                                     <div>
@@ -578,21 +617,21 @@ export default function RequisitionShow() {
                                                     <div className="mt-2 flex flex-wrap gap-2">
                                                         <Badge
                                                             variant="outline"
-                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
                                                         >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                                                             Pending
                                                         </Badge>
                                                         <Badge
                                                             variant="outline"
-                                                            className="gap-1 border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400"
+                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
                                                         >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                                            Awaiting
+                                                            Awaiting in Premier
                                                         </Badge>
                                                         <Badge
                                                             variant="outline"
-                                                            className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
                                                         >
                                                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                             Sent
@@ -608,30 +647,12 @@ export default function RequisitionShow() {
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
                                     <Button
                                         size="sm"
-                                        className="h-8 gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-xs text-white shadow-lg shadow-blue-600/30 transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl hover:shadow-blue-600/40 sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
+                                        className="h-8 gap-1.5 px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
                                     >
                                         <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Send to Premier
                                     </Button>
                                 </Link>
-                            )}
-                            {requisition.status === 'office_review' && !canApprovePricing && (
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1 border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-purple-800 dark:bg-purple-950 dark:text-purple-400"
-                                >
-                                    <Building className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    Waiting for Review
-                                </Badge>
-                            )}
-                            {requisition.status !== 'pending' && requisition.status !== 'failed' && requisition.status !== 'office_review' && (
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1 border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
-                                >
-                                    <CircleCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                    <span className="xs:inline hidden">Sent to</span> Premier
-                                </Badge>
                             )}
                         </div>
                     </div>
@@ -642,7 +663,7 @@ export default function RequisitionShow() {
                     <div className="px-3 pt-3 sm:px-6 sm:pt-4 md:px-8">
                         <Alert variant="destructive" className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/50">
                             <AlertCircleIcon className="h-4 w-4" />
-                            <AlertTitle>Errors found in PO</AlertTitle>
+                            <AlertTitle>Couldn't complete that action</AlertTitle>
                             <AlertDescription>{flash.error}</AlertDescription>
                         </Alert>
                     </div>
@@ -652,88 +673,55 @@ export default function RequisitionShow() {
                 <div className="min-w-0 flex-1 p-3 sm:p-4 md:p-6 lg:p-8">
                     <div className="grid min-w-0 gap-4 md:gap-6 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr]">
                         {/* Left Column - Details */}
-                        <div className="space-y-3 md:space-y-4">
-                            {/* Mobile: Stacked cards, Desktop: Sidebar */}
-                            <div className="flex flex-col gap-3 lg:gap-4">
-                                {/* Details Card */}
-                                <Card className="dark:border-border overflow-hidden border-slate-200/60">
-                                    <CardHeader className="dark:border-border dark:bg-muted/30 border-b border-slate-100 bg-slate-50/50 !px-3 py-2.5 sm:!px-4 sm:py-3">
-                                        <CardTitle className="flex items-center gap-2 text-xs font-semibold text-slate-700 sm:text-sm dark:text-slate-300">
-                                            <Package className="h-3.5 w-3.5 text-slate-400 sm:h-4 sm:w-4" />
-                                            Details
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0">
-                                        {/* Compact grid on mobile, list on desktop */}
-                                        <div className="dark:bg-border grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4 lg:grid-cols-1 lg:gap-0 lg:bg-transparent">
-                                            {detailItems.map((item) => (
-                                                <div
-                                                    key={item.label}
-                                                    className="dark:bg-card dark:lg:border-border flex items-start gap-2 bg-white px-2.5 py-2 sm:px-3 lg:gap-3 lg:border-b lg:border-slate-100 lg:px-4 lg:py-2.5 lg:last:border-0"
-                                                >
-                                                    <item.icon className="mt-0.5 h-3 w-3 shrink-0 text-slate-400 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4 dark:text-slate-500" />
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-[9px] font-medium tracking-wider text-slate-400 uppercase sm:text-[10px] lg:text-[11px] dark:text-slate-500">
-                                                            {item.label}
-                                                        </p>
-                                                        <p className="mt-0.5 text-[11px] font-medium break-words text-slate-700 sm:text-xs lg:text-sm dark:text-slate-200">
-                                                            {item.value || <span className="text-slate-400">—</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Value Summary - Hidden on mobile since it's in header */}
-                                <Card className="dark:border-border hidden border-slate-200/60 bg-gradient-to-br from-blue-50 to-indigo-50 lg:block dark:from-blue-950/30 dark:to-indigo-950/30">
-                                    <CardContent className="!p-4">
-                                        <p className="text-xs font-medium tracking-wider text-slate-500 uppercase dark:text-slate-400">Total Value</p>
-                                        <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                                            ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                        </p>
-                                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                                            {itemCount} line {itemCount === 1 ? 'item' : 'items'}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                        <div>
+                            {/* Details Card */}
+                            <Card className="overflow-hidden border-slate-200/60 dark:border-border">
+                                <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:border-slate-800 dark:text-slate-400">
+                                    Order
+                                </div>
+                                <div className="py-1">{orderDetails.map((item) => renderDetailRow(item))}</div>
+                                <Collapsible>
+                                    <CollapsibleTrigger className="group flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase transition-colors hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900/50">
+                                        <span>People</span>
+                                        <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="border-t border-slate-100 py-1 dark:border-slate-800">
+                                        {peopleDetails.map((item) => renderDetailRow(item))}
+                                    </CollapsibleContent>
+                                </Collapsible>
+                                <Collapsible>
+                                    <CollapsibleTrigger className="group flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase transition-colors hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900/50">
+                                        <span>Timeline</span>
+                                        <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="border-t border-slate-100 py-1 dark:border-slate-800">
+                                        {timelineDetails.map((item) => renderDetailRow(item, true))}
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            </Card>
                         </div>
 
                         {/* Right Column - Tabs */}
                         <div className="min-w-0">
                             <Tabs defaultValue="items" className="w-full">
-                                <TabsList className="dark:border-border dark:bg-muted/50 mb-3 inline-flex h-auto w-full max-w-full justify-start overflow-x-auto rounded-lg border border-slate-200/50 bg-slate-100/80 p-1 sm:mb-4 sm:w-auto">
-                                    <TabsTrigger
-                                        value="items"
-                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
-                                        <Cuboid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                <TabsList className="mb-3 w-full justify-start overflow-x-auto sm:mb-4 sm:w-auto">
+                                    <TabsTrigger value="items" className="gap-1.5">
+                                        <Cuboid className="h-4 w-4" />
                                         Items
-                                        <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[9px] sm:ml-1 sm:h-5 sm:px-1.5 sm:text-[10px]">
+                                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                                             {itemCount}
                                         </Badge>
                                     </TabsTrigger>
-                                    <TabsTrigger
-                                        value="log"
-                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
-                                        <History className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <TabsTrigger value="log" className="gap-1.5">
+                                        <History className="h-4 w-4" />
                                         Activity
                                     </TabsTrigger>
-                                    <TabsTrigger
-                                        value="compare"
-                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
-                                        <GitCompare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <TabsTrigger value="compare" className="gap-1.5">
+                                        <GitCompare className="h-4 w-4" />
                                         Compare
                                     </TabsTrigger>
-                                    <TabsTrigger
-                                        value="delivery"
-                                        className="dark:data-active:bg-card flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all data-active:bg-white data-active:shadow-sm sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
-                                        <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <TabsTrigger value="delivery" className="gap-1.5">
+                                        <Package className="h-4 w-4" />
                                         Delivery
                                     </TabsTrigger>
                                 </TabsList>
@@ -752,147 +740,143 @@ export default function RequisitionShow() {
                                         />
                                     )}
 
-                                    <Card className="dark:border-border max-w-full overflow-hidden border-slate-200/60">
-                                        <div className="-mx-px overflow-x-auto">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow className="dark:border-border dark:bg-muted/30 border-b border-slate-100 bg-slate-50/80 hover:bg-slate-50/80">
-                                                        <TableHead
-                                                            className="cursor-pointer px-2 py-2 text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
-                                                            onClick={() => handleSort('code')}
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                Code
-                                                                <ArrowUpDown className="hidden h-3 w-3 opacity-40 sm:block" />
-                                                            </div>
-                                                        </TableHead>
-                                                        <TableHead
-                                                            className="cursor-pointer px-2 py-2 text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase transition-colors hover:text-slate-700 sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
-                                                            onClick={() => handleSort('description')}
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                <span className="sm:hidden">Desc</span>
-                                                                <span className="hidden sm:inline">Description</span>
-                                                                <ArrowUpDown className="hidden h-3 w-3 opacity-40 sm:block" />
-                                                            </div>
-                                                        </TableHead>
-                                                        <TableHead
-                                                            className="cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
-                                                            onClick={() => handleSort('qty')}
-                                                        >
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                Qty
-                                                                <ArrowUpDown className="hidden h-3 w-3 opacity-40 sm:block" />
-                                                            </div>
-                                                        </TableHead>
-                                                        <TableHead
-                                                            className="hidden cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:table-cell sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
-                                                            onClick={() => handleSort('unit_cost')}
-                                                        >
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                Unit
-                                                                <ArrowUpDown className="h-3 w-3 opacity-40" />
-                                                            </div>
-                                                        </TableHead>
-                                                        <TableHead
-                                                            className="cursor-pointer px-2 py-2 text-right text-[10px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase sm:px-4 sm:py-3 sm:text-xs dark:text-slate-400"
-                                                            onClick={() => handleSort('total_cost')}
-                                                        >
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                Total
-                                                                <ArrowUpDown className="hidden h-3 w-3 opacity-40 sm:block" />
-                                                            </div>
-                                                        </TableHead>
-                                                        <TableHead className="hidden px-4 py-3 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase md:table-cell dark:text-slate-400">
-                                                            Cost Code
-                                                        </TableHead>
-                                                        <TableHead className="hidden px-4 py-3 text-xs font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase lg:table-cell dark:text-slate-400">
-                                                            Price List
-                                                        </TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {getSortedItems().map((item, index) => (
-                                                        <TableRow
-                                                            key={item.id}
-                                                            className={cn(
-                                                                'transition-colors',
-                                                                item.is_locked
-                                                                    ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:hover:bg-amber-950/50'
-                                                                    : cn(
-                                                                          index % 2 === 0
-                                                                              ? 'dark:bg-card bg-white'
-                                                                              : 'dark:bg-muted/10 bg-slate-50/50',
-                                                                          'hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
-                                                                      ),
-                                                            )}
-                                                        >
-                                                            <TableCell className="px-2 py-2 font-mono text-xs text-slate-700 sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    {item.is_locked ? (
-                                                                        <Lock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                                                                    ) : null}
-                                                                    <span>{item.code}</span>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="max-w-[120px] px-2 py-2 text-xs text-slate-600 sm:max-w-[200px] sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
-                                                                <span className="line-clamp-2">{item.description}</span>
-                                                                {item.price_list && (
-                                                                    <span className="mt-1 block text-[10px] text-slate-400 lg:hidden dark:text-slate-500">
-                                                                        {item.price_list}
-                                                                    </span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="px-2 py-2 text-right text-xs font-medium text-slate-700 tabular-nums sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-300">
-                                                                {item.qty}
-                                                            </TableCell>
-                                                            <TableCell className="hidden px-2 py-2 text-right text-xs text-slate-600 tabular-nums sm:table-cell sm:px-4 sm:py-2.5 sm:text-sm dark:text-slate-400">
-                                                                <div
-                                                                    className="flex items-center justify-end gap-1.5"
-                                                                    title={item.is_locked ? 'Project locked price' : undefined}
+                                    <Card className="max-w-full overflow-hidden py-0">
+                                        {itemCount === 0 ? (
+                                            <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                                                <div className="bg-muted mb-3 rounded-full p-3">
+                                                    <Cuboid className="text-muted-foreground h-5 w-5" />
+                                                </div>
+                                                <p className="text-sm font-medium">No line items yet</p>
+                                                <p className="text-muted-foreground mt-1 text-xs">
+                                                    Items added to this requisition will appear here
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-x-auto">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow className="hover:bg-transparent">
+                                                            <TableHead aria-sort={getAriaSort('code')} className="h-10">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleSort('code')}
+                                                                    className="text-muted-foreground group -ml-3 h-8 gap-1.5"
                                                                 >
-                                                                    {item.is_locked ? (
-                                                                        <Lock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                                                    ) : null}
-                                                                    <span className={item.is_locked ? 'text-amber-700 dark:text-amber-300' : ''}>
-                                                                        ${Number(item.unit_cost)?.toFixed(2)}
-                                                                    </span>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="px-2 py-2 text-right text-xs font-semibold text-slate-900 tabular-nums sm:px-4 sm:py-2.5 sm:text-sm dark:text-white">
-                                                                ${Number(item.total_cost)?.toFixed(2)}
-                                                            </TableCell>
-                                                            <TableCell className="hidden px-4 py-2.5 text-sm text-slate-500 md:table-cell dark:text-slate-400">
-                                                                {item.cost_code || '—'}
-                                                            </TableCell>
-                                                            <TableCell className="hidden px-4 py-2.5 text-sm text-slate-500 lg:table-cell dark:text-slate-400">
-                                                                {item.price_list || '—'}
-                                                            </TableCell>
+                                                                    Code
+                                                                    {renderSortIcon('code')}
+                                                                </Button>
+                                                            </TableHead>
+                                                            <TableHead aria-sort={getAriaSort('description')} className="h-10">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleSort('description')}
+                                                                    className="text-muted-foreground group -ml-3 h-8 gap-1.5"
+                                                                >
+                                                                    <span className="sm:hidden">Desc</span>
+                                                                    <span className="hidden sm:inline">Description</span>
+                                                                    {renderSortIcon('description')}
+                                                                </Button>
+                                                            </TableHead>
+                                                            <TableHead aria-sort={getAriaSort('qty')} className="h-10 text-right">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleSort('qty')}
+                                                                    className="text-muted-foreground group -mr-3 ml-auto flex h-8 gap-1.5"
+                                                                >
+                                                                    Qty
+                                                                    {renderSortIcon('qty')}
+                                                                </Button>
+                                                            </TableHead>
+                                                            <TableHead
+                                                                aria-sort={getAriaSort('unit_cost')}
+                                                                className="hidden h-10 text-right sm:table-cell"
+                                                            >
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleSort('unit_cost')}
+                                                                    className="text-muted-foreground group -mr-3 ml-auto flex h-8 gap-1.5"
+                                                                >
+                                                                    Unit
+                                                                    {renderSortIcon('unit_cost')}
+                                                                </Button>
+                                                            </TableHead>
+                                                            <TableHead aria-sort={getAriaSort('total_cost')} className="h-10 text-right">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleSort('total_cost')}
+                                                                    className="text-muted-foreground group -mr-3 ml-auto flex h-8 gap-1.5"
+                                                                >
+                                                                    Total
+                                                                    {renderSortIcon('total_cost')}
+                                                                </Button>
+                                                            </TableHead>
+                                                            <TableHead className="hidden h-10 md:table-cell">Cost Code</TableHead>
+                                                            <TableHead className="hidden h-10 lg:table-cell">Price List</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                    {/* Total Row */}
-                                                    <TableRow className="dark:border-border dark:bg-muted/50 border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                                                        <TableCell
-                                                            colSpan={3}
-                                                            className="px-2 py-2.5 text-right text-xs text-slate-700 sm:hidden dark:text-slate-300"
-                                                        >
-                                                            Total ({itemCount})
-                                                        </TableCell>
-                                                        <TableCell
-                                                            colSpan={4}
-                                                            className="hidden px-4 py-3 text-right text-sm text-slate-700 sm:table-cell dark:text-slate-300"
-                                                        >
-                                                            Total ({itemCount} items)
-                                                        </TableCell>
-                                                        <TableCell className="px-2 py-2.5 text-right text-sm text-slate-900 tabular-nums sm:px-4 sm:py-3 sm:text-base dark:text-white">
-                                                            ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                                        </TableCell>
-                                                        <TableCell className="hidden md:table-cell" />
-                                                        <TableCell className="hidden lg:table-cell" />
-                                                    </TableRow>
-                                                </TableBody>
-                                            </Table>
-                                        </div>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {getSortedItems().map((item) => (
+                                                            <TableRow key={item.id}>
+                                                                <TableCell className="font-mono text-xs sm:text-sm">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        {item.is_locked ? (
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <Lock className="text-muted-foreground h-3 w-3 shrink-0" />
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>Project locked price</TooltipContent>
+                                                                            </Tooltip>
+                                                                        ) : null}
+                                                                        <span>{item.code}</span>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-muted-foreground max-w-[140px] text-xs sm:max-w-[220px] sm:text-sm">
+                                                                    <span className="line-clamp-2">{item.description}</span>
+                                                                    {item.price_list && (
+                                                                        <span className="text-muted-foreground/70 mt-1 block text-xs lg:hidden">
+                                                                            {item.price_list}
+                                                                        </span>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell className="text-right text-xs font-medium tabular-nums sm:text-sm">
+                                                                    {item.qty}
+                                                                </TableCell>
+                                                                <TableCell className="text-muted-foreground hidden text-right text-xs tabular-nums sm:table-cell sm:text-sm">
+                                                                    ${Number(item.unit_cost)?.toFixed(2)}
+                                                                </TableCell>
+                                                                <TableCell className="text-right text-xs font-semibold tabular-nums sm:text-sm">
+                                                                    ${Number(item.total_cost)?.toFixed(2)}
+                                                                </TableCell>
+                                                                <TableCell className="text-muted-foreground hidden text-sm md:table-cell">
+                                                                    {item.cost_code || <span className="text-muted-foreground/50">—</span>}
+                                                                </TableCell>
+                                                                <TableCell className="text-muted-foreground hidden text-sm lg:table-cell">
+                                                                    {item.price_list || <span className="text-muted-foreground/50">—</span>}
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                        <TableRow className="bg-muted/50 hover:bg-muted/50 font-semibold">
+                                                            <TableCell colSpan={4} className="text-muted-foreground text-right text-xs sm:text-sm">
+                                                                <span className="sm:hidden">Total ({itemCount})</span>
+                                                                <span className="hidden sm:inline">
+                                                                    Total ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell className="text-right text-sm tabular-nums sm:text-base">
+                                                                ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                            </TableCell>
+                                                            <TableCell className="hidden md:table-cell" />
+                                                            <TableCell className="hidden lg:table-cell" />
+                                                        </TableRow>
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        )}
                                     </Card>
                                 </TabsContent>
 
@@ -908,7 +892,7 @@ export default function RequisitionShow() {
                                                     <p className="text-xs font-medium text-slate-500 sm:text-sm dark:text-slate-400">
                                                         No activity recorded
                                                     </p>
-                                                    <p className="mt-1 text-[10px] text-slate-400 sm:text-xs dark:text-slate-500">
+                                                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                                                         Activity will appear here once changes are made
                                                     </p>
                                                 </div>
@@ -923,26 +907,18 @@ export default function RequisitionShow() {
                                                         const isLast = index === activities.length - 1;
 
                                                         return (
-                                                            <div key={activity.id} className="relative flex gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
-                                                                {/* Timeline line */}
-                                                                {!isLast && (
+                                                            <div key={activity.id} className="flex gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+                                                                {/* Icon + timeline line */}
+                                                                <div className="flex flex-col items-center">
                                                                     <div
                                                                         className={cn(
-                                                                            'absolute top-10 left-[23px] w-0.5 sm:top-12 sm:left-[37px]',
-                                                                            eventConfig.lineColor,
+                                                                            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
+                                                                            eventConfig.bg,
                                                                         )}
-                                                                        style={{ height: 'calc(100% - 16px)' }}
-                                                                    />
-                                                                )}
-
-                                                                {/* Icon */}
-                                                                <div
-                                                                    className={cn(
-                                                                        'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
-                                                                        eventConfig.bg,
-                                                                    )}
-                                                                >
-                                                                    <EventIcon className={cn('h-3 w-3 sm:h-4 sm:w-4', eventConfig.iconColor)} />
+                                                                    >
+                                                                        <EventIcon className={cn('h-3 w-3 sm:h-4 sm:w-4', eventConfig.iconColor)} />
+                                                                    </div>
+                                                                    {!isLast && <div className={cn('mt-2 w-px flex-1', eventConfig.lineColor)} />}
                                                                 </div>
 
                                                                 {/* Content */}
@@ -951,7 +927,7 @@ export default function RequisitionShow() {
                                                                         <Badge
                                                                             variant="outline"
                                                                             className={cn(
-                                                                                'px-1.5 py-0 text-[10px] font-medium capitalize sm:px-2 sm:py-0.5 sm:text-xs',
+                                                                                'px-2 py-0.5 text-xs font-medium capitalize',
                                                                                 eventConfig.badgeBg,
                                                                                 eventConfig.badgeText,
                                                                                 eventConfig.badgeBorder,
@@ -962,7 +938,7 @@ export default function RequisitionShow() {
                                                                         <span className="hidden text-xs text-slate-400 sm:inline dark:text-slate-500">
                                                                             {activity.log_name}
                                                                         </span>
-                                                                        <span className="text-[10px] text-slate-400 tabular-nums sm:text-xs dark:text-slate-500">
+                                                                        <span className="text-xs text-slate-400 tabular-nums dark:text-slate-500">
                                                                             {new Date(activity.created_at).toLocaleString()}
                                                                         </span>
                                                                     </div>
@@ -984,7 +960,7 @@ export default function RequisitionShow() {
                                                                                 <Button
                                                                                     variant="ghost"
                                                                                     size="sm"
-                                                                                    className="h-6 gap-1 px-1.5 text-[10px] text-slate-500 hover:text-slate-700 sm:h-7 sm:gap-1.5 sm:px-2 sm:text-xs dark:text-slate-400"
+                                                                                    className="h-7 gap-1.5 px-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400"
                                                                                 >
                                                                                     {isExpanded ? (
                                                                                         <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -997,10 +973,10 @@ export default function RequisitionShow() {
                                                                             <CollapsibleContent className="mt-2 space-y-2 sm:space-y-3">
                                                                                 {activity.properties?.attributes && (
                                                                                     <div className="dark:border-border dark:bg-muted/30 rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3">
-                                                                                        <p className="mb-1.5 text-[9px] font-semibold tracking-wider text-slate-500 uppercase sm:mb-2 sm:text-[10px] dark:text-slate-400">
+                                                                                        <p className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
                                                                                             New Values
                                                                                         </p>
-                                                                                        <div className="grid gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
+                                                                                        <div className="grid gap-2 text-sm">
                                                                                             {Object.entries(activity.properties.attributes).map(
                                                                                                 ([key, value]) => (
                                                                                                     <div
@@ -1020,21 +996,21 @@ export default function RequisitionShow() {
                                                                                     </div>
                                                                                 )}
                                                                                 {activity.properties?.old && (
-                                                                                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2 sm:p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                                                                                        <p className="mb-1.5 text-[9px] font-semibold tracking-wider text-amber-600 uppercase sm:mb-2 sm:text-[10px] dark:text-amber-400">
+                                                                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-900/30">
+                                                                                        <p className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
                                                                                             Previous Values
                                                                                         </p>
-                                                                                        <div className="grid gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
+                                                                                        <div className="grid gap-2 text-sm">
                                                                                             {Object.entries(activity.properties.old).map(
                                                                                                 ([key, value]) => (
                                                                                                     <div
                                                                                                         key={key}
                                                                                                         className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2"
                                                                                                     >
-                                                                                                        <span className="font-medium text-amber-600 dark:text-amber-400">
+                                                                                                        <span className="font-medium text-slate-500 dark:text-slate-400">
                                                                                                             {key}:
                                                                                                         </span>
-                                                                                                        <span className="break-all text-amber-700 dark:text-amber-300">
+                                                                                                        <span className="break-all text-slate-600 line-through dark:text-slate-400">
                                                                                                             {String(value)}
                                                                                                         </span>
                                                                                                     </div>
@@ -1070,6 +1046,22 @@ export default function RequisitionShow() {
                     </div>
                 </div>
             </div>
+            <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
+                            Duplicate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             {/* Smart Pricing Wizard (field worker — shown before send to office) */}
             {smartPricingWizardOpen && smartPricingProblems.length > 0 && (
                 <SmartPricingWizard

@@ -3,6 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
@@ -18,20 +29,22 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
     Check,
     ChevronsUpDown,
     CirclePlus,
+    ClipboardList,
     Copy,
     EllipsisVertical,
     Eye,
-    FileText,
     LayoutGrid,
     LayoutList,
     ListFilter,
@@ -45,12 +58,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import CardsIndex from './index-partials/cardsIndex';
 import CostRangeSlider from './index-partials/costRangeSlider';
+import { getStatus, TONE_STYLES } from './index-partials/statusConfig';
 import { CostRange, FilterOptions, Filters, RequisitionData } from './index-partials/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Requisitions',
-        href: '/requisitions/all',
+        href: '/requisition/all',
     },
 ];
 
@@ -60,113 +74,210 @@ interface PageProps {
     costRange: CostRange;
     filters: Filters;
     flash: { success: string; error: string };
+    auth: { permissions?: string[] };
     [key: string]: unknown;
-}
-
-const statusVariants: Record<string, string> = {
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
-    failed: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
-    sent: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
-    office_review: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800',
-};
-
-function getStatusClasses(status: string) {
-    return statusVariants[status] ?? 'bg-muted text-muted-foreground border';
 }
 
 function formatCurrency(value: number | string) {
     return `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function StatusBadge({ status }: { status: string }) {
+    const cfg = getStatus(status);
+    const tone = TONE_STYLES[cfg.tone];
+    return (
+        <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium', tone.badge)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} aria-hidden />
+            {cfg.label}
+        </span>
+    );
+}
+
 // ── Actions dropdown (desktop) ────────────────────────────────────────
 function RequisitionActions({ requisition }: { requisition: { id: number; is_template: boolean } }) {
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <span className="sr-only">Open menu</span>
-                    <EllipsisVertical className="h-4 w-4" />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <Link href={`/requisition/${requisition.id}`}>
-                    <DropdownMenuItem className="gap-2">
-                        <Eye className="h-4 w-4" />
-                        View Details
-                    </DropdownMenuItem>
-                </Link>
-                <Link href={`/requisition/${requisition.id}/copy`}>
-                    <DropdownMenuItem className="gap-2">
+        <AlertDialog>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <span className="sr-only">Open menu</span>
+                        <EllipsisVertical className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <Link href={`/requisition/${requisition.id}`}>
+                        <DropdownMenuItem className="gap-2">
+                            <Eye className="h-4 w-4" />
+                            View Details
+                        </DropdownMenuItem>
+                    </Link>
+                    <DropdownMenuItem
+                        className="gap-2"
+                        onSelect={() => router.post(`/requisition/${requisition.id}/copy`)}
+                    >
                         <Copy className="h-4 w-4" />
                         Copy
                     </DropdownMenuItem>
-                </Link>
-                <Link href={`/requisition/${requisition.id}/toggle-requisition-template`}>
-                    <DropdownMenuItem className="gap-2">
+                    <DropdownMenuItem
+                        className="gap-2"
+                        onSelect={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
+                    >
                         <SquarePlus className="h-4 w-4" />
                         {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
                     </DropdownMenuItem>
-                </Link>
-                <DropdownMenuSeparator />
-                <Link href={`/requisition/${requisition.id}/delete`}>
-                    <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
-                        <Trash2 className="h-4 w-4" />
+                    <DropdownMenuSeparator />
+                    <AlertDialogTrigger asChild>
+                        <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                        </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the requisition and all associated line items.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => router.delete(`/requisition/${requisition.id}`)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                         Delete
-                    </DropdownMenuItem>
-                </Link>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
 // ── Actions sheet (mobile) ────────────────────────────────────────────
 function RequisitionActionsMobile({ requisition }: { requisition: { id: number; is_template: boolean } }) {
+    const [confirmOpen, setConfirmOpen] = useState(false);
+
     return (
-        <Sheet>
-            <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <span className="sr-only">Open menu</span>
-                    <EllipsisVertical className="h-4 w-4" />
-                </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="rounded-t-xl">
-                <SheetHeader>
-                    <SheetTitle>Requisition #{requisition.id}</SheetTitle>
-                </SheetHeader>
-                <nav className="flex flex-col gap-1 px-4 pb-6">
-                    <Link href={`/requisition/${requisition.id}`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
-                        <Eye className="text-muted-foreground h-4 w-4" />
-                        View Details
-                    </Link>
-                    <Link href={`/requisition/${requisition.id}/copy`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
-                        <Copy className="text-muted-foreground h-4 w-4" />
-                        Copy
-                    </Link>
-                    <Link href={`/requisition/${requisition.id}/toggle-requisition-template`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
-                        <SquarePlus className="text-muted-foreground h-4 w-4" />
-                        {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
-                    </Link>
-                    <Separator className="my-2" />
-                    <Link href={`/requisition/${requisition.id}/delete`} className="hover:bg-destructive/10 text-destructive flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                    </Link>
-                </nav>
-            </SheetContent>
-        </Sheet>
+        <>
+            <Sheet>
+                <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <span className="sr-only">Open menu</span>
+                        <EllipsisVertical className="h-4 w-4" />
+                    </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="rounded-t-xl">
+                    <SheetHeader>
+                        <SheetTitle>Requisition #{requisition.id}</SheetTitle>
+                    </SheetHeader>
+                    <nav className="flex flex-col gap-1 px-4 pb-6">
+                        <Link href={`/requisition/${requisition.id}`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                            <Eye className="text-muted-foreground h-4 w-4" />
+                            View Details
+                        </Link>
+                        <button
+                            onClick={() => router.post(`/requisition/${requisition.id}/copy`)}
+                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                        >
+                            <Copy className="text-muted-foreground h-4 w-4" />
+                            Copy
+                        </button>
+                        <button
+                            onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
+                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                        >
+                            <SquarePlus className="text-muted-foreground h-4 w-4" />
+                            {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                        </button>
+                        <Separator className="my-2" />
+                        <button
+                            onClick={() => setConfirmOpen(true)}
+                            className="hover:bg-destructive/10 text-destructive flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                        </button>
+                    </nav>
+                </SheetContent>
+            </Sheet>
+
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the requisition and all associated line items.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => router.delete(`/requisition/${requisition.id}`)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────
 export default function RequisitionList() {
-    const { requisitions, filterOptions, costRange, filters, flash } = usePage<PageProps>().props;
+    const { requisitions, filterOptions, costRange, filters, flash, auth } = usePage<PageProps>().props;
+    const permissions = auth?.permissions ?? [];
+    const canDelete = permissions.includes('requisitions.delete');
 
     const reqs = requisitions.data;
-    const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') ?? 'table');
+    const viewMode = filters.view ?? 'table';
     const [searchInput, setSearchInput] = useState(filters.search || '');
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+    useEffect(() => {
+        setSelectedIds(new Set());
+    }, [requisitions.current_page]);
+
+    // Soft loading indicator while Inertia re-fetches (filters/sort/pagination).
+    const [isNavigating, setIsNavigating] = useState(false);
+    useEffect(() => {
+        const offStart = router.on('start', () => setIsNavigating(true));
+        const offFinish = router.on('finish', () => setIsNavigating(false));
+        return () => {
+            offStart();
+            offFinish();
+        };
+    }, []);
+
+    const toggleSelect = useCallback((id: number) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const toggleSelectAll = useCallback(() => {
+        setSelectedIds((prev) => {
+            if (prev.size === reqs.length) return new Set();
+            return new Set(reqs.map((r) => r.id));
+        });
+    }, [reqs]);
+
+    const bulkDelete = useCallback(() => {
+        router.post('/requisitions/bulk-delete', { ids: Array.from(selectedIds) }, {
+            preserveScroll: true,
+            onSuccess: () => setSelectedIds(new Set()),
+        });
+        setBulkDeleteConfirmOpen(false);
+    }, [selectedIds]);
     const [localCostRange, setLocalCostRange] = useState<[number, number]>([
         filters.min_cost ? parseFloat(filters.min_cost) : costRange.min,
         filters.max_cost ? parseFloat(filters.max_cost) : costRange.max,
@@ -175,8 +286,7 @@ export default function RequisitionList() {
     const costRangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleViewModeChange = (value: string) => {
-        setViewMode(value);
-        localStorage.setItem('viewMode', value);
+        applyFilters({ view: value as 'table' | 'cards' });
     };
 
     const applyFilters = useCallback(
@@ -193,6 +303,11 @@ export default function RequisitionList() {
             if (merged.templates_only) query.templates_only = '1';
             if (merged.min_cost) query.min_cost = merged.min_cost;
             if (merged.max_cost) query.max_cost = merged.max_cost;
+            if (merged.sort && merged.sort !== 'id') query.sort = merged.sort;
+            if (merged.direction && !(merged.sort === 'id' && merged.direction === 'desc')) {
+                query.direction = merged.direction;
+            }
+            if (merged.view && merged.view !== 'table') query.view = merged.view;
             router.get('/requisition/all', query, { preserveState: true, preserveScroll: true });
         },
         [filters],
@@ -219,6 +334,15 @@ export default function RequisitionList() {
         setLocalCostRange([costRange.min, costRange.max]);
         router.get('/requisition/all', {}, { preserveState: true, preserveScroll: true });
     }, [costRange]);
+
+    const handleSort = useCallback(
+        (column: string) => {
+            const isCurrent = filters.sort === column;
+            const nextDirection = isCurrent && filters.direction === 'asc' ? 'desc' : 'asc';
+            applyFilters({ sort: column, direction: nextDirection });
+        },
+        [filters.sort, filters.direction, applyFilters],
+    );
 
     const handleCostRangeChange = useCallback(
         (value: [number, number]) => {
@@ -263,8 +387,9 @@ export default function RequisitionList() {
         { key: 'contact' as const, label: 'Contact', options: filterOptions.contacts },
     ];
 
+    const excludedFilterKeys = new Set(['search', 'min_cost', 'max_cost', 'templates_only', 'sort', 'direction']);
     const activeFilters = Object.entries(filters).filter(
-        ([key, value]) => value && key !== 'search' && key !== 'min_cost' && key !== 'max_cost' && key !== 'templates_only',
+        ([key, value]) => value && !excludedFilterKeys.has(key),
     );
 
     const totalActiveFilters = activeFilters.length + (filters.templates_only ? 1 : 0);
@@ -373,13 +498,71 @@ export default function RequisitionList() {
                     </div>
                 </div>
 
+                {/* ── Bulk Action Bar ──────────────────────────────────── */}
+                {selectedIds.size > 0 && viewMode === 'table' && canDelete && (
+                    <div className="bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">{selectedIds.size} selected</span>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelectedIds(new Set())}>
+                                Clear
+                            </Button>
+                        </div>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 gap-1.5"
+                            onClick={() => setBulkDeleteConfirmOpen(true)}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                        </Button>
+                    </div>
+                )}
+
+                <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete {selectedIds.size} requisition(s)?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. All selected requisitions and their line items will be permanently deleted.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={bulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                Delete {selectedIds.size}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Inertia navigation progress indicator (thin top bar) */}
+                <div
+                    aria-hidden
+                    className={cn(
+                        'pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden transition-opacity duration-150',
+                        isNavigating ? 'opacity-100' : 'opacity-0',
+                    )}
+                >
+                    <div className="h-full w-2/5 animate-nav-slide bg-primary/80" />
+                </div>
+
                 {/* ── Content ──────────────────────────────────────────── */}
-                <Tabs value={viewMode} onValueChange={handleViewModeChange}>
-                    <TabsContent value="table" className="mt-0">
+                <div
+                    className={cn(
+                        'flex min-w-0 flex-col gap-4 transition-opacity duration-200',
+                        isNavigating && 'opacity-60',
+                    )}
+                    aria-busy={isNavigating || undefined}
+                >
+                {viewMode === 'cards' ? (
+                    <CardsIndex filteredRequisitions={reqs} />
+                ) : (
+                    <>
                         {reqs.length === 0 ? (
                             <Empty className="border">
                                 <EmptyMedia variant="icon">
-                                    <FileText />
+                                    <ClipboardList />
                                 </EmptyMedia>
                                 <EmptyHeader>
                                     <EmptyTitle>No requisitions found</EmptyTitle>
@@ -402,29 +585,33 @@ export default function RequisitionList() {
                                 {/* Card layout for narrow containers */}
                                 <div className="flex flex-col gap-2 @3xl:hidden">
                                     {reqs.map((req) => (
-                                        <div key={req.id} className="rounded-lg border p-4">
+                                        <div key={req.id} className="bg-card overflow-hidden rounded-lg border p-4">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         <Link href={`/requisition/${req.id}`} className="font-mono text-sm font-semibold hover:underline">
                                                             #{req.id}
                                                         </Link>
-                                                        <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(req.status))}>
-                                                            {req.status.replace('_', ' ')}
-                                                        </Badge>
+                                                        <StatusBadge status={req.status} />
                                                         {req.is_template && (
-                                                            <Badge variant="outline" className="text-xs">Template</Badge>
+                                                            <Badge variant="outline" className="text-[10px]">Template</Badge>
                                                         )}
                                                     </div>
-                                                    <p className="mt-1 truncate text-sm font-medium">{req.supplier?.name}</p>
-                                                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                                                        {req.location?.name && <span>{req.location.name}</span>}
-                                                        {req.creator?.name && <span>{req.creator.name}</span>}
-                                                        <span>{new Date(req.date_required).toLocaleDateString('en-GB')}</span>
+                                                    <p className="mt-1.5 truncate text-sm font-medium">{req.supplier?.name}</p>
+                                                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                                        {req.location?.name && <span className="truncate">{req.location.name}</span>}
+                                                        {req.creator?.name && (
+                                                            <>
+                                                                <span className="text-border">·</span>
+                                                                <span>{req.creator.name}</span>
+                                                            </>
+                                                        )}
+                                                        <span className="text-border">·</span>
+                                                        <span className="tabular-nums">{new Date(req.date_required).toLocaleDateString('en-GB')}</span>
                                                     </div>
                                                 </div>
                                                 <div className="flex shrink-0 items-center gap-1">
-                                                    <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                                                    <span className="tabular-nums text-sm font-semibold">
                                                         {formatCurrency(req.line_items_sum_total_cost)}
                                                     </span>
                                                     <RequisitionActionsMobile requisition={req} />
@@ -439,88 +626,113 @@ export default function RequisitionList() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="hover:bg-transparent">
-                                                <TableHead className="w-[70px] pl-4">ID</TableHead>
-                                                <TableHead>Supplier</TableHead>
-                                                <TableHead className="hidden @5xl:table-cell">Project</TableHead>
-                                                <TableHead className="hidden @4xl:table-cell">PO #</TableHead>
-                                                <TableHead>Status</TableHead>
+                                                {canDelete && (
+                                                    <TableHead className="w-[40px] pl-4">
+                                                        <Checkbox
+                                                            checked={reqs.length > 0 && selectedIds.size === reqs.length}
+                                                            onCheckedChange={toggleSelectAll}
+                                                            aria-label="Select all"
+                                                        />
+                                                    </TableHead>
+                                                )}
+                                                <TableHead className={cn('w-[70px]', !canDelete && 'pl-4')}>
+                                                    <SortableHeader column="id" label="ID" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead>
+                                                    <SortableHeader column="supplier" label="Supplier" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @5xl:table-cell">
+                                                    <SortableHeader column="location" label="Project" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @4xl:table-cell">
+                                                    <SortableHeader column="po_number" label="PO #" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead>
+                                                    <SortableHeader column="status" label="Status" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
                                                 <TableHead className="hidden @5xl:table-cell">Template</TableHead>
                                                 <TableHead className="hidden @6xl:table-cell">Order Ref</TableHead>
-                                                <TableHead className="hidden @4xl:table-cell">Created By</TableHead>
-                                                <TableHead className="hidden @5xl:table-cell">Date Required</TableHead>
-                                                <TableHead className="hidden @7xl:table-cell">Contact</TableHead>
-                                                <TableHead className="hidden @7xl:table-cell">Deliver To</TableHead>
-                                                <TableHead className="text-right">Value</TableHead>
+                                                <TableHead className="hidden @4xl:table-cell">
+                                                    <SortableHeader column="creator" label="Created By" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @5xl:table-cell">
+                                                    <SortableHeader column="date_required" label="Date Required" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @6xl:table-cell">
+                                                    <SortableHeader column="created_at" label="Created" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @7xl:table-cell">
+                                                    <SortableHeader column="delivery_contact" label="Contact" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="hidden @7xl:table-cell">
+                                                    <SortableHeader column="deliver_to" label="Deliver To" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
+                                                </TableHead>
+                                                <TableHead className="text-right">
+                                                    <SortableHeader column="value" label="Value" sort={filters.sort} direction={filters.direction} onSort={handleSort} align="right" />
+                                                </TableHead>
                                                 <TableHead className="w-[50px] pr-4"></TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {reqs.map((req) => (
-                                                <TableRow key={req.id}>
-                                                    <TableCell className="pl-4">
-                                                        <Link href={`/requisition/${req.id}`} className="font-mono text-xs font-semibold hover:underline">
+                                                <TableRow key={req.id} data-state={selectedIds.has(req.id) ? 'selected' : undefined}>
+                                                    {canDelete && (
+                                                        <TableCell className="pl-4">
+                                                            <Checkbox
+                                                                checked={selectedIds.has(req.id)}
+                                                                onCheckedChange={() => toggleSelect(req.id)}
+                                                                aria-label={`Select requisition ${req.id}`}
+                                                            />
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell className={cn(!canDelete && 'pl-4')}>
+                                                        <Link href={`/requisition/${req.id}`} className="text-foreground font-mono text-xs font-semibold hover:underline">
                                                             #{req.id}
                                                         </Link>
                                                     </TableCell>
 
                                                     <TableCell className="max-w-[200px]">
-                                                        <TooltipProvider delayDuration={300}>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <span className="block truncate text-sm font-medium">
-                                                                        {req.supplier?.name}
-                                                                    </span>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>{req.supplier?.name}</TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
+                                                        <span className="text-foreground block truncate text-sm font-medium" title={req.supplier?.name}>
+                                                            {req.supplier?.name}
+                                                        </span>
                                                     </TableCell>
 
                                                     <TableCell className="hidden max-w-[160px] @5xl:table-cell">
-                                                        <TooltipProvider delayDuration={300}>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <span className="text-muted-foreground block truncate text-sm">
-                                                                        {req.location?.name || '-'}
-                                                                    </span>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>{req.location?.name || 'Not set'}</TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
+                                                        <span className="block truncate text-sm" title={req.location?.name || undefined}>
+                                                            {req.location?.name || <span className="text-muted-foreground">—</span>}
+                                                        </span>
                                                     </TableCell>
 
                                                     <TableCell className="hidden @4xl:table-cell">
                                                         {req.po_number ? (
-                                                            <Badge variant="outline" className="font-mono text-xs">
+                                                            <span className="bg-muted text-foreground inline-flex rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold">
                                                                 PO{req.po_number}
-                                                            </Badge>
+                                                            </span>
                                                         ) : (
-                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                            <span className="text-muted-foreground text-sm">—</span>
                                                         )}
                                                     </TableCell>
 
                                                     <TableCell>
-                                                        <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(req.status))}>
-                                                            {req.status.replace('_', ' ')}
-                                                        </Badge>
+                                                        <StatusBadge status={req.status} />
                                                     </TableCell>
 
                                                     <TableCell className="hidden @5xl:table-cell">
                                                         {req.is_template ? (
-                                                            <Badge variant="secondary" className="text-xs">Template</Badge>
+                                                            <Badge variant="secondary" className="text-[10px]">Template</Badge>
                                                         ) : (
-                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                            <span className="text-muted-foreground text-sm">—</span>
                                                         )}
                                                     </TableCell>
 
                                                     <TableCell className="hidden max-w-[120px] @6xl:table-cell">
                                                         <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.order_reference || '-'}
+                                                            {req.order_reference || '—'}
                                                         </span>
                                                     </TableCell>
 
                                                     <TableCell className="hidden @4xl:table-cell">
-                                                        <span className="text-muted-foreground text-sm">{req.creator?.name || '-'}</span>
+                                                        <span className="text-muted-foreground text-sm">{req.creator?.name || '—'}</span>
                                                     </TableCell>
 
                                                     <TableCell className="hidden @5xl:table-cell">
@@ -529,20 +741,26 @@ export default function RequisitionList() {
                                                         </span>
                                                     </TableCell>
 
-                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
-                                                        <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.delivery_contact || '-'}
+                                                    <TableCell className="hidden @6xl:table-cell">
+                                                        <span className="text-muted-foreground tabular-nums text-sm">
+                                                            {new Date(req.created_at).toLocaleDateString('en-GB')}
                                                         </span>
                                                     </TableCell>
 
                                                     <TableCell className="hidden max-w-[120px] @7xl:table-cell">
                                                         <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.deliver_to || '-'}
+                                                            {req.delivery_contact || '—'}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
+                                                        <span className="text-muted-foreground block truncate text-sm">
+                                                            {req.deliver_to || '—'}
                                                         </span>
                                                     </TableCell>
 
                                                     <TableCell className="text-right">
-                                                        <span className="font-mono text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                                                        <span className="text-foreground tabular-nums text-sm font-semibold">
                                                             {formatCurrency(req.line_items_sum_total_cost)}
                                                         </span>
                                                     </TableCell>
@@ -560,8 +778,8 @@ export default function RequisitionList() {
                                 {requisitions.last_page > 1 && (
                                     <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
                                         <p className="text-muted-foreground text-sm">
-                                            Page <span className="text-foreground font-medium">{requisitions.current_page}</span> of{' '}
-                                            <span className="text-foreground font-medium">{requisitions.last_page}</span>
+                                            Showing <span className="text-foreground font-medium">{requisitions.from}</span>–<span className="text-foreground font-medium">{requisitions.to}</span> of{' '}
+                                            <span className="text-foreground font-medium">{requisitions.total}</span> results
                                         </p>
                                         <Pagination>
                                             <PaginationContent className="gap-1">
@@ -609,12 +827,9 @@ export default function RequisitionList() {
                                 )}
                             </>
                         )}
-                    </TabsContent>
-
-                    <TabsContent value="cards" className="mt-0">
-                        <CardsIndex filteredRequisitions={reqs} />
-                    </TabsContent>
-                </Tabs>
+                    </>
+                )}
+                </div>
             </div>
         </AppLayout>
     );
@@ -846,6 +1061,41 @@ function ActiveFilterBadges({
                 </Badge>
             )}
         </div>
+    );
+}
+
+// ── Sortable Header ───────────────────────────────────────────────────
+function SortableHeader({
+    column,
+    label,
+    sort,
+    direction,
+    onSort,
+    align = 'left',
+}: {
+    column: string;
+    label: string;
+    sort: string;
+    direction: 'asc' | 'desc';
+    onSort: (column: string) => void;
+    align?: 'left' | 'right';
+}) {
+    const isActive = sort === column;
+    const Icon = isActive ? (direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+
+    return (
+        <button
+            type="button"
+            onClick={() => onSort(column)}
+            className={cn(
+                'hover:text-foreground inline-flex items-center gap-1 text-sm font-medium transition-colors',
+                isActive ? 'text-foreground' : 'text-muted-foreground',
+                align === 'right' && 'flex-row-reverse',
+            )}
+        >
+            {label}
+            <Icon className={cn('h-3.5 w-3.5', !isActive && 'opacity-50')} />
+        </button>
     );
 }
 

@@ -1,7 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -142,8 +142,8 @@ const StatusBadge = ({ status }: { status: ComparisonItem['status'] }) => {
     const config = {
         unchanged: { label: 'Match', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
         modified: { label: 'Modified', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-        added: { label: 'Added', className: 'bg-muted text-muted-foreground' },
-        removed: { label: 'Local Only', className: 'bg-muted text-muted-foreground' },
+        added: { label: 'Added', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+        removed: { label: 'Local Only', className: 'bg-rose-50 text-rose-700 border-rose-200' },
     };
 
     const { label, className } = config[status];
@@ -154,6 +154,10 @@ const StatusBadge = ({ status }: { status: ComparisonItem['status'] }) => {
         </Badge>
     );
 };
+
+const EmptyDash = ({ className }: { className?: string }) => (
+    <span className={cn('text-muted-foreground/60 text-xs', className)}>—</span>
+);
 
 export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
     const [loading, setLoading] = useState(true);
@@ -296,15 +300,22 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
     const invoiceVariance = invoice_total - premier_total;
 
     return (
-        <div className="mt-4 space-y-5">
+        <div className="mt-4 space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <p className="text-muted-foreground text-xs">Last fetched: {new Date(fetched_at).toLocaleString()}</p>
-                <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowDebug(!showDebug)}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-muted-foreground text-xs tabular-nums">
+                    Last fetched {new Date(fetched_at).toLocaleString()}
+                </p>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground h-8 text-xs"
+                        onClick={() => setShowDebug(!showDebug)}
+                    >
                         {showDebug ? 'Hide Debug' : 'Debug'}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => fetchComparison(true)} disabled={refreshing}>
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => fetchComparison(true)} disabled={refreshing}>
                         <RefreshCw className={cn('mr-2 size-4', refreshing && 'animate-spin')} />
                         Refresh from Premier
                     </Button>
@@ -320,7 +331,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     </p>
 
                     <div className="mt-3 grid grid-cols-2 gap-4">
-                        <div className="rounded border bg-white p-2">
+                        <div className="bg-card rounded border p-2">
                             <p className="font-semibold">Local Sample:</p>
                             {Array.isArray(debug.local_sample) ? (
                                 debug.local_sample.map((item, i) => (
@@ -348,7 +359,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                             )}
                         </div>
 
-                        <div className="rounded border bg-white p-2">
+                        <div className="bg-card rounded border p-2">
                             <p className="font-semibold">Premier Sample:</p>
                             {Array.isArray(debug.premier_sample) ? (
                                 debug.premier_sample.map((item, i) => (
@@ -374,7 +385,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     </div>
 
                     {debug.invoice_lines_sample && debug.invoice_lines_sample.length > 0 && (
-                        <div className="mt-3 rounded border bg-white p-2">
+                        <div className="mt-3 bg-card rounded border p-2">
                             <p className="font-semibold">Invoice Lines Sample ({debug.invoice_lines_count} total):</p>
                             <pre className="bg-muted/30 mt-1 max-h-40 overflow-auto rounded p-1 text-xs">
                                 {JSON.stringify(debug.invoice_lines_sample, null, 2)}
@@ -383,7 +394,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     )}
 
                     {debug.premier_raw_sample && (
-                        <div className="mt-3 rounded border bg-white p-2">
+                        <div className="mt-3 bg-card rounded border p-2">
                             <p className="font-semibold">
                                 Raw Premier API Response
                                 {(debug.premier_raw_sample as Record<string, unknown>).total_count !== undefined && (
@@ -402,7 +413,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     )}
 
                     {debug.invoice_query && (
-                        <div className="mt-3 rounded border bg-white p-2">
+                        <div className="mt-3 bg-card rounded border p-2">
                             <p className="font-semibold">Invoice Query Debug</p>
                             <p className="text-xs">
                                 Method: <code className="bg-muted rounded px-1">{debug.invoice_query.method}</code>
@@ -415,7 +426,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     )}
 
                     {debug.description_comparison && debug.description_comparison.length > 0 && (
-                        <div className="mt-3 rounded border bg-white p-2">
+                        <div className="mt-3 bg-card rounded border p-2">
                             <p className="font-semibold">Matching Scores (Local to Invoice)</p>
                             <p className="text-muted-foreground mb-2 text-xs">Threshold: 30% | Matches by: description OR cost</p>
                             <div className="max-h-80 space-y-3 overflow-auto">
@@ -462,54 +473,74 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
 
             {/* Summary Row */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs">Matched</p>
-                    <p className="text-2xl font-semibold">{summary.unchanged_count}</p>
+                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Matched</p>
+                    <p className={cn('text-2xl font-semibold leading-none tabular-nums', summary.unchanged_count === 0 && 'text-muted-foreground/50')}>
+                        {summary.unchanged_count}
+                    </p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs">Modified</p>
-                    <p className={cn('text-2xl font-semibold', summary.modified_count > 0 && 'text-amber-600')}>
+                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Modified</p>
+                    <p className={cn(
+                        'text-2xl font-semibold leading-none tabular-nums',
+                        summary.modified_count > 0 ? 'text-amber-600' : 'text-muted-foreground/50',
+                    )}>
                         {summary.modified_count}
                     </p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs">Added in Premier</p>
-                    <p className={cn('text-2xl font-semibold', summary.added_count > 0 && 'text-amber-600')}>
+                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Added in Premier</p>
+                    <p className={cn(
+                        'text-2xl font-semibold leading-none tabular-nums',
+                        summary.added_count > 0 ? 'text-sky-600' : 'text-muted-foreground/50',
+                    )}>
                         {summary.added_count}
                     </p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs">Removed</p>
-                    <p className={cn('text-2xl font-semibold', summary.removed_count > 0 && 'text-rose-600')}>
+                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Missing in Premier</p>
+                    <p className={cn(
+                        'text-2xl font-semibold leading-none tabular-nums',
+                        summary.removed_count > 0 ? 'text-rose-600' : 'text-muted-foreground/50',
+                    )}>
                         {summary.removed_count}
                     </p>
                 </div>
             </div>
 
             {/* Totals Banner */}
-            <div className="grid grid-cols-3 gap-4 rounded-md border px-4 py-4">
-                <div>
+            <div className="bg-muted/20 grid grid-cols-1 divide-y rounded-md border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div className="flex flex-col gap-1.5 px-5 py-4">
                     <p className="text-muted-foreground text-xs uppercase tracking-wide">Original (Local)</p>
-                    <p className="text-xl font-semibold">{formatCurrency(local_total)}</p>
+                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(local_total)}</p>
+                    <p className="text-muted-foreground/60 text-xs">Baseline</p>
                 </div>
-                <div>
+                <div className="flex flex-col gap-1.5 px-5 py-4">
                     <p className="text-muted-foreground text-xs uppercase tracking-wide">Premier PO</p>
-                    <p className="text-xl font-semibold">{formatCurrency(premier_total)}</p>
-                    {poVariance !== 0 && (
-                        <p className={cn('text-xs', poVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(premier_total)}</p>
+                    {poVariance !== 0 ? (
+                        <p className={cn('text-xs tabular-nums', poVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
                             {poVariance > 0 ? '+' : ''}
                             {formatCurrency(poVariance)} from original
                         </p>
+                    ) : (
+                        <p className="text-muted-foreground/60 text-xs">Matches original</p>
                     )}
                 </div>
-                <div>
+                <div className="flex flex-col gap-1.5 px-5 py-4">
                     <p className="text-muted-foreground text-xs uppercase tracking-wide">Invoiced</p>
-                    <p className="text-xl font-semibold">{formatCurrency(invoice_total)}</p>
-                    {invoice_total > 0 && invoiceVariance !== 0 && (
-                        <p className={cn('text-xs', invoiceVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                            {invoiceVariance > 0 ? '+' : ''}
-                            {formatCurrency(invoiceVariance)} from PO
-                        </p>
+                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(invoice_total)}</p>
+                    {invoice_total > 0 ? (
+                        invoiceVariance !== 0 ? (
+                            <p className={cn('text-xs tabular-nums', invoiceVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                                {invoiceVariance > 0 ? '+' : ''}
+                                {formatCurrency(invoiceVariance)} from PO
+                            </p>
+                        ) : (
+                            <p className="text-muted-foreground/60 text-xs">Matches PO</p>
+                        )
+                    ) : (
+                        <p className="text-muted-foreground/60 text-xs">Not yet invoiced</p>
                     )}
                 </div>
             </div>
@@ -535,21 +566,26 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
 
             {invoices && invoices.has_invoices && (
                 <div className="rounded-md border px-4 py-3">
-                    <p className="text-sm font-medium">
-                        {invoices.count} Invoice{invoices.count > 1 ? 's' : ''} Received — {formatCurrency(invoices.total)}
-                    </p>
+                    <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-medium">
+                            {invoices.count} invoice{invoices.count > 1 ? 's' : ''} received
+                        </p>
+                        <p className="text-sm font-semibold tabular-nums">{formatCurrency(invoices.total)}</p>
+                    </div>
                     <div className="mt-2 space-y-1">
                         {invoices.invoices.map((inv, i) => (
-                            <div key={i} className="text-muted-foreground flex items-center gap-2 text-sm">
-                                <span className="text-foreground font-medium">{inv.invoice_number}</span>
-                                <span>·</span>
-                                <span>{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString() : 'No date'}</span>
-                                <span>·</span>
-                                <span>{formatCurrency(inv.total)}</span>
+                            <div key={i} className="text-muted-foreground flex items-center gap-2 text-xs">
+                                <span className="text-foreground font-medium tabular-nums">{inv.invoice_number}</span>
+                                <span className="text-muted-foreground/50">·</span>
+                                <span className="tabular-nums">
+                                    {inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString() : 'No date'}
+                                </span>
+                                <span className="text-muted-foreground/50">·</span>
+                                <span className="tabular-nums">{formatCurrency(inv.total)}</span>
                                 {inv.status && (
                                     <>
-                                        <span>·</span>
-                                        <span className="text-xs">{inv.status}</span>
+                                        <span className="text-muted-foreground/50">·</span>
+                                        <span>{inv.status}</span>
                                     </>
                                 )}
                             </div>
@@ -559,44 +595,46 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
             )}
 
             {/* Comparison Table */}
-            <Card className="gap-0 p-0">
-                <CardHeader className="px-6 py-3">
-                    <CardTitle className="text-base">Line Item Comparison</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table className="min-w-[1400px]">
+            <div className="bg-card overflow-hidden rounded-md border">
+                <div className="flex items-baseline justify-between border-b px-5 py-3">
+                    <h3 className="text-sm font-semibold">Line item comparison</h3>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                        {comparison.length} {comparison.length === 1 ? 'line' : 'lines'}
+                    </span>
+                </div>
+                <div className="overflow-x-auto">
+                    <Table className="min-w-[1400px]">
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead rowSpan={2} className="w-[70px] border-r align-middle text-xs">
+                                    <TableHead rowSpan={2} className="w-[70px] border-r align-middle text-[11px] font-medium uppercase tracking-wide">
                                         Status
                                     </TableHead>
-                                    <TableHead rowSpan={2} className="min-w-[180px] border-r align-middle text-xs">
+                                    <TableHead rowSpan={2} className="min-w-[180px] border-r align-middle text-[11px] font-medium uppercase tracking-wide">
                                         Description
                                     </TableHead>
-                                    <TableHead colSpan={4} className="border-r text-center text-xs font-normal text-muted-foreground">
+                                    <TableHead colSpan={4} className="border-r text-center text-[11px] font-semibold uppercase tracking-wider text-foreground">
                                         Original (Local)
                                     </TableHead>
-                                    <TableHead colSpan={4} className="border-r text-center text-xs font-normal text-muted-foreground">
+                                    <TableHead colSpan={4} className="border-r text-center text-[11px] font-semibold uppercase tracking-wider text-foreground">
                                         Premier PO
                                     </TableHead>
-                                    <TableHead colSpan={4} className="text-center text-xs font-normal text-muted-foreground">
+                                    <TableHead colSpan={4} className="text-center text-[11px] font-semibold uppercase tracking-wider text-foreground">
                                         Invoiced
                                     </TableHead>
                                 </TableRow>
                                 <TableRow>
-                                    <TableHead className="w-[50px] text-right text-xs font-normal text-muted-foreground">Qty</TableHead>
-                                    <TableHead className="w-[100px] text-left text-xs font-normal text-muted-foreground">Price List</TableHead>
-                                    <TableHead className="w-[80px] text-right text-xs font-normal text-muted-foreground">Unit</TableHead>
-                                    <TableHead className="w-[90px] border-r text-right text-xs font-normal text-muted-foreground">Total</TableHead>
-                                    <TableHead className="w-[50px] text-right text-xs font-normal text-muted-foreground">Qty</TableHead>
-                                    <TableHead className="w-[80px] text-right text-xs font-normal text-muted-foreground">Unit</TableHead>
-                                    <TableHead className="w-[90px] text-right text-xs font-normal text-muted-foreground">Total</TableHead>
-                                    <TableHead className="w-[90px] border-r text-right text-xs font-normal text-muted-foreground">Variance</TableHead>
-                                    <TableHead className="w-[50px] text-right text-xs font-normal text-muted-foreground">Qty</TableHead>
-                                    <TableHead className="w-[80px] text-right text-xs font-normal text-muted-foreground">Unit</TableHead>
-                                    <TableHead className="w-[90px] text-right text-xs font-normal text-muted-foreground">Total</TableHead>
-                                    <TableHead className="w-[90px] text-right text-xs font-normal text-muted-foreground">Remaining</TableHead>
+                                    <TableHead className="w-[50px] text-right text-[11px] font-normal text-muted-foreground">Qty</TableHead>
+                                    <TableHead className="w-[100px] text-left text-[11px] font-normal text-muted-foreground">Price List</TableHead>
+                                    <TableHead className="w-[80px] text-right text-[11px] font-normal text-muted-foreground">Unit</TableHead>
+                                    <TableHead className="w-[90px] border-r text-right text-[11px] font-normal text-muted-foreground">Total</TableHead>
+                                    <TableHead className="w-[50px] text-right text-[11px] font-normal text-muted-foreground">Qty</TableHead>
+                                    <TableHead className="w-[80px] text-right text-[11px] font-normal text-muted-foreground">Unit</TableHead>
+                                    <TableHead className="w-[90px] text-right text-[11px] font-normal text-muted-foreground">Total</TableHead>
+                                    <TableHead className="w-[90px] border-r text-right text-[11px] font-normal text-muted-foreground">Variance</TableHead>
+                                    <TableHead className="w-[50px] text-right text-[11px] font-normal text-muted-foreground">Qty</TableHead>
+                                    <TableHead className="w-[80px] text-right text-[11px] font-normal text-muted-foreground">Unit</TableHead>
+                                    <TableHead className="w-[90px] text-right text-[11px] font-normal text-muted-foreground">Total</TableHead>
+                                    <TableHead className="w-[90px] text-right text-[11px] font-normal text-muted-foreground">Remaining</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -623,24 +661,30 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                             </TableCell>
 
                                             {/* Description */}
-                                            <TableCell className="max-w-[200px] border-r">
-                                                <div className="text-sm break-words whitespace-normal">
+                                            <TableCell className="max-w-[220px] border-r align-top">
+                                                <div className="flex flex-col gap-0.5">
                                                     {displayItem?.line_number && (
-                                                        <span className="text-muted-foreground mr-1 text-xs">#{displayItem.line_number}</span>
+                                                        <span className="text-muted-foreground text-[10px] font-medium tabular-nums uppercase tracking-wider">
+                                                            Line {displayItem.line_number}
+                                                        </span>
                                                     )}
-                                                    {displayItem?.code && <span className="font-medium">{displayItem.code}</span>}
-                                                    {displayItem?.code && displayItem?.description && (
-                                                        <span className="text-muted-foreground mx-1">-</span>
-                                                    )}
-                                                    <span>
-                                                        {displayItem?.description || <span className="text-muted-foreground italic">No desc</span>}
-                                                    </span>
+                                                    <div className="text-sm break-words whitespace-normal leading-snug">
+                                                        {displayItem?.code && <span className="font-medium">{displayItem.code}</span>}
+                                                        {displayItem?.code && displayItem?.description && (
+                                                            <span className="text-muted-foreground/60 mx-1">·</span>
+                                                        )}
+                                                        <span>
+                                                            {displayItem?.description || (
+                                                                <span className="text-muted-foreground italic">No description</span>
+                                                            )}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </TableCell>
 
                                             {/* Original (Local) Values */}
                                             <TableCell className="text-right tabular-nums">
-                                                {item.local ? item.local.qty : <span className="text-muted-foreground">—</span>}
+                                                {item.local ? item.local.qty : <EmptyDash />}
                                             </TableCell>
                                             <TableCell className="max-w-[120px] text-left">
                                                 {item.local?.price_list != null && item.local.price_list !== '' ? (
@@ -648,14 +692,14 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         {String(item.local.price_list)}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
-                                                {item.local ? formatCurrency(item.local.unit_cost) : <span className="text-muted-foreground">—</span>}
+                                                {item.local ? formatCurrency(item.local.unit_cost) : <EmptyDash />}
                                             </TableCell>
                                             <TableCell className="border-r text-right tabular-nums font-medium">
-                                                {item.local ? formatCurrency(item.local.total_cost) : <span className="text-muted-foreground font-normal">—</span>}
+                                                {item.local ? formatCurrency(item.local.total_cost) : <EmptyDash />}
                                             </TableCell>
 
                                             {/* Premier PO Values */}
@@ -665,7 +709,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         {item.premier.qty}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-muted-foreground">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
@@ -674,7 +718,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         {formatCurrency(item.premier.unit_cost)}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-muted-foreground">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums font-medium">
@@ -683,14 +727,14 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         {formatCurrency(item.premier.total_cost)}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-muted-foreground font-normal">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                             {/* Variance column */}
                                             <TableCell className="border-r text-right tabular-nums">
                                                 {item.premier && item.local ? (
                                                     hasTotalChange && item.variances ? (
-                                                        <div className={cn('text-xs font-medium', totalVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                                                        <div className={cn('text-xs font-medium leading-tight', totalVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
                                                             <div>
                                                                 {totalVariance > 0 ? '+' : ''}
                                                                 {formatCurrency(totalVariance)}
@@ -701,32 +745,32 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-muted-foreground text-xs">—</span>
+                                                        <EmptyDash />
                                                     )
                                                 ) : item.status === 'added' ? (
-                                                    <span className="text-muted-foreground text-xs">New</span>
+                                                    <span className="text-sky-600 text-xs">New</span>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
 
                                             {/* Invoice Values */}
                                             <TableCell className="text-right tabular-nums">
-                                                {item.invoice ? item.invoice.qty : <span className="text-muted-foreground text-xs">—</span>}
+                                                {item.invoice ? item.invoice.qty : <EmptyDash />}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
-                                                {item.invoice ? formatCurrency(item.invoice.unit_cost) : <span className="text-muted-foreground text-xs">—</span>}
+                                                {item.invoice ? formatCurrency(item.invoice.unit_cost) : <EmptyDash />}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
                                                 {item.invoice ? (
-                                                    <div>
-                                                        <span className="font-medium">{formatCurrency(item.invoice.total_cost)}</span>
+                                                    <div className="leading-tight">
+                                                        <div className="font-medium">{formatCurrency(item.invoice.total_cost)}</div>
                                                         {item.invoice.invoice_number && (
-                                                            <div className="text-muted-foreground text-xs">{item.invoice.invoice_number}</div>
+                                                            <div className="text-muted-foreground text-xs font-normal">{item.invoice.invoice_number}</div>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                             {/* Remaining */}
@@ -734,28 +778,27 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                 {item.premier ? (
                                                     hasInvoice ? (
                                                         Math.abs(remaining) < 0.01 ? (
-                                                            <span className="text-xs text-emerald-600">Fully Invoiced</span>
+                                                            <span className="text-xs text-emerald-600">Fully invoiced</span>
                                                         ) : (
-                                                            <div className={cn('text-xs font-medium', remaining > 0 ? 'text-amber-600' : 'text-rose-600')}>
+                                                            <div className={cn('text-xs font-medium leading-tight', remaining > 0 ? 'text-amber-600' : 'text-rose-600')}>
                                                                 <div>{formatCurrency(Math.abs(remaining))}</div>
                                                                 <div className="text-muted-foreground font-normal">{remaining > 0 ? 'remaining' : 'over'}</div>
                                                             </div>
                                                         )
                                                     ) : (
-                                                        <span className="text-muted-foreground text-xs">Not invoiced</span>
+                                                        <span className="text-muted-foreground/60 text-xs">Not invoiced</span>
                                                     )
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                    <EmptyDash />
                                                 )}
                                             </TableCell>
                                         </TableRow>
                                     );
                                 })}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
         </div>
     );
 }

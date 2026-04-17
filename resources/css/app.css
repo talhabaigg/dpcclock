@@ -437,6 +437,52 @@
 }
 
 /* ================================
+   Purchasing Board — Microinteractions
+   ================================ */
+
+/* Card entrance: stagger via --card-index (set inline on the element).
+   Uses decelerate ease (ease-out) so items settle naturally. */
+@keyframes card-in {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-enter {
+    animation: card-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--card-index, 0) * 18ms);
+}
+
+/* Counter badge pop — gentle acknowledgement when count changes */
+@keyframes count-pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.animate-count-pop {
+    animation: count-pop 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Inertia navigation top bar — indeterminate slide */
+@keyframes nav-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+}
+
+.animate-nav-slide {
+    animation: nav-slide 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* Respect user motion preferences — cancel non-essential motion */
+@media (prefers-reduced-motion: reduce) {
+    .card-enter,
+    .animate-count-pop,
+    .animate-nav-slide {
+        animation: none !important;
+    }
+}
+
+/* ================================
    Agent Live View Animations
    ================================ */
 @keyframes scanline {
