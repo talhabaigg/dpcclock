@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Download, RotateCcw, X } from 'lucide-react';
+import { Download, Mail, RotateCcw, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 interface SigningRequestRow {
@@ -232,12 +232,20 @@ export default function SigningRequestsIndex() {
                                             <TableCell className="px-3 text-right">
                                                 <div className="flex justify-end gap-1">
                                                     {isSigned && (
-                                                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
-                                                            <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
-                                                                <Download className="h-3 w-3" />
-                                                                Download
-                                                            </a>
-                                                        </Button>
+                                                        <>
+                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
+                                                                <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
+                                                                    <Download className="h-3 w-3" />
+                                                                    Download
+                                                                </a>
+                                                            </Button>
+                                                            {sr.recipient_email && (
+                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend-signed-copy`, {}, { preserveScroll: true })}>
+                                                                    <Mail className="h-3 w-3" />
+                                                                    Resend Copy
+                                                                </Button>
+                                                            )}
+                                                        </>
                                                     )}
                                                     {isPending && (
                                                         <>

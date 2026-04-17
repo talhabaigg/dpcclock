@@ -607,6 +607,27 @@ class DocumentSigningService
         );
     }
 
+    /**
+     * Resend the signed PDF copy to the recipient (and sender).
+     */
+    public function resendSignedCopy(SigningRequest $signingRequest): void
+    {
+        if ($signingRequest->recipient_email) {
+            Notification::route('mail', $signingRequest->recipient_email)
+                ->notify(new SignedDocumentNotification($signingRequest));
+        }
+
+        $senderEmail = $signingRequest->sentBy?->email;
+        if ($senderEmail) {
+            Notification::route('mail', $senderEmail)
+                ->notify(new SignedDocumentSenderNotification($signingRequest));
+        }
+
+        $signingRequest->logEvent('signed_copy_resent', 'system', null, null, [
+            'to' => $signingRequest->recipient_email,
+        ]);
+    }
+
     // ─── Private helpers ────────────────────────────────────────
 
     /**

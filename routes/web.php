@@ -356,6 +356,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/signing-requests/{signingRequest}/cancel', [SigningRequestController::class, 'cancel'])->name('signing-requests.cancel');
     Route::post('/signing-requests/{signingRequest}/resend', [SigningRequestController::class, 'resend'])->name('signing-requests.resend');
     Route::get('/signing-requests/{signingRequest}/download', [SigningRequestController::class, 'download'])->name('signing-requests.download');
+    Route::post('/signing-requests/{signingRequest}/resend-signed-copy', [SigningRequestController::class, 'resendSignedCopy'])->name('signing-requests.resend-signed-copy');
 
     // Comments (generic — currently only employment applications use comments)
     Route::middleware('permission:employment-applications.view')->group(function () {

@@ -1140,6 +1140,23 @@ class SigningRequestController extends Controller
         return redirect()->back()->with('success', 'Document resent for signing.');
     }
 
+    public function resendSignedCopy(Request $request, SigningRequest $signingRequest)
+    {
+        $this->authorizeSignableAction($signingRequest);
+
+        if ($signingRequest->status !== 'signed') {
+            return redirect()->back()->with('error', 'Only signed documents can be resent.');
+        }
+
+        if (! $signingRequest->recipient_email) {
+            return redirect()->back()->with('error', 'No recipient email address on file.');
+        }
+
+        $this->signingService->resendSignedCopy($signingRequest);
+
+        return redirect()->back()->with('success', 'Signed copy resent to ' . $signingRequest->recipient_email);
+    }
+
     public function download(SigningRequest $signingRequest)
     {
         $this->authorizeSignableAction($signingRequest);
