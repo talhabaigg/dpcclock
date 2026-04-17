@@ -9,7 +9,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Str;
 
-class SignedDocumentNotification extends Notification implements ShouldQueue
+class SignedDocumentSenderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -32,10 +32,9 @@ class SignedDocumentNotification extends Notification implements ShouldQueue
 
         $message = (new MailMessage)
             ->subject("Signed: {$documentLabel} — {$signerName}")
-            ->greeting("Hi {$signerName},")
-            ->line("Thanks for signing **{$documentLabel}**. A copy of the fully-signed document is attached to this email for your records.")
-            ->line('Signed on ' . $this->signingRequest->signed_at?->timezone('Australia/Brisbane')->format('d/m/Y h:i A T'))
-            ->line('If you have any questions about this document, please contact the sender.');
+            ->greeting("Hi,")
+            ->line("**{$signerName}** has signed **{$documentLabel}**. A copy of the fully-signed document is attached for your records.")
+            ->line('Signed on ' . $this->signingRequest->signed_at?->timezone('Australia/Brisbane')->format('d/m/Y h:i A T'));
 
         $pdf = $this->signingRequest->getFirstMedia('signed_document');
         if ($pdf) {

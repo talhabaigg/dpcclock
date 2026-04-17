@@ -13,6 +13,7 @@ use App\Notifications\DocumentSigningNotification;
 use App\Notifications\InfoDocumentNotification;
 use App\Notifications\InternalSignatureRequestedNotification;
 use App\Notifications\SignedDocumentNotification;
+use App\Notifications\SignedDocumentSenderNotification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -215,12 +216,25 @@ class DocumentSigningService
         // Email the signer a copy of the fully-signed PDF
         try {
             if ($signingRequest->recipient_email) {
-                $adminBcc = $signingRequest->sentBy?->email;
                 Notification::route('mail', $signingRequest->recipient_email)
-                    ->notify(new SignedDocumentNotification($signingRequest, $adminBcc));
+                    ->notify(new SignedDocumentNotification($signingRequest));
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Failed to send signed-copy email', [
+            \Illuminate\Support\Facades\Log::warning('Failed to send signed-copy email to recipient', [
+                'signing_request_id' => $signingRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email the sender a copy of the fully-signed PDF
+        try {
+            $senderEmail = $signingRequest->sentBy?->email;
+            if ($senderEmail) {
+                Notification::route('mail', $senderEmail)
+                    ->notify(new SignedDocumentSenderNotification($signingRequest));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to send signed-copy email to sender', [
                 'signing_request_id' => $signingRequest->id,
                 'error' => $e->getMessage(),
             ]);
