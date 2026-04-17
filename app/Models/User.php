@@ -72,7 +72,20 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
 
     public function savedSignatureUrl(): ?string
     {
-        return $this->getFirstMediaUrl('signature') ?: null;
+        $media = $this->getFirstMedia('signature');
+        if (! $media) {
+            return null;
+        }
+
+        if (app()->environment('production')) {
+            try {
+                return $media->getTemporaryUrl(now()->addMinutes(30));
+            } catch (\RuntimeException) {
+                // Fallback if disk doesn't support temporary URLs
+            }
+        }
+
+        return $media->getUrl();
     }
 
     public function hasSavedSignature(): bool
