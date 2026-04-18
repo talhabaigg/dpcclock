@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCreditCardReceiptRequest;
 use App\Jobs\ExtractReceiptData;
 use App\Models\CreditCardReceipt;
+use App\Models\PremierGlAccount;
 use App\Models\PremierVendor;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;

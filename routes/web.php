@@ -460,7 +460,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:locations.load-job-data');
     Route::post('/locations/sync-jobs', [LocationController::class, 'dispatchSyncJobs'])->name('locations.syncJobs')
         ->middleware('permission:locations.load-job-data');
-    Route::get('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
+    Route::post('/locations/{location}/load-timesheets', [LocationController::class, 'loadTimesheets'])->name('locations.loadTimesheets')
         ->middleware('permission:timesheets.sync');
     Route::middleware('permission:locations.view')->group(function () {
         Route::get('/project-dashboard', [LocationController::class, 'projectDashboard'])->name('project-dashboard')->middleware('permission:project-dashboard.view');

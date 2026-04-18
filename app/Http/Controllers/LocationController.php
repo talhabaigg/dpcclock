@@ -26,8 +26,7 @@ class LocationController extends Controller
         $showClosed = $request->boolean('show_closed', false);
 
         // Fetch primary locations
-        $query = Location::with('worktypes')
-            ->where(function ($q) {
+        $query = Location::where(function ($q) {
                 $q->where('eh_parent_id', 1149031)
                   ->orWhere('eh_parent_id', 1198645)
                   ->orWhere('eh_parent_id', 1249093);
