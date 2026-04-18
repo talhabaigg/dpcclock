@@ -61,7 +61,6 @@ use App\Http\Controllers\SupplierCategoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimesheetEventController;
 use App\Http\Controllers\TakeoffExportController;
-use App\Http\Controllers\TitleBlockTemplateController;
 use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
@@ -1057,21 +1056,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('drawings.show');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
-        Route::get('/drawings/{drawing}/file', [DrawingController::class, 'serveFile'])->name('drawings.file');
-        Route::get('/drawings/{drawing}/thumbnail', [DrawingController::class, 'serveThumbnail'])->name('drawings.thumbnail');
-        Route::get('/drawings/{drawing}/diff', [DrawingController::class, 'serveDiff'])->name('drawings.diff');
         Route::get('/drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'serveTile'])->name('drawings.tile')->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
-        Route::get('/drawings/{drawing}/preview', [DrawingController::class, 'servePreview'])->name('drawings.preview');
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
     });
     Route::middleware('permission:drawings.create')->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
-        Route::post('/drawings/{drawing}/replicate-floors', [DrawingController::class, 'replicateToFloors'])->name('drawings.replicate-floors');
-        Route::post('/drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])->name('drawings.extract-metadata');
     });
     Route::delete('/drawings/{drawing}', [DrawingController::class, 'destroy'])->name('drawings.destroy')
+        ->middleware('permission:drawings.delete');
+    Route::delete('/drawings', [DrawingController::class, 'bulkDestroy'])->name('drawings.bulk-destroy')
         ->middleware('permission:drawings.delete');
 
     // --------------------------------------------
@@ -1159,29 +1154,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/observations/{observation}/confirm', [DrawingObservationController::class, 'confirm'])->name('drawings.observations.confirm');
         Route::delete('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'destroy'])->name('drawings.observations.destroy');
         Route::post('/drawings/{drawing}/observations/bulk-delete', [DrawingObservationController::class, 'bulkDestroy'])->name('drawings.observations.bulk-destroy');
-        Route::post('/drawings/{drawing}/observations/{observation}/describe', [DrawingObservationController::class, 'describe'])->name('drawings.observations.describe');
         Route::get('/drawing-observations/{observation}/photo', [DrawingObservationController::class, 'photo'])->name('drawings.observations.photo');
-        // Drawing Alignment
-        Route::post('/drawings/{drawing}/alignment', [DrawingController::class, 'saveAlignment'])->name('drawings.alignment.save');
-        Route::get('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'getAlignment'])->name('drawings.alignment.get');
-        Route::delete('/drawings/{drawing}/alignment/{candidateDrawing}', [DrawingController::class, 'deleteAlignment'])->name('drawings.alignment.delete');
-        // AI Drawing Comparison
-        Route::post('/drawings/compare', [DrawingController::class, 'compareRevisions'])->name('drawings.compare');
-        Route::post('/drawings/compare/save-observations', [DrawingController::class, 'saveComparisonAsObservations'])->name('drawings.compare.save-observations');
-    });
-
-    // Title Block Templates (read requires drawings.view; write requires drawings.create)
-    Route::middleware('permission:drawings.view')->group(function () {
-        Route::get('/projects/{project}/templates', [TitleBlockTemplateController::class, 'index'])->name('title-block-templates.index');
-        Route::post('/templates/{template}/test', [TitleBlockTemplateController::class, 'test'])->name('title-block-templates.test');
-        Route::post('/drawings/{drawing}/detect-text', [TitleBlockTemplateController::class, 'detectTextBlocks'])->name('drawings.detect-text');
-        Route::post('/drawings/{drawing}/create-template', [TitleBlockTemplateController::class, 'createFromSheet'])->name('drawings.create-template');
-    });
-    Route::middleware('permission:drawings.create')->group(function () {
-        Route::post('/projects/{project}/templates', [TitleBlockTemplateController::class, 'store'])->name('title-block-templates.store');
-        Route::put('/templates/{template}', [TitleBlockTemplateController::class, 'update'])->name('title-block-templates.update');
-        Route::put('/templates/{template}/field-mappings', [TitleBlockTemplateController::class, 'saveFieldMappings'])->name('title-block-templates.field-mappings');
-        Route::delete('/templates/{template}', [TitleBlockTemplateController::class, 'destroy'])->name('title-block-templates.destroy');
     });
 
     // ============================================

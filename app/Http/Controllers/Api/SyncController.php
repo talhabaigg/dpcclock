@@ -358,22 +358,19 @@ class SyncController extends Controller
             $projectWatermelonId = $project->watermelon_id;
         }
 
+        $media = $drawing->getFirstMedia('source');
+
         return [
             'id' => $drawing->watermelon_id,
             'server_id' => $drawing->id,
             'project_id' => $projectWatermelonId,
             'sheet_number' => $drawing->sheet_number,
             'title' => $drawing->title,
-            'discipline' => $drawing->discipline,
-            'storage_path' => $drawing->storage_path,
-            'original_name' => $drawing->original_name,
-            'mime_type' => $drawing->mime_type,
-            'file_size' => $drawing->file_size ? (int) $drawing->file_size : null,
+            'original_name' => $media?->file_name,
+            'mime_type' => $media?->mime_type,
+            'file_size' => $media?->size ? (int) $media->size : null,
             'revision_number' => $drawing->revision_number,
-            'revision_date' => $drawing->revision_date?->toDateString(),
             'status' => $drawing->status,
-            'extraction_status' => $drawing->extraction_status,
-            'total_pages' => $drawing->total_pages,
             'local_file_path' => null,
             'local_thumbnail_path' => null,
             'created_at' => $drawing->created_at?->getTimestampMs() ?? 0,

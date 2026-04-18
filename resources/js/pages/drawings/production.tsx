@@ -20,14 +20,10 @@ type Revision = {
     id: number;
     sheet_number?: string | null;
     revision_number?: string | null;
-    revision_date?: string | null;
     status: string;
     created_at: string;
-    drawing_number?: string | null;
-    drawing_title?: string | null;
     revision?: string | null;
     file_url?: string;
-    page_preview_url?: string;
 };
 
 type TilesInfo = {
@@ -47,7 +43,6 @@ type Drawing = {
     title?: string | null;
     display_name?: string;
     file_url?: string | null;
-    page_preview_url?: string | null;
     revision_number?: string | null;
     tiles_info?: TilesInfo | null;
 };
@@ -193,7 +188,7 @@ export default function DrawingProduction() {
 
     const canEditProduction = auth?.permissions?.includes('production.edit') ?? false;
 
-    const imageUrl = drawing.page_preview_url || drawing.file_url || null;
+    const imageUrl = drawing.file_url || null;
 
     // State
     const [mapControls, setMapControls] = useState<MapControls | null>(null);

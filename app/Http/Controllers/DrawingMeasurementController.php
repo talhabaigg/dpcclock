@@ -59,8 +59,8 @@ class DrawingMeasurementController extends Controller
 
         $validated = $request->validate($rules);
 
-        $imgW = $drawing->tiles_width ?: $drawing->page_width_px ?: 1;
-        $imgH = $drawing->tiles_height ?: $drawing->page_height_px ?: 1;
+        $imgW = $drawing->tiles_width ?: 1;
+        $imgH = $drawing->tiles_height ?: 1;
 
         if ($method === 'manual') {
             $dx = ($validated['point_b_x'] - $validated['point_a_x']) * $imgW;
@@ -161,8 +161,8 @@ class DrawingMeasurementController extends Controller
         } else {
             $calibration = $drawing->scaleCalibration;
             if ($calibration) {
-                $imgW = $drawing->tiles_width ?: $drawing->page_width_px ?: 1;
-                $imgH = $drawing->tiles_height ?: $drawing->page_height_px ?: 1;
+                $imgW = $drawing->tiles_width ?: 1;
+                $imgH = $drawing->tiles_height ?: 1;
 
                 if ($validated['type'] === 'linear') {
                     $computedValue = $this->computePolylineLength(
@@ -236,8 +236,8 @@ class DrawingMeasurementController extends Controller
             } else {
                 $calibration = $drawing->scaleCalibration;
                 if ($calibration) {
-                    $imgW = $drawing->tiles_width ?: $drawing->page_width_px ?: 1;
-                    $imgH = $drawing->tiles_height ?: $drawing->page_height_px ?: 1;
+                    $imgW = $drawing->tiles_width ?: 1;
+                    $imgH = $drawing->tiles_height ?: 1;
                     if ($measurement->type === 'linear') {
                         $validated['computed_value'] = $this->computePolylineLength(
                             $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH

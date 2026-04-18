@@ -18,8 +18,6 @@ type Revision = {
     sheet_number?: string | null;
     revision_number?: string | null;
     status: string;
-    drawing_number?: string | null;
-    drawing_title?: string | null;
     revision?: string | null;
 };
 type Drawing = {

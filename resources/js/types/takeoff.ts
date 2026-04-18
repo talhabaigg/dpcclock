@@ -17,36 +17,26 @@ export type Observation = {
     is_360_photo?: boolean;
     created_at?: string;
     created_by_user?: { name: string };
-    source?: 'ai_comparison' | null;
-    source_sheet_a_id?: number | null;
-    source_sheet_b_id?: number | null;
+    is_confirmed?: boolean;
+    confirmed_at?: string | null;
+    confirmed_by?: number | null;
+    // Legacy AI comparison fields — feature removed but columns remain
+    source?: string | null;
     ai_change_type?: string | null;
     ai_impact?: 'low' | 'medium' | 'high' | null;
     ai_location?: string | null;
     potential_change_order?: boolean;
-    is_confirmed?: boolean;
-    confirmed_at?: string | null;
-    confirmed_by?: number | null;
 };
 
 export type Revision = {
     id: number;
     sheet_number?: string | null;
     revision_number?: string | null;
-    revision_date?: string | null;
+    title?: string | null;
     status: string;
     created_at: string;
-    thumbnail_path?: string | null;
-    thumbnail_s3_key?: string | null;
-    page_preview_s3_key?: string | null;
-    drawing_number?: string | null;
-    drawing_title?: string | null;
-    revision?: string | null;
-    diff_image_path?: string | null;
-    file_url?: string;
-    page_preview_url?: string;
-    thumbnail_url?: string;
-    diff_image_url?: string;
+    file_url?: string | null;
+    thumbnail_url?: string | null;
 };
 
 export type TilesInfo = {
@@ -64,11 +54,9 @@ export type Drawing = {
     project?: Project;
     sheet_number?: string | null;
     title?: string | null;
-    discipline?: string | null;
     display_name?: string;
     file_url?: string | null;
-    pdf_url?: string | null;
-    page_preview_url?: string | null;
+    thumbnail_url?: string | null;
     observations?: Observation[];
     previous_revision?: {
         id: number;
@@ -76,16 +64,7 @@ export type Drawing = {
         revision_number?: string | null;
     };
     revision_number?: string | null;
-    diff_image_url?: string | null;
-    drawing_number?: string | null;
-    drawing_title?: string | null;
-    revision?: string | null;
     tiles_info?: TilesInfo | null;
-    storage_path?: string | null;
-    original_name?: string | null;
-    mime_type?: string | null;
-    quantity_multiplier?: number;
-    floor_label?: string | null;
 };
 
 export type PendingPoint = {
@@ -99,29 +78,4 @@ export type VariationSummary = {
     co_number: string;
     description: string;
     status: string;
-};
-
-export type AIComparisonChange = {
-    type: string;
-    description: string;
-    location: string;
-    impact: string;
-    potential_change_order: boolean;
-    reason?: string;
-    page_number?: number;
-    coordinates?: {
-        page?: number;
-        x: number;
-        y: number;
-        width?: number;
-        height?: number;
-        reference?: string;
-    };
-};
-
-export type AIComparisonResult = {
-    summary: string | null;
-    changes: AIComparisonChange[];
-    confidence?: string;
-    notes?: string;
 };

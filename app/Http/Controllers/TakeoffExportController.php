@@ -47,7 +47,7 @@ class TakeoffExportController extends Controller
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
-            ->with(['bidArea', 'deductions', 'drawing:id,quantity_multiplier'])
+            ->with(['bidArea', 'deductions', 'drawing:id'])
             ->get();
 
         if ($measurements->isEmpty()) {
@@ -69,7 +69,7 @@ class TakeoffExportController extends Controller
                 $totalCost = 0;
 
                 foreach ($areaMeasurements as $m) {
-                    $mul = $m->drawing->quantity_multiplier ?? 1.0;
+                    $mul = 1.0;
                     $netQty += ($m->computed_value ?? 0) * $mul;
                     $labourCost += ($m->labour_cost ?? 0) * $mul;
                     $materialCost += ($m->material_cost ?? 0) * $mul;

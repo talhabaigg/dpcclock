@@ -372,10 +372,6 @@ class DrawingTileService
     {
         $originalPath = $this->getOriginalFilePath($drawing);
 
-        if (!$originalPath || !file_exists($originalPath)) {
-            $originalPath = $this->downloadFromS3($drawing);
-        }
-
         if (!$originalPath) {
             return null;
         }
@@ -384,7 +380,7 @@ class DrawingTileService
         if ($extension === 'pdf') {
             $tempImagePath = sys_get_temp_dir() . '/drawing_tile_' . $drawing->id . '_' . uniqid() . '.png';
 
-            if ($this->convertPdfToImage($originalPath, $tempImagePath, $drawing->page_number ?? 1, 400)) {
+            if ($this->convertPdfToImage($originalPath, $tempImagePath, 1, 400)) {
                 return $tempImagePath;
             }
             return null;
@@ -393,40 +389,36 @@ class DrawingTileService
         return $originalPath;
     }
 
+    /**
+     * Get the local file path for the drawing's source media.
+     * For local disk: returns Spatie's path directly.
+     * For S3: downloads to a temp file and tracks it for cleanup.
+     */
     protected function getOriginalFilePath(Drawing $drawing): ?string
     {
-        $storagePath = $drawing->storage_path ?? $drawing->file_path;
-        if ($storagePath) {
-            $disk = config('filesystems.drawings_disk', 'public');
-            if ($disk !== 's3') {
-                $localPath = Storage::disk($disk)->path($storagePath);
-                if (file_exists($localPath)) {
-                    return $localPath;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    protected function downloadFromS3(Drawing $drawing): ?string
-    {
-        $s3Key = $drawing->storage_path ?? $drawing->file_path ?? $drawing->page_preview_s3_key;
-        if (!$s3Key) {
+        $media = $drawing->getFirstMedia('source');
+        if (!$media) {
             return null;
         }
 
+        // Local disk — Spatie's getPath() returns the filesystem path
+        if ($media->disk !== 's3') {
+            $path = $media->getPath();
+            return file_exists($path) ? $path : null;
+        }
+
+        // S3 — download to temp
         try {
-            $extension = pathinfo($s3Key, PATHINFO_EXTENSION) ?: 'pdf';
+            $extension = pathinfo($media->file_name, PATHINFO_EXTENSION) ?: 'pdf';
             $tempPath = sys_get_temp_dir() . '/drawing_' . $drawing->id . '_' . uniqid() . '.' . $extension;
 
-            $content = Storage::disk('s3')->get($s3Key);
+            $content = Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
             if ($content) {
                 file_put_contents($tempPath, $content);
                 return $tempPath;
             }
         } catch (\Exception $e) {
-            Log::error('Failed to download from S3', [
+            Log::error('Failed to download drawing media from S3', [
                 'drawing_id' => $drawing->id,
                 'error' => $e->getMessage(),
             ]);

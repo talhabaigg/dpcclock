@@ -64,7 +64,7 @@ class GenerateDrawingTilesJob implements ShouldQueue
 
         Log::info('GenerateDrawingTilesJob: Starting tile generation', [
             'drawing_id' => $drawing->id,
-            'name' => $drawing->name,
+            'title' => $drawing->title,
         ]);
 
         $result = $tileService->generateTiles($drawing);

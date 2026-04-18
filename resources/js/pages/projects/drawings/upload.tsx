@@ -15,15 +15,9 @@ type Project = { id: number; name: string };
 
 type Drawing = {
     id: number;
-    original_name: string | null;
     sheet_number: string | null;
     title: string | null;
-    drawing_number: string | null;
-    drawing_title: string | null;
     status: string;
-    extraction_status: string | null;
-    mime_type: string | null;
-    file_size: number | null;
     display_name?: string;
     thumbnail_url?: string | null;
     created_at: string;
@@ -41,13 +35,6 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
     pending_review: { label: 'Needs Review', variant: 'outline', icon: Clock },
     active: { label: 'Active', variant: 'secondary', icon: CheckCircle },
 };
-
-function formatFileSize(bytes: number | null): string {
-    if (!bytes) return '—';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export default function DrawingsUpload() {
     const { project, recentDrawings: initialDrawings } = usePage<{
@@ -136,7 +123,7 @@ export default function DrawingsUpload() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Upload Drawings — ${project.name}`} />
 
-            <div className="min-w-full space-y-4 p-2 sm:p-4">
+            <div className="mx-auto w-full max-w-5xl space-y-4 p-2 sm:p-4">
                 <Card>
                     <CardContent className="p-3 sm:p-6">
                         <div
@@ -216,9 +203,7 @@ export default function DrawingsUpload() {
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
                                             <TableHead className="pl-3 sm:pl-6">File</TableHead>
-                                            <TableHead className="hidden sm:table-cell">Title</TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead className="hidden md:table-cell">Size</TableHead>
                                             <TableHead className="hidden lg:table-cell">Uploaded</TableHead>
                                             <TableHead className="w-16 pr-3 text-right sm:pr-6" />
                                         </TableRow>
@@ -230,18 +215,23 @@ export default function DrawingsUpload() {
 
                                             return (
                                                 <TableRow key={drawing.id}>
-                                                    <TableCell className="max-w-[150px] pl-3 sm:max-w-[200px] sm:pl-6">
-                                                        <p className="truncate text-sm font-medium" title={drawing.original_name || undefined}>
-                                                            {drawing.original_name || '—'}
-                                                        </p>
-                                                        <p className="text-muted-foreground truncate text-xs sm:hidden">
-                                                            {drawing.title || drawing.drawing_title || '—'}
-                                                        </p>
-                                                    </TableCell>
-                                                    <TableCell className="hidden sm:table-cell">
-                                                        <span className="text-muted-foreground text-xs">
-                                                            {drawing.title || drawing.drawing_title || '—'}
-                                                        </span>
+                                                    <TableCell className="pl-3 sm:pl-6">
+                                                        <div className="flex items-center gap-3">
+                                                            {drawing.thumbnail_url ? (
+                                                                <img
+                                                                    src={drawing.thumbnail_url}
+                                                                    alt=""
+                                                                    className="h-10 w-10 rounded border object-cover"
+                                                                />
+                                                            ) : (
+                                                                <div className="bg-muted flex h-10 w-10 items-center justify-center rounded border">
+                                                                    <FileText className="text-muted-foreground h-5 w-5" />
+                                                                </div>
+                                                            )}
+                                                            <span className="truncate text-sm font-medium" title={drawing.title || undefined}>
+                                                                {drawing.title || '—'}
+                                                            </span>
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant={sConfig.variant} className="gap-1 text-xs">
@@ -250,9 +240,6 @@ export default function DrawingsUpload() {
                                                             />
                                                             {sConfig.label}
                                                         </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground hidden text-xs tabular-nums md:table-cell">
-                                                        {formatFileSize(drawing.file_size)}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
                                                         {formatDistanceToNow(new Date(drawing.created_at), { addSuffix: true })}

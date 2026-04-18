@@ -73,26 +73,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Drawings
     Route::apiResource('drawings', DrawingController::class)->names('api.drawings');
 
-    Route::get('drawings/{drawing}/file', [DrawingController::class, 'file'])
-        ->name('api.drawings.file');
-    Route::get('drawings/{drawing}/thumbnail', [DrawingController::class, 'thumbnail'])
-        ->name('api.drawings.thumbnail');
-    Route::get('drawings/{drawing}/diff', [DrawingController::class, 'diff'])
-        ->name('api.drawings.diff');
     Route::get('drawings/{drawing}/revisions', [DrawingController::class, 'revisions'])
         ->name('api.drawings.revisions');
-    Route::post('drawings/{drawing}/compare', [DrawingController::class, 'compare'])
-        ->name('api.drawings.compare');
     Route::post('drawings/{drawing}/reprocess', [DrawingController::class, 'reprocess'])
         ->name('api.drawings.reprocess');
-
-    // Drawing metadata extraction and confirmation
-    Route::get('drawings/{drawing}/metadata', [DrawingController::class, 'metadata'])
-        ->name('api.drawings.metadata');
-    Route::post('drawings/{drawing}/extract-metadata', [DrawingController::class, 'extractMetadata'])
-        ->name('api.drawings.extract-metadata');
-    Route::post('drawings/{drawing}/confirm-metadata', [DrawingController::class, 'confirmMetadata'])
-        ->name('api.drawings.confirm-metadata');
 
     // Drawing Observations
     Route::apiResource('drawing-observations', DrawingObservationController::class)
@@ -149,10 +133,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])
         ->name('api.drawings.segment-status.bulk');
 
-    // Drawing tiles & preview (for mobile viewer)
+    // Drawing tiles (for mobile viewer)
     Route::get('drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'tile'])
         ->name('api.drawings.tile')
         ->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
-    Route::get('drawings/{drawing}/preview', [DrawingController::class, 'preview'])
-        ->name('api.drawings.preview');
 });

@@ -49,7 +49,7 @@ class ProcessDrawingJob implements ShouldQueue
 
         Log::info('ProcessDrawingJob: Starting processing', [
             'drawing_id' => $drawing->id,
-            'name' => $drawing->name,
+            'title' => $drawing->title,
         ]);
 
         // Step 1: Process drawing (thumbnail, dimensions, diff)

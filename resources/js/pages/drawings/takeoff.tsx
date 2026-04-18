@@ -15,14 +15,12 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ObservationDialog } from '@/components/observation-dialog';
-import AIComparisonDialog from '@/components/ai-comparison-dialog';
 import CalibrationDialog from '@/components/calibration-dialog';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useObservations } from '@/hooks/use-observations';
-import { useAIComparison } from '@/hooks/use-ai-comparison';
 import { useCalibration } from '@/hooks/use-calibration';
 import { useBidView } from '@/hooks/use-bid-view';
 import { api, ApiError } from '@/lib/api';
@@ -43,7 +41,6 @@ import {
     Plus,
     Ruler,
     Scale,
-    Sparkles,
     Square,
     Trash2,
     X,
@@ -62,7 +59,7 @@ export default function DrawingTakeoff() {
 
     const canEditTakeoff = auth?.permissions?.includes('takeoff.edit') ?? false;
 
-    const imageUrl = drawing.page_preview_url || drawing.file_url || null;
+    const imageUrl = drawing.file_url || null;
 
     const projectId = project?.id || drawing.project_id;
 
@@ -76,12 +73,6 @@ export default function DrawingTakeoff() {
         confirm,
     });
 
-    // AI Comparison hook
-    const aiCompare = useAIComparison({
-        drawingId: drawing.id,
-        revisions,
-    });
-
     // Revision comparison
     const [showCompareOverlay, setShowCompareOverlay] = useState(false);
 
@@ -91,11 +82,10 @@ export default function DrawingTakeoff() {
 
     const candidateRevision = compareRevisionId ? revisions.find((rev) => rev.id === compareRevisionId) : null;
 
-    const canCompare = revisions.length > 1 || Boolean(drawing.diff_image_url);
-    const hasDiffImage = Boolean(drawing.diff_image_url);
+    const canCompare = revisions.length > 1;
 
     const candidateImageUrl = candidateRevision
-        ? (candidateRevision.page_preview_url || candidateRevision.file_url || null)
+        ? (candidateRevision.file_url || null)
         : null;
 
     // View mode
@@ -547,9 +537,7 @@ export default function DrawingTakeoff() {
 
     // Determine comparison image URL
     const comparisonImageUrl = showCompareOverlay
-        ? (!compareRevisionId && hasDiffImage
-            ? drawing.diff_image_url!
-            : candidateImageUrl || undefined)
+        ? (candidateImageUrl || undefined)
         : undefined;
 
     // Keyboard shortcuts
@@ -591,15 +579,6 @@ export default function DrawingTakeoff() {
                     </span>
                     <div className="bg-border h-3 w-px" />
                     <span>{measurements.length} measurement{measurements.length !== 1 ? 's' : ''}</span>
-                    {drawing.floor_label && (
-                        <>
-                            <div className="bg-border h-3 w-px" />
-                            <span>{drawing.floor_label}</span>
-                        </>
-                    )}
-                    {drawing.quantity_multiplier && drawing.quantity_multiplier > 1 && (
-                        <span className="text-blue-500">{drawing.quantity_multiplier}x</span>
-                    )}
                     <div className="flex-1" />
 
                     {/* Observation selection controls */}
@@ -903,7 +882,7 @@ export default function DrawingTakeoff() {
                                                                     .filter((rev) => rev.id !== drawing.id && rev.file_url)
                                                                     .map((rev) => (
                                                                         <SelectItem key={rev.id} value={String(rev.id)}>
-                                                                            Rev {rev.revision_number || rev.revision || '?'}
+                                                                            Rev {rev.revision_number || '?'}
                                                                         </SelectItem>
                                                                     ))}
                                                             </SelectContent>
@@ -925,27 +904,6 @@ export default function DrawingTakeoff() {
                                                     />
                                                 </div>
 
-                                                {hasDiffImage && (
-                                                    <div className="flex items-center justify-between">
-                                                        <Label htmlFor="diff-mode" className="cursor-pointer text-[11px] font-medium">
-                                                            Diff View
-                                                        </Label>
-                                                        <Switch
-                                                            id="diff-mode"
-                                                            checked={!compareRevisionId}
-                                                            onCheckedChange={(checked) => {
-                                                                if (checked) {
-                                                                    setCompareRevisionId(null);
-                                                                } else {
-                                                                    const otherRevisions = revisions.filter((r) => r.id !== drawing.id && r.file_url);
-                                                                    if (otherRevisions.length > 0) {
-                                                                        setCompareRevisionId(otherRevisions[0].id);
-                                                                    }
-                                                                }
-                                                            }}
-                                                        />
-                                                    </div>
-                                                )}
                                             </>
                                         )}
                                     </div>
@@ -955,21 +913,6 @@ export default function DrawingTakeoff() {
                     )}
 
                     {/* AI Compare Button */}
-                    {revisions.length >= 2 && (
-                        <>
-                            <div className="bg-border h-4 w-px" />
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                                onClick={aiCompare.openDialog}
-                            >
-                                <Sparkles className="h-3 w-3" />
-                                AI
-                            </Button>
-                        </>
-                    )}
                 </>
             }
         >
@@ -1164,7 +1107,7 @@ export default function DrawingTakeoff() {
                                     onAddDeduction={handleAddDeduction}
                                     onMeasurementHover={setHoveredMeasurementId}
                                     drawingId={drawing.id}
-                                    quantityMultiplier={drawing.quantity_multiplier ?? 1}
+                                    quantityMultiplier={1}
                                     readOnly={!canEditTakeoff}
                                 />
                             </>
@@ -1196,29 +1139,6 @@ export default function DrawingTakeoff() {
                 onDescribeWithAI={obs.handleDescribeWithAI}
                 onDetect360={obs.detect360FromFile}
                 onReset={obs.resetDialog}
-            />
-
-            {/* AI Comparison Dialog */}
-            <AIComparisonDialog
-                open={aiCompare.showDialog}
-                onOpenChange={aiCompare.setShowDialog}
-                revisions={revisions}
-                drawingA={aiCompare.drawingA}
-                onDrawingAChange={aiCompare.setDrawingA}
-                drawingB={aiCompare.drawingB}
-                onDrawingBChange={aiCompare.setDrawingB}
-                comparing={aiCompare.comparing}
-                result={aiCompare.result}
-                selectedChanges={aiCompare.selectedChanges}
-                customPrompt={aiCompare.customPrompt}
-                onCustomPromptChange={aiCompare.setCustomPrompt}
-                savingObservations={aiCompare.savingObservations}
-                onCompare={aiCompare.handleCompare}
-                onToggleChange={aiCompare.handleToggleChange}
-                onSelectAll={aiCompare.handleSelectAll}
-                onDeselectAll={aiCompare.handleDeselectAll}
-                onSaveAsObservations={aiCompare.handleSaveAsObservations}
-                onRegenerate={aiCompare.handleRegenerate}
             />
 
             {/* Calibration Dialog */}

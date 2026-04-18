@@ -50,17 +50,11 @@ class ProjectDrawingController extends Controller
      */
     public function index(Request $request, Location $project)
     {
-        $query = Drawing::where('project_id', $project->id)
+        $drawings = Drawing::where('project_id', $project->id)
             ->where('status', Drawing::STATUS_ACTIVE)
-            ->with(['observations.createdBy', 'createdBy', 'updatedBy'])
-            ->orderBy('sheet_number');
-
-        // Optional discipline filter
-        if ($request->has('discipline')) {
-            $query->where('discipline', $request->discipline);
-        }
-
-        $drawings = $query->get();
+            ->with(['observations.createdBy', 'createdBy', 'updatedBy', 'media'])
+            ->orderBy('sheet_number')
+            ->get();
 
         return response()->json($drawings);
     }

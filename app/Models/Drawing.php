@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-class Drawing extends Model
+class Drawing extends Model implements HasMedia
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, InteractsWithMedia, SoftDeletes;
 
     protected $table = 'drawings';
 
@@ -18,84 +20,31 @@ class Drawing extends Model
         'project_id',
         'sheet_number',
         'title',
-        'discipline',
-        'storage_path',
-        'original_name',
-        'mime_type',
-        'file_size',
-        'sha256',
-        'metadata_confirmed',
         'revision_number',
-        'revision_date',
-        'revision_notes',
         'status',
         'previous_revision_id',
-        'thumbnail_path',
-        'ai_extracted_metadata',
-        'page_dimensions',
-        'diff_image_path',
-        // Textract extraction fields
-        'page_preview_s3_key',
-        'thumbnail_s3_key',
-        'page_width_px',
-        'page_height_px',
-        'page_orientation',
-        'size_bucket',
-        'drawing_number',
-        'drawing_title',
-        'revision',
-        'extraction_status',
-        'confidence_number',
-        'confidence_title',
-        'confidence_revision',
-        'used_template_id',
-        'extraction_raw',
-        'extraction_errors',
-        'extracted_at',
-        'created_by',
-        'updated_by',
-        // Tile rendering columns for Leaflet viewer
         'tiles_base_url',
         'tiles_max_zoom',
         'tiles_width',
         'tiles_height',
         'tile_size',
         'tiles_status',
-        // Typical area / floor replication
-        'quantity_multiplier',
-        'source_drawing_id',
-        'floor_label',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
-        'revision_date' => 'date',
-        'ai_extracted_metadata' => 'array',
-        'page_dimensions' => 'array',
-        'page_width_px' => 'integer',
-        'page_height_px' => 'integer',
-        'extraction_raw' => 'array',
-        'extraction_errors' => 'array',
-        'confidence_number' => 'float',
-        'confidence_title' => 'float',
-        'confidence_revision' => 'float',
-        'extracted_at' => 'datetime',
         'tiles_max_zoom' => 'integer',
         'tiles_width' => 'integer',
         'tiles_height' => 'integer',
         'tile_size' => 'integer',
-        'metadata_confirmed' => 'boolean',
-        'quantity_multiplier' => 'float',
     ];
 
     protected $appends = [
         'file_url',
         'thumbnail_url',
-        'diff_image_url',
         'display_name',
-        'pdf_url',
         'tiles_info',
-        'page_preview_url',
-        'display_revision',
     ];
 
     // Workflow status constants
@@ -111,17 +60,6 @@ class Drawing extends Model
 
     const STATUS_ARCHIVED = 'archived';
 
-    // Extraction status constants
-    const EXTRACTION_QUEUED = 'queued';
-
-    const EXTRACTION_PROCESSING = 'processing';
-
-    const EXTRACTION_SUCCESS = 'success';
-
-    const EXTRACTION_NEEDS_REVIEW = 'needs_review';
-
-    const EXTRACTION_FAILED = 'failed';
-
     protected static function booted()
     {
         static::creating(function ($model) {
@@ -136,6 +74,26 @@ class Drawing extends Model
         static::updating(function ($model) {
             $model->updated_by = auth()->id();
         });
+    }
+
+    // Media collections + conversions
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('source')->singleFile();
+        $this->addMediaCollection('thumbnail')->singleFile();
+    }
+
+    public function registerMediaConversions(?Media $media = null): void
+    {
+        // For images in the source collection, Spatie auto-generates the thumb conversion.
+        // PDFs are converted to thumbnails explicitly in ProcessDrawingJob and stored
+        // in the separate `thumbnail` collection (Spatie v11 can't render PDFs natively).
+        $this->addMediaConversion('thumb')
+            ->format('png')
+            ->width(1200)
+            ->performOnCollections('source')
+            ->nonOptimized();
     }
 
     // Relationships
@@ -170,11 +128,6 @@ class Drawing extends Model
         return $this->hasOne(self::class, 'previous_revision_id');
     }
 
-    public function usedTemplate()
-    {
-        return $this->belongsTo(TitleBlockTemplate::class, 'used_template_id');
-    }
-
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -185,45 +138,36 @@ class Drawing extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
-    public function sourceDrawing()
-    {
-        return $this->belongsTo(self::class, 'source_drawing_id');
-    }
-
-    public function replicatedDrawings()
-    {
-        return $this->hasMany(self::class, 'source_drawing_id');
-    }
-
     // Accessors
 
     public function getFileUrlAttribute(): ?string
     {
-        if ($this->storage_path) {
-            return route('drawings.file', ['drawing' => $this->id]);
-        }
+        $media = $this->getFirstMedia('source');
 
-        if ($this->page_preview_s3_key) {
-            return route('drawings.preview', ['drawing' => $this->id]);
-        }
-
-        // Legacy fallback
-        if ($this->file_path) {
-            return route('drawings.file', ['drawing' => $this->id]);
-        }
-
-        return null;
+        return $media?->getUrl();
     }
 
-    public function getPdfUrlAttribute(): ?string
+    public function getThumbnailUrlAttribute(): ?string
     {
-        if ($this->storage_path && str_contains($this->mime_type ?? '', 'pdf')) {
-            return route('drawings.file', ['drawing' => $this->id]);
+        // Prefer the explicitly-generated thumbnail (PDFs render here)
+        $thumbnail = $this->getFirstMedia('thumbnail');
+        if ($thumbnail) {
+            return $thumbnail->getUrl();
         }
 
-        // Legacy fallback
-        if ($this->file_path && str_contains($this->file_type ?? '', 'pdf')) {
-            return route('drawings.file', ['drawing' => $this->id]);
+        // For image sources, use Spatie's auto-generated thumb conversion
+        $source = $this->getFirstMedia('source');
+        if (! $source) {
+            return null;
+        }
+
+        if ($source->hasGeneratedConversion('thumb')) {
+            return $source->getUrl('thumb');
+        }
+
+        // Only fall back to the original source file if it's an image
+        if (str_starts_with(strtolower($source->mime_type ?? ''), 'image/')) {
+            return $source->getUrl();
         }
 
         return null;
@@ -239,58 +183,16 @@ class Drawing extends Model
             return $this->sheet_number;
         }
 
-        if ($this->drawing_number && $this->drawing_title) {
-            return "{$this->drawing_number} - {$this->drawing_title}";
-        }
-
-        if ($this->drawing_number) {
-            return $this->drawing_number;
-        }
-
         if ($this->title) {
             return $this->title;
         }
 
-        if ($this->original_name) {
-            return $this->original_name;
+        $media = $this->getFirstMedia('source');
+        if ($media?->file_name) {
+            return $media->file_name;
         }
 
         return "Drawing #{$this->id}";
-    }
-
-    public function getThumbnailUrlAttribute(): ?string
-    {
-        if (! $this->thumbnail_path && ! $this->thumbnail_s3_key) {
-            return null;
-        }
-
-        return route('drawings.thumbnail', ['drawing' => $this->id]);
-    }
-
-    public function getDiffImageUrlAttribute(): ?string
-    {
-        if (! $this->diff_image_path) {
-            return null;
-        }
-
-        return route('drawings.diff', ['drawing' => $this->id]);
-    }
-
-    public function getDisplayRevisionAttribute(): string
-    {
-        $rev = $this->revision_number ?? '?';
-        $date = $this->revision_date?->format('Y-m-d') ?? '';
-
-        return $date ? "Rev {$rev} ({$date})" : "Rev {$rev}";
-    }
-
-    public function getPagePreviewUrlAttribute(): ?string
-    {
-        if (! $this->page_preview_s3_key) {
-            return $this->thumbnail_url;
-        }
-
-        return route('drawings.preview', ['drawing' => $this->id]);
     }
 
     public function getTilesInfoAttribute(): ?array
@@ -299,12 +201,10 @@ class Drawing extends Model
             return null;
         }
 
-        // Always use the proxy route — works for both local and S3
         $baseUrl = "/drawings/{$this->id}/tiles";
 
         $maxZoom = $this->tiles_max_zoom ?? 5;
         $maxDim = max($this->tiles_width ?? 0, $this->tiles_height ?? 0);
-        // Min useful zoom: level where largest dimension >= 3000px
         $minNativeZoom = $maxDim > 0
             ? max(0, $maxZoom - (int) floor(log(max($maxDim, 1) / 3000, 2)))
             : 0;
@@ -321,20 +221,24 @@ class Drawing extends Model
 
     public function getIsPdfAttribute(): bool
     {
-        if ($this->mime_type) {
-            return str_contains(strtolower($this->mime_type), 'pdf');
+        $media = $this->getFirstMedia('source');
+
+        if (! $media) {
+            return false;
         }
 
-        return str_ends_with(strtolower($this->original_name ?? ''), '.pdf');
+        return str_contains(strtolower($media->mime_type ?? ''), 'pdf');
     }
 
     public function getIsImageAttribute(): bool
     {
-        if ($this->mime_type) {
-            return str_starts_with(strtolower($this->mime_type), 'image/');
+        $media = $this->getFirstMedia('source');
+
+        if (! $media) {
+            return false;
         }
 
-        return (bool) preg_match('/\.(png|jpe?g|gif|webp|bmp)$/i', $this->original_name ?? '');
+        return str_starts_with(strtolower($media->mime_type ?? ''), 'image/');
     }
 
     // Scopes
@@ -347,21 +251,6 @@ class Drawing extends Model
     public function scopeNotArchived($query)
     {
         return $query->where('status', '!=', self::STATUS_ARCHIVED);
-    }
-
-    public function scopeExtractionQueued($query)
-    {
-        return $query->where('extraction_status', self::EXTRACTION_QUEUED);
-    }
-
-    public function scopeExtractionNeedsReview($query)
-    {
-        return $query->where('extraction_status', self::EXTRACTION_NEEDS_REVIEW);
-    }
-
-    public function scopeExtractionSuccess($query)
-    {
-        return $query->where('extraction_status', self::EXTRACTION_SUCCESS);
     }
 
     // Methods
@@ -417,7 +306,6 @@ class Drawing extends Model
         self $newDrawing,
         ?string $revisionNumber = null
     ): void {
-        // Find current active revision for this sheet
         $currentActive = self::where('project_id', $projectId)
             ->where('sheet_number', $sheetNumber)
             ->where('status', self::STATUS_ACTIVE)
@@ -481,7 +369,7 @@ class Drawing extends Model
             $letters[$i] = 'A';
         }
 
-        return 'A' . $letters;
+        return 'A'.$letters;
     }
 
     /**
@@ -492,37 +380,5 @@ class Drawing extends Model
         return $this->tiles_status === 'completed'
             && $this->tiles_base_url
             && $this->tiles_max_zoom !== null;
-    }
-
-    /**
-     * Check if extraction needs review.
-     */
-    public function needsExtractionReview(): bool
-    {
-        return $this->extraction_status === self::EXTRACTION_NEEDS_REVIEW;
-    }
-
-    /**
-     * Check if extraction was successful.
-     */
-    public function extractionSuccessful(): bool
-    {
-        return $this->extraction_status === self::EXTRACTION_SUCCESS;
-    }
-
-    /**
-     * Calculate the size bucket from page dimensions.
-     */
-    public static function calculateSizeBucket(int $width, int $height): string
-    {
-        return TitleBlockTemplate::createSizeBucket($width, $height);
-    }
-
-    /**
-     * Determine page orientation from dimensions.
-     */
-    public static function determineOrientation(int $width, int $height): string
-    {
-        return $width >= $height ? 'landscape' : 'portrait';
     }
 }

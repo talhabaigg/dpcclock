@@ -40,8 +40,6 @@ type Revision = {
     revision_number?: string;
     revision?: string;
     status: string;
-    drawing_number?: string;
-    drawing_title?: string;
 };
 
 // ---------- helpers ----------
