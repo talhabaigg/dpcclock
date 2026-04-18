@@ -4,16 +4,7 @@ interface ImportTasksDialogProps {
     onImport: (rows: Record<string, string>[]) => void;
 }
 
-const REQUIRED_COLUMNS = [
-    'WBS',
-    'Task Name',
-    'Start Date',
-    'End Date',
-    'Baseline Start',
-    'Baseline Finish',
-    'Color',
-    'Critical',
-];
+const REQUIRED_COLUMNS = ['WBS', 'Task Name', 'Start Date', 'End Date', 'Baseline Start', 'Baseline Finish', 'Color', 'Critical'];
 
 export default function ImportTasksDialog({ onImport }: ImportTasksDialogProps) {
     return (

@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { format, getMonth, getQuarter, getYear } from 'date-fns';
+import { memo } from 'react';
 import { getNonWorkDayType, isNonWorkingWeekday } from './utils';
 
 interface GanttHeaderProps {
@@ -7,9 +8,13 @@ interface GanttHeaderProps {
     dayWidth: number;
 }
 
-interface Group { label: string; startIdx: number; count: number }
+interface Group {
+    label: string;
+    startIdx: number;
+    count: number;
+}
 
-export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
+function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
     // Year groups — always shown so multi-year auto-fit views remain legible.
     const yearGroups: Group[] = [];
     let currentYear = -1;
@@ -63,7 +68,7 @@ export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
                 {yearGroups.map((g) => (
                     <div
                         key={g.label + g.startIdx}
-                        className="border-r text-center text-[11px] font-semibold leading-5"
+                        className="border-r text-center text-[11px] leading-5 font-semibold"
                         style={{ width: g.count * dayWidth }}
                     >
                         {g.count * dayWidth > 28 ? g.label : ''}
@@ -111,3 +116,5 @@ export default function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
         </div>
     );
 }
+
+export default memo(GanttHeader);

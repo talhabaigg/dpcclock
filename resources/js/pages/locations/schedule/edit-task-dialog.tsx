@@ -16,8 +16,7 @@ import { isNonWorkDay, snapToWorkday } from './utils';
 
 const toDate = (s: string): Date | undefined => (s ? parseISO(s) : undefined);
 const toStr = (d?: Date): string => (d ? format(d, 'yyyy-MM-dd') : '');
-const snapStr = (s: string, direction: 'forward' | 'backward'): string =>
-    s ? toStr(snapToWorkday(parseISO(s), direction)) : '';
+const snapStr = (s: string, direction: 'forward' | 'backward'): string => (s ? toStr(snapToWorkday(parseISO(s), direction)) : '');
 
 interface EditTaskDialogProps {
     open: boolean;
@@ -25,19 +24,22 @@ interface EditTaskDialogProps {
     task: TaskNode | null;
     links: TaskLink[];
     allTasks: TaskNode[];
-    onUpdateTask: (id: number, data: {
-        name?: string;
-        baseline_start?: string | null;
-        baseline_finish?: string | null;
-        start_date?: string | null;
-        end_date?: string | null;
-        color?: string | null;
-        is_critical?: boolean;
-        headcount?: number | null;
-        location_pay_rate_template_id?: number | null;
-        responsible?: string | null;
-        status?: TaskStatus | null;
-    }) => void;
+    onUpdateTask: (
+        id: number,
+        data: {
+            name?: string;
+            baseline_start?: string | null;
+            baseline_finish?: string | null;
+            start_date?: string | null;
+            end_date?: string | null;
+            color?: string | null;
+            is_critical?: boolean;
+            headcount?: number | null;
+            location_pay_rate_template_id?: number | null;
+            responsible?: string | null;
+            status?: TaskStatus | null;
+        },
+    ) => void;
     onDeleteLink: (linkId: number) => void;
     onUpdateLink: (linkId: number, patch: { type?: LinkType; lag_days?: number }) => void;
     payRateTemplates: PayRateTemplateOption[];
@@ -121,11 +123,7 @@ export default function EditTaskDialog({
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                             <Label htmlFor="edit-name">Task Name</Label>
-                            <Input
-                                id="edit-name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
+                            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
                         </div>
 
                         {!isGroup && (
@@ -152,7 +150,7 @@ export default function EditTaskDialog({
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label>Baseline Start</Label>
+                                        <Label>Saved Plan Start</Label>
                                         <DatePickerDemo
                                             value={toDate(baselineStart)}
                                             onChange={(d) => setBaselineStart(toStr(d))}
@@ -161,7 +159,7 @@ export default function EditTaskDialog({
                                         />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label>Baseline Finish</Label>
+                                        <Label>Saved Plan Finish</Label>
                                         <DatePickerDemo
                                             value={toDate(baselineFinish)}
                                             onChange={(d) => setBaselineFinish(toStr(d))}
@@ -173,11 +171,7 @@ export default function EditTaskDialog({
                             </>
                         )}
 
-                        {isGroup && (
-                            <p className="text-muted-foreground text-sm">
-                                Dates are auto-calculated from child tasks.
-                            </p>
-                        )}
+                        {isGroup && <p className="text-muted-foreground text-sm">Dates are worked out from child tasks.</p>}
 
                         {/* Resource row */}
                         {!isGroup && (
@@ -201,7 +195,7 @@ export default function EditTaskDialog({
                                         id="edit-template"
                                         value={templateId}
                                         onChange={(e) => setTemplateId(e.target.value)}
-                                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
                                     >
                                         <option value="">— None —</option>
                                         {payRateTemplates.map((t) => (
@@ -238,11 +232,13 @@ export default function EditTaskDialog({
                                     id="edit-status"
                                     value={status}
                                     onChange={(e) => setStatus(e.target.value as TaskStatus | '')}
-                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
                                 >
                                     <option value="">Auto</option>
                                     {MANUAL_STATUSES.map((s) => (
-                                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                                        <option key={s} value={s}>
+                                            {STATUS_LABELS[s]}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -263,7 +259,7 @@ export default function EditTaskDialog({
                                         onClick={() => setColor(null)}
                                         title="Default"
                                     >
-                                        {color === null && <Check className="h-3 w-3 mx-auto text-white" />}
+                                        {color === null && <Check className="mx-auto h-3 w-3 text-white" />}
                                     </button>
                                     {PRESET_COLORS.map((c) => (
                                         <button
@@ -276,13 +272,13 @@ export default function EditTaskDialog({
                                             style={{ backgroundColor: c }}
                                             onClick={() => setColor(c)}
                                         >
-                                            {color === c && <Check className="h-3 w-3 mx-auto text-white" />}
+                                            {color === c && <Check className="mx-auto h-3 w-3 text-white" />}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label>Critical Path</Label>
+                                <Label>On Critical Path</Label>
                                 <div className="flex items-center gap-2 pt-1">
                                     <Switch checked={isCritical} onCheckedChange={setIsCritical} />
                                     <span className="text-muted-foreground text-xs">{isCritical ? 'Critical' : 'Normal'}</span>
@@ -293,7 +289,7 @@ export default function EditTaskDialog({
                         {/* Dependencies section */}
                         {taskLinks.length > 0 && (
                             <div className="grid gap-2">
-                                <Label>Dependencies</Label>
+                                <Label>Linked Tasks</Label>
                                 <div className="space-y-2">
                                     {taskLinks.map((link) => {
                                         const isSource = link.source_id === task.id;
@@ -306,10 +302,7 @@ export default function EditTaskDialog({
                                                 <span className="text-muted-foreground min-w-0 flex-1 truncate">
                                                     {direction === 'to' ? `This → ${otherName}` : `${otherName} → This`}
                                                 </span>
-                                                <Select
-                                                    value={link.type}
-                                                    onValueChange={(val) => onUpdateLink(link.id, { type: val as LinkType })}
-                                                >
+                                                <Select value={link.type} onValueChange={(val) => onUpdateLink(link.id, { type: val as LinkType })}>
                                                     <SelectTrigger className="h-7 w-[110px] text-xs">
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -352,7 +345,7 @@ export default function EditTaskDialog({
 
                         {taskLinks.length === 0 && (
                             <p className="text-muted-foreground text-xs">
-                                No dependencies. Use the link button to connect tasks.
+                                No linked tasks yet. Turn on Link Tasks, then click two bars to connect them.
                             </p>
                         )}
                     </div>

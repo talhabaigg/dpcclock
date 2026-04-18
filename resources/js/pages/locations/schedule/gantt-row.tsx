@@ -1,8 +1,9 @@
 import { parseISO } from 'date-fns';
+import { memo } from 'react';
+import GanttBar from './gantt-bar';
 import type { TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
 import { dateToX } from './utils';
-import GanttBar from './gantt-bar';
 
 interface GanttRowProps {
     node: TaskNode;
@@ -17,7 +18,18 @@ interface GanttRowProps {
     showBaseline: boolean;
 }
 
-export default function GanttRow({ node, rangeStart, dayWidth, onDatesChange, onBarClick, linkMode, onLinkDotClick, isLinking, pendingSourceId, showBaseline }: GanttRowProps) {
+function GanttRow({
+    node,
+    rangeStart,
+    dayWidth,
+    onDatesChange,
+    onBarClick,
+    linkMode,
+    onLinkDotClick,
+    isLinking,
+    pendingSourceId,
+    showBaseline,
+}: GanttRowProps) {
     const hasBaseline = showBaseline && node.baseline_start && node.baseline_finish;
     const rowHeight = hasBaseline ? ROW_HEIGHT + 16 : ROW_HEIGHT;
 
@@ -43,7 +55,7 @@ export default function GanttRow({ node, rangeStart, dayWidth, onDatesChange, on
             {/* Baseline bar — sits below the actual bar */}
             {hasBaseline && (
                 <div
-                    className="bg-muted-foreground/20 absolute h-4 rounded-sm border border-dashed border-muted-foreground/30"
+                    className="bg-muted-foreground/20 border-muted-foreground/30 absolute h-4 rounded-sm border border-dashed"
                     style={{
                         left: dateToX(parseISO(node.baseline_start!), rangeStart, dayWidth),
                         width: Math.max(
@@ -59,3 +71,5 @@ export default function GanttRow({ node, rangeStart, dayWidth, onDatesChange, on
         </div>
     );
 }
+
+export default memo(GanttRow);

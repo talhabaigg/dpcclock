@@ -1,20 +1,19 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type LocationBase } from '@/layouts/location-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import FullCalendar from '@fullcalendar/react';
 import { Head, Link, useHttp, usePage } from '@inertiajs/react';
-import { ArrowLeft, Settings2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Settings2, Trash2 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -49,15 +48,15 @@ interface PageProps {
 }
 
 const PROJECT_TYPE_META: Record<ProjectEventType, { label: string; hex: string; dotClass: string }> = {
-    safety:            { label: 'Safety',            hex: '#ef4444', dotClass: 'bg-red-500' },
+    safety: { label: 'Safety', hex: '#ef4444', dotClass: 'bg-red-500' },
     industrial_action: { label: 'Industrial Action', hex: '#f97316', dotClass: 'bg-orange-500' },
-    weather:           { label: 'Weather',           hex: '#0ea5e9', dotClass: 'bg-sky-500' },
-    other:             { label: 'Other',             hex: '#64748b', dotClass: 'bg-slate-500' },
+    weather: { label: 'Weather', hex: '#0ea5e9', dotClass: 'bg-sky-500' },
+    other: { label: 'Other', hex: '#64748b', dotClass: 'bg-slate-500' },
 };
 
 const GLOBAL_TYPE_META = {
     public_holiday: { label: 'Public Holiday', hex: '#3b82f6', dotClass: 'bg-blue-500' },
-    rdo:            { label: 'RDO',            hex: '#f59e0b', dotClass: 'bg-amber-500' },
+    rdo: { label: 'RDO', hex: '#f59e0b', dotClass: 'bg-amber-500' },
 } as const;
 
 const WEEKDAYS: { value: number; short: string; long: string }[] = [
@@ -88,6 +87,7 @@ export default function ProjectCalendar() {
         notes: '',
     });
     const [workingWeekDialogOpen, setWorkingWeekDialogOpen] = useState(false);
+    const [calendarTitle, setCalendarTitle] = useState('');
     const calendarRef = useRef<FullCalendar>(null);
 
     const eventHttp = useHttp({ title: '', start: '', end: '', type: 'safety' as ProjectEventType, notes: '' });
@@ -165,6 +165,10 @@ export default function ProjectCalendar() {
         setView(v);
         calendarRef.current?.getApi().changeView(v);
     };
+
+    const handlePrev = () => calendarRef.current?.getApi().prev();
+    const handleNext = () => calendarRef.current?.getApi().next();
+    const handleToday = () => calendarRef.current?.getApi().today();
 
     const openCreate = (dateStr: string) => {
         setEditing(null);
@@ -264,68 +268,78 @@ export default function ProjectCalendar() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Calendar - ${location.name}`} />
 
-            <div className="flex flex-col gap-4 p-4 md:p-6">
-                <div className="grid grid-cols-1 gap-6">
-                    {/* Calendar */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 space-y-0 py-3">
+            <div className="flex h-[calc(100vh-65px)] flex-col gap-4 p-4 md:p-6">
+                <div className="flex min-h-0 flex-1 flex-col gap-6">
+                    <div className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                        <div className="flex min-w-0 flex-col gap-1">
                             <div className="flex min-w-0 items-center gap-3">
-                                <CardTitle className="text-base">Project Calendar</CardTitle>
+                                <h1 className="text-base font-semibold">Project Calendar</h1>
                                 <span className="text-muted-foreground truncate text-sm">{location.name}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8"
-                                    onClick={() => setWorkingWeekDialogOpen(true)}
-                                >
-                                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Working Week:</span>
-                                    <span className="font-medium">{workingDaysLabel}</span>
-                                </Button>
-                                <Button asChild variant="outline" size="sm" className="h-8" nativeButton={false}>
-                                    <Link href={`/locations/${location.id}/schedule`}>
-                                        <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                                        Schedule
-                                    </Link>
-                                </Button>
-                                <div className="bg-muted inline-flex items-center rounded-md p-0.5">
-                                    {(['dayGridMonth', 'multiMonthYear'] as CalendarView[]).map((v) => (
-                                        <button
-                                            key={v}
-                                            type="button"
-                                            onClick={() => handleViewChange(v)}
-                                            className={cn(
-                                                'rounded-sm px-3 py-1 text-xs font-medium transition-colors',
-                                                view === v
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground',
-                                            )}
-                                        >
-                                            {v === 'dayGridMonth' ? 'Month' : 'Year'}
-                                        </button>
-                                    ))}
+                                <div className="inline-flex items-center rounded-md border">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-none border-r" onClick={handlePrev}>
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={handleNext}>
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
                                 </div>
+                                <Button variant="outline" size="sm" className="h-8" onClick={handleToday}>
+                                    Today
+                                </Button>
+                                <span className="text-sm font-medium">{calendarTitle}</span>
                             </div>
-                        </CardHeader>
-                        <Separator />
-                        <CardContent className="p-2 pt-2 sm:p-3 sm:pt-2">
-                            <div className={cn('project-calendar-root', view === 'multiMonthYear' && 'pcal-year')}>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button variant="outline" size="sm" className="h-8" onClick={() => setWorkingWeekDialogOpen(true)}>
+                                <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Working Week:</span>
+                                <span className="font-medium">{workingDaysLabel}</span>
+                            </Button>
+                            <Button asChild variant="outline" size="sm" className="h-8" nativeButton={false}>
+                                <Link href={`/locations/${location.id}/schedule`}>
+                                    <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+                                    Schedule
+                                </Link>
+                            </Button>
+                            <div className="bg-muted inline-flex items-center rounded-md p-0.5">
+                                {(['dayGridMonth', 'multiMonthYear'] as CalendarView[]).map((v) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => handleViewChange(v)}
+                                        className={cn(
+                                            'rounded-sm px-3 py-1 text-xs font-medium transition-colors',
+                                            view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                                        )}
+                                    >
+                                        {v === 'dayGridMonth' ? 'Month' : 'Year'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Calendar */}
+                    <Card className="flex min-h-0 flex-1 flex-col overflow-hidden py-0">
+                        <CardContent className="flex min-h-0 flex-1 overflow-auto p-0">
+                            <div className={cn('project-calendar-root min-h-0 flex-1', view === 'multiMonthYear' && 'pcal-year')}>
                                 <FullCalendar
                                     ref={calendarRef}
                                     plugins={[dayGridPlugin, multiMonthPlugin, interactionPlugin]}
                                     initialView={view}
                                     events={view === 'multiMonthYear' ? [] : fcEvents}
                                     firstDay={1}
-                                    height="auto"
+                                    height={view === 'dayGridMonth' ? '100%' : 'auto'}
                                     expandRows
-                                    fixedWeekCount={false}
+                                    fixedWeekCount={view === 'dayGridMonth'}
                                     multiMonthMaxColumns={4}
                                     multiMonthMinWidth={200}
                                     dayMaxEvents={3}
                                     dayCellClassNames={dayCellClassNames}
                                     dateClick={(arg) => openCreate(arg.dateStr)}
+                                    datesSet={(arg) => setCalendarTitle(arg.view.title)}
                                     eventClick={(arg) => {
                                         if (arg.event.extendedProps.source !== 'project') {
                                             toast.info('Global events are managed from the main Calendar page');
@@ -335,13 +349,11 @@ export default function ProjectCalendar() {
                                         const evt = projectEvents.find((e) => e.id === rawId);
                                         if (evt) openEdit(evt);
                                     }}
-                                    headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-                                    buttonText={{ today: 'Today' }}
+                                    headerToolbar={false}
                                 />
                             </div>
                         </CardContent>
                     </Card>
-
                 </div>
             </div>
 
@@ -377,12 +389,7 @@ export default function ProjectCalendar() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="end">To</Label>
-                                <Input
-                                    id="end"
-                                    type="date"
-                                    value={form.end}
-                                    onChange={(e) => setForm({ ...form, end: e.currentTarget.value })}
-                                />
+                                <Input id="end" type="date" value={form.end} onChange={(e) => setForm({ ...form, end: e.currentTarget.value })} />
                             </div>
                         </div>
 
@@ -425,11 +432,19 @@ export default function ProjectCalendar() {
 
                     <DialogFooter className="sm:justify-between">
                         {editing ? (
-                            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saving} className="text-destructive hover:text-destructive">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleDelete}
+                                disabled={saving}
+                                className="text-destructive hover:text-destructive"
+                            >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                             </Button>
-                        ) : <span />}
+                        ) : (
+                            <span />
+                        )}
                         <div className="flex gap-2">
                             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                                 Cancel
@@ -453,8 +468,8 @@ export default function ProjectCalendar() {
                     <DialogHeader>
                         <DialogTitle>Configure Working Week</DialogTitle>
                         <DialogDescription>
-                            Choose which days are treated as working days on this project. Non-selected days will be shaded as non-working on
-                            the schedule.
+                            Choose which days are treated as working days on this project. Non-selected days will be shaded as non-working on the
+                            schedule.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -482,9 +497,7 @@ export default function ProjectCalendar() {
                     </div>
 
                     <DialogFooter className="sm:justify-between">
-                        <div className="text-muted-foreground text-xs">
-                            {workingDays.length} of 7 days working
-                        </div>
+                        <div className="text-muted-foreground text-xs">{workingDays.length} of 7 days working</div>
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
@@ -496,10 +509,7 @@ export default function ProjectCalendar() {
                             >
                                 Cancel
                             </Button>
-                            <Button
-                                onClick={handleSaveWorkingDays}
-                                disabled={!workingDaysDirty || savingWorkingDays}
-                            >
+                            <Button onClick={handleSaveWorkingDays} disabled={!workingDaysDirty || savingWorkingDays}>
                                 {savingWorkingDays ? 'Saving…' : 'Save'}
                             </Button>
                         </div>

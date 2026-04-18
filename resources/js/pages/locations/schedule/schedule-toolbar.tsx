@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/menubar';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { ArrowDownUp, CalendarDays, CalendarRange, HardHat, Maximize2, Search, X } from 'lucide-react';
+import { ArrowDownUp, CalendarDays, CalendarRange, HardHat, Link2, Maximize2, Search, X } from 'lucide-react';
 import type { ColumnKey, ColumnVisibility, FilterFlag, SortMode, ZoomLevel } from './types';
 import { COLUMN_LABELS, SORT_MODE_LABELS } from './types';
 
@@ -108,42 +108,27 @@ export default function ScheduleToolbar({
         <div className="flex flex-col">
             {/* Menu bar row */}
             <div className="flex items-center gap-2 border-b px-3 py-1">
-                <Menubar className="border-none shadow-none bg-transparent h-auto p-0 gap-0">
+                <Menubar className="h-auto gap-0 border-none bg-transparent p-0 shadow-none">
                     {/* File menu */}
                     <MenubarMenu>
-                        <MenubarTrigger className="text-xs px-2 py-1">File</MenubarTrigger>
+                        <MenubarTrigger className="px-2 py-1 text-xs">File</MenubarTrigger>
                         <MenubarContent>
-                            <MenubarItem onClick={onImport}>
-                                Import
-                            </MenubarItem>
-                            <MenubarItem onClick={onDownloadTemplate}>
-                                Download Template
-                            </MenubarItem>
+                            <MenubarItem onClick={onImport}>Import</MenubarItem>
+                            <MenubarItem onClick={onDownloadTemplate}>Download Import Template</MenubarItem>
                             <MenubarSeparator />
-                            <MenubarItem onClick={onExportMsProject}>
-                                Export to MS Project
-                            </MenubarItem>
+                            <MenubarItem onClick={onExportMsProject}>Export to Microsoft Project</MenubarItem>
                         </MenubarContent>
                     </MenubarMenu>
 
                     {/* Tasks menu */}
                     <MenubarMenu>
-                        <MenubarTrigger className="text-xs px-2 py-1">Tasks</MenubarTrigger>
+                        <MenubarTrigger className="px-2 py-1 text-xs">Tasks</MenubarTrigger>
                         <MenubarContent>
-                            <MenubarItem onClick={onAddTask}>
-                                Add Task
-                            </MenubarItem>
-                            <MenubarItem onClick={onSetBaseline}>
-                                Set Baseline
-                            </MenubarItem>
-                            <MenubarItem onClick={onRevertToBaseline}>
-                                Revert to Baseline
-                            </MenubarItem>
+                            <MenubarItem onClick={onAddTask}>Add Task</MenubarItem>
+                            <MenubarItem onClick={onSetBaseline}>Save Current Plan</MenubarItem>
+                            <MenubarItem onClick={onRevertToBaseline}>Restore Saved Plan</MenubarItem>
                             <MenubarSeparator />
-                            <MenubarItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={onClearAll}
-                            >
+                            <MenubarItem className="text-destructive focus:text-destructive" onClick={onClearAll}>
                                 Delete All Tasks
                             </MenubarItem>
                         </MenubarContent>
@@ -151,29 +136,19 @@ export default function ScheduleToolbar({
 
                     {/* View menu */}
                     <MenubarMenu>
-                        <MenubarTrigger className="text-xs px-2 py-1">View</MenubarTrigger>
+                        <MenubarTrigger className="px-2 py-1 text-xs">View</MenubarTrigger>
                         <MenubarContent>
-                            <MenubarCheckboxItem
-                                checked={linkMode}
-                                onCheckedChange={onToggleLinkMode}
-                            >
-                                Link Mode
+                            <MenubarCheckboxItem checked={linkMode} onCheckedChange={onToggleLinkMode}>
+                                Link Tasks
                             </MenubarCheckboxItem>
-                            <MenubarCheckboxItem
-                                checked={showBaseline}
-                                onCheckedChange={onToggleBaseline}
-                            >
-                                Show Baseline
+                            <MenubarCheckboxItem checked={showBaseline} onCheckedChange={onToggleBaseline}>
+                                Show Saved Plan
                             </MenubarCheckboxItem>
                             <MenubarSub>
                                 <MenubarSubTrigger inset>Columns</MenubarSubTrigger>
                                 <MenubarSubContent>
                                     {columnKeys.map((key) => (
-                                        <MenubarCheckboxItem
-                                            key={key}
-                                            checked={visibleColumns[key]}
-                                            onCheckedChange={() => onToggleColumn(key)}
-                                        >
+                                        <MenubarCheckboxItem key={key} checked={visibleColumns[key]} onCheckedChange={() => onToggleColumn(key)}>
                                             {COLUMN_LABELS[key]}
                                         </MenubarCheckboxItem>
                                     ))}
@@ -187,23 +162,14 @@ export default function ScheduleToolbar({
                                 Collapse All Tasks
                             </MenubarItem>
                             <MenubarSeparator />
-                            <MenubarCheckboxItem
-                                checked={activeFilters.has('delayed')}
-                                onCheckedChange={() => onToggleFilter('delayed')}
-                            >
-                                Show Delayed
+                            <MenubarCheckboxItem checked={activeFilters.has('delayed')} onCheckedChange={() => onToggleFilter('delayed')}>
+                                Late Tasks
                             </MenubarCheckboxItem>
-                            <MenubarCheckboxItem
-                                checked={activeFilters.has('critical')}
-                                onCheckedChange={() => onToggleFilter('critical')}
-                            >
-                                Show Critical
+                            <MenubarCheckboxItem checked={activeFilters.has('critical')} onCheckedChange={() => onToggleFilter('critical')}>
+                                Critical Path
                             </MenubarCheckboxItem>
-                            <MenubarCheckboxItem
-                                checked={activeFilters.has('ours')}
-                                onCheckedChange={() => onToggleFilter('ours')}
-                            >
-                                Show Our Tasks
+                            <MenubarCheckboxItem checked={activeFilters.has('ours')} onCheckedChange={() => onToggleFilter('ours')}>
+                                Our Team
                             </MenubarCheckboxItem>
                         </MenubarContent>
                     </MenubarMenu>
@@ -248,6 +214,16 @@ export default function ScheduleToolbar({
                 <Button size="icon" variant="outline" onClick={onAutoFit} title="Auto-fit" className="h-7 w-7">
                     <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
+                <Button
+                    size="sm"
+                    variant={linkMode ? 'default' : 'outline'}
+                    onClick={onToggleLinkMode}
+                    title="Link tasks together"
+                    className="h-7 text-xs"
+                >
+                    <Link2 className="mr-1 h-3.5 w-3.5" />
+                    Link Tasks
+                </Button>
 
                 {/* Sort menu */}
                 <DropdownMenu>
@@ -273,11 +249,11 @@ export default function ScheduleToolbar({
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                <div className="mx-1 h-4 w-px bg-border" />
+                <div className="bg-border mx-1 h-4 w-px" />
 
                 {/* Search */}
                 <div className="relative">
-                    <Search className="text-muted-foreground absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
+                    <Search className="text-muted-foreground absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2" />
                     <Input
                         className="h-7 w-[150px] pl-6 text-xs"
                         placeholder="Search tasks..."
@@ -288,47 +264,48 @@ export default function ScheduleToolbar({
 
                 {/* Active filter chips */}
                 {activeFilters.has('delayed') && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
-                        Delayed
+                    <span className="bg-destructive/10 text-destructive inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                        Late Tasks
                         <button onClick={() => onToggleFilter('delayed')} className="hover:text-destructive/70">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
                 {activeFilters.has('critical') && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                        Critical
+                    <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                        Critical Path
                         <button onClick={() => onToggleFilter('critical')} className="hover:text-primary/70">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
                 {showBaseline && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        Baseline
+                    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                        Saved Plan
                         <button onClick={onToggleBaseline} className="hover:text-foreground">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
                 {linkMode && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        Link Mode
+                    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                        Link Tasks On
                         <button onClick={onToggleLinkMode} className="hover:text-foreground">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
+                {linkMode && <span className="text-muted-foreground text-[10px]">Click the dots on two bars to connect tasks.</span>}
                 {activeFilters.has('ours') && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
-                        Ours
+                        Our Team
                         <button onClick={() => onToggleFilter('ours')} className="hover:text-green-500/70">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
                 {filterTaskName && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
                         <span className="max-w-[100px] truncate">{filterTaskName}</span>
                         <button onClick={onClearTaskFilter} className="hover:text-primary/70">
                             <X className="h-3 w-3" />
@@ -336,7 +313,7 @@ export default function ScheduleToolbar({
                     </span>
                 )}
                 {searchQuery && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
                         &quot;{searchQuery}&quot;
                         <button onClick={() => onSearchChange('')} className="hover:text-primary/70">
                             <X className="h-3 w-3" />
@@ -344,7 +321,7 @@ export default function ScheduleToolbar({
                     </span>
                 )}
                 {(startDateRange.from || startDateRange.to) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
                         Start: {startDateRange.from ?? '...'} – {startDateRange.to ?? '...'}
                         <button onClick={onClearStartDateRange} className="hover:text-primary/70">
                             <X className="h-3 w-3" />
@@ -352,7 +329,7 @@ export default function ScheduleToolbar({
                     </span>
                 )}
                 {(endDateRange.from || endDateRange.to) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
                         Finish: {endDateRange.from ?? '...'} – {endDateRange.to ?? '...'}
                         <button onClick={onClearEndDateRange} className="hover:text-primary/70">
                             <X className="h-3 w-3" />
@@ -363,23 +340,11 @@ export default function ScheduleToolbar({
                 {/* Bulk mark — only when search active */}
                 {searchQuery && hasFilteredTasks && (
                     <>
-                        <Button
-                            size="sm"
-                            variant="default"
-                            onClick={onBulkMarkOwned}
-                            title="Mark all matching tasks as ours"
-                            className="h-7 text-xs"
-                        >
+                        <Button size="sm" variant="default" onClick={onBulkMarkOwned} title="Mark all matching tasks as ours" className="h-7 text-xs">
                             <HardHat className="mr-1 h-3.5 w-3.5" />
                             Mark as Ours
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onBulkUnmarkOwned}
-                            title="Unmark all matching tasks"
-                            className="h-7 text-xs"
-                        >
+                        <Button size="sm" variant="outline" onClick={onBulkUnmarkOwned} title="Unmark all matching tasks" className="h-7 text-xs">
                             Unmark
                         </Button>
                     </>

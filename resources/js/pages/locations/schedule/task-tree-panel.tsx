@@ -1,6 +1,6 @@
+import { DatePickerDemo } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,8 @@ import {
     type CollisionDetection,
     DndContext,
     type DragEndEvent,
+    type DragOverEvent,
+    type DragStartEvent,
     MeasuringStrategy,
     PointerSensor,
     useSensor,
@@ -16,12 +18,12 @@ import {
 } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { endOfMonth, endOfQuarter, endOfWeek, format, startOfMonth, startOfQuarter, startOfWeek, subMonths, addMonths } from 'date-fns';
-import { ChevronRight, Filter, FolderOpen, Plus } from 'lucide-react';
-import { forwardRef, useCallback, useMemo, useState } from 'react';
+import { addMonths, endOfMonth, endOfQuarter, endOfWeek, format, startOfMonth, startOfQuarter, startOfWeek, subMonths } from 'date-fns';
+import { ChevronRight, Filter, FolderOpen, Plus, X } from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
+import TaskTreeRow from './task-tree-row';
 import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode } from './types';
 import { ROW_HEIGHT } from './types';
-import TaskTreeRow from './task-tree-row';
 
 interface DateRange {
     from: string | null;
@@ -62,16 +64,69 @@ function fmtDate(d: Date): string {
     return format(d, 'yyyy-MM-dd');
 }
 
+function toDate(value: string | null): Date | undefined {
+    return value ? new Date(`${value}T00:00:00`) : undefined;
+}
+
+function DateRangeField({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
+    return (
+        <div className="flex items-center gap-1">
+            <DatePickerDemo
+                value={toDate(value)}
+                onChange={(date) => onChange(date ? fmtDate(date) : null)}
+                displayFormat="dd MMM yyyy"
+                placeholder="Select date"
+                className="h-7 text-xs"
+            />
+            {value && (
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onChange(null)} aria-label="Clear date">
+                    <X className="h-3.5 w-3.5" />
+                </Button>
+            )}
+        </div>
+    );
+}
+
 function DateRangeFilter({ label, range, onChange }: { label: string; range: DateRange; onChange: (range: DateRange) => void }) {
     const [open, setOpen] = useState(false);
     const isActive = !!(range.from || range.to);
 
     const presets = [
-        { label: 'This Week', fn: () => { const now = new Date(); return { from: fmtDate(startOfWeek(now, { weekStartsOn: 1 })), to: fmtDate(endOfWeek(now, { weekStartsOn: 1 })) }; } },
-        { label: 'This Month', fn: () => { const now = new Date(); return { from: fmtDate(startOfMonth(now)), to: fmtDate(endOfMonth(now)) }; } },
-        { label: 'Last Month', fn: () => { const d = subMonths(new Date(), 1); return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) }; } },
-        { label: 'Next Month', fn: () => { const d = addMonths(new Date(), 1); return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) }; } },
-        { label: 'This Quarter', fn: () => { const now = new Date(); return { from: fmtDate(startOfQuarter(now)), to: fmtDate(endOfQuarter(now)) }; } },
+        {
+            label: 'This Week',
+            fn: () => {
+                const now = new Date();
+                return { from: fmtDate(startOfWeek(now, { weekStartsOn: 1 })), to: fmtDate(endOfWeek(now, { weekStartsOn: 1 })) };
+            },
+        },
+        {
+            label: 'This Month',
+            fn: () => {
+                const now = new Date();
+                return { from: fmtDate(startOfMonth(now)), to: fmtDate(endOfMonth(now)) };
+            },
+        },
+        {
+            label: 'Last Month',
+            fn: () => {
+                const d = subMonths(new Date(), 1);
+                return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) };
+            },
+        },
+        {
+            label: 'Next Month',
+            fn: () => {
+                const d = addMonths(new Date(), 1);
+                return { from: fmtDate(startOfMonth(d)), to: fmtDate(endOfMonth(d)) };
+            },
+        },
+        {
+            label: 'This Quarter',
+            fn: () => {
+                const now = new Date();
+                return { from: fmtDate(startOfQuarter(now)), to: fmtDate(endOfQuarter(now)) };
+            },
+        },
     ];
 
     return (
@@ -89,8 +144,11 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
                         {presets.map((p) => (
                             <button
                                 key={p.label}
-                                className="rounded-md bg-muted px-2 py-1 text-[10px] font-medium hover:bg-muted/80 transition-colors"
-                                onClick={() => { onChange(p.fn()); setOpen(false); }}
+                                className="bg-muted hover:bg-muted/80 rounded-md px-2 py-1 text-[10px] font-medium transition-colors"
+                                onClick={() => {
+                                    onChange(p.fn());
+                                    setOpen(false);
+                                }}
                             >
                                 {p.label}
                             </button>
@@ -100,22 +158,12 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
                     {/* Custom range */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="grid gap-1">
-                            <Label className="text-[10px] text-muted-foreground">From</Label>
-                            <Input
-                                type="date"
-                                className="h-7 text-xs"
-                                value={range.from ?? ''}
-                                onChange={(e) => onChange({ ...range, from: e.target.value || null })}
-                            />
+                            <Label className="text-muted-foreground text-[10px]">From</Label>
+                            <DateRangeField value={range.from} onChange={(value) => onChange({ ...range, from: value })} />
                         </div>
                         <div className="grid gap-1">
-                            <Label className="text-[10px] text-muted-foreground">To</Label>
-                            <Input
-                                type="date"
-                                className="h-7 text-xs"
-                                value={range.to ?? ''}
-                                onChange={(e) => onChange({ ...range, to: e.target.value || null })}
-                            />
+                            <Label className="text-muted-foreground text-[10px]">To</Label>
+                            <DateRangeField value={range.to} onChange={(value) => onChange({ ...range, to: value })} />
                         </div>
                     </div>
 
@@ -124,7 +172,10 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs"
-                            onClick={() => { onChange({ from: null, to: null }); setOpen(false); }}
+                            onClick={() => {
+                                onChange({ from: null, to: null });
+                                setOpen(false);
+                            }}
                         >
                             Clear Filter
                         </Button>
@@ -136,8 +187,40 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
 }
 
 const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
-    ({ visibleTasks, allTasks, expanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onResponsibleChange, responsibleOptions, onStatusChange, visibleColumns, onAddTask, onManualReorder, onIndent, onOutdent, showBaseline, filterTaskId, onFilterTaskChange, rootTasks, startDateRange, onStartDateRangeChange, endDateRange, onEndDateRangeChange, payRateTemplates }, ref) => {
+    (
+        {
+            visibleTasks,
+            allTasks,
+            expanded,
+            onToggle,
+            onAddChild,
+            onDelete,
+            onRename,
+            onDatesChange,
+            onResponsibleChange,
+            responsibleOptions,
+            onStatusChange,
+            visibleColumns,
+            onAddTask,
+            onManualReorder,
+            onIndent,
+            onOutdent,
+            showBaseline,
+            filterTaskId,
+            onFilterTaskChange,
+            rootTasks,
+            startDateRange,
+            onStartDateRangeChange,
+            endDateRange,
+            onEndDateRangeChange,
+            payRateTemplates,
+        },
+        ref,
+    ) => {
         const [filterOpen, setFilterOpen] = useState(false);
+        const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+        const [activeDragId, setActiveDragId] = useState<number | null>(null);
+        const [overDragId, setOverDragId] = useState<number | null>(null);
 
         // 5px activation distance prevents accidental drags when clicking row controls.
         const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -167,53 +250,73 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
 
         // Restrict collision detection to siblings of the actively-dragged row.
         // This turns an O(n) per-frame scan into O(sibling-count), which is typically small.
-        const siblingCollision = useCallback<CollisionDetection>((args) => {
-            const activeId = args.active?.id;
-            if (activeId == null) return closestCenter(args);
-            const activeParent = rowMeta.parentOf.get(Number(activeId));
-            if (activeParent === undefined) return closestCenter(args);
-            const siblingContainers = args.droppableContainers.filter((c) => {
-                const cid = Number(c.id);
-                return rowMeta.parentOf.get(cid) === activeParent;
-            });
-            return closestCenter({ ...args, droppableContainers: siblingContainers });
-        }, [rowMeta]);
+        const siblingCollision = useCallback<CollisionDetection>(
+            (args) => {
+                const activeId = args.active?.id;
+                if (activeId == null) return closestCenter(args);
+                const activeParent = rowMeta.parentOf.get(Number(activeId));
+                if (activeParent === undefined) return closestCenter(args);
+                const siblingContainers = args.droppableContainers.filter((c) => {
+                    const cid = Number(c.id);
+                    return rowMeta.parentOf.get(cid) === activeParent;
+                });
+                return closestCenter({ ...args, droppableContainers: siblingContainers });
+            },
+            [rowMeta],
+        );
 
-        const handleDragEnd = useCallback((event: DragEndEvent) => {
-            const { active, over } = event;
-            if (!over || active.id === over.id) return;
+        const handleDragStart = useCallback((event: DragStartEvent) => {
+            setActiveDragId(Number(event.active.id));
+            setOverDragId(Number(event.active.id));
+        }, []);
 
-            const activeId = Number(active.id);
-            const overId = Number(over.id);
-            const activeTask = allTasks.find((t) => t.id === activeId);
-            const overTask = allTasks.find((t) => t.id === overId);
-            if (!activeTask || !overTask) return;
+        const handleDragOver = useCallback((event: DragOverEvent) => {
+            setOverDragId(event.over ? Number(event.over.id) : null);
+        }, []);
 
-            // Sibling-only: reject cross-parent drops.
-            if (activeTask.parent_id !== overTask.parent_id) return;
+        const handleDragEnd = useCallback(
+            (event: DragEndEvent) => {
+                setActiveDragId(null);
+                setOverDragId(null);
+                const { active, over } = event;
+                if (!over || active.id === over.id) return;
 
-            // Reorder within the sibling group, then renumber sort_order.
-            const siblings = allTasks
-                .filter((t) => t.parent_id === activeTask.parent_id)
-                .sort((a, b) => a.sort_order - b.sort_order);
-            const fromIdx = siblings.findIndex((t) => t.id === activeId);
-            const toIdx = siblings.findIndex((t) => t.id === overId);
-            if (fromIdx < 0 || toIdx < 0) return;
+                const activeId = Number(active.id);
+                const overId = Number(over.id);
+                const activeTask = allTasks.find((t) => t.id === activeId);
+                const overTask = allTasks.find((t) => t.id === overId);
+                if (!activeTask || !overTask) return;
 
-            const reordered = [...siblings];
-            const [moved] = reordered.splice(fromIdx, 1);
-            reordered.splice(toIdx, 0, moved);
+                // Sibling-only: reject cross-parent drops.
+                if (activeTask.parent_id !== overTask.parent_id) return;
 
-            const newOrder = new Map<number, number>();
-            reordered.forEach((t, i) => newOrder.set(t.id, i));
+                // Reorder within the sibling group, then renumber sort_order.
+                const siblings = allTasks.filter((t) => t.parent_id === activeTask.parent_id).sort((a, b) => a.sort_order - b.sort_order);
+                const fromIdx = siblings.findIndex((t) => t.id === activeId);
+                const toIdx = siblings.findIndex((t) => t.id === overId);
+                if (fromIdx < 0 || toIdx < 0) return;
 
-            const next = allTasks.map((t) =>
-                newOrder.has(t.id) ? { ...t, sort_order: newOrder.get(t.id)! } : t,
-            );
-            onManualReorder(next);
-        }, [allTasks, onManualReorder]);
+                const reordered = [...siblings];
+                const [moved] = reordered.splice(fromIdx, 1);
+                reordered.splice(toIdx, 0, moved);
+
+                const newOrder = new Map<number, number>();
+                reordered.forEach((t, i) => newOrder.set(t.id, i));
+
+                const next = allTasks.map((t) => (newOrder.has(t.id) ? { ...t, sort_order: newOrder.get(t.id)! } : t));
+                onManualReorder(next);
+            },
+            [allTasks, onManualReorder],
+        );
 
         const sortableIds = visibleTasks.map((t) => t.id);
+        const visibleIndexById = useMemo(() => new Map(visibleTasks.map((task, index) => [task.id, index])), [visibleTasks]);
+
+        useEffect(() => {
+            if (selectedTaskId !== null && !visibleTasks.some((task) => task.id === selectedTaskId)) {
+                setSelectedTaskId(null);
+            }
+        }, [selectedTaskId, visibleTasks]);
 
         const templateById = useMemo(() => {
             const m = new Map<number, PayRateTemplateOption>();
@@ -230,27 +333,31 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
             return tpl?.label ?? null;
         };
 
-        const allFilterOptions: { id: number; name: string; depth: number; hasChildren: boolean }[] = [];
-        function collectTasks(nodes: TaskNode[], depth: number) {
-            for (const n of nodes) {
-                allFilterOptions.push({ id: n.id, name: n.name, depth, hasChildren: n.hasChildren });
-                collectTasks(n.childNodes, depth + 1);
+        const allFilterOptions = useMemo(() => {
+            const options: { id: number; name: string; depth: number; hasChildren: boolean }[] = [];
+            function collectTasks(nodes: TaskNode[], depth: number) {
+                for (const n of nodes) {
+                    options.push({ id: n.id, name: n.name, depth, hasChildren: n.hasChildren });
+                    collectTasks(n.childNodes, depth + 1);
+                }
             }
-        }
-        collectTasks(rootTasks, 0);
+            collectTasks(rootTasks, 0);
+            return options;
+        }, [rootTasks]);
 
         const isFiltered = filterTaskId !== null;
 
         // Name column + drag handle + trailing scrollbar spacer are fixed.
         // Per-column widths must stay in sync between header and row.
         const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120 };
-        const BASE_WIDTH = 4 /* drag */ + 340 /* name min-ish */ + 32 /* trailing */;
-        const panelWidth = BASE_WIDTH
-            + (visibleColumns.start ? COL_WIDTHS.start : 0)
-            + (visibleColumns.finish ? COL_WIDTHS.finish : 0)
-            + (visibleColumns.days ? COL_WIDTHS.days : 0)
-            + (visibleColumns.responsible ? COL_WIDTHS.responsible : 0)
-            + (visibleColumns.status ? COL_WIDTHS.status : 0);
+        const BASE_WIDTH = 4 /* drag */ + 340 /* name min-ish */ + 32; /* trailing */
+        const panelWidth =
+            BASE_WIDTH +
+            (visibleColumns.start ? COL_WIDTHS.start : 0) +
+            (visibleColumns.finish ? COL_WIDTHS.finish : 0) +
+            (visibleColumns.days ? COL_WIDTHS.days : 0) +
+            (visibleColumns.responsible ? COL_WIDTHS.responsible : 0) +
+            (visibleColumns.status ? COL_WIDTHS.status : 0);
 
         return (
             <div className="flex shrink-0 flex-col" style={{ width: panelWidth }}>
@@ -300,9 +407,9 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                                             >
                                                 <span className="flex items-center" style={{ paddingLeft: opt.depth * 12 }}>
                                                     {opt.hasChildren ? (
-                                                        <FolderOpen className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
+                                                        <FolderOpen className="text-muted-foreground mr-1 h-3 w-3 shrink-0" />
                                                     ) : (
-                                                        <ChevronRight className="mr-1 h-3 w-3 shrink-0 text-muted-foreground/50" />
+                                                        <ChevronRight className="text-muted-foreground/50 mr-1 h-3 w-3 shrink-0" />
                                                     )}
                                                     <span className="truncate">{opt.name}</span>
                                                 </span>
@@ -315,13 +422,7 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                     </Popover>
 
                     {/* Add task button */}
-                    <Button
-                        size="icon"
-                        variant="outline"
-                        className="mr-2 ml-1 h-5 w-5"
-                        onClick={onAddTask}
-                        title="Add task"
-                    >
+                    <Button size="icon" variant="outline" className="mr-2 ml-1 h-5 w-5" onClick={onAddTask} title="Add task">
                         <Plus className="h-3 w-3" />
                     </Button>
 
@@ -347,47 +448,67 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                 <div className="bg-muted/30 border-b" style={{ height: 24 }} />
 
                 {/* Scrollable rows */}
-                <div ref={ref} className="flex-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
-                    {visibleTasks.length === 0 && (
+                <div ref={ref} className="flex-1 overflow-x-hidden overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                    {visibleTasks.length === 0 ? (
                         <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
                             No tasks yet. Click &quot;+&quot; to begin.
                         </div>
+                    ) : (
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={siblingCollision}
+                            modifiers={[restrictToVerticalAxis]}
+                            measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
+                            onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
+                            onDragEnd={handleDragEnd}
+                            onDragCancel={() => {
+                                setActiveDragId(null);
+                                setOverDragId(null);
+                            }}
+                        >
+                            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                                {visibleTasks.map((node) => {
+                                    const flags = rowMeta.meta.get(node.id);
+                                    const activeIndex = activeDragId !== null ? (visibleIndexById.get(activeDragId) ?? -1) : -1;
+                                    const overIndex = overDragId !== null ? (visibleIndexById.get(overDragId) ?? -1) : -1;
+                                    const dropPlacement =
+                                        activeDragId !== null && overDragId === node.id && activeIndex >= 0 && overIndex >= 0
+                                            ? activeIndex < overIndex
+                                                ? 'after'
+                                                : 'before'
+                                            : null;
+                                    return (
+                                        <TaskTreeRow
+                                            key={node.id}
+                                            node={node}
+                                            isSelected={selectedTaskId === node.id}
+                                            isExpanded={expanded.has(node.id)}
+                                            dragging={activeDragId !== null}
+                                            isDraggingSelf={activeDragId === node.id}
+                                            dropPlacement={dropPlacement}
+                                            onSelect={setSelectedTaskId}
+                                            onToggle={onToggle}
+                                            onAddChild={onAddChild}
+                                            onDelete={onDelete}
+                                            onRename={onRename}
+                                            onDatesChange={onDatesChange}
+                                            onResponsibleChange={onResponsibleChange}
+                                            responsibleOptions={responsibleOptions}
+                                            onStatusChange={onStatusChange}
+                                            visibleColumns={visibleColumns}
+                                            onIndent={onIndent}
+                                            onOutdent={onOutdent}
+                                            canIndent={flags?.canIndent ?? false}
+                                            canOutdent={flags?.canOutdent ?? false}
+                                            showBaseline={showBaseline}
+                                            resourceLabel={getResourceLabel(node)}
+                                        />
+                                    );
+                                })}
+                            </SortableContext>
+                        </DndContext>
                     )}
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={siblingCollision}
-                        modifiers={[restrictToVerticalAxis]}
-                        measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                            {visibleTasks.map((node) => {
-                                const flags = rowMeta.meta.get(node.id);
-                                return (
-                                    <TaskTreeRow
-                                        key={node.id}
-                                        node={node}
-                                        isExpanded={expanded.has(node.id)}
-                                        onToggle={onToggle}
-                                        onAddChild={onAddChild}
-                                        onDelete={onDelete}
-                                        onRename={onRename}
-                                        onDatesChange={onDatesChange}
-                                        onResponsibleChange={onResponsibleChange}
-                                        responsibleOptions={responsibleOptions}
-                                        onStatusChange={onStatusChange}
-                                        visibleColumns={visibleColumns}
-                                        onIndent={onIndent}
-                                        onOutdent={onOutdent}
-                                        canIndent={flags?.canIndent ?? false}
-                                        canOutdent={flags?.canOutdent ?? false}
-                                        showBaseline={showBaseline}
-                                        resourceLabel={getResourceLabel(node)}
-                                    />
-                                );
-                            })}
-                        </SortableContext>
-                    </DndContext>
                 </div>
             </div>
         );

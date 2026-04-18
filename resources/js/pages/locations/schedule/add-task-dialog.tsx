@@ -7,14 +7,13 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Check } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { MANUAL_STATUSES, PRESET_COLORS, STATUS_LABELS, type PayRateTemplateOption, type TaskStatus } from './types';
 import { isNonWorkDay, snapToWorkday } from './utils';
 
 const toDate = (s: string): Date | undefined => (s ? parseISO(s) : undefined);
 const toStr = (d?: Date): string => (d ? format(d, 'yyyy-MM-dd') : '');
-const snapStr = (s: string, direction: 'forward' | 'backward'): string =>
-    s ? toStr(snapToWorkday(parseISO(s), direction)) : '';
+const snapStr = (s: string, direction: 'forward' | 'backward'): string => (s ? toStr(snapToWorkday(parseISO(s), direction)) : '');
 
 interface AddTaskDialogProps {
     open: boolean;
@@ -39,7 +38,15 @@ interface AddTaskDialogProps {
     responsibleOptions: string[];
 }
 
-export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, parentName, payRateTemplates, responsibleOptions }: AddTaskDialogProps) {
+export default function AddTaskDialog({
+    open,
+    onOpenChange,
+    onSubmit,
+    parentId,
+    parentName,
+    payRateTemplates,
+    responsibleOptions,
+}: AddTaskDialogProps) {
     const [name, setName] = useState('');
     const [baselineStart, setBaselineStart] = useState('');
     const [baselineFinish, setBaselineFinish] = useState('');
@@ -129,7 +136,7 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <Label>Baseline Start</Label>
+                                <Label>Saved Plan Start</Label>
                                 <DatePickerDemo
                                     value={toDate(baselineStart)}
                                     onChange={(d) => setBaselineStart(toStr(d))}
@@ -138,7 +145,7 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label>Baseline Finish</Label>
+                                <Label>Saved Plan Finish</Label>
                                 <DatePickerDemo
                                     value={toDate(baselineFinish)}
                                     onChange={(d) => setBaselineFinish(toStr(d))}
@@ -169,7 +176,7 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                     id="task-template"
                                     value={templateId}
                                     onChange={(e) => setTemplateId(e.target.value)}
-                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
                                 >
                                     <option value="">— None —</option>
                                     {payRateTemplates.map((t) => (
@@ -205,11 +212,13 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                     id="task-status"
                                     value={status}
                                     onChange={(e) => setStatus(e.target.value as TaskStatus | '')}
-                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
                                 >
                                     <option value="">Auto</option>
                                     {MANUAL_STATUSES.map((s) => (
-                                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                                        <option key={s} value={s}>
+                                            {STATUS_LABELS[s]}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -229,7 +238,7 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                         onClick={() => setColor(null)}
                                         title="Default"
                                     >
-                                        {color === null && <Check className="h-3 w-3 mx-auto text-white" />}
+                                        {color === null && <Check className="mx-auto h-3 w-3 text-white" />}
                                     </button>
                                     {PRESET_COLORS.map((c) => (
                                         <button
@@ -242,13 +251,13 @@ export default function AddTaskDialog({ open, onOpenChange, onSubmit, parentId, 
                                             style={{ backgroundColor: c }}
                                             onClick={() => setColor(c)}
                                         >
-                                            {color === c && <Check className="h-3 w-3 mx-auto text-white" />}
+                                            {color === c && <Check className="mx-auto h-3 w-3 text-white" />}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label>Critical Path</Label>
+                                <Label>On Critical Path</Label>
                                 <div className="flex items-center gap-2 pt-1">
                                     <Switch checked={isCritical} onCheckedChange={setIsCritical} />
                                     <span className="text-muted-foreground text-xs">{isCritical ? 'Critical' : 'Normal'}</span>

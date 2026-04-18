@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskNode } from './types';
 import { addWorkingDays, countWorkingDays, dateToX, snapToWorkday, xToDate } from './utils';
 
@@ -23,7 +23,17 @@ interface GanttBarProps {
     pendingSourceId?: number | null;
 }
 
-export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, onBarClick, linkMode, onLinkDotClick, isLinking, pendingSourceId }: GanttBarProps) {
+export default function GanttBar({
+    node,
+    rangeStart,
+    dayWidth,
+    onDatesChange,
+    onBarClick,
+    linkMode,
+    onLinkDotClick,
+    isLinking,
+    pendingSourceId,
+}: GanttBarProps) {
     const [dragState, setDragState] = useState<{
         type: 'move' | 'resize-left' | 'resize-right';
         startX: number;
@@ -33,6 +43,15 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
     } | null>(null);
     const [offset, setOffset] = useState({ left: 0, width: 0 });
     const barRef = useRef<HTMLDivElement>(null);
+    const dragStateRef = useRef<{
+        type: 'move' | 'resize-left' | 'resize-right';
+        startX: number;
+        origLeft: number;
+        origWidth: number;
+        activated: boolean;
+    } | null>(null);
+    const offsetRef = useRef({ left: 0, width: 0 });
+    const animationFrameRef = useRef<number | null>(null);
 
     const hasDates = !!(node.start_date && node.end_date);
     const startDate = hasDates ? parseISO(node.start_date!) : null;
@@ -52,13 +71,16 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             e.preventDefault();
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-            setDragState({
+            const nextDragState = {
                 type,
                 startX: e.clientX,
                 origLeft: baseLeft,
                 origWidth: baseWidth,
                 activated: false,
-            });
+            };
+            dragStateRef.current = nextDragState;
+            setDragState(nextDragState);
+            offsetRef.current = { left: 0, width: 0 };
             setOffset({ left: 0, width: 0 });
         },
         [baseLeft, baseWidth, linkMode],
@@ -66,46 +88,73 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
 
     const handlePointerMove = useCallback(
         (e: React.PointerEvent) => {
-            if (!dragState) return;
-            const dx = e.clientX - dragState.startX;
+            const currentDragState = dragStateRef.current;
+            if (!currentDragState) return;
+            const dx = e.clientX - currentDragState.startX;
 
-            if (!dragState.activated) {
+            if (!currentDragState.activated) {
                 if (Math.abs(dx) < DRAG_THRESHOLD) return;
-                setDragState((prev) => prev ? { ...prev, activated: true } : null);
+                const activatedState = { ...currentDragState, activated: true };
+                dragStateRef.current = activatedState;
+                setDragState(activatedState);
             }
 
-            if (dragState.type === 'move') {
-                setOffset({ left: dx, width: 0 });
-            } else if (dragState.type === 'resize-left') {
-                const newLeft = Math.min(dx, dragState.origWidth - dayWidth);
-                setOffset({ left: newLeft, width: -newLeft });
-            } else if (dragState.type === 'resize-right') {
-                setOffset({ left: 0, width: Math.max(dx, -dragState.origWidth + dayWidth) });
+            let nextOffset = offsetRef.current;
+
+            if (currentDragState.type === 'move') {
+                nextOffset = { left: dx, width: 0 };
+            } else if (currentDragState.type === 'resize-left') {
+                const newLeft = Math.min(dx, currentDragState.origWidth - dayWidth);
+                nextOffset = { left: newLeft, width: -newLeft };
+            } else if (currentDragState.type === 'resize-right') {
+                nextOffset = { left: 0, width: Math.max(dx, -currentDragState.origWidth + dayWidth) };
             }
+
+            if (nextOffset.left === offsetRef.current.left && nextOffset.width === offsetRef.current.width) {
+                return;
+            }
+            offsetRef.current = nextOffset;
+
+            if (animationFrameRef.current !== null) return;
+
+            animationFrameRef.current = requestAnimationFrame(() => {
+                setOffset(offsetRef.current);
+                animationFrameRef.current = null;
+            });
         },
-        [dragState, dayWidth],
+        [dayWidth],
     );
 
     const handlePointerUp = useCallback(
         (e: React.PointerEvent) => {
-            if (!dragState || !startDate || !endDate) return;
+            const currentDragState = dragStateRef.current;
+            if (!currentDragState || !startDate || !endDate) return;
             (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
-            if (!dragState.activated) {
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+            }
+
+            if (!currentDragState.activated) {
+                dragStateRef.current = null;
                 setDragState(null);
+                offsetRef.current = { left: 0, width: 0 };
                 setOffset({ left: 0, width: 0 });
                 onBarClick?.(node);
                 return;
             }
 
-            if (dragState.type === 'resize-right') {
-                const finalRight = dragState.origLeft + dragState.origWidth + offset.width - dayWidth;
+            const finalOffset = offsetRef.current;
+
+            if (currentDragState.type === 'resize-right') {
+                const finalRight = currentDragState.origLeft + currentDragState.origWidth + finalOffset.width - dayWidth;
                 const rawEnd = xToDate(finalRight, rangeStart, dayWidth);
                 const snappedEnd = snapToWorkday(rawEnd < startDate ? startDate : rawEnd, 'backward');
                 const safeEnd = snappedEnd < startDate ? startDate : snappedEnd;
                 onDatesChange(node.id, node.start_date!, fmtLocalDate(safeEnd));
-            } else if (dragState.type === 'resize-left') {
-                const finalLeft = dragState.origLeft + offset.left;
+            } else if (currentDragState.type === 'resize-left') {
+                const finalLeft = currentDragState.origLeft + finalOffset.left;
                 const rawStart = xToDate(finalLeft, rangeStart, dayWidth);
                 const snappedStart = snapToWorkday(rawStart > endDate ? endDate : rawStart, 'forward');
                 const safeStart = snappedStart > endDate ? endDate : snappedStart;
@@ -113,7 +162,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             } else {
                 // Move: preserve working-day duration. Snap start forward to workday,
                 // then derive end = start + (workingDays-1) of working days.
-                const finalLeft = dragState.origLeft + offset.left;
+                const finalLeft = currentDragState.origLeft + finalOffset.left;
                 const rawStart = xToDate(finalLeft, rangeStart, dayWidth);
                 const newStart = snapToWorkday(rawStart, 'forward');
                 const wdCount = Math.max(1, countWorkingDays(startDate, endDate));
@@ -121,10 +170,21 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
                 onDatesChange(node.id, fmtLocalDate(newStart), fmtLocalDate(newEnd));
             }
 
+            dragStateRef.current = null;
             setDragState(null);
+            offsetRef.current = { left: 0, width: 0 };
             setOffset({ left: 0, width: 0 });
         },
-        [dragState, offset, rangeStart, dayWidth, node, startDate, endDate, onDatesChange, onBarClick],
+        [rangeStart, dayWidth, node, startDate, endDate, onDatesChange, onBarClick],
+    );
+
+    useEffect(
+        () => () => {
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        },
+        [],
     );
 
     // Compute preview dates while dragging
@@ -176,10 +236,13 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             <div
                 className="bg-primary/70 absolute top-1/2 flex h-3 -translate-y-1/2 cursor-pointer items-center rounded-sm"
                 style={{ left: baseLeft, width: Math.max(baseWidth, dayWidth) }}
-                onClick={(e) => { e.stopPropagation(); onBarClick?.(node); }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onBarClick?.(node);
+                }}
             >
                 <div className="bg-primary/70 absolute -bottom-1 left-0 h-1.5 w-1.5 rounded-bl-sm" />
-                <div className="bg-primary/70 absolute -bottom-1 right-0 h-1.5 w-1.5 rounded-br-sm" />
+                <div className="bg-primary/70 absolute right-0 -bottom-1 h-1.5 w-1.5 rounded-br-sm" />
             </div>
         );
     }
@@ -189,7 +252,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
         <div
             className={cn(
                 'absolute top-1/2 z-20 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-white transition-all',
-                isThisSource ? 'bg-orange-600 scale-125' : isLinking ? 'bg-green-500 hover:scale-125' : 'bg-orange-500 hover:scale-125',
+                isThisSource ? 'scale-125 bg-orange-600' : isLinking ? 'bg-green-500 hover:scale-125' : 'bg-orange-500 hover:scale-125',
                 side === 'start' ? '-left-[7px]' : '-right-[7px]',
             )}
             style={{ cursor: 'crosshair' }}
@@ -206,7 +269,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             className={cn(
                 'group/bar absolute top-1/2 flex h-5 -translate-y-1/2 items-center rounded-sm',
                 !barColor && 'bg-primary',
-                isCritical && 'ring-2 ring-red-500 ring-offset-1 ring-offset-background',
+                isCritical && 'ring-offset-background ring-2 ring-red-500 ring-offset-1',
                 dragState?.activated && 'opacity-80',
             )}
             style={{
@@ -221,11 +284,11 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
         >
             {/* Drag preview tooltip */}
             {previewDates && (
-                <div className="pointer-events-none absolute -top-9 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded bg-black/85 px-2 py-1 text-[10px] leading-tight text-white shadow-lg">
+                <div className="pointer-events-none absolute -top-9 left-1/2 z-30 -translate-x-1/2 rounded bg-zinc-950/85 px-2 py-1 text-[10px] leading-tight whitespace-nowrap text-white shadow-lg">
                     <span>{previewDates.start}</span>
-                    <span className="text-white/50 mx-1">→</span>
+                    <span className="mx-1 text-white/50">→</span>
                     <span>{previewDates.end}</span>
-                    <span className="text-white/50 ml-1.5">({previewDates.days} working days)</span>
+                    <span className="ml-1.5 text-white/50">({previewDates.days} working days)</span>
                 </div>
             )}
 
@@ -240,7 +303,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             {/* Left resize handle */}
             {!linkMode && (
                 <div
-                    className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize rounded-l-sm hover:bg-white/30"
+                    className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize rounded-l-sm hover:bg-white/30"
                     onPointerDown={(e) => handlePointerDown('resize-left', e)}
                 />
             )}
@@ -258,7 +321,7 @@ export default function GanttBar({ node, rangeStart, dayWidth, onDatesChange, on
             {/* Right resize handle */}
             {!linkMode && (
                 <div
-                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize rounded-r-sm hover:bg-white/30"
+                    className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize rounded-r-sm hover:bg-white/30"
                     onPointerDown={(e) => handlePointerDown('resize-right', e)}
                 />
             )}

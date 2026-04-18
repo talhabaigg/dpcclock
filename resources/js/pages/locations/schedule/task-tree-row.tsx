@@ -7,14 +7,56 @@ import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical, IndentDecrease, IndentIncrease, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+import {
+    ChevronDown,
+    ChevronRight,
+    EllipsisVertical,
+    GripVertical,
+    IndentDecrease,
+    IndentIncrease,
+    Pencil,
+    Plus,
+    Trash2,
+    Users,
+    X,
+} from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { MANUAL_STATUSES, ROW_HEIGHT, STATUS_COLORS, STATUS_LABELS, type ColumnVisibility, type TaskNode, type TaskStatus } from './types';
 import { countWorkingDays, getEffectiveStatus, isNonWorkDay, snapToWorkday } from './utils';
 
+const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120 };
+
 interface TaskTreeRowProps {
     node: TaskNode;
+    isSelected: boolean;
     isExpanded: boolean;
+    dragging: boolean;
+    isDraggingSelf: boolean;
+    dropPlacement: 'before' | 'after' | null;
+    onSelect: (id: number) => void;
+    onToggle: (id: number) => void;
+    onAddChild: (parentId: number, parentName: string) => void;
+    showBaseline: boolean;
+    onDelete: (id: number) => void;
+    onRename: (id: number, name: string) => void;
+    onDatesChange: (id: number, startDate: string, endDate: string) => void;
+    onResponsibleChange: (id: number, value: string | null) => void;
+    responsibleOptions: string[];
+    onStatusChange: (id: number, status: TaskStatus | null) => void;
+    visibleColumns: ColumnVisibility;
+    onIndent: (id: number) => void;
+    onOutdent: (id: number) => void;
+    canIndent: boolean;
+    canOutdent: boolean;
+    resourceLabel: string | null;
+}
+
+interface TaskTreeRowContentProps {
+    node: TaskNode;
+    isSelected: boolean;
+    isExpanded: boolean;
+    dragging: boolean;
+    dropPlacement: 'before' | 'after' | null;
     onToggle: (id: number) => void;
     onAddChild: (parentId: number, parentName: string) => void;
     showBaseline: boolean;
@@ -46,19 +88,13 @@ function DateCell({ value, onChange, disabled }: { value: string | null; onChang
     const selected = value ? parseISO(value) : undefined;
 
     if (disabled) {
-        return (
-            <span className="text-muted-foreground w-full truncate text-center text-[11px]">
-                {formatDisplayDate(value)}
-            </span>
-        );
+        return <span className="text-muted-foreground w-full truncate text-center text-[11px]">{formatDisplayDate(value)}</span>;
     }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <button className="w-full truncate text-center text-[11px] hover:text-primary">
-                    {formatDisplayDate(value)}
-                </button>
+                <button className="hover:text-primary w-full truncate text-center text-[11px]">{formatDisplayDate(value)}</button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
                 <Calendar
@@ -105,10 +141,7 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className={cn(
-                        'flex h-full w-full items-center gap-1 px-1 text-[11px] hover:text-primary',
-                        !value && 'text-muted-foreground',
-                    )}
+                    className={cn('hover:text-primary flex h-full w-full items-center gap-1 px-1 text-[11px]', !value && 'text-muted-foreground')}
                     title={value ?? 'Assign responsible party'}
                 >
                     <span className="flex-1 truncate text-center">{value || '—'}</span>
@@ -117,7 +150,7 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
                             role="button"
                             tabIndex={-1}
                             aria-label="Clear"
-                            className="text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                            className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
@@ -131,25 +164,15 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
             </PopoverTrigger>
             <PopoverContent className="w-[220px] p-0" align="start" side="bottom">
                 <Command shouldFilter={false}>
-                    <CommandInput
-                        placeholder="Search or create..."
-                        className="h-8 text-xs"
-                        value={query}
-                        onValueChange={setQuery}
-                    />
+                    <CommandInput placeholder="Search or create..." className="h-8 text-xs" value={query} onValueChange={setQuery} />
                     <CommandList className="max-h-[220px]">
-                        <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">
+                        <CommandEmpty className="text-muted-foreground py-2 text-center text-xs">
                             {trimmed ? 'No matches — use Create below.' : 'No options yet.'}
                         </CommandEmpty>
                         {filtered.length > 0 && (
                             <CommandGroup>
                                 {filtered.map((opt) => (
-                                    <CommandItem
-                                        key={opt}
-                                        value={opt}
-                                        onSelect={() => commit(opt)}
-                                        className="text-xs"
-                                    >
+                                    <CommandItem key={opt} value={opt} onSelect={() => commit(opt)} className="text-xs">
                                         {opt}
                                     </CommandItem>
                                 ))}
@@ -157,11 +180,7 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
                         )}
                         {trimmed && !exists && (
                             <CommandGroup heading="Create">
-                                <CommandItem
-                                    value={`__create__${trimmed}`}
-                                    onSelect={() => commit(trimmed)}
-                                    className="text-xs text-primary"
-                                >
+                                <CommandItem value={`__create__${trimmed}`} onSelect={() => commit(trimmed)} className="text-primary text-xs">
                                     <Plus className="mr-2 h-3 w-3" />
                                     Create &quot;{trimmed}&quot;
                                 </CommandItem>
@@ -184,7 +203,7 @@ function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: Tas
                 <button
                     type="button"
                     className={cn(
-                        'inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium hover:ring-2 hover:ring-ring/40',
+                        'hover:ring-ring/40 inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium hover:ring-2',
                         STATUS_COLORS[effective],
                     )}
                     title={isOverride ? `Manual: ${STATUS_LABELS[effective]}` : `Auto: ${STATUS_LABELS[effective]}`}
@@ -194,22 +213,15 @@ function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: Tas
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[140px]">
-                <DropdownMenuItem
-                    className="text-xs"
-                    onClick={() => onChange(null)}
-                >
+                <DropdownMenuItem className="text-xs" onClick={() => onChange(null)}>
                     <span className="text-muted-foreground">Auto</span>
-                    {!isOverride && <span className="ml-auto text-[10px] text-primary">✓</span>}
+                    {!isOverride && <span className="text-primary ml-auto text-[10px]">✓</span>}
                 </DropdownMenuItem>
                 {MANUAL_STATUSES.map((s) => (
-                    <DropdownMenuItem
-                        key={s}
-                        className="text-xs"
-                        onClick={() => onChange(s)}
-                    >
+                    <DropdownMenuItem key={s} className="text-xs" onClick={() => onChange(s)}>
                         <span className={cn('mr-2 inline-block h-2 w-2 rounded-full', STATUS_COLORS[s].split(' ')[0])} />
                         {STATUS_LABELS[s]}
-                        {node.status === s && <span className="ml-auto text-[10px] text-primary">✓</span>}
+                        {node.status === s && <span className="text-primary ml-auto text-[10px]">✓</span>}
                     </DropdownMenuItem>
                 ))}
             </DropdownMenuContent>
@@ -217,7 +229,27 @@ function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: Tas
     );
 }
 
-function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, onRename, onDatesChange, onResponsibleChange, responsibleOptions, onStatusChange, visibleColumns, onIndent, onOutdent, canIndent, canOutdent, showBaseline, resourceLabel }: TaskTreeRowProps) {
+function TaskTreeRowContent({
+    node,
+    isSelected,
+    isExpanded,
+    dragging,
+    dropPlacement,
+    onToggle,
+    onAddChild,
+    onDelete,
+    onRename,
+    onDatesChange,
+    onResponsibleChange,
+    responsibleOptions,
+    onStatusChange,
+    visibleColumns,
+    onIndent,
+    onOutdent,
+    canIndent,
+    canOutdent,
+    resourceLabel,
+}: TaskTreeRowContentProps) {
     const [editing, setEditing] = useState(false);
     const [editName, setEditName] = useState(node.name);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -251,49 +283,25 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
         onDatesChange(node.id, snapped < startDate ? snapped : startDate, snapped);
     }
 
-    const workingDays =
-        node.start_date && node.end_date ? countWorkingDays(parseISO(node.start_date), parseISO(node.end_date)) : null;
+    const workingDays = node.start_date && node.end_date ? countWorkingDays(parseISO(node.start_date), parseISO(node.end_date)) : null;
 
     const isGroup = node.hasChildren;
-    const rowHeight = (showBaseline && node.baseline_start && node.baseline_finish) ? ROW_HEIGHT + 16 : ROW_HEIGHT;
-
-    // animateLayoutChanges=false disables FLIP transitions on siblings — much snappier at the cost
-    // of an "instant" rearrange instead of a smooth slide. Transform on the active item is preserved.
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
-        id: node.id,
-        animateLayoutChanges: () => false,
-    });
-    const dragStyle: React.CSSProperties = {
-        transform: CSS.Transform.toString(transform),
-        opacity: isDragging ? 0.5 : undefined,
-        zIndex: isDragging ? 10 : undefined,
-        background: isDragging ? 'var(--background, white)' : undefined,
-    };
+    const compactTrailingWidth =
+        (visibleColumns.start ? COL_WIDTHS.start : 0) +
+        (visibleColumns.finish ? COL_WIDTHS.finish : 0) +
+        (visibleColumns.days ? COL_WIDTHS.days : 0) +
+        (visibleColumns.responsible ? COL_WIDTHS.responsible : 0) +
+        (visibleColumns.status ? COL_WIDTHS.status : 0) +
+        32;
 
     return (
-        <div
-            ref={setNodeRef}
-            className={cn('group flex items-center border-b', isGroup && 'font-medium')}
-            style={{ height: rowHeight, ...dragStyle }}
-        >
-            {/* Drag handle — sibling reorder */}
-            <button
-                {...attributes}
-                {...listeners}
-                type="button"
-                className="flex h-full w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
-                style={{ cursor: 'grab', touchAction: 'none' }}
-                title="Drag to reorder (within same parent)"
-                aria-label="Drag to reorder"
-            >
-                <GripVertical className="h-3 w-3" />
-            </button>
-
+        <>
+            {dragging && dropPlacement === 'before' && <div className="bg-primary absolute top-0 right-0 left-0 h-0.5" />}
             {/* Name column — full cell gets the Excel-style outline */}
             <div
                 className={cn(
                     'flex min-w-0 flex-1 items-center px-2',
-                    editing && 'bg-background outline outline-2 -outline-offset-2 outline-primary',
+                    editing && 'bg-background outline-primary outline outline-2 -outline-offset-2',
                 )}
                 style={{
                     paddingLeft: node.depth * 16 + 8,
@@ -301,7 +309,10 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
                 }}
             >
                 <button
-                    className={cn('mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded', node.hasChildren ? 'hover:bg-muted cursor-pointer' : 'invisible')}
+                    className={cn(
+                        'mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded',
+                        node.hasChildren ? 'hover:bg-muted cursor-pointer' : 'invisible',
+                    )}
                     onPointerDown={(e) => {
                         if (!node.hasChildren) return;
                         e.stopPropagation();
@@ -309,14 +320,11 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
                         onToggle(node.id);
                     }}
                 >
-                    {node.hasChildren &&
-                        (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
+                    {node.hasChildren && (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
                 </button>
 
                 {/* Owned indicator */}
-                {node.is_owned && (
-                    <div className="mr-1 h-2 w-2 shrink-0 rounded-full bg-green-500" title="Our task" />
-                )}
+                {node.is_owned && <div className="mr-1 h-2 w-2 shrink-0 rounded-full bg-green-500" title="Our task" />}
 
                 <div
                     className={cn('flex min-w-0 flex-1 items-center px-1', !editing && 'cursor-text')}
@@ -351,7 +359,7 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
                 {/* Resource badge (headcount × pay rate template) */}
                 {resourceLabel && !editing && (
                     <span
-                        className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                        className="bg-muted text-muted-foreground ml-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
                         title={resourceLabel}
                     >
                         <Users className="h-2.5 w-2.5" />
@@ -359,87 +367,176 @@ function TaskTreeRowInner({ node, isExpanded, onToggle, onAddChild, onDelete, on
                     </span>
                 )}
 
-                <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="ml-1 h-5 w-5 shrink-0 p-0 opacity-0 group-hover:opacity-100">
-                            <EllipsisVertical className="h-3 w-3" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onAddChild(node.id, node.name)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Sub-task
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setEditing(true)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => onIndent(node.id)}
-                            disabled={!canIndent}
-                        >
-                            <IndentIncrease className="mr-2 h-4 w-4" />
-                            Indent (make sub-task)
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => onOutdent(node.id)}
-                            disabled={!canOutdent}
-                        >
-                            <IndentDecrease className="mr-2 h-4 w-4" />
-                            Outdent (promote)
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => onDelete(node.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {!dragging && (
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                    'ml-1 h-6 w-6 shrink-0 p-0 transition-opacity',
+                                    isSelected ? 'opacity-100' : 'opacity-50 group-hover:opacity-100 focus-visible:opacity-100',
+                                )}
+                                aria-label={`Open actions for ${node.name}`}
+                            >
+                                <EllipsisVertical className="h-3 w-3" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onAddChild(node.id, node.name)}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Sub-task
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditing(true)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onIndent(node.id)} disabled={!canIndent}>
+                                <IndentIncrease className="mr-2 h-4 w-4" />
+                                Indent (make sub-task)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onOutdent(node.id)} disabled={!canOutdent}>
+                                <IndentDecrease className="mr-2 h-4 w-4" />
+                                Outdent (promote)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(node.id)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
 
-            {/* Start Date column */}
-            {visibleColumns.start && (
-                <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
-                    <DateCell value={node.start_date} onChange={handleStartChange} disabled={isGroup} />
-                </div>
-            )}
+            {dragging ? (
+                <div className="bg-muted/15 shrink-0 border-l" style={{ width: compactTrailingWidth }} />
+            ) : (
+                <>
+                    {/* Start Date column */}
+                    {visibleColumns.start && (
+                        <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
+                            {dragging ? (
+                                <span className="text-muted-foreground w-full truncate text-center text-[11px]">
+                                    {formatDisplayDate(node.start_date)}
+                                </span>
+                            ) : (
+                                <DateCell value={node.start_date} onChange={handleStartChange} disabled={isGroup} />
+                            )}
+                        </div>
+                    )}
 
-            {/* End Date column */}
-            {visibleColumns.finish && (
-                <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
-                    <DateCell value={node.end_date} onChange={handleEndChange} disabled={isGroup} />
-                </div>
-            )}
+                    {/* End Date column */}
+                    {visibleColumns.finish && (
+                        <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
+                            {dragging ? (
+                                <span className="text-muted-foreground w-full truncate text-center text-[11px]">
+                                    {formatDisplayDate(node.end_date)}
+                                </span>
+                            ) : (
+                                <DateCell value={node.end_date} onChange={handleEndChange} disabled={isGroup} />
+                            )}
+                        </div>
+                    )}
 
-            {/* Working days column */}
-            {visibleColumns.days && (
-                <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-[11px]">
-                    {workingDays !== null ? `${workingDays}d` : '—'}
-                </div>
-            )}
+                    {/* Working days column */}
+                    {visibleColumns.days && (
+                        <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-[11px]">
+                            {workingDays !== null ? `${workingDays}d` : '—'}
+                        </div>
+                    )}
 
-            {/* Responsible column — select-or-create combobox */}
-            {visibleColumns.responsible && (
-                <div className="flex h-full w-[150px] shrink-0 items-center border-l">
-                    <ResponsibleCell
-                        value={node.responsible}
-                        options={responsibleOptions}
-                        onChange={(v) => onResponsibleChange(node.id, v)}
-                    />
-                </div>
-            )}
+                    {/* Responsible column — select-or-create combobox */}
+                    {visibleColumns.responsible && (
+                        <div className="flex h-full w-[150px] shrink-0 items-center border-l">
+                            {dragging ? (
+                                <span className="text-muted-foreground w-full truncate px-2 text-center text-[11px]">{node.responsible || '—'}</span>
+                            ) : (
+                                <ResponsibleCell
+                                    value={node.responsible}
+                                    options={responsibleOptions}
+                                    onChange={(v) => onResponsibleChange(node.id, v)}
+                                />
+                            )}
+                        </div>
+                    )}
 
-            {/* Status column — derived by default, overridable */}
-            {visibleColumns.status && (
-                <div className="flex h-full w-[120px] shrink-0 items-center justify-center border-l px-1">
-                    <StatusCell node={node} onChange={(s) => onStatusChange(node.id, s)} />
-                </div>
-            )}
+                    {/* Status column — derived by default, overridable */}
+                    {visibleColumns.status && (
+                        <div className="flex h-full w-[120px] shrink-0 items-center justify-center border-l px-1">
+                            {dragging ? (
+                                <span
+                                    className={cn(
+                                        'inline-flex h-6 items-center rounded-md px-2 text-[11px] font-medium',
+                                        STATUS_COLORS[getEffectiveStatus(node)],
+                                    )}
+                                >
+                                    {STATUS_LABELS[getEffectiveStatus(node)]}
+                                </span>
+                            ) : (
+                                <StatusCell node={node} onChange={(s) => onStatusChange(node.id, s)} />
+                            )}
+                        </div>
+                    )}
 
-            {/* Spacer for scrollbar alignment */}
-            <div className="w-[32px] shrink-0" />
+                    {/* Spacer for scrollbar alignment */}
+                    <div className="w-[32px] shrink-0" />
+                </>
+            )}
+            {dragging && dropPlacement === 'after' && <div className="bg-primary absolute right-0 bottom-0 left-0 h-0.5" />}
+        </>
+    );
+}
+
+function TaskTreeRowInner(props: TaskTreeRowProps) {
+    const { node, isSelected, showBaseline, dragging, isDraggingSelf } = props;
+    const rowHeight = showBaseline && node.baseline_start && node.baseline_finish ? ROW_HEIGHT + 16 : ROW_HEIGHT;
+    const isGroup = node.hasChildren;
+
+    // Keep the drag subscription in a lightweight shell so row content doesn't re-render on every drag frame.
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
+        id: node.id,
+    });
+    const dragStyle: React.CSSProperties = {
+        transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+        opacity: isDragging ? 0.6 : undefined,
+        zIndex: isDragging ? 10 : undefined,
+        willChange: isDragging ? 'transform' : undefined,
+        background: isDragging ? 'var(--background, white)' : undefined,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={cn(
+                'group focus-within:bg-muted/40 relative flex items-center border-b transition-colors',
+                isGroup && 'font-medium',
+                isSelected && 'bg-muted/40 ring-primary/20 ring-1 ring-inset',
+            )}
+            style={{ height: rowHeight, ...dragStyle }}
+            onClick={() => props.onSelect(node.id)}
+            onFocusCapture={() => props.onSelect(node.id)}
+        >
+            <button
+                {...attributes}
+                {...listeners}
+                type="button"
+                className={cn(
+                    'text-muted-foreground/50 hover:text-foreground flex h-full w-4 shrink-0 items-center justify-center transition-opacity',
+                    isSelected ? 'opacity-100' : 'opacity-45 group-hover:opacity-100 focus-visible:opacity-100',
+                )}
+                style={{ cursor: 'grab', touchAction: 'none' }}
+                title="Drag to reorder (within same parent)"
+                aria-label="Drag to reorder"
+            >
+                <GripVertical className="h-3 w-3" />
+            </button>
+            <MemoTaskTreeRowContent {...props} />
+            {dragging && !isDraggingSelf && <div className="pointer-events-none absolute inset-0" />}
         </div>
     );
 }
+
+const MemoTaskTreeRowContent = memo(TaskTreeRowContent);
 
 // Memoize so non-moving rows don't re-render on every pointer move during drag.
 // useSortable subscribes internally and still triggers its own rerender when needed.
