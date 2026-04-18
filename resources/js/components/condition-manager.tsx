@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
-import { useHttp } from '@inertiajs/react';
 import {
     DollarSign,
     Hash,
@@ -316,19 +315,6 @@ export function ConditionManager({
 
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
-
-    // HTTP instances
-    const loadConditionsHttp = useHttp({});
-    const loadTemplatesHttp = useHttp({});
-    const loadTypesHttp = useHttp({});
-    const createTypeHttp = useHttp({});
-    const deleteTypeHttp = useHttp({});
-    const saveConditionHttp = useHttp({});
-    const deleteConditionHttp = useHttp({});
-    const searchMaterialsHttp = useHttp({});
-    const searchCostCodesHttp = useHttp({});
-    const searchLccsHttp = useHttp({});
-    const createLccHttp = useHttp({});
 
     // Load conditions, pay rate templates, and condition types
     useEffect(() => {

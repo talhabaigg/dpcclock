@@ -25,7 +25,7 @@ import { useCalibration } from '@/hooks/use-calibration';
 import { useBidView } from '@/hooks/use-bid-view';
 import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } from '@/lib/constants';
 import type { Project, Observation, Revision, Drawing } from '@/types/takeoff';
-import { useHttp, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import {
     FolderTree,
     GitCompare,

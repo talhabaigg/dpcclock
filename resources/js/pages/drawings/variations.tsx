@@ -100,7 +100,6 @@ export default function DrawingVariations() {
     const variationsHttp = useHttp({});
     const pricingHttp = useHttp({});
     const saveMeasurementHttp = useHttp({});
-    const deleteMeasurementHttp = useHttp({});
     const generatePremierHttp = useHttp({});
 
     const conditionPatterns = useMemo(() => {

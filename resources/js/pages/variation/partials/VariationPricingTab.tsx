@@ -63,7 +63,6 @@ export default function VariationPricingTab({
 }: VariationPricingTabProps) {
     const http = useHttp({});
     const deleteHttp = useHttp({});
-    const editHttp = useHttp({});
     const [addMode, setAddMode] = useState<AddMode>('condition');
     const [addPanelOpen, setAddPanelOpen] = useState(true);
 

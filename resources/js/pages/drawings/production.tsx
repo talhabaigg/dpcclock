@@ -202,8 +202,6 @@ export default function DrawingProduction() {
 
     const segmentStatusHttp = useHttp({});
     const measurementStatusHttp = useHttp({});
-    const bulkStatusHttp = useHttp({});
-    const dateStatusHttp = useHttp({});
 
     // F2: Multi-select state — keys: "m-{id}" for whole measurements, "s-{measId}-{segIdx}" for segments
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());

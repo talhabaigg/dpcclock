@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 // Select removed — qty_source hidden from grid (QuickBid-style)
-import { useHttp } from '@inertiajs/react';
 import { Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -1071,4 +1070,3 @@ export function ConditionDetailGrid({
         </div>
     );
 }
-

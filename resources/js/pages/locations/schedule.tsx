@@ -84,8 +84,6 @@ export default function Schedule() {
     const updateDatesHttp = useHttp({});
     const updateLinkLagHttp = useHttp({});
     const createLinkHttp = useHttp({});
-    const updateLinkHttp = useHttp({});
-    const deleteLinkHttp = useHttp({});
     const bulkOwnershipHttp = useHttp({});
     const setBaselineHttp = useHttp({});
     const revertBaselineHttp = useHttp({});
