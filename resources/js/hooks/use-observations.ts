@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import type { Observation, PendingPoint } from '@/types/takeoff';
 import { toast } from 'sonner';
 
@@ -22,13 +22,14 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
     const [description, setDescription] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [is360Photo, setIs360Photo] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [confirming, setConfirming] = useState(false);
-    const [deleting, setDeleting] = useState(false);
-    const [bulkDeleting, setBulkDeleting] = useState(false);
-    const [describing, setDescribing] = useState(false);
     const [selectedObservationIds, setSelectedObservationIds] = useState<Set<number>>(new Set());
     const [serverObservations, setServerObservations] = useState<Observation[]>(initialObservations);
+
+    const saveHttp = useHttp({});
+    const confirmHttp = useHttp({});
+    const deleteHttp = useHttp({});
+    const bulkDeleteHttp = useHttp({ observation_ids: [] as number[] });
+    const describeHttp = useHttp({});
 
     const resetDialog = () => {
         setPendingPoint(null);
@@ -58,30 +59,29 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
             return;
         }
 
-        setSaving(true);
-
-        try {
-            const formData = new FormData();
-            formData.append('type', observationType);
-            formData.append('description', description.trim());
-            formData.append('page_number', pendingPoint.pageNumber.toString());
-            formData.append('x', pendingPoint.x.toString());
-            formData.append('y', pendingPoint.y.toString());
-            if (photoFile) {
-                formData.append('photo', photoFile);
-            }
-            formData.append('is_360_photo', is360Photo ? '1' : '0');
-
-            const saved = await api.post<Observation>(`/drawings/${drawingId}/observations`, formData);
-            setServerObservations((prev) => [...prev, saved]);
-            toast.success('Observation saved.');
-            setDialogOpen(false);
-            resetDialog();
-        } catch {
-            toast.error('Failed to save observation.');
-        } finally {
-            setSaving(false);
+        const formData = new FormData();
+        formData.append('type', observationType);
+        formData.append('description', description.trim());
+        formData.append('page_number', pendingPoint.pageNumber.toString());
+        formData.append('x', pendingPoint.x.toString());
+        formData.append('y', pendingPoint.y.toString());
+        if (photoFile) {
+            formData.append('photo', photoFile);
         }
+        formData.append('is_360_photo', is360Photo ? '1' : '0');
+
+        saveHttp.setData(formData as any);
+        saveHttp.post(`/drawings/${drawingId}/observations`, {
+            onSuccess: (data: Observation) => {
+                setServerObservations((prev) => [...prev, data]);
+                toast.success('Observation saved.');
+                setDialogOpen(false);
+                resetDialog();
+            },
+            onError: () => {
+                toast.error('Failed to save observation.');
+            },
+        });
     };
 
     const handleUpdateObservation = async () => {
@@ -91,52 +91,44 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
             return;
         }
 
-        setSaving(true);
-
-        try {
-            const formData = new FormData();
-            formData.append('type', observationType);
-            formData.append('description', description.trim());
-            formData.append('page_number', editingObservation.page_number.toString());
-            formData.append('x', editingObservation.x.toString());
-            formData.append('y', editingObservation.y.toString());
-            if (photoFile) {
-                formData.append('photo', photoFile);
-            }
-            formData.append('is_360_photo', is360Photo ? '1' : '0');
-
-            const saved = await api.post<Observation>(
-                `/drawings/${drawingId}/observations/${editingObservation.id}`,
-                formData,
-            );
-            setServerObservations((prev) => prev.map((obs) => (obs.id === saved.id ? saved : obs)));
-            toast.success('Observation updated.');
-            setDialogOpen(false);
-            resetDialog();
-        } catch {
-            toast.error('Failed to update observation.');
-        } finally {
-            setSaving(false);
+        const formData = new FormData();
+        formData.append('type', observationType);
+        formData.append('description', description.trim());
+        formData.append('page_number', editingObservation.page_number.toString());
+        formData.append('x', editingObservation.x.toString());
+        formData.append('y', editingObservation.y.toString());
+        if (photoFile) {
+            formData.append('photo', photoFile);
         }
+        formData.append('is_360_photo', is360Photo ? '1' : '0');
+
+        saveHttp.setData(formData as any);
+        saveHttp.post(`/drawings/${drawingId}/observations/${editingObservation.id}`, {
+            onSuccess: (data: Observation) => {
+                setServerObservations((prev) => prev.map((obs) => (obs.id === data.id ? data : obs)));
+                toast.success('Observation updated.');
+                setDialogOpen(false);
+                resetDialog();
+            },
+            onError: () => {
+                toast.error('Failed to update observation.');
+            },
+        });
     };
 
     const handleConfirmObservation = async () => {
         if (!editingObservation || editingObservation.source !== 'ai_comparison') return;
 
-        setConfirming(true);
-
-        try {
-            const confirmed = await api.post<Observation>(
-                `/drawings/${drawingId}/observations/${editingObservation.id}/confirm`,
-            );
-            setServerObservations((prev) => prev.map((obs) => (obs.id === confirmed.id ? confirmed : obs)));
-            setEditingObservation(confirmed);
-            toast.success('AI observation confirmed.');
-        } catch {
-            toast.error('Failed to confirm observation.');
-        } finally {
-            setConfirming(false);
-        }
+        confirmHttp.post(`/drawings/${drawingId}/observations/${editingObservation.id}/confirm`, {
+            onSuccess: (data: Observation) => {
+                setServerObservations((prev) => prev.map((obs) => (obs.id === data.id ? data : obs)));
+                setEditingObservation(data);
+                toast.success('AI observation confirmed.');
+            },
+            onError: () => {
+                toast.error('Failed to confirm observation.');
+            },
+        });
     };
 
     const handleDeleteObservation = async () => {
@@ -150,46 +142,40 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
         });
         if (!confirmed) return;
 
-        setDeleting(true);
-
-        try {
-            await api.delete(`/drawings/${drawingId}/observations/${editingObservation.id}`);
-            setServerObservations((prev) => prev.filter((obs) => obs.id !== editingObservation.id));
-            setDialogOpen(false);
-            resetDialog();
-            toast.success('Observation deleted.');
-        } catch {
-            toast.error('Failed to delete observation.');
-        } finally {
-            setDeleting(false);
-        }
+        deleteHttp.destroy(`/drawings/${drawingId}/observations/${editingObservation.id}`, {
+            onSuccess: () => {
+                setServerObservations((prev) => prev.filter((obs) => obs.id !== editingObservation.id));
+                setDialogOpen(false);
+                resetDialog();
+                toast.success('Observation deleted.');
+            },
+            onError: () => {
+                toast.error('Failed to delete observation.');
+            },
+        });
     };
 
     const handleDescribeWithAI = async () => {
         if (!editingObservation || editingObservation.source !== 'ai_comparison') return;
 
-        setDescribing(true);
+        describeHttp.post(`/drawings/${drawingId}/observations/${editingObservation.id}/describe`, {
+            onSuccess: (data: { success: boolean; observation: Observation; message?: string }) => {
+                if (!data.success) {
+                    toast.error(data.message || 'Request failed');
+                    return;
+                }
 
-        try {
-            const data = await api.post<{ success: boolean; observation: Observation; message?: string }>(
-                `/drawings/${drawingId}/observations/${editingObservation.id}/describe`,
-            );
-
-            if (!data.success) {
-                throw new Error(data.message || 'Request failed');
-            }
-
-            setServerObservations((prev) =>
-                prev.map((obs) => (obs.id === editingObservation.id ? data.observation : obs)),
-            );
-            setEditingObservation(data.observation);
-            setDescription(data.observation.description);
-            toast.success('AI description generated.');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to describe with AI.');
-        } finally {
-            setDescribing(false);
-        }
+                setServerObservations((prev) =>
+                    prev.map((obs) => (obs.id === editingObservation.id ? data.observation : obs)),
+                );
+                setEditingObservation(data.observation);
+                setDescription(data.observation.description);
+                toast.success('AI description generated.');
+            },
+            onError: () => {
+                toast.error('Failed to describe with AI.');
+            },
+        });
     };
 
     const handleDeleteAllAIObservations = async () => {
@@ -207,27 +193,22 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
         });
         if (!confirmed) return;
 
-        setBulkDeleting(true);
+        const ids = aiObservations.map((obs) => obs.id);
+        bulkDeleteHttp.setData({ observation_ids: ids });
+        bulkDeleteHttp.post(`/drawings/${drawingId}/observations/bulk-delete`, {
+            onSuccess: (data: { success: boolean; deleted_count: number; failed_count: number }) => {
+                setServerObservations((prev) => prev.filter((obs) => obs.source !== 'ai_comparison'));
 
-        try {
-            const ids = aiObservations.map((obs) => obs.id);
-            const data = await api.post<{ success: boolean; deleted_count: number; failed_count: number }>(
-                `/drawings/${drawingId}/observations/bulk-delete`,
-                { observation_ids: ids },
-            );
-
-            setServerObservations((prev) => prev.filter((obs) => obs.source !== 'ai_comparison'));
-
-            if (data.failed_count === 0) {
-                toast.success(`Deleted ${data.deleted_count} AI observations.`);
-            } else {
-                toast.warning(`Deleted ${data.deleted_count} observations. ${data.failed_count} failed.`);
-            }
-        } catch {
-            toast.error('Failed to delete AI observations.');
-        } finally {
-            setBulkDeleting(false);
-        }
+                if (data.failed_count === 0) {
+                    toast.success(`Deleted ${data.deleted_count} AI observations.`);
+                } else {
+                    toast.warning(`Deleted ${data.deleted_count} observations. ${data.failed_count} failed.`);
+                }
+            },
+            onError: () => {
+                toast.error('Failed to delete AI observations.');
+            },
+        });
     };
 
     const handleDeleteSelectedObservations = async () => {
@@ -244,39 +225,33 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
         });
         if (!confirmed) return;
 
-        setBulkDeleting(true);
+        const ids = serverObservations.filter((obs) => selectedObservationIds.has(obs.id)).map((obs) => obs.id);
 
-        try {
-            const ids = serverObservations.filter((obs) => selectedObservationIds.has(obs.id)).map((obs) => obs.id);
-
-            if (ids.length === 0) {
-                toast.warning('Selected observations not found in current list.');
-                setBulkDeleting(false);
-                setSelectedObservationIds(new Set());
-                return;
-            }
-
-            const data = await api.post<{ success: boolean; deleted_count: number; failed_count: number }>(
-                `/drawings/${drawingId}/observations/bulk-delete`,
-                { observation_ids: ids },
-            );
-
-            const deletedSet = new Set(ids);
-            setServerObservations((prev) => prev.filter((obs) => !deletedSet.has(obs.id)));
+        if (ids.length === 0) {
+            toast.warning('Selected observations not found in current list.');
             setSelectedObservationIds(new Set());
-
-            if (data.failed_count === 0) {
-                toast.success(
-                    `Deleted ${data.deleted_count} observation${data.deleted_count !== 1 ? 's' : ''}.`,
-                );
-            } else {
-                toast.warning(`Deleted ${data.deleted_count} observations. ${data.failed_count} failed.`);
-            }
-        } catch {
-            toast.error('Failed to delete selected observations.');
-        } finally {
-            setBulkDeleting(false);
+            return;
         }
+
+        bulkDeleteHttp.setData({ observation_ids: ids });
+        bulkDeleteHttp.post(`/drawings/${drawingId}/observations/bulk-delete`, {
+            onSuccess: (data: { success: boolean; deleted_count: number; failed_count: number }) => {
+                const deletedSet = new Set(ids);
+                setServerObservations((prev) => prev.filter((obs) => !deletedSet.has(obs.id)));
+                setSelectedObservationIds(new Set());
+
+                if (data.failed_count === 0) {
+                    toast.success(
+                        `Deleted ${data.deleted_count} observation${data.deleted_count !== 1 ? 's' : ''}.`,
+                    );
+                } else {
+                    toast.warning(`Deleted ${data.deleted_count} observations. ${data.failed_count} failed.`);
+                }
+            },
+            onError: () => {
+                toast.error('Failed to delete selected observations.');
+            },
+        });
     };
 
     const handleClearSelection = () => {
@@ -310,11 +285,11 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
         setPhotoFile,
         is360Photo,
         setIs360Photo,
-        saving,
-        confirming,
-        deleting,
-        bulkDeleting,
-        describing,
+        saving: saveHttp.processing,
+        confirming: confirmHttp.processing,
+        deleting: deleteHttp.processing,
+        bulkDeleting: bulkDeleteHttp.processing,
+        describing: describeHttp.processing,
         selectedObservationIds,
         setSelectedObservationIds,
         serverObservations,

@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import type { MeasurementData } from '@/components/measurement-layer';
 import { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
@@ -21,6 +21,8 @@ export function useMeasurementHistory(callbacks: Callbacks) {
     const redoStackRef = useRef<UndoAction[]>([]);
     const processingRef = useRef(false);
 
+    const http = useHttp({});
+
     const pushUndo = useCallback((action: UndoAction) => {
         undoStackRef.current.push(action);
         if (undoStackRef.current.length > MAX_STACK) {
@@ -36,37 +38,51 @@ export function useMeasurementHistory(callbacks: Callbacks) {
 
             try {
                 if (action.type === 'create' && isUndo) {
-                    // Undo create → soft-delete the measurement
-                    await api.delete(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`);
-                    callbacks.onMeasurementRemoved(action.measurement.id);
-                    toast.success('Undo: measurement removed');
+                    await http.destroy(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
+                        onSuccess: () => {
+                            callbacks.onMeasurementRemoved(action.measurement.id);
+                            toast.success('Undo: measurement removed');
+                        },
+                    });
                 } else if (action.type === 'create' && !isUndo) {
-                    // Redo create → restore the measurement
-                    const restored = await api.post<MeasurementData>(
+                    await http.post(
                         `/drawings/${action.drawingId}/measurements/${action.measurement.id}/restore`,
+                        {
+                            onSuccess: (data: MeasurementData) => {
+                                callbacks.onMeasurementRestored(data);
+                                toast.success('Redo: measurement restored');
+                            },
+                        },
                     );
-                    callbacks.onMeasurementRestored(restored);
-                    toast.success('Redo: measurement restored');
                 } else if (action.type === 'delete' && isUndo) {
-                    // Undo delete → restore from soft-delete
-                    const restored = await api.post<MeasurementData>(
+                    await http.post(
                         `/drawings/${action.drawingId}/measurements/${action.measurement.id}/restore`,
+                        {
+                            onSuccess: (data: MeasurementData) => {
+                                callbacks.onMeasurementRestored(data);
+                                toast.success('Undo: measurement restored');
+                            },
+                        },
                     );
-                    callbacks.onMeasurementRestored(restored);
-                    toast.success('Undo: measurement restored');
                 } else if (action.type === 'delete' && !isUndo) {
-                    // Redo delete → soft-delete again
-                    await api.delete(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`);
-                    callbacks.onMeasurementRemoved(action.measurement.id);
-                    toast.success('Redo: measurement removed');
+                    await http.destroy(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
+                        onSuccess: () => {
+                            callbacks.onMeasurementRemoved(action.measurement.id);
+                            toast.success('Redo: measurement removed');
+                        },
+                    });
                 } else if (action.type === 'update') {
                     const payload = isUndo ? action.before : action.after;
-                    const updated = await api.put<MeasurementData>(
+                    http.setData(payload);
+                    await http.put(
                         `/drawings/${action.drawingId}/measurements/${action.measurementId}`,
-                        payload,
+                        {
+                            onSuccess: (data: MeasurementData) => {
+                                callbacks.onMeasurementUpdated(data);
+                                toast.success(isUndo ? 'Undo: measurement reverted' : 'Redo: measurement updated');
+                            },
+                        },
                     );
-                    callbacks.onMeasurementUpdated(updated);
-                    toast.success(isUndo ? 'Undo: measurement reverted' : 'Redo: measurement updated');
                 }
             } catch {
                 toast.error(isUndo ? 'Undo failed' : 'Redo failed');
@@ -74,7 +90,7 @@ export function useMeasurementHistory(callbacks: Callbacks) {
                 processingRef.current = false;
             }
         },
-        [callbacks],
+        [callbacks, http],
     );
 
     const undo = useCallback(() => {

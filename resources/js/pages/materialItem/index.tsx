@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import { type ColumnDef, type ColumnOrderState, type ColumnSizingState, type VisibilityState, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, CirclePlus, Columns3, Download, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -70,32 +70,23 @@ const CSV_HEADERS = ['code', 'description', 'unit_cost', 'supplier_code', 'cost_
 
 function CategoryCell({ itemId, value, categories }: { itemId: number; value: number | null; categories: SupplierCategory[] }) {
     const [current, setCurrent] = useState(value);
+    const http = useHttp({});
 
     useEffect(() => {
         setCurrent(value);
     }, [value]);
 
-    const handleChange = async (newValue: string) => {
+    const handleChange = (newValue: string) => {
         const categoryId = newValue === 'none' ? null : Number(newValue);
         const previous = current;
         setCurrent(categoryId);
-        try {
-            const response = await fetch(`/material-items/${itemId}/category`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-                body: JSON.stringify({ supplier_category_id: categoryId }),
-            });
-            if (!response.ok) {
+        http.setData({ supplier_category_id: categoryId });
+        http.patch(`/material-items/${itemId}/category`, {
+            onError: () => {
                 setCurrent(previous);
                 toast.error('Failed to update category');
-            }
-        } catch {
-            setCurrent(previous);
-            toast.error('Failed to update category');
-        }
+            },
+        });
     };
 
     return (

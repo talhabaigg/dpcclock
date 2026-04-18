@@ -23,10 +23,9 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { useObservations } from '@/hooks/use-observations';
 import { useCalibration } from '@/hooks/use-calibration';
 import { useBidView } from '@/hooks/use-bid-view';
-import { api, ApiError } from '@/lib/api';
 import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } from '@/lib/constants';
 import type { Project, Observation, Revision, Drawing } from '@/types/takeoff';
-import { usePage } from '@inertiajs/react';
+import { useHttp, usePage } from '@inertiajs/react';
 import {
     FolderTree,
     GitCompare,

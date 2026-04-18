@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { AlertTriangle, ChevronDown, Columns, Info, Search, Settings2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -80,7 +80,7 @@ function CodePicker({
 }) {
     const [expanded, setExpanded] = useState(false);
     const [search, setSearch] = useState('');
-    const [saving, setSaving] = useState(false);
+    const http = useHttp({});
 
     const filtered = useMemo(() => {
         if (!search) return availableCodes;
@@ -90,19 +90,17 @@ function CodePicker({
         );
     }, [availableCodes, search]);
 
-    const toggleCode = async (code: string) => {
+    const toggleCode = (code: string) => {
         const next = selectedCodes.includes(code)
             ? selectedCodes.filter((c) => c !== code)
             : [...selectedCodes, code];
         onCodesChange(next);
-        setSaving(true);
-        try {
-            await api.put(`/locations/${locationId}/dashboard-settings`, { [settingKey]: next });
-        } catch {
-            toast.error('Failed to save setting.');
-        } finally {
-            setSaving(false);
-        }
+        http.setData({ [settingKey]: next });
+        http.put(`/locations/${locationId}/dashboard-settings`, {
+            onError: () => {
+                toast.error('Failed to save setting.');
+            },
+        });
     };
 
     return (
@@ -120,7 +118,7 @@ function CodePicker({
                             {selectedCodes.length} mapped
                         </Badge>
                     )}
-                    {saving && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
+                    {http.processing && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
                 </div>
                 <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
             </button>
@@ -204,7 +202,7 @@ function WorktypePicker({
 }) {
     const [expanded, setExpanded] = useState(false);
     const [search, setSearch] = useState('');
-    const [saving, setSaving] = useState(false);
+    const http = useHttp({});
 
     const filtered = useMemo(() => {
         if (!search) return availableWorktypes;
@@ -212,19 +210,17 @@ function WorktypePicker({
         return availableWorktypes.filter((wt) => wt.toLowerCase().includes(lc));
     }, [availableWorktypes, search]);
 
-    const toggleWorktype = async (wt: string) => {
+    const toggleWorktype = (wt: string) => {
         const next = selectedWorktypes.includes(wt)
             ? selectedWorktypes.filter((w) => w !== wt)
             : [...selectedWorktypes, wt];
         onWorktypesChange(next);
-        setSaving(true);
-        try {
-            await api.put(`/locations/${locationId}/dashboard-settings`, { [settingKey]: next });
-        } catch {
-            toast.error('Failed to save setting.');
-        } finally {
-            setSaving(false);
-        }
+        http.setData({ [settingKey]: next });
+        http.put(`/locations/${locationId}/dashboard-settings`, {
+            onError: () => {
+                toast.error('Failed to save setting.');
+            },
+        });
     };
 
     return (
@@ -241,7 +237,7 @@ function WorktypePicker({
                             {selectedWorktypes.length} mapped
                         </Badge>
                     )}
-                    {saving && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
+                    {http.processing && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
                 </div>
                 <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
             </button>
@@ -339,6 +335,7 @@ export default function ProductionAnalysis({
         labourer: String(dpcRateSettings.labourer ?? ''),
     });
     const [savingRateKey, setSavingRateKey] = useState<string | null>(null);
+    const rateHttp = useHttp({});
 
     const parsedRates: Record<Category, number> = {
         wages: parseFloat(dpcRates.wages) || 0,
@@ -347,17 +344,20 @@ export default function ProductionAnalysis({
         labourer: parseFloat(dpcRates.labourer) || 0,
     };
 
-    const saveDpcRate = async (key: Category) => {
+    const saveDpcRate = (key: Category) => {
         const val = parseFloat(dpcRates[key]) || 0;
         const updated = { ...dpcRateSettings, [key]: val };
         setSavingRateKey(key);
-        try {
-            await api.put(`/locations/${locationId}/dashboard-settings`, { dpc_rates: updated });
-        } catch {
-            toast.error('Failed to save rate.');
-        } finally {
-            setSavingRateKey(null);
-        }
+        rateHttp.setData({ dpc_rates: updated });
+        rateHttp.put(`/locations/${locationId}/dashboard-settings`, {
+            onSuccess: () => {
+                setSavingRateKey(null);
+            },
+            onError: () => {
+                toast.error('Failed to save rate.');
+                setSavingRateKey(null);
+            },
+        });
     };
 
     const updateDpcRate = (key: Category, value: string) => {

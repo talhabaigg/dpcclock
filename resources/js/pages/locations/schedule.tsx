@@ -1,8 +1,7 @@
-import { api } from '@/lib/api';
 import AppLayout from '@/layouts/app-layout';
 import { type LocationBase } from '@/layouts/location-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
+import { Head, useHttp, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -77,7 +76,24 @@ export default function Schedule() {
         });
     }, []);
     const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(false);
+
+    const reorderHttp = useHttp({});
+    const addTaskHttp = useHttp({});
+    const deleteTaskHttp = useHttp({});
+    const updateTaskHttp = useHttp({});
+    const updateDatesHttp = useHttp({});
+    const updateLinkLagHttp = useHttp({});
+    const createLinkHttp = useHttp({});
+    const updateLinkHttp = useHttp({});
+    const deleteLinkHttp = useHttp({});
+    const bulkOwnershipHttp = useHttp({});
+    const setBaselineHttp = useHttp({});
+    const revertBaselineHttp = useHttp({});
+    const clearAllHttp = useHttp({});
+    const importHttp = useHttp({});
+    const hierarchyHttp = useHttp({});
+
+    const loading = reorderHttp.processing || bulkOwnershipHttp.processing || setBaselineHttp.processing || revertBaselineHttp.processing || clearAllHttp.processing || importHttp.processing;
     const columnsStorageKey = `schedule.columns.${location.id}`;
     const [visibleColumns, setVisibleColumns] = useState<ColumnVisibility>(() => {
         if (typeof window === 'undefined') return DEFAULT_COLUMN_VISIBILITY;
@@ -109,7 +125,7 @@ export default function Schedule() {
         return (valid as string[]).includes(stored ?? '') ? (stored as SortMode) : 'manual';
     });
 
-    const handleSortModeChange = useCallback(async (mode: SortMode) => {
+    const handleSortModeChange = useCallback((mode: SortMode) => {
         setSortMode(mode);
         try {
             window.localStorage.setItem(sortStorageKey, mode);
@@ -123,15 +139,16 @@ export default function Schedule() {
         const next = tasks.map((t) => updateMap.has(t.id) ? { ...t, sort_order: updateMap.get(t.id)! } : t);
         setTasks(next);
 
-        try {
-            await api.post(`/locations/${location.id}/tasks/reorder`, { tasks: updates });
-        } catch {
-            setTasks(tasks);
-            toast.error('Failed to save sort order');
-        }
+        reorderHttp.setData({ tasks: updates });
+        reorderHttp.post(`/locations/${location.id}/tasks/reorder`, {
+            onError: () => {
+                setTasks(tasks);
+                toast.error('Failed to save sort order');
+            },
+        });
     }, [tasks, location.id, sortStorageKey]);
 
-    const persistManualReorder = useCallback(async (next: ProjectTask[]) => {
+    const persistManualReorder = useCallback((next: ProjectTask[]) => {
         // Compute updates: any task whose new sort_order differs from its old one.
         const oldMap = new Map(tasks.map((t) => [t.id, t.sort_order]));
         const updates: { id: number; sort_order: number }[] = [];
@@ -146,12 +163,13 @@ export default function Schedule() {
             try { window.localStorage.setItem(sortStorageKey, 'manual'); } catch { /* noop */ }
         }
 
-        try {
-            await api.post(`/locations/${location.id}/tasks/reorder`, { tasks: updates });
-        } catch {
-            setTasks(tasks);
-            toast.error('Failed to save order');
-        }
+        reorderHttp.setData({ tasks: updates });
+        reorderHttp.post(`/locations/${location.id}/tasks/reorder`, {
+            onError: () => {
+                setTasks(tasks);
+                toast.error('Failed to save order');
+            },
+        });
     }, [tasks, location.id, sortMode, sortStorageKey]);
 
     const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
@@ -388,17 +406,20 @@ export default function Schedule() {
     // ── Task CRUD ──
 
     const handleAddTask = useCallback(
-        async (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null; color?: string | null; is_critical?: boolean; headcount?: number | null; location_pay_rate_template_id?: number | null }) => {
-            try {
-                const task = await api.post<ProjectTask>(`/locations/${location.id}/tasks`, data);
-                setTasks((prev) => [...prev, task]);
-                if (data.parent_id) {
-                    setExpanded((prev) => new Set(prev).add(data.parent_id!));
-                }
-                toast.success('Task added');
-            } catch {
-                toast.error('Failed to add task');
-            }
+        (data: { name: string; parent_id: number | null; baseline_start: string | null; baseline_finish: string | null; start_date: string | null; end_date: string | null; color?: string | null; is_critical?: boolean; headcount?: number | null; location_pay_rate_template_id?: number | null }) => {
+            addTaskHttp.setData(data);
+            addTaskHttp.post(`/locations/${location.id}/tasks`, {
+                onSuccess: (task: ProjectTask) => {
+                    setTasks((prev) => [...prev, task]);
+                    if (data.parent_id) {
+                        setExpanded((prev) => new Set(prev).add(data.parent_id!));
+                    }
+                    toast.success('Task added');
+                },
+                onError: () => {
+                    toast.error('Failed to add task');
+                },
+            });
         },
         [location.id],
     );
@@ -408,45 +429,48 @@ export default function Schedule() {
         setAddDialogOpen(true);
     }, []);
 
-    const handleDelete = useCallback(async (id: number) => {
-        try {
-            await api.delete(`/tasks/${id}`);
-            setTasks((prev) => {
-                const idsToRemove = new Set<number>();
-                idsToRemove.add(id);
-                let changed = true;
-                while (changed) {
-                    changed = false;
-                    for (const t of prev) {
-                        if (t.parent_id && idsToRemove.has(t.parent_id) && !idsToRemove.has(t.id)) {
-                            idsToRemove.add(t.id);
-                            changed = true;
+    const handleDelete = useCallback((id: number) => {
+        deleteTaskHttp.destroy(`/tasks/${id}`, {
+            onSuccess: () => {
+                setTasks((prev) => {
+                    const idsToRemove = new Set<number>();
+                    idsToRemove.add(id);
+                    let changed = true;
+                    while (changed) {
+                        changed = false;
+                        for (const t of prev) {
+                            if (t.parent_id && idsToRemove.has(t.parent_id) && !idsToRemove.has(t.id)) {
+                                idsToRemove.add(t.id);
+                                changed = true;
+                            }
                         }
                     }
-                }
-                return prev.filter((t) => !idsToRemove.has(t.id));
-            });
-            // Also remove links involving deleted tasks
-            setLinks((prev) => prev.filter((l) => l.source_id !== id && l.target_id !== id));
-            toast.success('Task deleted');
-        } catch {
-            toast.error('Failed to delete task');
-        }
+                    return prev.filter((t) => !idsToRemove.has(t.id));
+                });
+                // Also remove links involving deleted tasks
+                setLinks((prev) => prev.filter((l) => l.source_id !== id && l.target_id !== id));
+                toast.success('Task deleted');
+            },
+            onError: () => {
+                toast.error('Failed to delete task');
+            },
+        });
     }, []);
 
-    const handleRename = useCallback(async (id: number, name: string) => {
+    const handleRename = useCallback((id: number, name: string) => {
         const prev = tasks;
         setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, name } : t)));
-        try {
-            await api.patch(`/tasks/${id}`, { name });
-        } catch {
-            setTasks(prev);
-            toast.error('Failed to rename task');
-        }
+        updateTaskHttp.setData({ name });
+        updateTaskHttp.patch(`/tasks/${id}`, {
+            onError: () => {
+                setTasks(prev);
+                toast.error('Failed to rename task');
+            },
+        });
     }, [tasks]);
 
     const handleDatesChange = useCallback(
-        async (id: number, startDate: string, endDate: string) => {
+        (id: number, startDate: string, endDate: string) => {
             const prev = tasks;
             const prevLinks = links;
 
@@ -500,48 +524,49 @@ export default function Schedule() {
             if (lagById.size > 0) setLinks(updatedLinks);
 
             // Persist all changes — moved task + cascaded successors + lag rewrites.
-            try {
-                const dateUpdates = [
-                    { id, start_date: startDate, end_date: endDate },
-                    ...cascaded,
-                ];
-                await Promise.all([
-                    ...dateUpdates.map((u) =>
-                        api.patch(`/tasks/${u.id}/dates`, { start_date: u.start_date, end_date: u.end_date }),
-                    ),
-                    ...lagUpdates.map((u) =>
-                        api.patch(`/task-links/${u.id}`, { lag_days: u.lag_days }),
-                    ),
-                ]);
-            } catch {
+            const dateUpdates = [
+                { id, start_date: startDate, end_date: endDate },
+                ...cascaded,
+            ];
+            const rollback = () => {
                 setTasks(prev);
                 setLinks(prevLinks);
                 toast.error('Failed to update dates');
+            };
+            for (const u of dateUpdates) {
+                updateDatesHttp.setData({ start_date: u.start_date, end_date: u.end_date });
+                updateDatesHttp.patch(`/tasks/${u.id}/dates`, { onError: rollback });
+            }
+            for (const u of lagUpdates) {
+                updateLinkLagHttp.setData({ lag_days: u.lag_days });
+                updateLinkLagHttp.patch(`/task-links/${u.id}`, { onError: rollback });
             }
         },
         [tasks, links],
     );
 
-    const handleResponsibleChange = useCallback(async (id: number, value: string | null) => {
+    const handleResponsibleChange = useCallback((id: number, value: string | null) => {
         const prev = tasks;
         setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, responsible: value } : t)));
-        try {
-            await api.patch(`/tasks/${id}`, { responsible: value });
-        } catch {
-            setTasks(prev);
-            toast.error('Failed to update responsible party');
-        }
+        updateTaskHttp.setData({ responsible: value });
+        updateTaskHttp.patch(`/tasks/${id}`, {
+            onError: () => {
+                setTasks(prev);
+                toast.error('Failed to update responsible party');
+            },
+        });
     }, [tasks]);
 
-    const handleStatusChange = useCallback(async (id: number, status: TaskStatus | null) => {
+    const handleStatusChange = useCallback((id: number, status: TaskStatus | null) => {
         const prev = tasks;
         setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, status } : t)));
-        try {
-            await api.patch(`/tasks/${id}`, { status });
-        } catch {
-            setTasks(prev);
-            toast.error('Failed to update status');
-        }
+        updateTaskHttp.setData({ status });
+        updateTaskHttp.patch(`/tasks/${id}`, {
+            onError: () => {
+                setTasks(prev);
+                toast.error('Failed to update status');
+            },
+        });
     }, [tasks]);
 
     const responsibleOptions = useMemo(() => {
@@ -554,7 +579,7 @@ export default function Schedule() {
     }, [tasks]);
 
     // Edit dialog update (from the dialog form)
-    const handleUpdateTask = useCallback(async (id: number, data: {
+    const handleUpdateTask = useCallback((id: number, data: {
         name?: string;
         baseline_start?: string | null;
         baseline_finish?: string | null;
@@ -567,12 +592,13 @@ export default function Schedule() {
     }) => {
         const prev = tasks;
         setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, ...data } : t)));
-        try {
-            await api.patch(`/tasks/${id}`, data);
-        } catch {
-            setTasks(prev);
-            toast.error('Failed to update task');
-        }
+        updateTaskHttp.setData(data);
+        updateTaskHttp.patch(`/tasks/${id}`, {
+            onError: () => {
+                setTasks(prev);
+                toast.error('Failed to update task');
+            },
+        });
     }, [tasks]);
 
     // ── Bar click → edit dialog ──
@@ -585,19 +611,19 @@ export default function Schedule() {
     // ── Hierarchy: indent (demote) / outdent (promote) ──
 
     const moveHierarchy = useCallback(
-        async (taskId: number, newParentId: number | null, siblingOrder: number[]) => {
-            try {
-                const result = await api.patch<{ success: boolean; tasks: ProjectTask[] }>(
-                    `/tasks/${taskId}/hierarchy`,
-                    { parent_id: newParentId, sibling_order: siblingOrder },
-                );
-                setTasks(result.tasks);
-                if (newParentId !== null) {
-                    setExpanded((prev) => new Set(prev).add(newParentId));
-                }
-            } catch {
-                toast.error('Failed to move task');
-            }
+        (taskId: number, newParentId: number | null, siblingOrder: number[]) => {
+            hierarchyHttp.setData({ parent_id: newParentId, sibling_order: siblingOrder });
+            hierarchyHttp.patch(`/tasks/${taskId}/hierarchy`, {
+                onSuccess: (result: { success: boolean; tasks: ProjectTask[] }) => {
+                    setTasks(result.tasks);
+                    if (newParentId !== null) {
+                        setExpanded((prev) => new Set(prev).add(newParentId));
+                    }
+                },
+                onError: () => {
+                    toast.error('Failed to move task');
+                },
+            });
         },
         [],
     );
@@ -647,24 +673,23 @@ export default function Schedule() {
     // ── Link CRUD ──
 
     const handleCreateLink = useCallback(
-        async (sourceId: number, sourcePoint: 'start' | 'finish', targetId: number, targetPoint: 'start' | 'finish') => {
+        (sourceId: number, sourcePoint: 'start' | 'finish', targetId: number, targetPoint: 'start' | 'finish') => {
             // Derive link type from the connection points
             const type: LinkType =
                 sourcePoint === 'finish' && targetPoint === 'start' ? 'FS' :
                 sourcePoint === 'start' && targetPoint === 'start' ? 'SS' :
                 sourcePoint === 'finish' && targetPoint === 'finish' ? 'FF' : 'SF';
 
-            try {
-                const link = await api.post<TaskLink>(`/locations/${location.id}/task-links`, {
-                    source_id: sourceId,
-                    target_id: targetId,
-                    type,
-                });
-                setLinks((prev) => [...prev.filter((l) => !(l.source_id === sourceId && l.target_id === targetId)), link]);
-                toast.success(`Link created (${type})`);
-            } catch {
-                toast.error('Failed to create link');
-            }
+            createLinkHttp.setData({ source_id: sourceId, target_id: targetId, type });
+            createLinkHttp.post(`/locations/${location.id}/task-links`, {
+                onSuccess: (link: TaskLink) => {
+                    setLinks((prev) => [...prev.filter((l) => !(l.source_id === sourceId && l.target_id === targetId)), link]);
+                    toast.success(`Link created (${type})`);
+                },
+                onError: () => {
+                    toast.error('Failed to create link');
+                },
+            });
         },
         [location.id],
     );

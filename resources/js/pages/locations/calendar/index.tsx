@@ -1,4 +1,3 @@
-import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +13,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import FullCalendar from '@fullcalendar/react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, useHttp, usePage } from '@inertiajs/react';
 import { ArrowLeft, Settings2, Trash2 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -77,7 +76,6 @@ export default function ProjectCalendar() {
     const [projectEvents, setProjectEvents] = useState<ProjectEvent[]>(initialProjectEvents);
     const [workingDays, setWorkingDays] = useState<number[]>(initialWorkingDays ?? [1, 2, 3, 4, 5]);
     const [savedWorkingDays, setSavedWorkingDays] = useState<number[]>(initialWorkingDays ?? [1, 2, 3, 4, 5]);
-    const [savingWorkingDays, setSavingWorkingDays] = useState(false);
     const [view, setView] = useState<CalendarView>('dayGridMonth');
 
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,9 +87,12 @@ export default function ProjectCalendar() {
         type: 'safety',
         notes: '',
     });
-    const [saving, setSaving] = useState(false);
     const [workingWeekDialogOpen, setWorkingWeekDialogOpen] = useState(false);
     const calendarRef = useRef<FullCalendar>(null);
+
+    const eventHttp = useHttp({ title: '', start: '', end: '', type: 'safety' as ProjectEventType, notes: '' });
+    const deleteHttp = useHttp({});
+    const workingDaysHttp = useHttp({ working_days: [] as number[] });
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -183,44 +184,50 @@ export default function ProjectCalendar() {
         setDialogOpen(true);
     };
 
-    const handleSave = async () => {
+    const handleSave = () => {
         if (!form.title || !form.start || !form.end || !form.type) {
             toast.error('Please fill in all required fields');
             return;
         }
-        setSaving(true);
-        try {
-            if (editing) {
-                const updated = await api.patch<ProjectEvent>(`/project-calendar/events/${editing.id}`, form);
-                setProjectEvents((prev) => prev.map((e) => (e.id === editing.id ? { ...e, ...updated, source: 'project' } : e)));
-                toast.success('Event updated');
-            } else {
-                const created = await api.post<ProjectEvent>(`/locations/${location.id}/calendar/events`, form);
-                setProjectEvents((prev) => [...prev, { ...created, source: 'project' }]);
-                toast.success('Event created');
-            }
-            setDialogOpen(false);
-        } catch {
-            toast.error('Failed to save event');
-        } finally {
-            setSaving(false);
+        eventHttp.setData(form);
+        if (editing) {
+            eventHttp.patch(`/project-calendar/events/${editing.id}`, {
+                onSuccess: (data: ProjectEvent) => {
+                    setProjectEvents((prev) => prev.map((e) => (e.id === editing.id ? { ...e, ...data, source: 'project' } : e)));
+                    toast.success('Event updated');
+                    setDialogOpen(false);
+                },
+                onError: () => {
+                    toast.error('Failed to save event');
+                },
+            });
+        } else {
+            eventHttp.post(`/locations/${location.id}/calendar/events`, {
+                onSuccess: (data: ProjectEvent) => {
+                    setProjectEvents((prev) => [...prev, { ...data, source: 'project' }]);
+                    toast.success('Event created');
+                    setDialogOpen(false);
+                },
+                onError: () => {
+                    toast.error('Failed to save event');
+                },
+            });
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
         if (!editing) return;
         if (!confirm('Delete this event?')) return;
-        setSaving(true);
-        try {
-            await api.delete(`/project-calendar/events/${editing.id}`);
-            setProjectEvents((prev) => prev.filter((e) => e.id !== editing.id));
-            setDialogOpen(false);
-            toast.success('Event deleted');
-        } catch {
-            toast.error('Failed to delete event');
-        } finally {
-            setSaving(false);
-        }
+        deleteHttp.destroy(`/project-calendar/events/${editing.id}`, {
+            onSuccess: () => {
+                setProjectEvents((prev) => prev.filter((e) => e.id !== editing.id));
+                setDialogOpen(false);
+                toast.success('Event deleted');
+            },
+            onError: () => {
+                toast.error('Failed to delete event');
+            },
+        });
     };
 
     const toggleWorkingDay = (day: number) => {
@@ -232,21 +239,24 @@ export default function ProjectCalendar() {
         });
     };
 
-    const handleSaveWorkingDays = async () => {
-        setSavingWorkingDays(true);
-        try {
-            await api.patch(`/locations/${location.id}/calendar/working-days`, { working_days: workingDays });
-            setSavedWorkingDays([...workingDays]);
-            toast.success('Working days updated');
-        } catch {
-            toast.error('Failed to update working days');
-        } finally {
-            setSavingWorkingDays(false);
-        }
+    const handleSaveWorkingDays = () => {
+        workingDaysHttp.setData({ working_days: workingDays });
+        workingDaysHttp.patch(`/locations/${location.id}/calendar/working-days`, {
+            onSuccess: () => {
+                setSavedWorkingDays([...workingDays]);
+                setWorkingWeekDialogOpen(false);
+                toast.success('Working days updated');
+            },
+            onError: () => {
+                toast.error('Failed to update working days');
+            },
+        });
     };
 
     const handleResetWorkingDays = () => setWorkingDays([...savedWorkingDays]);
 
+    const saving = eventHttp.processing || deleteHttp.processing;
+    const savingWorkingDays = workingDaysHttp.processing;
     const workingDaysDirty = !sameSet(workingDays, savedWorkingDays);
     const workingDaysLabel = formatWorkingDays(savedWorkingDays);
 
@@ -487,10 +497,7 @@ export default function ProjectCalendar() {
                                 Cancel
                             </Button>
                             <Button
-                                onClick={async () => {
-                                    await handleSaveWorkingDays();
-                                    setWorkingWeekDialogOpen(false);
-                                }}
+                                onClick={handleSaveWorkingDays}
                                 disabled={!workingDaysDirty || savingWorkingDays}
                             >
                                 {savingWorkingDays ? 'Saving…' : 'Save'}

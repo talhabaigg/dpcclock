@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface PushNotificationState {
@@ -34,6 +34,16 @@ export function usePushNotifications() {
         permission: null,
         isLoading: true,
         error: null,
+    });
+
+    const subscribeHttp = useHttp({
+        endpoint: '',
+        keys: { p256dh: '', auth: '' },
+        contentEncoding: 'aesgcm',
+    });
+
+    const unsubscribeHttp = useHttp({
+        endpoint: '',
     });
 
     const checkSupport = useCallback(() => {
@@ -116,20 +126,27 @@ export function usePushNotifications() {
 
             // Send subscription to server
             const subscriptionJson = subscription.toJSON();
-            await api.post('/push-subscriptions', {
-                endpoint: subscriptionJson.endpoint,
+            subscribeHttp.setData({
+                endpoint: subscriptionJson.endpoint || '',
                 keys: {
-                    p256dh: subscriptionJson.keys?.p256dh,
-                    auth: subscriptionJson.keys?.auth,
+                    p256dh: subscriptionJson.keys?.p256dh || '',
+                    auth: subscriptionJson.keys?.auth || '',
                 },
                 contentEncoding: (PushManager as any).supportedContentEncodings?.[0] || 'aesgcm',
             });
 
-            setState((prev) => ({
-                ...prev,
-                isSubscribed: true,
-                isLoading: false,
-            }));
+            await subscribeHttp.post('/push-subscriptions', {
+                onSuccess: () => {
+                    setState((prev) => ({
+                        ...prev,
+                        isSubscribed: true,
+                        isLoading: false,
+                    }));
+                },
+                onError: () => {
+                    throw new Error('Failed to save subscription on server');
+                },
+            });
 
             return true;
         } catch (error) {
@@ -141,7 +158,7 @@ export function usePushNotifications() {
             }));
             return false;
         }
-    }, [state.permission, requestPermission]);
+    }, [state.permission, requestPermission, subscribeHttp]);
 
     const unsubscribe = useCallback(async (): Promise<boolean> => {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
@@ -161,13 +178,19 @@ export function usePushNotifications() {
             await subscription.unsubscribe();
 
             // Remove subscription from server
-            await api.delete('/push-subscriptions', { endpoint: subscription.endpoint });
-
-            setState((prev) => ({
-                ...prev,
-                isSubscribed: false,
-                isLoading: false,
-            }));
+            unsubscribeHttp.setData({ endpoint: subscription.endpoint });
+            await unsubscribeHttp.destroy('/push-subscriptions', {
+                onSuccess: () => {
+                    setState((prev) => ({
+                        ...prev,
+                        isSubscribed: false,
+                        isLoading: false,
+                    }));
+                },
+                onError: () => {
+                    throw new Error('Failed to remove subscription from server');
+                },
+            });
 
             return true;
         } catch (error) {
@@ -179,7 +202,7 @@ export function usePushNotifications() {
             }));
             return false;
         }
-    }, [getSubscription]);
+    }, [getSubscription, unsubscribeHttp]);
 
     return {
         ...state,

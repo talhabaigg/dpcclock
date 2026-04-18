@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { getDefaultLayout, GRID_COLS, WIDGET_REGISTRY, type LayoutItem } from './widget-registry';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 
 export interface ActiveLayout {
     id: number;
@@ -43,6 +43,10 @@ function useIsFixedLayout(): boolean {
 
 export function useDashboardLayout(activeLayout: ActiveLayout | null, isAdmin: boolean) {
     const isFixedLayout = useIsFixedLayout();
+    const persistHttp = useHttp({
+        grid_layout: [] as Array<{ i: string; x: number; y: number; w: number; h: number }>,
+        hidden_widgets: [] as string[],
+    });
 
     const [layouts, setLayouts] = useState<LayoutItem[]>(() => {
         const source = activeLayout?.grid_layout;
@@ -91,15 +95,18 @@ export function useDashboardLayout(activeLayout: ActiveLayout | null, isAdmin: b
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             saveTimerRef.current = setTimeout(() => {
                 const cleanLayouts = newLayouts.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
-                api.put(`/dashboard-layouts/${layoutIdRef.current}`, {
+                persistHttp.setData({
                     grid_layout: cleanLayouts,
                     hidden_widgets: newHidden,
-                }).catch(() => {
-                    toast.error('Failed to save layout.');
+                });
+                persistHttp.put(`/dashboard-layouts/${layoutIdRef.current}`, {
+                    onError: () => {
+                        toast.error('Failed to save layout.');
+                    },
                 });
             }, 800);
         },
-        [isAdmin],
+        [isAdmin, persistHttp],
     );
 
     const onLayoutChange = useCallback(

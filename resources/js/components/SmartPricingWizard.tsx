@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { ArrowRight, Check, ChevronLeft, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -100,13 +100,17 @@ function AiMessage({ children, animate = false }: { children: React.ReactNode; a
 export function SmartPricingWizard({ open, onClose, requisitionId, problems, onComplete }: SmartPricingWizardProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [aiResults, setAiResults] = useState<Record<number, AIAssessment>>({});
-    const [loadingAI, setLoadingAI] = useState(false);
-    const [saving, setSaving] = useState(false);
     const [answers, setAnswers] = useState<Record<number, FieldWorkerAnswers>>({});
     const [completing, setCompleting] = useState(false);
     const [removedItems, setRemovedItems] = useState<Set<number>>(new Set());
     const [step, setStep] = useState(0);
     const scrollEndRef = useRef<HTMLDivElement>(null);
+
+    const assessHttp = useHttp({});
+    const actionHttp = useHttp({});
+
+    const loadingAI = assessHttp.processing;
+    const saving = actionHttp.processing;
 
     const activeProblems = problems.filter((p) => !removedItems.has(p.line_item_id));
     const currentProblem = activeProblems[currentIndex];
@@ -159,31 +163,30 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
 
     useEffect(() => {
         if (!currentProblem || aiResults[currentProblem.line_item_id]) return;
-        const fetchAssessment = async () => {
-            setLoadingAI(true);
-            try {
-                const data = await api.post<AIAssessment>(`/requisition/${requisitionId}/smart-pricing-assess`, {
-                    line_item_id: currentProblem.line_item_id, reasons: currentProblem.reasons,
-                });
-                setAiResults((prev) => ({ ...prev, [currentProblem.line_item_id]: data }));
+        const lineItemId = currentProblem.line_item_id;
+        const reasons = currentProblem.reasons;
+        assessHttp.setData({ line_item_id: lineItemId, reasons });
+        assessHttp.post(`/requisition/${requisitionId}/smart-pricing-assess`, {
+            onSuccess: (data: AIAssessment) => {
+                setAiResults((prev) => ({ ...prev, [lineItemId]: data }));
                 if (data.success) {
                     if (data.path === 'not_in_price_list') {
-                        setAnswers((prev) => ({ ...prev, [currentProblem.line_item_id]: prev[currentProblem.line_item_id] ?? getDefaultPathAAnswers(data.assessment) }));
+                        setAnswers((prev) => ({ ...prev, [lineItemId]: prev[lineItemId] ?? getDefaultPathAAnswers(data.assessment) }));
                     } else {
-                        setAnswers((prev) => ({ ...prev, [currentProblem.line_item_id]: prev[currentProblem.line_item_id] ?? getDefaultPathBAnswers(data.assessment, data) }));
+                        setAnswers((prev) => ({ ...prev, [lineItemId]: prev[lineItemId] ?? getDefaultPathBAnswers(data.assessment, data) }));
                     }
                 }
-            } catch {
+            },
+            onError: () => {
                 setAiResults((prev) => ({
                     ...prev,
-                    [currentProblem.line_item_id]: {
-                        success: false, assessment: '', path: currentProblem.reasons.includes('not_in_price_list') ? 'not_in_price_list' : 'custom_length',
+                    [lineItemId]: {
+                        success: false, assessment: '', path: reasons.includes('not_in_price_list') ? 'not_in_price_list' : 'custom_length',
                         recommended_action: null, parsed_length: null, is_meterage: false, matches: [], error: 'Failed to load assessment',
                     },
                 }));
-            } finally { setLoadingAI(false); }
-        };
-        fetchAssessment();
+            },
+        });
     }, [currentProblem?.line_item_id, requisitionId]);
 
     // ── Path B step logic ──
@@ -262,44 +265,44 @@ export function SmartPricingWizard({ open, onClose, requisitionId, problems, onC
         saveAndNext();
     };
 
-    const saveAndNext = async () => {
+    const saveAndNext = () => {
         if (!currentProblem || !currentAnswer) return;
-        setSaving(true);
-        try {
-            await api.post(`/requisition/${requisitionId}/smart-pricing-context`, {
-                line_item_id: currentProblem.line_item_id, ...currentAnswer, item_exists_in_db: currentProblem.item_exists_in_db,
-            });
-            advanceOrComplete();
-        } catch { /* ignored */ }
-        finally { setSaving(false); }
+        actionHttp.setData({
+            line_item_id: currentProblem.line_item_id, ...currentAnswer, item_exists_in_db: currentProblem.item_exists_in_db,
+        });
+        actionHttp.post(`/requisition/${requisitionId}/smart-pricing-context`, {
+            onSuccess: () => advanceOrComplete(),
+            onError: () => { /* ignored */ },
+        });
     };
 
-    const removeItemAndNext = async () => {
+    const removeItemAndNext = () => {
         if (!currentProblem) return;
-        setSaving(true);
-        try {
-            await api.post(`/requisition/${requisitionId}/smart-pricing-remove-item`, { line_item_id: currentProblem.line_item_id });
-            setRemovedItems((prev) => new Set(prev).add(currentProblem.line_item_id));
-            const remaining = activeProblems.filter((p) => p.line_item_id !== currentProblem.line_item_id);
-            if (remaining.length === 0 || currentIndex >= remaining.length) { setCompleting(true); onComplete(); }
-        } catch { /* ignored */ }
-        finally { setSaving(false); }
+        const lineItemId = currentProblem.line_item_id;
+        actionHttp.setData({ line_item_id: lineItemId });
+        actionHttp.post(`/requisition/${requisitionId}/smart-pricing-remove-item`, {
+            onSuccess: () => {
+                setRemovedItems((prev) => new Set(prev).add(lineItemId));
+                const remaining = activeProblems.filter((p) => p.line_item_id !== lineItemId);
+                if (remaining.length === 0 || currentIndex >= remaining.length) { setCompleting(true); onComplete(); }
+            },
+            onError: () => { /* ignored */ },
+        });
     };
 
-    const skipAndNext = async () => {
+    const skipAndNext = () => {
         if (!currentProblem) return;
-        setSaving(true);
-        try {
-            const path = effectivePath ?? 'custom_length';
-            await api.post(`/requisition/${requisitionId}/smart-pricing-context`, {
-                line_item_id: currentProblem.line_item_id, path,
-                field_worker_choice: path === 'not_in_price_list' ? 'keep_for_office' : undefined,
-                field_worker_notes: '', ai_assessment: currentAI?.assessment ?? '',
-                ai_matches: currentAI?.matches ?? [], item_exists_in_db: currentProblem.item_exists_in_db,
-            });
-            advanceOrComplete();
-        } catch { /* ignored */ }
-        finally { setSaving(false); }
+        const path = effectivePath ?? 'custom_length';
+        actionHttp.setData({
+            line_item_id: currentProblem.line_item_id, path,
+            field_worker_choice: path === 'not_in_price_list' ? 'keep_for_office' : undefined,
+            field_worker_notes: '', ai_assessment: currentAI?.assessment ?? '',
+            ai_matches: currentAI?.matches ?? [], item_exists_in_db: currentProblem.item_exists_in_db,
+        });
+        actionHttp.post(`/requisition/${requisitionId}/smart-pricing-context`, {
+            onSuccess: () => advanceOrComplete(),
+            onError: () => { /* ignored */ },
+        });
     };
 
     const selectMatch = (match: CatalogMatch) => {

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -50,7 +50,8 @@ function fmt(val: number): string {
 export default function BudgetDonutCard({ title, locationId, costCodes, savedCostCode, settingKey, isEditing }: BudgetDonutCardProps) {
     const [selectedCode, setSelectedCode] = useState<string>(savedCostCode ?? '');
     const [pickerOpen, setPickerOpen] = useState(false);
-    const [saving, setSaving] = useState(false);
+
+    const http = useHttp({});
 
     const selected = useMemo(() => costCodes.find((c) => c.cost_code === selectedCode), [costCodes, selectedCode]);
 
@@ -65,14 +66,12 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
     const handleSelect = async (code: string) => {
         setSelectedCode(code);
         setPickerOpen(false);
-        setSaving(true);
-        try {
-            await api.put(`/locations/${locationId}/dashboard-settings`, { [settingKey]: code });
-        } catch {
-            toast.error('Failed to save setting.');
-        } finally {
-            setSaving(false);
-        }
+        http.setData({ [settingKey]: code });
+        http.put(`/locations/${locationId}/dashboard-settings`, {
+            onError: () => {
+                toast.error('Failed to save setting.');
+            },
+        });
     };
 
     const hasData = selected && selected.est_hours > 0;
@@ -98,7 +97,7 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
                                 type="button"
                                 className={cn(
                                     'rounded p-0.5 transition-colors hover:bg-muted',
-                                    saving && 'animate-pulse',
+                                    http.processing && 'animate-pulse',
                                 )}
                                 title="Select cost code"
                             >

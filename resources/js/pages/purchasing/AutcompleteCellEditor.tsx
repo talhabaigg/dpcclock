@@ -4,40 +4,36 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { api } from '@/lib/api';
-import { Check, ChevronsUpDown, Loader2, Star } from 'lucide-react'; // 👈 Loader icon
+import { useHttp } from '@inertiajs/react';
+import { Check, ChevronsUpDown, Loader2, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export function ComboboxDemo({ value, onValueChange, selectedSupplier, selectedLocation }) {
     const [open, setOpen] = useState(true);
     const [search, setSearch] = useState('');
     const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(false); // 👈 loading state
+
+    const http = useHttp({});
 
     useEffect(() => {
-        const fetchItems = async () => {
-            setLoading(true);
-            if (!selectedSupplier) {
-                alert('Please select a supplier first.');
-                setLoading(false);
-                return;
-            }
-            if (!selectedLocation) {
-                alert('Please select a location first.');
-                setLoading(false);
-                return;
-            }
+        if (!selectedSupplier) {
+            alert('Please select a supplier first.');
+            return;
+        }
+        if (!selectedLocation) {
+            alert('Please select a location first.');
+            return;
+        }
 
-            try {
-                const data = await api.get<any[]>('/material-items', {
-                    params: {
-                        search,
-                        supplier_id: selectedSupplier,
-                        location_id: selectedLocation,
-                    },
-                });
+        const params = new URLSearchParams({
+            search,
+            supplier_id: selectedSupplier,
+            location_id: selectedLocation,
+        });
 
-                const mapped = data.map((item) => ({
+        http.get(`/material-items?${params.toString()}`, {
+            onSuccess: (data: any) => {
+                const mapped = data.map((item: any) => ({
                     value: item.id.toString(),
                     label: item.code,
                     description: item.description,
@@ -45,15 +41,12 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier, selectedL
                 }));
 
                 setItems(mapped);
-            } catch (err) {
-                alert('Failed to fetch items. Please try again later. ' + err.message);
+            },
+            onError: () => {
+                alert('Failed to fetch items. Please try again later.');
                 setItems([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (selectedSupplier) fetchItems();
+            },
+        });
     }, [search, selectedSupplier]);
 
     return (
@@ -77,7 +70,7 @@ export function ComboboxDemo({ value, onValueChange, selectedSupplier, selectedL
                 <Command>
                     <CommandInput placeholder="Search item..." className="h-9" value={search} onValueChange={setSearch} />
                     <CommandList>
-                        {loading ? (
+                        {http.processing ? (
                             <div className="flex items-center justify-center py-4">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 <span>Loading...</span>

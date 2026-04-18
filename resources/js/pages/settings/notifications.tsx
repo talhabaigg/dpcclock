@@ -1,5 +1,4 @@
-import { Head } from '@inertiajs/react';
-import { api, ApiError } from '@/lib/api';
+import { Head, useHttp } from '@inertiajs/react';
 import { useState } from 'react';
 
 import HeadingSmall from '@/components/heading-small';
@@ -22,6 +21,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function Notifications() {
     const { isSupported, isSubscribed, permission, isLoading, error, subscribe, unsubscribe } = usePushNotifications();
 
+    const testHttp = useHttp({});
+
     const getStatusIcon = () => {
         if (isLoading) return <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />;
         if (!isSupported) return <AlertCircle className="text-destructive h-5 w-5" />;
@@ -38,7 +39,6 @@ export default function Notifications() {
         return 'Push notifications are disabled. Enable them to receive important updates.';
     };
 
-    const [isSendingTest, setIsSendingTest] = useState(false);
     const [testMessage, setTestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const handleToggle = async () => {
@@ -49,21 +49,20 @@ export default function Notifications() {
         }
     };
 
-    const handleTestNotification = async () => {
-        setIsSendingTest(true);
+    const handleTestNotification = () => {
         setTestMessage(null);
 
-        try {
-            const data = await api.post<{ message: string }>('/settings/notifications/test');
-            setTestMessage({ type: 'success', text: data.message });
-        } catch (err: unknown) {
-            setTestMessage({
-                type: 'error',
-                text: err instanceof ApiError ? err.message : 'Failed to send test notification',
-            });
-        } finally {
-            setIsSendingTest(false);
-        }
+        testHttp.post('/settings/notifications/test', {
+            onSuccess: (data: { message: string }) => {
+                setTestMessage({ type: 'success', text: data.message });
+            },
+            onError: () => {
+                setTestMessage({
+                    type: 'error',
+                    text: 'Failed to send test notification',
+                });
+            },
+        });
     };
 
     return (
@@ -114,8 +113,8 @@ export default function Notifications() {
                                     </Button>
 
                                     {isSubscribed && (
-                                        <Button onClick={handleTestNotification} disabled={isSendingTest} variant="secondary">
-                                            {isSendingTest ? (
+                                        <Button onClick={handleTestNotification} disabled={testHttp.processing} variant="secondary">
+                                            {testHttp.processing ? (
                                                 <>
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                     Sending...

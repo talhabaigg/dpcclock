@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import type { VariationSummary } from '@/types/takeoff';
 import { toast } from 'sonner';
 
@@ -20,14 +20,21 @@ export function useBidView({ drawingId, projectId }: UseBidViewParams) {
     const [newVarCoNumber, setNewVarCoNumber] = useState('');
     const [newVarDescription, setNewVarDescription] = useState('');
     const [newVarType, setNewVarType] = useState<'extra' | 'credit'>('extra');
-    const [creatingVariation, setCreatingVariation] = useState(false);
+
+    const listHttp = useHttp({});
+    const createHttp = useHttp({
+        location_id: projectId,
+        co_number: '',
+        description: '',
+        type: 'extra' as 'extra' | 'credit',
+    });
 
     const activeVariation = activeVariationId ? projectVariations.find((v) => v.id === activeVariationId) ?? null : null;
 
     useEffect(() => {
-        api.get<{ variations: VariationSummary[] }>(`/drawings/${drawingId}/variation-list`)
-            .then((data) => setProjectVariations(data.variations || []))
-            .catch(() => {});
+        listHttp.get(`/drawings/${drawingId}/variation-list`, {
+            onSuccess: (data: { variations: VariationSummary[] }) => setProjectVariations(data.variations || []),
+        });
     }, [drawingId]);
 
     const handleCreateVariation = async () => {
@@ -35,28 +42,28 @@ export function useBidView({ drawingId, projectId }: UseBidViewParams) {
             toast.error('CO number and description are required.');
             return;
         }
-        setCreatingVariation(true);
-        try {
-            const data = await api.post<{ variation: VariationSummary }>('/variations/quick-store', {
-                location_id: projectId,
-                co_number: newVarCoNumber.trim(),
-                description: newVarDescription.trim(),
-                type: newVarType,
-            });
-            const created = data.variation;
-            setProjectVariations((prev) => [...prev, created]);
-            setBidViewLayers((prev) => ({ ...prev, variations: { ...prev.variations, [created.id]: true } }));
-            setActiveVariationId(created.id);
-            setShowNewVariationForm(false);
-            setNewVarCoNumber('');
-            setNewVarDescription('');
-            setNewVarType('extra');
-            toast.success(`Created ${created.co_number}`);
-        } catch {
-            toast.error('Failed to create variation.');
-        } finally {
-            setCreatingVariation(false);
-        }
+        createHttp.setData({
+            location_id: projectId,
+            co_number: newVarCoNumber.trim(),
+            description: newVarDescription.trim(),
+            type: newVarType,
+        });
+        createHttp.post('/variations/quick-store', {
+            onSuccess: (data: { variation: VariationSummary }) => {
+                const created = data.variation;
+                setProjectVariations((prev) => [...prev, created]);
+                setBidViewLayers((prev) => ({ ...prev, variations: { ...prev.variations, [created.id]: true } }));
+                setActiveVariationId(created.id);
+                setShowNewVariationForm(false);
+                setNewVarCoNumber('');
+                setNewVarDescription('');
+                setNewVarType('extra');
+                toast.success(`Created ${created.co_number}`);
+            },
+            onError: () => {
+                toast.error('Failed to create variation.');
+            },
+        });
     };
 
     const resetVariationForm = () => {
@@ -84,7 +91,7 @@ export function useBidView({ drawingId, projectId }: UseBidViewParams) {
         setNewVarDescription,
         newVarType,
         setNewVarType,
-        creatingVariation,
+        creatingVariation: createHttp.processing,
         handleCreateVariation,
         resetVariationForm,
     };

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { fmtCurrency } from '@/lib/utils';
-import { api, ApiError } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { Download, ExternalLink, Loader2, Send, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -43,8 +43,8 @@ export default function PremierVariationTab({
     lineItems,
     onLineItemsChange,
 }: PremierVariationTabProps) {
-    const [generating, setGenerating] = useState(false);
-    const [sending, setSending] = useState(false);
+    const generateHttp = useHttp({});
+    const sendHttp = useHttp({});
     const [confirmRegenerate, setConfirmRegenerate] = useState(false);
     const [confirmSend, setConfirmSend] = useState(false);
 
@@ -55,47 +55,49 @@ export default function PremierVariationTab({
 
     const hasExistingLines = lineItems.length > 0;
 
-    const handleGenerate = async () => {
+    const handleGenerate = () => {
         if (pricingItems.length === 0) {
             toast.error('Add pricing items first');
             return;
         }
-        setGenerating(true);
-        try {
-            let lineItemsResult: LineItem[];
-            let summary: { line_count: number };
 
-            if (variationId) {
-                // Saved variation: generate and persist to DB
-                const data = await api.post<{ variation: { line_items: LineItem[] }; summary: { line_count: number } }>(`/variations/${variationId}/generate-premier`);
-                lineItemsResult = data.variation.line_items;
-                summary = data.summary;
-            } else {
-                // Unsaved variation: compute only, no DB writes
-                if (!locationId) {
-                    toast.error('Please select a location first');
-                    return;
-                }
-                const data = await api.post<{ line_items: LineItem[]; summary: { line_count: number } }>('/variations/preview-premier-lines', {
-                    location_id: Number(locationId),
-                    pricing_items: pricingItems.map((i) => ({
-                        labour_cost: i.labour_cost,
-                        material_cost: i.material_cost,
-                        qty: i.qty,
-                        takeoff_condition_id: i.takeoff_condition_id ?? null,
-                    })),
-                });
-                lineItemsResult = data.line_items;
-                summary = data.summary;
+        if (variationId) {
+            // Saved variation: generate and persist to DB
+            generateHttp.post(`/variations/${variationId}/generate-premier`, {
+                onSuccess: (data: { variation: { line_items: LineItem[] }; summary: { line_count: number } }) => {
+                    onLineItemsChange(data.variation.line_items);
+                    toast.success(`Generated ${data.summary.line_count} Premier lines`);
+                    setConfirmRegenerate(false);
+                },
+                onError: () => {
+                    toast.error('Failed to generate Premier lines');
+                },
+            });
+        } else {
+            // Unsaved variation: compute only, no DB writes
+            if (!locationId) {
+                toast.error('Please select a location first');
+                return;
             }
-
-            onLineItemsChange(lineItemsResult);
-            toast.success(`Generated ${summary.line_count} Premier lines`);
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to generate Premier lines');
-        } finally {
-            setGenerating(false);
-            setConfirmRegenerate(false);
+            generateHttp.setData({
+                location_id: Number(locationId),
+                pricing_items: pricingItems.map((i) => ({
+                    labour_cost: i.labour_cost,
+                    material_cost: i.material_cost,
+                    qty: i.qty,
+                    takeoff_condition_id: i.takeoff_condition_id ?? null,
+                })),
+            });
+            generateHttp.post('/variations/preview-premier-lines', {
+                onSuccess: (data: { line_items: LineItem[]; summary: { line_count: number } }) => {
+                    onLineItemsChange(data.line_items);
+                    toast.success(`Generated ${data.summary.line_count} Premier lines`);
+                    setConfirmRegenerate(false);
+                },
+                onError: () => {
+                    toast.error('Failed to generate Premier lines');
+                },
+            });
         }
     };
 
@@ -107,18 +109,17 @@ export default function PremierVariationTab({
         }
     };
 
-    const handleSendToPremier = async () => {
+    const handleSendToPremier = () => {
         if (!variationId) return;
-        setSending(true);
-        try {
-            await api.get(`/variations/${variationId}/send-to-premier`);
-            toast.success('Variation sent to Premier successfully');
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to send variation to Premier');
-        } finally {
-            setSending(false);
-            setConfirmSend(false);
-        }
+        sendHttp.get(`/variations/${variationId}/send-to-premier`, {
+            onSuccess: () => {
+                toast.success('Variation sent to Premier successfully');
+                setConfirmSend(false);
+            },
+            onError: () => {
+                toast.error('Failed to send variation to Premier');
+            },
+        });
     };
 
     return (
@@ -155,10 +156,10 @@ export default function PremierVariationTab({
                     <div className="sm:ml-auto">
                         <Button
                             onClick={handleGenerateClick}
-                            disabled={generating || pricingItems.length === 0}
+                            disabled={generateHttp.processing || pricingItems.length === 0}
                             className="gap-2"
                         >
-                            {generating ? (
+                            {generateHttp.processing ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                                 <Zap className="h-4 w-4" />
@@ -200,10 +201,10 @@ export default function PremierVariationTab({
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setConfirmSend(true)}
-                                    disabled={sending}
+                                    disabled={sendHttp.processing}
                                     className="h-8 gap-1.5"
                                 >
-                                    {sending ? (
+                                    {sendHttp.processing ? (
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                     ) : (
                                         <Send className="h-3.5 w-3.5" />
@@ -228,8 +229,8 @@ export default function PremierVariationTab({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleGenerate} disabled={generating}>
-                            {generating ? 'Generating...' : 'Regenerate'}
+                        <AlertDialogAction onClick={handleGenerate} disabled={generateHttp.processing}>
+                            {generateHttp.processing ? 'Generating...' : 'Regenerate'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -246,9 +247,9 @@ export default function PremierVariationTab({
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleSendToPremier} disabled={sending}>
-                            {sending ? 'Sending...' : 'Send to Premier'}
+                        <AlertDialogCancel disabled={sendHttp.processing}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleSendToPremier} disabled={sendHttp.processing}>
+                            {sendHttp.processing ? 'Sending...' : 'Send to Premier'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

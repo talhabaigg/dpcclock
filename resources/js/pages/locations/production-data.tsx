@@ -6,10 +6,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router, useHttp, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, BarChart3, CalendarIcon, Check, Eye, Loader2, Trash2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -106,19 +105,22 @@ function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
 export default function ProductionData() {
     const { location, uploads } = usePage<PageProps>().props;
 
+    // HTTP instances
+    const previewHttp = useHttp({});
+    const uploadHttp = useHttp({});
+    const detailHttp = useHttp({});
+    const deleteHttp = useHttp({});
+
     // Upload wizard state
     const [wizardOpen, setWizardOpen] = useState(false);
     const [wizardStep, setWizardStep] = useState<1 | 2>(1);
     const [reportDate, setReportDate] = useState<Date | undefined>(new Date());
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [previewing, setPreviewing] = useState(false);
-    const [confirming, setConfirming] = useState(false);
     const [previewData, setPreviewData] = useState<PreviewResponse | null>(null);
 
     // Detail dialog state
     const [detailOpen, setDetailOpen] = useState(false);
-    const [detailLoading, setDetailLoading] = useState(false);
     const [detailUpload, setDetailUpload] = useState<ProductionUploadData | null>(null);
     const [detailLines, setDetailLines] = useState<ProductionLine[]>([]);
 
@@ -131,8 +133,6 @@ export default function ProductionData() {
         setReportDate(undefined);
         setSelectedFile(null);
         setPreviewData(null);
-        setPreviewing(false);
-        setConfirming(false);
         setDatePickerOpen(false);
     };
 
@@ -142,85 +142,79 @@ export default function ProductionData() {
         setWizardOpen(true);
     };
 
-    const handlePreview = async () => {
+    const handlePreview = () => {
         if (!selectedFile || !reportDate) {
             toast.error('Please select a file and report date.');
             return;
         }
 
-        setPreviewing(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        try {
-            const result = await api.post<PreviewResponse>(`/locations/${location.id}/production-data/preview`, formData);
-            setPreviewData(result);
-            setWizardStep(2);
-        } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : 'Failed to parse file.';
-            toast.error(message);
-        } finally {
-            setPreviewing(false);
-        }
+        previewHttp.setData(formData as any);
+        previewHttp.post(`/locations/${location.id}/production-data/preview`, {
+            onSuccess: (result: PreviewResponse) => {
+                setPreviewData(result);
+                setWizardStep(2);
+            },
+            onError: () => {
+                toast.error('Failed to parse file.');
+            },
+        });
     };
 
-    const handleConfirmUpload = async () => {
+    const handleConfirmUpload = () => {
         if (!selectedFile || !reportDate) return;
 
-        setConfirming(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('report_date', format(reportDate, 'yyyy-MM-dd'));
 
-        try {
-            const result = await api.post<{ success: boolean; total_rows: number; error_rows: number; errors: RowError[] }>(
-                `/locations/${location.id}/production-data/upload`,
-                formData,
-            );
-            if (result.error_rows > 0) {
-                toast.warning(`Uploaded ${result.total_rows} rows — ${result.error_rows} rows had errors.`);
-            } else {
-                toast.success(`Uploaded ${result.total_rows} rows successfully.`);
-            }
-            setWizardOpen(false);
-            resetWizard();
-            router.reload();
-        } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : 'Upload failed.';
-            toast.error(message);
-        } finally {
-            setConfirming(false);
-        }
+        uploadHttp.setData(formData as any);
+        uploadHttp.post(`/locations/${location.id}/production-data/upload`, {
+            onSuccess: (result: { success: boolean; total_rows: number; error_rows: number; errors: RowError[] }) => {
+                if (result.error_rows > 0) {
+                    toast.warning(`Uploaded ${result.total_rows} rows — ${result.error_rows} rows had errors.`);
+                } else {
+                    toast.success(`Uploaded ${result.total_rows} rows successfully.`);
+                }
+                setWizardOpen(false);
+                resetWizard();
+                router.reload();
+            },
+            onError: () => {
+                toast.error('Upload failed.');
+            },
+        });
     };
 
-    const handleViewDetail = async (upload: ProductionUploadData) => {
+    const handleViewDetail = (upload: ProductionUploadData) => {
         setDetailUpload(upload);
         setDetailOpen(true);
-        setDetailLoading(true);
 
-        try {
-            const data = await api.get<{ upload: ProductionUploadData; lines: ProductionLine[] }>(
-                `/locations/${location.id}/production-data/${upload.id}`,
-            );
-            setDetailLines(data.lines);
-        } catch {
-            toast.error('Failed to load upload details.');
-            setDetailOpen(false);
-        } finally {
-            setDetailLoading(false);
-        }
+        detailHttp.get(`/locations/${location.id}/production-data/${upload.id}`, {
+            onSuccess: (data: { upload: ProductionUploadData; lines: ProductionLine[] }) => {
+                setDetailLines(data.lines);
+            },
+            onError: () => {
+                toast.error('Failed to load upload details.');
+                setDetailOpen(false);
+            },
+        });
     };
 
-    const handleDelete = async (uploadId: number) => {
+    const handleDelete = (uploadId: number) => {
         if (!confirm('Are you sure you want to delete this upload?')) return;
 
-        try {
-            await api.delete(`/locations/${location.id}/production-data/${uploadId}`);
-            toast.success('Upload deleted.');
-            router.reload();
-        } catch {
-            toast.error('Failed to delete upload.');
-        }
+        deleteHttp.destroy(`/locations/${location.id}/production-data/${uploadId}`, {
+            onSuccess: () => {
+                toast.success('Upload deleted.');
+                router.reload();
+            },
+            onError: () => {
+                toast.error('Failed to delete upload.');
+            },
+        });
     };
 
     return (
@@ -329,7 +323,7 @@ export default function ProductionData() {
             <Dialog
                 open={wizardOpen}
                 onOpenChange={(open) => {
-                    if (!open && !confirming) {
+                    if (!open && !uploadHttp.processing) {
                         setWizardOpen(false);
                         resetWizard();
                     }
@@ -398,9 +392,9 @@ export default function ProductionData() {
                                     )}
                                 </div>
                                 <div className="flex justify-end">
-                                    <Button onClick={handlePreview} disabled={previewing || !selectedFile || !reportDate} className="gap-2">
-                                        {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                                        {previewing ? 'Parsing...' : 'Preview'}
+                                    <Button onClick={handlePreview} disabled={previewHttp.processing || !selectedFile || !reportDate} className="gap-2">
+                                        {previewHttp.processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                                        {previewHttp.processing ? 'Parsing...' : 'Preview'}
                                     </Button>
                                 </div>
                             </div>
@@ -443,13 +437,13 @@ export default function ProductionData() {
                             <ProductionDataTable columns={productionColumns} data={previewData.rows} />
 
                             <DialogFooter className="mt-auto flex-row justify-between gap-2">
-                                <Button variant="outline" onClick={() => setWizardStep(1)} disabled={confirming} className="gap-2">
+                                <Button variant="outline" onClick={() => setWizardStep(1)} disabled={uploadHttp.processing} className="gap-2">
                                     <ArrowLeft className="h-4 w-4" />
                                     Back
                                 </Button>
-                                <Button onClick={handleConfirmUpload} disabled={confirming} className="gap-2">
-                                    {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                                    {confirming ? 'Uploading...' : 'Confirm Upload'}
+                                <Button onClick={handleConfirmUpload} disabled={uploadHttp.processing} className="gap-2">
+                                    {uploadHttp.processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                    {uploadHttp.processing ? 'Uploading...' : 'Confirm Upload'}
                                 </Button>
                             </DialogFooter>
                         </div>
@@ -470,14 +464,14 @@ export default function ProductionData() {
                             </div>
                         )}
                     </DialogHeader>
-                    {detailLoading ? (
+                    {detailHttp.processing ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
                         </div>
                     ) : (
                         <DetailSummaryCards lines={detailLines} />
                     )}
-                    {!detailLoading && (
+                    {!detailHttp.processing && (
                         <ProductionDataTable columns={productionColumns} data={detailLines} />
                     )}
                 </DialogContent>

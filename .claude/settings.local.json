@@ -89,7 +89,10 @@
       "Bash(npm run *)",
       "Bash(brew list *)",
       "Bash(brew install *)",
-      "Bash(xargs kill *)"
+      "Bash(xargs kill *)",
+      "WebSearch",
+      "WebFetch(domain:inertiajs.com)",
+      "Bash(git rm *)"
     ]
   }
 }

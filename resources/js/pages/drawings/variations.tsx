@@ -4,7 +4,7 @@ import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/compon
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
-import { usePage } from '@inertiajs/react';
+import { useHttp, usePage } from '@inertiajs/react';
 import { FileText, Hand, Hash, Loader2, Maximize2, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -93,7 +93,15 @@ export default function DrawingVariations() {
     const [variations, setVariations] = useState<VariationSummary[]>([]);
     const [selectedVariationId, setSelectedVariationId] = useState<number | null>(null);
     const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
-    const [generatingPremier, setGeneratingPremier] = useState(false);
+
+    // HTTP instances
+    const measurementsHttp = useHttp({});
+    const conditionsHttp = useHttp({});
+    const variationsHttp = useHttp({});
+    const pricingHttp = useHttp({});
+    const saveMeasurementHttp = useHttp({});
+    const deleteMeasurementHttp = useHttp({});
+    const generatePremierHttp = useHttp({});
 
     const conditionPatterns = useMemo(() => {
         const map: Record<number, string> = {};
@@ -111,52 +119,34 @@ export default function DrawingVariations() {
         return map;
     }, [conditions]);
 
-    const getCsrfToken = () => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-    const getXsrfToken = () => {
-        const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
-        return match ? decodeURIComponent(match[1]) : '';
-    };
-
     // Load measurements and calibration
     useEffect(() => {
-        fetch(`/drawings/${drawing.id}/measurements`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => {
+        measurementsHttp.get(`/drawings/${drawing.id}/measurements`, {
+            onSuccess: (data: any) => {
                 setMeasurements(data.measurements || []);
                 setCalibration(data.calibration || null);
-            })
-            .catch(() => {});
+            },
+        });
     }, [drawing.id]);
 
     // Load conditions (for color/pattern display)
     useEffect(() => {
-        fetch(`/locations/${projectId}/takeoff-conditions`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => setConditions(data.conditions || []))
-            .catch(() => {});
+        conditionsHttp.get(`/locations/${projectId}/takeoff-conditions`, {
+            onSuccess: (data: any) => setConditions(data.conditions || []),
+        });
     }, [projectId]);
 
     // Load project variations
     useEffect(() => {
-        fetch(`/drawings/${drawing.id}/variation-list`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => {
+        variationsHttp.get(`/drawings/${drawing.id}/variation-list`, {
+            onSuccess: (data: any) => {
                 setVariations(data.variations || []);
                 // Auto-select first variation
                 if (data.variations?.length > 0 && !selectedVariationId) {
                     setSelectedVariationId(data.variations[0].id);
                 }
-            })
-            .catch(() => {});
+            },
+        });
     }, [drawing.id]);
 
     // Load pricing items for selected variation
@@ -165,84 +155,49 @@ export default function DrawingVariations() {
             setPricingItems([]);
             return;
         }
-        // Pricing items are loaded via the variation's pricingItems relation
-        // We can fetch them via a variation detail endpoint or embed them
-        // For now, the variation-list already loads with lineItems; we need pricing items too
-        // Let's fetch the variation edit data which includes pricingItems
-        fetch(`/variations/${selectedVariationId}/pricing-items`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => {
-                if (!res.ok) return { pricing_items: [] };
-                return res.json();
-            })
-            .then((data) => setPricingItems(data.pricing_items || []))
-            .catch(() => setPricingItems([]));
+        pricingHttp.get(`/variations/${selectedVariationId}/pricing-items`, {
+            onSuccess: (data: any) => setPricingItems(data.pricing_items || []),
+            onError: () => setPricingItems([]),
+        });
     }, [selectedVariationId]);
 
-    const handleGeneratePremier = async (variationId: number) => {
-        setGeneratingPremier(true);
-        try {
-            const response = await fetch(`/variations/${variationId}/generate-premier`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
-            if (!response.ok) throw new Error('Failed to generate');
-            const data = await response.json();
-            toast.success(`Generated ${data.variation?.line_items?.length || 0} Premier line items`);
-            // Refresh variations list
-            fetch(`/drawings/${drawing.id}/variation-list`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            })
-                .then((res) => res.json())
-                .then((d) => setVariations(d.variations || []))
-                .catch(() => {});
-        } catch {
-            toast.error('Failed to generate Premier line items');
-        } finally {
-            setGeneratingPremier(false);
-        }
+    const handleGeneratePremier = (variationId: number) => {
+        generatePremierHttp.post(`/variations/${variationId}/generate-premier`, {
+            onSuccess: (data: any) => {
+                toast.success(`Generated ${data.variation?.line_items?.length || 0} Premier line items`);
+                // Refresh variations list
+                variationsHttp.get(`/drawings/${drawing.id}/variation-list`, {
+                    onSuccess: (d: any) => setVariations(d.variations || []),
+                });
+            },
+            onError: () => {
+                toast.error('Failed to generate Premier line items');
+            },
+        });
     };
 
-    const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
+    const handleMeasurementComplete = (points: Point[], type: 'linear' | 'area' | 'count') => {
         const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
         const counter = measurements.filter((m) => m.type === type).length + 1;
         const name = `Var ${typeLabel} #${counter}`;
 
-        try {
-            const response = await fetch(`/drawings/${drawing.id}/measurements`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    name,
-                    type,
-                    color: '#f59e0b',
-                    category: 'Variation',
-                    points,
-                    scope: 'variation',
-                }),
-            });
-            if (!response.ok) throw new Error('Failed to save');
-            const saved = await response.json();
-            setMeasurements((prev) => [...prev, saved]);
-            toast.success(`Saved: ${name}`);
-        } catch {
-            toast.error('Failed to save measurement.');
-        }
+        saveMeasurementHttp.setData({
+            name,
+            type,
+            color: '#f59e0b',
+            category: 'Variation',
+            points,
+            scope: 'variation',
+        });
+        saveMeasurementHttp.post(`/drawings/${drawing.id}/measurements`, {
+            onSuccess: (saved: any) => {
+                setMeasurements((prev) => [...prev, saved]);
+                toast.success(`Saved: ${name}`);
+            },
+            onError: () => {
+                toast.error('Failed to save measurement.');
+            },
+        });
     };
 
     const handleDeleteMeasurement = async (m: MeasurementData) => {

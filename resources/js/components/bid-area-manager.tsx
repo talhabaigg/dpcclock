@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useHttp } from '@inertiajs/react';
 import { ChevronRight, FolderTree, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -23,14 +24,6 @@ type BidAreaManagerProps = {
     onBidAreasChange: (bidAreas: BidArea[]) => void;
 };
 
-function getCsrfToken() {
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-}
-function getXsrfToken() {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-}
-
 function flattenTree(areas: BidArea[], depth = 0): Array<BidArea & { depth: number }> {
     const result: Array<BidArea & { depth: number }> = [];
     for (const area of areas) {
@@ -43,13 +36,14 @@ function flattenTree(areas: BidArea[], depth = 0): Array<BidArea & { depth: numb
 }
 
 export function BidAreaManager({ open, onOpenChange, locationId, bidAreas, onBidAreasChange }: BidAreaManagerProps) {
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
-
     // Form state
     const [formName, setFormName] = useState('');
     const [formParentId, setFormParentId] = useState<string>('none');
     const [editingId, setEditingId] = useState<number | null>(null);
+
+    const httpLoad = useHttp({});
+    const httpSave = useHttp({});
+    const httpDelete = useHttp({});
 
     const flatAreas = useMemo(() => flattenTree(bidAreas), [bidAreas]);
 
@@ -71,15 +65,10 @@ export function BidAreaManager({ open, onOpenChange, locationId, bidAreas, onBid
     // Fetch bid areas when dialog opens
     useEffect(() => {
         if (!open || !locationId) return;
-        setLoading(true);
-        fetch(`/locations/${locationId}/bid-areas`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => onBidAreasChange(data.bidAreas || []))
-            .catch(() => toast.error('Failed to load bid areas'))
-            .finally(() => setLoading(false));
+        httpLoad.get(`/locations/${locationId}/bid-areas`, {
+            onSuccess: (data: any) => onBidAreasChange(data.bidAreas || []),
+            onError: () => toast.error('Failed to load bid areas'),
+        });
     }, [open, locationId]);
 
     const resetForm = () => {
@@ -94,88 +83,56 @@ export function BidAreaManager({ open, onOpenChange, locationId, bidAreas, onBid
         setFormParentId(area.parent_id ? String(area.parent_id) : 'none');
     };
 
-    const handleSave = async () => {
+    const handleSave = () => {
         if (!formName.trim()) {
             toast.error('Name is required');
             return;
         }
 
-        setSaving(true);
         const parentId = formParentId === 'none' ? null : Number(formParentId);
+        const isEdit = editingId !== null;
+        const url = isEdit
+            ? `/locations/${locationId}/bid-areas/${editingId}`
+            : `/locations/${locationId}/bid-areas`;
 
-        try {
-            const isEdit = editingId !== null;
-            const url = isEdit
-                ? `/locations/${locationId}/bid-areas/${editingId}`
-                : `/locations/${locationId}/bid-areas`;
+        httpSave.setData({
+            name: formName.trim(),
+            parent_id: parentId,
+        });
 
-            const response = await fetch(url, {
-                method: isEdit ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    name: formName.trim(),
-                    parent_id: parentId,
-                }),
-            });
+        const options = {
+            onSuccess: () => {
+                toast.success(isEdit ? 'Bid area updated' : 'Bid area created');
+                // Refetch the tree
+                httpLoad.get(`/locations/${locationId}/bid-areas`, {
+                    onSuccess: (data: any) => onBidAreasChange(data.bidAreas || []),
+                });
+                resetForm();
+            },
+            onError: () => toast.error('Failed to save bid area'),
+        };
 
-            if (!response.ok) {
-                const err = await response.json().catch(() => null);
-                throw new Error(err?.message || 'Failed to save');
-            }
-
-            toast.success(isEdit ? 'Bid area updated' : 'Bid area created');
-
-            // Refetch the tree
-            const listRes = await fetch(`/locations/${locationId}/bid-areas`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-            const listData = await listRes.json();
-            onBidAreasChange(listData.bidAreas || []);
-            resetForm();
-        } catch (e: unknown) {
-            toast.error(e instanceof Error ? e.message : 'Failed to save bid area');
-        } finally {
-            setSaving(false);
+        if (isEdit) {
+            httpSave.put(url, options);
+        } else {
+            httpSave.post(url, options);
         }
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = (id: number) => {
         if (!confirm('Delete this bid area and all its children?')) return;
 
-        try {
-            const response = await fetch(`/locations/${locationId}/bid-areas/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) throw new Error('Failed to delete');
-
-            toast.success('Bid area deleted');
-
-            // Refetch
-            const listRes = await fetch(`/locations/${locationId}/bid-areas`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-            const listData = await listRes.json();
-            onBidAreasChange(listData.bidAreas || []);
-
-            if (editingId === id) resetForm();
-        } catch {
-            toast.error('Failed to delete bid area');
-        }
+        httpDelete.destroy(`/locations/${locationId}/bid-areas/${id}`, {
+            onSuccess: () => {
+                toast.success('Bid area deleted');
+                // Refetch
+                httpLoad.get(`/locations/${locationId}/bid-areas`, {
+                    onSuccess: (data: any) => onBidAreasChange(data.bidAreas || []),
+                });
+                if (editingId === id) resetForm();
+            },
+            onError: () => toast.error('Failed to delete bid area'),
+        });
     };
 
     return (
@@ -226,8 +183,8 @@ export function BidAreaManager({ open, onOpenChange, locationId, bidAreas, onBid
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button size="sm" className="h-7 px-2 text-[11px]" onClick={handleSave} disabled={saving}>
-                                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : editingId ? 'Save' : <Plus className="h-3 w-3" />}
+                            <Button size="sm" className="h-7 px-2 text-[11px]" onClick={handleSave} disabled={httpSave.processing}>
+                                {httpSave.processing ? <Loader2 className="h-3 w-3 animate-spin" /> : editingId ? 'Save' : <Plus className="h-3 w-3" />}
                             </Button>
                             {editingId && (
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={resetForm}>
@@ -239,7 +196,7 @@ export function BidAreaManager({ open, onOpenChange, locationId, bidAreas, onBid
 
                     {/* Tree list */}
                     <div className="flex-1 overflow-y-auto">
-                        {loading ? (
+                        {httpLoad.processing ? (
                             <div className="flex items-center justify-center py-8">
                                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             </div>

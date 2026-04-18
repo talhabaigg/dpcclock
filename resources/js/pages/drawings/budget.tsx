@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { cn } from '@/lib/utils';
-import { usePage } from '@inertiajs/react';
+import { useHttp, usePage } from '@inertiajs/react';
 import { BarChart3, Calendar, ChevronDown, ChevronRight, Layers, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, ReferenceLine, XAxis, YAxis } from 'recharts';
@@ -81,15 +81,6 @@ type GroupData = {
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-function getCsrfToken() {
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-}
-
-function getXsrfToken() {
-    const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-}
-
 function computeProjected(estHrs: number, earnedHrs: number, usedHrs: number) {
     if (usedHrs <= 0 || earnedHrs <= 0) return { pct: null, hours: null, variance: null };
     const cpi = earnedHrs / usedHrs;
@@ -194,6 +185,12 @@ export default function DrawingBudget() {
     const canEditBudget = auth?.permissions?.includes('budget.edit') ?? false;
 
     const projectId = project?.id || drawing.project_id;
+
+    // HTTP instances
+    const budgetEntryHttp = useHttp({});
+    const workDateHttp = useHttp({});
+    const lccHistoryHttp = useHttp({});
+    const projectHistoryHttp = useHttp({});
 
     // State
     const [showBidViewPanel, setShowBidViewPanel] = useState(true);
@@ -343,47 +340,32 @@ export default function DrawingBudget() {
         }
 
         // Debounce save
-        saveTimers.current[timerKey] = setTimeout(async () => {
-            try {
-                await fetch(`/locations/${projectId}/budget-hours`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        'X-XSRF-TOKEN': getXsrfToken(),
-                        Accept: 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        bid_area_id: bidAreaId,
-                        labour_cost_code_id: lccId,
-                        work_date: workDate,
-                        used_hours: payload.used_hours ?? usedHoursMap[key] ?? 0,
-                        percent_complete: payload.percent_complete !== undefined
-                            ? payload.percent_complete
-                            : (percentCompleteMap[key] ?? null),
-                    }),
-                });
-            } catch {
-                toast.error('Failed to save budget entry');
-            }
+        saveTimers.current[timerKey] = setTimeout(() => {
+            budgetEntryHttp.setData({
+                bid_area_id: bidAreaId,
+                labour_cost_code_id: lccId,
+                work_date: workDate,
+                used_hours: payload.used_hours ?? usedHoursMap[key] ?? 0,
+                percent_complete: payload.percent_complete !== undefined
+                    ? payload.percent_complete
+                    : (percentCompleteMap[key] ?? null),
+            });
+            budgetEntryHttp.post(`/locations/${projectId}/budget-hours`, {
+                onError: () => toast.error('Failed to save budget entry'),
+            });
         }, 600);
     }, [projectId, workDate, usedHoursMap, percentCompleteMap]);
 
     // ─── Work date change ───────────────────────────────────────────────────
-    const handleWorkDateChange = useCallback(async (newDate: string) => {
+    const handleWorkDateChange = useCallback((newDate: string) => {
         setWorkDate(newDate);
-        try {
-            const res = await fetch(`/locations/${projectId}/budget-hours?work_date=${newDate}`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-            const data = await res.json();
-            setUsedHoursMap(data.usedHoursMap || {});
-            setPercentCompleteMap(data.percentCompleteMap || {});
-        } catch {
-            toast.error('Failed to load hours for date');
-        }
+        workDateHttp.get(`/locations/${projectId}/budget-hours?work_date=${newDate}`, {
+            onSuccess: (data: any) => {
+                setUsedHoursMap(data.usedHoursMap || {});
+                setPercentCompleteMap(data.percentCompleteMap || {});
+            },
+            onError: () => toast.error('Failed to load hours for date'),
+        });
     }, [projectId]);
 
     // Toggle group collapse
@@ -413,25 +395,22 @@ export default function DrawingBudget() {
             return;
         }
         setLoadingHistory(true);
-        fetch(
+        lccHistoryHttp.get(
             `/locations/${projectId}/budget-hours-history?bid_area_id=${selectedGridRow.bid_area_id ?? 0}&labour_cost_code_id=${selectedGridRow.labour_cost_code_id}`,
-            { headers: { Accept: 'application/json' }, credentials: 'same-origin' },
-        )
-            .then((res) => res.json())
-            .then((data) => setLccHistory(data.history || []))
-            .catch(() => setLccHistory([]))
-            .finally(() => setLoadingHistory(false));
+            {
+                onSuccess: (data: any) => setLccHistory(data.history || []),
+                onError: () => setLccHistory([]),
+                onFinish: () => setLoadingHistory(false),
+            },
+        );
     }, [selectedGridRow?.bid_area_id, selectedGridRow?.labour_cost_code_id, projectId]);
 
     // Fetch project-level history for overview chart
     useEffect(() => {
-        fetch(`/locations/${projectId}/budget-hours-history`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => setProjectHistory(data.history || []))
-            .catch(() => setProjectHistory([]));
+        projectHistoryHttp.get(`/locations/${projectId}/budget-hours-history`, {
+            onSuccess: (data: any) => setProjectHistory(data.history || []),
+            onError: () => setProjectHistory([]),
+        });
     }, [projectId]);
 
     const today = useMemo(() => new Date().toISOString().split('T')[0], []);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import type { Point, CalibrationData, MeasurementData, ViewMode } from '@/components/measurement-layer';
 import { toast } from 'sonner';
 
@@ -28,7 +28,9 @@ export function useCalibration({
     const [paperSize, setPaperSize] = useState('A1');
     const [scale, setScale] = useState('1:50');
     const [customScale, setCustomScale] = useState('');
-    const [saving, setSaving] = useState(false);
+
+    const saveHttp = useHttp({});
+    const deleteHttp = useHttp({});
 
     const handleCalibrationComplete = (pointA: Point, pointB: Point) => {
         setPendingPoints({ a: pointA, b: pointB });
@@ -38,47 +40,43 @@ export function useCalibration({
     };
 
     const handleSave = async () => {
-        setSaving(true);
-        try {
-            let body: Record<string, unknown>;
-            if (method === 'manual') {
-                if (!pendingPoints) {
-                    toast.error('Draw a reference line first.');
-                    setSaving(false);
-                    return;
-                }
-                body = {
-                    method: 'manual',
-                    point_a_x: pendingPoints.a.x,
-                    point_a_y: pendingPoints.a.y,
-                    point_b_x: pendingPoints.b.x,
-                    point_b_y: pendingPoints.b.y,
-                    real_distance: parseFloat(distance),
-                    unit,
-                };
-            } else {
-                const scaleValue = scale === 'Custom' ? customScale : scale;
-                body = {
-                    method: 'preset',
-                    paper_size: paperSize,
-                    drawing_scale: scaleValue,
-                    unit,
-                };
+        let body: Record<string, unknown>;
+        if (method === 'manual') {
+            if (!pendingPoints) {
+                toast.error('Draw a reference line first.');
+                return;
             }
-
-            const data = await api.post<{ calibration: CalibrationData; measurements: MeasurementData[] }>(
-                `/drawings/${drawingId}/calibration`,
-                body,
-            );
-            onCalibrationSaved(data.calibration, data.measurements || []);
-            setDialogOpen(false);
-            setPendingPoints(null);
-            toast.success('Scale calibration saved.');
-        } catch {
-            toast.error('Failed to save calibration.');
-        } finally {
-            setSaving(false);
+            body = {
+                method: 'manual',
+                point_a_x: pendingPoints.a.x,
+                point_a_y: pendingPoints.a.y,
+                point_b_x: pendingPoints.b.x,
+                point_b_y: pendingPoints.b.y,
+                real_distance: parseFloat(distance),
+                unit,
+            };
+        } else {
+            const scaleValue = scale === 'Custom' ? customScale : scale;
+            body = {
+                method: 'preset',
+                paper_size: paperSize,
+                drawing_scale: scaleValue,
+                unit,
+            };
         }
+
+        saveHttp.setData(body);
+        saveHttp.post(`/drawings/${drawingId}/calibration`, {
+            onSuccess: (data: { calibration: CalibrationData; measurements: MeasurementData[] }) => {
+                onCalibrationSaved(data.calibration, data.measurements || []);
+                setDialogOpen(false);
+                setPendingPoints(null);
+                toast.success('Scale calibration saved.');
+            },
+            onError: () => {
+                toast.error('Failed to save calibration.');
+            },
+        });
     };
 
     const handleDelete = async () => {
@@ -90,13 +88,15 @@ export function useCalibration({
         });
         if (!confirmed) return;
 
-        try {
-            await api.delete(`/drawings/${drawingId}/calibration`);
-            onCalibrationDeleted();
-            toast.success('Calibration deleted.');
-        } catch {
-            toast.error('Failed to delete calibration.');
-        }
+        deleteHttp.destroy(`/drawings/${drawingId}/calibration`, {
+            onSuccess: () => {
+                onCalibrationDeleted();
+                toast.success('Calibration deleted.');
+            },
+            onError: () => {
+                toast.error('Failed to delete calibration.');
+            },
+        });
     };
 
     const handleOpenDialog = (m: 'manual' | 'preset') => {
@@ -125,7 +125,7 @@ export function useCalibration({
         setScale,
         customScale,
         setCustomScale,
-        saving,
+        saving: saveHttp.processing,
         handleCalibrationComplete,
         handleSave,
         handleDelete,

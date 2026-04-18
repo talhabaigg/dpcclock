@@ -5,8 +5,7 @@ import { ProductionPanel, getPercentColor, type LccSummary } from '@/components/
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
-import { usePage } from '@inertiajs/react';
-import { api } from '@/lib/api';
+import { usePage, useHttp } from '@inertiajs/react';
 import { Calendar, ChevronRight, Hand, MousePointer2, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -200,7 +199,11 @@ export default function DrawingProduction() {
     const [lccSummary, setLccSummary] = useState<LccSummary[]>(initialSummary || []);
     const [percentDropdown, setPercentDropdown] = useState<{ measurementId: number; segmentIndex?: number; x: number; y: number } | null>(null);
     const [workDate, setWorkDate] = useState(initialWorkDate || new Date().toISOString().split('T')[0]);
-    const [loadingDate, setLoadingDate] = useState(false);
+
+    const segmentStatusHttp = useHttp({});
+    const measurementStatusHttp = useHttp({});
+    const bulkStatusHttp = useHttp({});
+    const dateStatusHttp = useHttp({});
 
     // F2: Multi-select state — keys: "m-{id}" for whole measurements, "s-{measId}-{segIdx}" for segments
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -380,7 +383,7 @@ export default function DrawingProduction() {
     }, [selectedLccId, selectedItems.size]);
 
     // Update status for a single measurement or segment
-    const updateStatus = useCallback(async (measurementId: number, percent: number, segmentIndex?: number) => {
+    const updateStatus = useCallback((measurementId: number, percent: number, segmentIndex?: number) => {
         if (!selectedLccId) return;
 
         setPercentDropdown(null);
@@ -390,46 +393,52 @@ export default function DrawingProduction() {
             const segKey = `${measurementId}-${segmentIndex}`;
             setSegmentStatuses(prev => ({ ...prev, [segKey]: percent }));
 
-            try {
-                const data = await api.post<{ statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }>(`/drawings/${drawing.id}/segment-status`, {
-                    measurement_id: measurementId,
-                    labour_cost_code_id: selectedLccId,
-                    segment_index: segmentIndex,
-                    percent_complete: percent,
-                    work_date: workDate,
-                });
-                if (data.statuses) setStatuses(data.statuses);
-                if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
-                if (data.lccSummary) setLccSummary(data.lccSummary);
-            } catch {
-                setSegmentStatuses(prev => {
-                    const next = { ...prev };
-                    delete next[segKey];
-                    return next;
-                });
-                toast.error('Failed to update status');
-            }
+            segmentStatusHttp.setData({
+                measurement_id: measurementId,
+                labour_cost_code_id: selectedLccId,
+                segment_index: segmentIndex,
+                percent_complete: percent,
+                work_date: workDate,
+            });
+            segmentStatusHttp.post(`/drawings/${drawing.id}/segment-status`, {
+                onSuccess: (data: { statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }) => {
+                    if (data.statuses) setStatuses(data.statuses);
+                    if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
+                    if (data.lccSummary) setLccSummary(data.lccSummary);
+                },
+                onError: () => {
+                    setSegmentStatuses(prev => {
+                        const next = { ...prev };
+                        delete next[segKey];
+                        return next;
+                    });
+                    toast.error('Failed to update status');
+                },
+            });
         } else {
             // Measurement-level update
             const key = `${measurementId}-${selectedLccId}`;
             setStatuses(prev => ({ ...prev, [key]: percent }));
 
-            try {
-                const data = await api.post<{ lccSummary?: LccSummary[] }>(`/drawings/${drawing.id}/measurement-status`, {
-                    measurement_id: measurementId,
-                    labour_cost_code_id: selectedLccId,
-                    percent_complete: percent,
-                    work_date: workDate,
-                });
-                if (data.lccSummary) setLccSummary(data.lccSummary);
-            } catch {
-                setStatuses(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-                toast.error('Failed to update status');
-            }
+            measurementStatusHttp.setData({
+                measurement_id: measurementId,
+                labour_cost_code_id: selectedLccId,
+                percent_complete: percent,
+                work_date: workDate,
+            });
+            measurementStatusHttp.post(`/drawings/${drawing.id}/measurement-status`, {
+                onSuccess: (data: { lccSummary?: LccSummary[] }) => {
+                    if (data.lccSummary) setLccSummary(data.lccSummary);
+                },
+                onError: () => {
+                    setStatuses(prev => {
+                        const next = { ...prev };
+                        delete next[key];
+                        return next;
+                    });
+                    toast.error('Failed to update status');
+                },
+            });
         }
     }, [drawing.id, selectedLccId, workDate]);
 

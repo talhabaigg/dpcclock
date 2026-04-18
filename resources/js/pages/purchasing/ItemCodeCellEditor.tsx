@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { ICellEditorParams } from 'ag-grid-community';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { Loader2, Package, Star } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
@@ -23,8 +23,9 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
     const [search, setSearch] = useState('');
     const [items, setItems] = useState<Item[]>([]);
-    const [loading, setLoading] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+    const http = useHttp({});
 
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -49,21 +50,18 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
     // Fetch items on search change
     useEffect(() => {
-        const fetchItems = async () => {
-            if (!selectedSupplier || !selectedLocation) {
-                return;
-            }
+        if (!selectedSupplier || !selectedLocation) {
+            return;
+        }
 
-            setLoading(true);
-            try {
-                const data = await api.get<any[]>('/material-items', {
-                    params: {
-                        search,
-                        supplier_id: selectedSupplier,
-                        location_id: selectedLocation,
-                    },
-                });
+        const params = new URLSearchParams({
+            search,
+            supplier_id: selectedSupplier,
+            location_id: selectedLocation,
+        });
 
+        http.get(`/material-items?${params.toString()}`, {
+            onSuccess: (data: any) => {
                 const mapped = data.map((item: any) => ({
                     value: item.id.toString(),
                     label: item.code,
@@ -73,14 +71,11 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
                 setItems(mapped);
                 setHighlightedIndex(0);
-            } catch {
+            },
+            onError: () => {
                 setItems([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchItems();
+            },
+        });
     }, [search, selectedSupplier, selectedLocation]);
 
     // Scroll highlighted item into view
@@ -177,7 +172,7 @@ export const ItemCodeCellEditor = forwardRef((props: ItemCodeCellEditorParams, r
 
             {/* Results List */}
             <div ref={listRef} className="max-h-[320px] overflow-y-auto p-1.5">
-                {loading ? (
+                {http.processing ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-8">
                         <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
                             <Loader2 className="text-primary h-5 w-5 animate-spin" />

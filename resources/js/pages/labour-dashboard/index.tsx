@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
 import { Head, useHttp, usePage } from '@inertiajs/react';
 import { format, parse, startOfMonth, subMonths } from 'date-fns';
-import { api } from '@/lib/api';
 import { Calendar as CalendarIcon, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AnnualLeaveTrend, { type AnnualLeaveTrendPoint } from './annual-leave-trend';
@@ -85,7 +84,6 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
     const [sickIndicators, setSickIndicators] = useState<SickLeaveIndicatorRow[]>([]);
     const [locationSearch, setLocationSearch] = useState('');
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
-    const [syncing, setSyncing] = useState(false);
     const [syncMessage, setSyncMessage] = useState('');
     const initialFetchDone = useRef(false);
 
@@ -97,6 +95,40 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         location_ids: initial.locationIds,
         date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
         date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const sickLeaveHttp = useHttp<{ location_ids: number[]; date_from: string; date_to: string }>({
+        location_ids: initial.locationIds,
+        date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
+        date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const annualLeaveHttp = useHttp<{ location_ids: number[]; date_from: string; date_to: string }>({
+        location_ids: initial.locationIds,
+        date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
+        date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const leaveBalancesHttp = useHttp<{ location_ids: number[]; date_from: string; date_to: string }>({
+        location_ids: initial.locationIds,
+        date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
+        date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const workforceStatsHttp = useHttp<{ location_ids: number[]; date_from: string; date_to: string }>({
+        location_ids: initial.locationIds,
+        date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
+        date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const sickIndicatorsHttp = useHttp<{ location_ids: number[]; date_from: string; date_to: string }>({
+        location_ids: initial.locationIds,
+        date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
+        date_to: format(initial.dateTo, 'yyyy-MM-dd'),
+    });
+
+    const syncHttp = useHttp<{ from: string }>({
+        from: format(initial.dateFrom, 'yyyy-MM-dd'),
     });
 
     const filteredLocations = useMemo(() => {
@@ -133,7 +165,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         form.setData('date_to', format(date, 'yyyy-MM-dd'));
     };
 
-    const fetchData = async () => {
+    const fetchData = () => {
         if (selectedLocationIds.length === 0) return;
         updateUrlParams(selectedLocationIds, dateFrom, dateTo, allIds);
 
@@ -143,39 +175,47 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
             date_to: format(dateTo, 'yyyy-MM-dd'),
         };
 
-        try {
-            const [matrixResponse, sickLeaveResponse, annualLeaveResponse, leaveBalancesResponse, workforceStatsResponse, sickIndicatorsResponse] = await Promise.all([
-                form.post('/labour-dashboard/data'),
-                api.post<typeof sickLeaveData>('/labour-dashboard/sick-leave-trend', payload),
-                api.post<AnnualLeaveTrendPoint[]>('/labour-dashboard/annual-leave-trend', payload),
-                api.post<LeaveBalanceRow[]>('/labour-dashboard/leave-balances', payload),
-                api.post<WorkforceStatsData>('/labour-dashboard/workforce-stats', payload),
-                api.post<SickLeaveIndicatorRow[]>('/labour-dashboard/sick-leave-indicators', payload),
-            ]);
-            if (matrixResponse) setData(matrixResponse);
-            if (sickLeaveResponse) setSickLeaveData(sickLeaveResponse);
-            if (annualLeaveResponse) setAnnualLeaveData(annualLeaveResponse);
-            if (leaveBalancesResponse) setLeaveBalances(leaveBalancesResponse);
-            if (workforceStatsResponse) setWorkforceStats(workforceStatsResponse);
-            if (sickIndicatorsResponse) setSickIndicators(sickIndicatorsResponse);
-        } catch {
-            // errors handled by useHttp
-        }
+        form.post('/labour-dashboard/data', {
+            onSuccess: (response: HoursMatrixRow[]) => { if (response) setData(response); },
+        });
+
+        sickLeaveHttp.setData(payload);
+        sickLeaveHttp.post('/labour-dashboard/sick-leave-trend', {
+            onSuccess: (response: typeof sickLeaveData) => { if (response) setSickLeaveData(response); },
+        });
+
+        annualLeaveHttp.setData(payload);
+        annualLeaveHttp.post('/labour-dashboard/annual-leave-trend', {
+            onSuccess: (response: AnnualLeaveTrendPoint[]) => { if (response) setAnnualLeaveData(response); },
+        });
+
+        leaveBalancesHttp.setData(payload);
+        leaveBalancesHttp.post('/labour-dashboard/leave-balances', {
+            onSuccess: (response: LeaveBalanceRow[]) => { if (response) setLeaveBalances(response); },
+        });
+
+        workforceStatsHttp.setData(payload);
+        workforceStatsHttp.post('/labour-dashboard/workforce-stats', {
+            onSuccess: (response: WorkforceStatsData) => { if (response) setWorkforceStats(response); },
+        });
+
+        sickIndicatorsHttp.setData(payload);
+        sickIndicatorsHttp.post('/labour-dashboard/sick-leave-indicators', {
+            onSuccess: (response: SickLeaveIndicatorRow[]) => { if (response) setSickIndicators(response); },
+        });
     };
 
-    const syncLeaveAccruals = async () => {
-        setSyncing(true);
+    const syncLeaveAccruals = () => {
         setSyncMessage('');
-        try {
-            const result = await api.post<{ message: string }>('/labour-dashboard/sync-leave-accruals', {
-                from: format(dateFrom, 'yyyy-MM-dd'),
-            });
-            setSyncMessage(result.message);
-        } catch {
-            setSyncMessage('Sync failed');
-        } finally {
-            setSyncing(false);
-        }
+        syncHttp.setData({ from: format(dateFrom, 'yyyy-MM-dd') });
+        syncHttp.post('/labour-dashboard/sync-leave-accruals', {
+            onSuccess: (result: { message: string }) => {
+                setSyncMessage(result.message);
+            },
+            onError: () => {
+                setSyncMessage('Sync failed');
+            },
+        });
     };
 
     // Auto-fetch on initial load
@@ -275,9 +315,9 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
                         {isAdmin && (
                             <div className="ml-auto flex items-center gap-2">
                                 {syncMessage && <span className="text-xs text-muted-foreground">{syncMessage}</span>}
-                                <Button variant="outline" size="sm" onClick={syncLeaveAccruals} disabled={syncing}>
-                                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                                    {syncing ? 'Syncing...' : 'Sync Pay Runs'}
+                                <Button variant="outline" size="sm" onClick={syncLeaveAccruals} disabled={syncHttp.processing}>
+                                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${syncHttp.processing ? 'animate-spin' : ''}`} />
+                                    {syncHttp.processing ? 'Syncing...' : 'Sync Pay Runs'}
                                 </Button>
                             </div>
                         )}

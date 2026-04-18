@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, useHttp } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -30,75 +29,83 @@ export default function LayoutManager({ allLayouts, activeLayoutId }: LayoutMana
     const [renameName, setRenameName] = useState('');
     const [renameId, setRenameId] = useState<number | null>(null);
     const [cloneFrom, setCloneFrom] = useState(false);
-    const [loading, setLoading] = useState(false);
+
+    const activateHttp = useHttp({});
+    const createHttp = useHttp({ name: '', clone_from: undefined as number | undefined });
+    const renameHttp = useHttp({ name: '' });
+    const deleteHttp = useHttp({});
+    const listHttp = useHttp({});
+
+    const loading = activateHttp.processing || createHttp.processing || renameHttp.processing || deleteHttp.processing;
 
     const activeLayout = layouts.find((l) => l.is_active);
     const deleteTarget = layouts.find((l) => l.id === deleteConfirmId);
 
     const handleActivate = async (id: number) => {
-        try {
-            setLoading(true);
-            await api.post(`/dashboard-layouts/${id}/activate`);
-            router.reload({ preserveScroll: true });
-        } catch {
-            toast.error('Failed to activate layout.');
-        } finally {
-            setLoading(false);
-        }
+        activateHttp.post(`/dashboard-layouts/${id}/activate`, {
+            onSuccess: () => {
+                router.reload({ preserveScroll: true });
+            },
+            onError: () => {
+                toast.error('Failed to activate layout.');
+            },
+        });
     };
 
     const handleCreate = async () => {
         if (!newName.trim()) return;
-        try {
-            setLoading(true);
-            await api.post('/dashboard-layouts', {
-                name: newName.trim(),
-                clone_from: cloneFrom ? activeLayoutId : undefined,
-            });
-            setCreateOpen(false);
-            setNewName('');
-            setCloneFrom(false);
-            // Refresh layouts list
-            const updated = await api.get<LayoutOption[]>('/dashboard-layouts');
-            setLayouts(updated);
-            toast.success('Layout created.');
-        } catch {
-            toast.error('Failed to create layout.');
-        } finally {
-            setLoading(false);
-        }
+        createHttp.setData({
+            name: newName.trim(),
+            clone_from: cloneFrom ? activeLayoutId ?? undefined : undefined,
+        });
+        createHttp.post('/dashboard-layouts', {
+            onSuccess: () => {
+                setCreateOpen(false);
+                setNewName('');
+                setCloneFrom(false);
+                // Refresh layouts list
+                listHttp.get('/dashboard-layouts', {
+                    onSuccess: (data: LayoutOption[]) => {
+                        setLayouts(data);
+                    },
+                });
+                toast.success('Layout created.');
+            },
+            onError: () => {
+                toast.error('Failed to create layout.');
+            },
+        });
     };
 
     const handleRename = async () => {
         if (!renameName.trim() || !renameId) return;
-        try {
-            setLoading(true);
-            await api.put(`/dashboard-layouts/${renameId}`, { name: renameName.trim() });
-            setRenameOpen(false);
-            setLayouts((prev) => prev.map((l) => l.id === renameId ? { ...l, name: renameName.trim() } : l));
-            if (renameId === activeLayoutId) {
-                router.reload({ preserveScroll: true });
-            }
-            toast.success('Layout renamed.');
-        } catch {
-            toast.error('Failed to rename layout.');
-        } finally {
-            setLoading(false);
-        }
+        renameHttp.setData({ name: renameName.trim() });
+        renameHttp.put(`/dashboard-layouts/${renameId}`, {
+            onSuccess: () => {
+                setRenameOpen(false);
+                setLayouts((prev) => prev.map((l) => l.id === renameId ? { ...l, name: renameName.trim() } : l));
+                if (renameId === activeLayoutId) {
+                    router.reload({ preserveScroll: true });
+                }
+                toast.success('Layout renamed.');
+            },
+            onError: () => {
+                toast.error('Failed to rename layout.');
+            },
+        });
     };
 
     const handleDelete = async (id: number) => {
-        try {
-            setLoading(true);
-            await api.delete(`/dashboard-layouts/${id}`);
-            setDeleteConfirmId(null);
-            setLayouts((prev) => prev.filter((l) => l.id !== id));
-            toast.success('Layout deleted.');
-        } catch {
-            toast.error('Cannot delete this layout.');
-        } finally {
-            setLoading(false);
-        }
+        deleteHttp.destroy(`/dashboard-layouts/${id}`, {
+            onSuccess: () => {
+                setDeleteConfirmId(null);
+                setLayouts((prev) => prev.filter((l) => l.id !== id));
+                toast.success('Layout deleted.');
+            },
+            onError: () => {
+                toast.error('Cannot delete this layout.');
+            },
+        });
     };
 
     const openRename = (layout: LayoutOption) => {

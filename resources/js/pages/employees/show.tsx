@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import { AlertTriangle, BookOpen, Check, Clock, Download, ExternalLink, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
@@ -257,11 +257,11 @@ export default function EmployeeShow() {
     const [locationDialogOpen, setLocationDialogOpen] = useState(false);
     const [selectedLocationNames, setSelectedLocationNames] = useState<Set<string>>(new Set());
     const [ehLocations, setEhLocations] = useState<{ id: number; name: string; externalId: string | null }[]>([]);
-    const [loadingLocations, setLoadingLocations] = useState(false);
-    const [savingLocations, setSavingLocations] = useState(false);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const httpGetLocations = useHttp({});
+    const httpSaveLocations = useHttp({});
 
     const filteredLocations = useMemo(() => {
         if (!searchQuery) return ehLocations;
@@ -271,40 +271,26 @@ export default function EmployeeShow() {
         );
     }, [ehLocations, searchQuery]);
 
-    const openLocationDialog = useCallback(async () => {
+    const openLocationDialog = useCallback(() => {
         setLocationDialogOpen(true);
-        setLoadingLocations(true);
         setLocationError(null);
         setLocationSuccess(null);
         setSearchQuery('');
 
-        try {
-            const response = await fetch(`/employees/${emp.id}/locations`, {
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-            });
-
-            if (!response.ok) throw new Error('Failed to fetch current locations');
-
-            const data = await response.json();
-
-            // Set available EH locations
-            setEhLocations(data.allEhLocations || []);
-
-            // Parse pipe-separated location names (these are the exact EH names)
-            const locationString: string = data.locations || '';
-            const names = locationString
-                .split('|')
-                .map((n: string) => n.trim())
-                .filter(Boolean);
-            setSelectedLocationNames(new Set(names));
-        } catch (err: any) {
-            setLocationError(err.message || 'Failed to load current locations');
-        } finally {
-            setLoadingLocations(false);
-        }
+        httpGetLocations.get(`/employees/${emp.id}/locations`, {
+            onSuccess: (data: any) => {
+                setEhLocations(data.allEhLocations || []);
+                const locationString: string = data.locations || '';
+                const names = locationString
+                    .split('|')
+                    .map((n: string) => n.trim())
+                    .filter(Boolean);
+                setSelectedLocationNames(new Set(names));
+            },
+            onError: () => {
+                setLocationError('Failed to load current locations');
+            },
+        });
     }, [emp.id]);
 
     const toggleLocation = useCallback((locationName: string) => {
@@ -319,41 +305,24 @@ export default function EmployeeShow() {
         });
     }, []);
 
-    const saveLocations = useCallback(async () => {
-        setSavingLocations(true);
+    const saveLocations = useCallback(() => {
         setLocationError(null);
         setLocationSuccess(null);
 
-        try {
-            const locationsString = Array.from(selectedLocationNames).join('|');
-
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-            const response = await fetch(`/employees/${emp.id}/locations`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ locations: locationsString }),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.message || 'Failed to update locations');
-            }
-
-            setLocationSuccess('Locations updated successfully');
-            setTimeout(() => {
-                setLocationDialogOpen(false);
-                router.reload();
-            }, 1500);
-        } catch (err: any) {
-            setLocationError(err.message || 'Failed to update locations');
-        } finally {
-            setSavingLocations(false);
-        }
+        const locationsString = Array.from(selectedLocationNames).join('|');
+        httpSaveLocations.setData({ locations: locationsString });
+        httpSaveLocations.put(`/employees/${emp.id}/locations`, {
+            onSuccess: () => {
+                setLocationSuccess('Locations updated successfully');
+                setTimeout(() => {
+                    setLocationDialogOpen(false);
+                    router.reload();
+                }, 1500);
+            },
+            onError: () => {
+                setLocationError('Failed to update locations');
+            },
+        });
     }, [emp.id, selectedLocationNames]);
 
     // Clear success message on dialog close
@@ -895,7 +864,7 @@ export default function EmployeeShow() {
                         </div>
                     )}
 
-                    {loadingLocations ? (
+                    {httpGetLocations.processing ? (
                         <div className="flex items-center justify-center py-8">
                             <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
                             <span className="text-muted-foreground ml-2 text-sm">Loading current locations...</span>
@@ -944,11 +913,11 @@ export default function EmployeeShow() {
                                 {selectedLocationNames.size} location{selectedLocationNames.size !== 1 ? 's' : ''} selected
                             </span>
                             <div className="flex gap-2">
-                                <Button variant="outline" onClick={() => setLocationDialogOpen(false)} disabled={savingLocations}>
+                                <Button variant="outline" onClick={() => setLocationDialogOpen(false)} disabled={httpSaveLocations.processing}>
                                     Cancel
                                 </Button>
-                                <Button onClick={saveLocations} disabled={savingLocations || loadingLocations}>
-                                    {savingLocations && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                <Button onClick={saveLocations} disabled={httpSaveLocations.processing || httpGetLocations.processing}>
+                                    {httpSaveLocations.processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Save Changes
                                 </Button>
                             </div>

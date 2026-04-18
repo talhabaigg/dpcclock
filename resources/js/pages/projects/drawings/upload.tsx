@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import { formatDistanceToNow } from 'date-fns';
 import { CheckCircle, Clock, Eye, FileText, Loader2, RefreshCw, Upload, X, XCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -44,6 +44,7 @@ export default function DrawingsUpload() {
 
     const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
     const [uploads, setUploads] = useState<UploadEntry[]>([]);
+    const uploadHttp = useHttp({});
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -52,39 +53,30 @@ export default function DrawingsUpload() {
         { title: 'Upload', href: `/projects/${project.id}/drawings/upload` },
     ];
 
-    const getCsrfToken = () => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-
     const uploadFile = useCallback(
-        async (file: File, index: number) => {
+        (file: File, index: number) => {
             setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'uploading' } : u)));
 
             const formData = new FormData();
             formData.append('files[]', file);
 
-            try {
-                const response = await fetch(`/projects/${project.id}/drawings`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                        Accept: 'application/json',
-                    },
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.drawings) {
-                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'success' } : u)));
-                    setDrawings((prev) => [...data.drawings, ...prev]);
-                    toast.success(`${file.name} uploaded`);
-                } else {
-                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: data.message } : u)));
-                    toast.error(`${file.name}: ${data.message || 'Upload failed'}`);
-                }
-            } catch {
-                setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: 'Upload failed' } : u)));
-                toast.error(`${file.name}: Upload failed`);
-            }
+            uploadHttp.setData(formData);
+            uploadHttp.post(`/projects/${project.id}/drawings`, {
+                onSuccess: (data: any) => {
+                    if (data.success && data.drawings) {
+                        setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'success' } : u)));
+                        setDrawings((prev) => [...data.drawings, ...prev]);
+                        toast.success(`${file.name} uploaded`);
+                    } else {
+                        setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: data.message } : u)));
+                        toast.error(`${file.name}: ${data.message || 'Upload failed'}`);
+                    }
+                },
+                onError: () => {
+                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: 'Upload failed' } : u)));
+                    toast.error(`${file.name}: Upload failed`);
+                },
+            });
         },
         [project.id],
     );

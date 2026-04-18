@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 // Select removed — qty_source hidden from grid (QuickBid-style)
+import { useHttp } from '@inertiajs/react';
 import { Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -70,10 +71,6 @@ type ConditionDetailGridProps = {
     onLineItemsChange: (items: ConditionLineItem[]) => void;
     aggregateQty?: { primary: number; secondary: number };
 };
-
-function getCsrfToken() {
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-}
 
 let keyCounter = 0;
 function nextKey() {

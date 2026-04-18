@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, useHttp, usePage } from '@inertiajs/react';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -26,47 +26,40 @@ export default function SafetyDashboardImport() {
     const { lastImport, totalRecords } = usePage<{ props: PageProps }>().props as unknown as PageProps;
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [importing, setImporting] = useState(false);
     const [lastImportTime, setLastImportTime] = useState(lastImport);
     const [recordCount, setRecordCount] = useState(totalRecords);
     const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number; errors: string[] } | null>(null);
+    const http = useHttp({});
 
-    const handleImport = async () => {
+    const handleImport = () => {
         const file = fileInputRef.current?.files?.[0];
         if (!file) {
             toast.error('Please select a file first');
             return;
         }
 
-        setImporting(true);
         setImportResult(null);
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const res = await fetch('/safety-dashboard/import', {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
-                body: formData,
-            });
-            const data = await res.json();
-            if (data.success) {
-                const parts = [`Imported ${data.imported}`];
-                if (data.updated > 0) parts.push(`updated ${data.updated}`);
-                if (data.skipped > 0) parts.push(`skipped ${data.skipped}`);
-                toast.success(parts.join(', '));
-                setLastImportTime(data.last_import);
-                setRecordCount(data.total_records);
-                setImportResult({ imported: data.imported, updated: data.updated ?? 0, skipped: data.skipped, errors: data.errors || [] });
-            } else {
-                toast.error('Import failed');
-            }
-        } catch {
-            toast.error('Import failed — network error');
-        } finally {
-            setImporting(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
+        http.setData({ file });
+        http.post('/safety-dashboard/import', {
+            onSuccess: (data: any) => {
+                if (data.success) {
+                    const parts = [`Imported ${data.imported}`];
+                    if (data.updated > 0) parts.push(`updated ${data.updated}`);
+                    if (data.skipped > 0) parts.push(`skipped ${data.skipped}`);
+                    toast.success(parts.join(', '));
+                    setLastImportTime(data.last_import);
+                    setRecordCount(data.total_records);
+                    setImportResult({ imported: data.imported, updated: data.updated ?? 0, skipped: data.skipped, errors: data.errors || [] });
+                } else {
+                    toast.error('Import failed');
+                }
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            },
+            onError: () => {
+                toast.error('Import failed — network error');
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            },
+        });
     };
 
     return (
@@ -96,8 +89,8 @@ export default function SafetyDashboardImport() {
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Excel File (.xlsx)</label>
                                 <Input ref={fileInputRef} type="file" accept=".xlsx,.xls" />
                             </div>
-                            <Button onClick={handleImport} disabled={importing}>
-                                {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                            <Button onClick={handleImport} disabled={http.processing}>
+                                {http.processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                                 Import
                             </Button>
                         </div>

@@ -20,7 +20,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { api, ApiError } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { DollarSign, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -42,9 +42,10 @@ export const CostBreakdownDialog = ({
     forecastMonth,
     aggregate,
 }: CostBreakdownDialogProps) => {
-    const [loading, setLoading] = useState(false);
     const [data, setData] = useState<CostBreakdownData | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    const http = useHttp({});
 
     // Fetch data whenever the dialog opens or key params change
     useEffect(() => {
@@ -53,23 +54,22 @@ export const CostBreakdownDialog = ({
         }
     }, [open, locationId, weekEnding, forecastMonth, aggregate]);
 
-    const fetchCostBreakdown = async () => {
-        setLoading(true);
+    const fetchCostBreakdown = () => {
         setError(null);
-        try {
-            const params = new URLSearchParams();
-            if (weekEnding) params.append('week_ending', weekEnding);
-            if (forecastMonth) params.append('forecast_month', forecastMonth);
-            if (aggregate) params.append('aggregate', aggregate);
-            const queryString = params.toString();
-            const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
-            const result = await api.get(url);
-            setData(result);
-        } catch (err: unknown) {
-            setError(err instanceof ApiError ? (err.data?.error as string) || err.message : 'Failed to fetch cost breakdown');
-        } finally {
-            setLoading(false);
-        }
+        const params = new URLSearchParams();
+        if (weekEnding) params.append('week_ending', weekEnding);
+        if (forecastMonth) params.append('forecast_month', forecastMonth);
+        if (aggregate) params.append('aggregate', aggregate);
+        const queryString = params.toString();
+        const url = `/location/${locationId}/labour-forecast/cost-breakdown${queryString ? `?${queryString}` : ''}`;
+        http.get(url, {
+            onSuccess: (result: CostBreakdownData) => {
+                setData(result);
+            },
+            onError: () => {
+                setError('Failed to fetch cost breakdown');
+            },
+        });
     };
 
     // Derive grouped data from API response
@@ -89,7 +89,7 @@ export const CostBreakdownDialog = ({
                 </DialogHeader>
 
                 {/* Loading state */}
-                {loading && (
+                {http.processing && (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="text-muted-foreground size-8 animate-spin" />
                     </div>
@@ -103,7 +103,7 @@ export const CostBreakdownDialog = ({
                 )}
 
                 {/* Main content (only when data loaded) */}
-                {data && !loading && (
+                {data && !http.processing && (
                     <div className="space-y-6">
                         {/* Summary cards: headcount, total cost, period */}
                         <div className="border-border bg-muted/30 grid grid-cols-3 gap-4 rounded-lg border p-4">

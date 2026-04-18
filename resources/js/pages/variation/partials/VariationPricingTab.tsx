@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, fmtCurrency, round2 } from '@/lib/utils';
-import { api, ApiError } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Pencil, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -61,7 +61,9 @@ export default function VariationPricingTab({
     onPricingItemsChange,
     onManageConditions,
 }: VariationPricingTabProps) {
-    const [loading, setLoading] = useState(false);
+    const http = useHttp({});
+    const deleteHttp = useHttp({});
+    const editHttp = useHttp({});
     const [addMode, setAddMode] = useState<AddMode>('condition');
     const [addPanelOpen, setAddPanelOpen] = useState(true);
 
@@ -98,7 +100,7 @@ export default function VariationPricingTab({
         selectedCondition?.type === 'linear' && selectedCondition?.height && selectedCondition.height > 0;
     const rateUnit = selectedCondition?.condition_type?.unit ?? 'm2';
 
-    const handleAddFromCondition = async () => {
+    const handleAddFromCondition = () => {
         if (!selectedConditionId || !conditionQty || parseFloat(conditionQty) <= 0) return;
         const condition = filteredConditions.find((c) => String(c.id) === selectedConditionId);
         if (!condition) return;
@@ -107,57 +109,67 @@ export default function VariationPricingTab({
         const unit = getNaturalUnit(condition);
         const description = condition.name;
 
-        setLoading(true);
-        try {
-            if (variationId) {
-                const data = await api.post<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items`, {
-                    takeoff_condition_id: condition.id,
-                    description,
-                    qty,
-                    unit,
-                });
-                onPricingItemsChange([...pricingItems, data.pricing_item]);
-            } else {
-                const data = await api.post<{ preview: any }>(`/locations/${locationId}/variation-preview`, {
-                    condition_id: condition.id,
-                    qty,
-                });
-                const preview = data.preview;
-                const localItem: PricingItem = {
-                    takeoff_condition_id: condition.id,
-                    description,
-                    qty,
-                    unit,
-                    labour_cost: preview.labour_base || 0,
-                    material_cost: preview.material_base || 0,
-                    total_cost: (preview.labour_base || 0) + (preview.material_base || 0),
-                    sort_order: pricingItems.length + 1,
-                    condition: {
-                        name: condition.name,
-                        type: condition.type,
-                        height: condition.height,
-                        condition_type: condition.condition_type
-                            ? {
-                                  name: condition.condition_type.name,
-                                  unit: condition.condition_type.unit,
-                                  color: condition.condition_type.color,
-                              }
-                            : null,
-                    },
-                };
-                onPricingItemsChange([...pricingItems, localItem]);
-            }
-            toast.success('Pricing item added');
-            setSelectedConditionId('');
-            setConditionQty('');
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to add pricing item');
-        } finally {
-            setLoading(false);
+        if (variationId) {
+            http.setData({
+                takeoff_condition_id: condition.id,
+                description,
+                qty,
+                unit,
+            });
+            http.post(`/variations/${variationId}/pricing-items`, {
+                onSuccess: (data: { pricing_item: PricingItem }) => {
+                    onPricingItemsChange([...pricingItems, data.pricing_item]);
+                    toast.success('Pricing item added');
+                    setSelectedConditionId('');
+                    setConditionQty('');
+                },
+                onError: () => {
+                    toast.error('Failed to add pricing item');
+                },
+            });
+        } else {
+            http.setData({
+                condition_id: condition.id,
+                qty,
+            });
+            http.post(`/locations/${locationId}/variation-preview`, {
+                onSuccess: (data: { preview: any }) => {
+                    const preview = data.preview;
+                    const localItem: PricingItem = {
+                        takeoff_condition_id: condition.id,
+                        description,
+                        qty,
+                        unit,
+                        labour_cost: preview.labour_base || 0,
+                        material_cost: preview.material_base || 0,
+                        total_cost: (preview.labour_base || 0) + (preview.material_base || 0),
+                        sort_order: pricingItems.length + 1,
+                        condition: {
+                            name: condition.name,
+                            type: condition.type,
+                            height: condition.height,
+                            condition_type: condition.condition_type
+                                ? {
+                                      name: condition.condition_type.name,
+                                      unit: condition.condition_type.unit,
+                                      color: condition.condition_type.color,
+                                  }
+                                : null,
+                        },
+                    };
+                    onPricingItemsChange([...pricingItems, localItem]);
+                    toast.success('Pricing item added');
+                    setSelectedConditionId('');
+                    setConditionQty('');
+                },
+                onError: () => {
+                    toast.error('Failed to add pricing item');
+                },
+            });
         }
     };
 
-    const handleAddManual = async () => {
+    const handleAddManual = () => {
         if (!manualDescription || !manualQty) return;
 
         const qty = parseFloat(manualQty) || 0;
@@ -167,55 +179,63 @@ export default function VariationPricingTab({
         const materialCost = round2(qty * materialRate);
         const totalCost = round2(labourCost + materialCost);
 
-        setLoading(true);
-        try {
-            if (variationId) {
-                const data = await api.post<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items`, {
-                    description: manualDescription,
-                    qty,
-                    unit: manualUnit,
-                    labour_cost: labourCost,
-                    material_cost: materialCost,
-                });
-                onPricingItemsChange([...pricingItems, data.pricing_item]);
-            } else {
-                const localItem: PricingItem = {
-                    description: manualDescription,
-                    qty,
-                    unit: manualUnit,
-                    labour_cost: labourCost,
-                    material_cost: materialCost,
-                    total_cost: totalCost,
-                    sort_order: pricingItems.length + 1,
-                };
-                onPricingItemsChange([...pricingItems, localItem]);
-            }
+        if (variationId) {
+            http.setData({
+                description: manualDescription,
+                qty,
+                unit: manualUnit,
+                labour_cost: labourCost,
+                material_cost: materialCost,
+            });
+            http.post(`/variations/${variationId}/pricing-items`, {
+                onSuccess: (data: { pricing_item: PricingItem }) => {
+                    onPricingItemsChange([...pricingItems, data.pricing_item]);
+                    toast.success('Manual item added');
+                    setManualDescription('');
+                    setManualQty('');
+                    setManualLabourRate('');
+                    setManualMaterialRate('');
+                },
+                onError: () => {
+                    toast.error('Failed to add item');
+                },
+            });
+        } else {
+            const localItem: PricingItem = {
+                description: manualDescription,
+                qty,
+                unit: manualUnit,
+                labour_cost: labourCost,
+                material_cost: materialCost,
+                total_cost: totalCost,
+                sort_order: pricingItems.length + 1,
+            };
+            onPricingItemsChange([...pricingItems, localItem]);
             toast.success('Manual item added');
             setManualDescription('');
             setManualQty('');
             setManualLabourRate('');
             setManualMaterialRate('');
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Failed to add item');
-        } finally {
-            setLoading(false);
         }
     };
 
-    const handleDelete = async (item: PricingItem, index: number) => {
+    const handleDelete = (item: PricingItem, index: number) => {
         if (item.id && variationId) {
-            try {
-                await api.delete(`/variations/${variationId}/pricing-items/${item.id}`);
-                onPricingItemsChange(pricingItems.filter((p) => p.id !== item.id));
-                toast.success('Item removed');
-            } catch {
-                toast.error('Failed to delete item');
-            }
+            deleteHttp.destroy(`/variations/${variationId}/pricing-items/${item.id}`, {
+                onSuccess: () => {
+                    onPricingItemsChange(pricingItems.filter((p) => p.id !== item.id));
+                    toast.success('Item removed');
+                    setDeleteTarget(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete item');
+                },
+            });
         } else {
             onPricingItemsChange(pricingItems.filter((_, i) => i !== index));
             toast.success('Item removed');
+            setDeleteTarget(null);
         }
-        setDeleteTarget(null);
     };
 
     // --- Inline editing ---

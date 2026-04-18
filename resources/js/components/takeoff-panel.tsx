@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalibrationData, MeasurementData, ViewMode } from './measurement-layer';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 
@@ -99,6 +99,8 @@ export function TakeoffPanel({
     const activeCondition = conditions.find((c) => c.id === activeConditionId) || null;
     const takeoffScrollRef = useRef<HTMLDivElement>(null);
 
+    const multiplierHttp = useHttp({ quantity_multiplier: quantityMultiplier });
+
     // Auto-scroll to selected measurement in the takeoff panel
     useEffect(() => {
         if (!selectedMeasurementId || !takeoffScrollRef.current) return;
@@ -108,16 +110,19 @@ export function TakeoffPanel({
         }
     }, [selectedMeasurementId]);
 
-    const saveMultiplier = useCallback(async () => {
+    const saveMultiplier = useCallback(() => {
         if (!drawingId || multiplier === quantityMultiplier) return;
-        try {
-            await api.patch(`/drawings/${drawingId}`, { quantity_multiplier: multiplier });
-            toast.success(`Quantity multiplier set to ${multiplier}×`);
-        } catch {
-            toast.error('Failed to save multiplier');
-            setMultiplier(quantityMultiplier);
-        }
-    }, [drawingId, multiplier, quantityMultiplier]);
+        multiplierHttp.setData({ quantity_multiplier: multiplier });
+        multiplierHttp.patch(`/drawings/${drawingId}`, {
+            onSuccess: () => {
+                toast.success(`Quantity multiplier set to ${multiplier}×`);
+            },
+            onError: () => {
+                toast.error('Failed to save multiplier');
+                setMultiplier(quantityMultiplier);
+            },
+        });
+    }, [drawingId, multiplier, quantityMultiplier, multiplierHttp]);
 
     // Group measurements by category
     const grouped = measurements.reduce<Record<string, MeasurementData[]>>((acc, m) => {

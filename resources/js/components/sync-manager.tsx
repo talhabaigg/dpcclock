@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { api } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { CheckCircle2, Clock, Loader2, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -33,25 +33,31 @@ export default function SyncManager() {
     const [jobs, setJobs] = useState<SyncJob[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
-    const [dispatching, setDispatching] = useState(false);
     const [forceFullSync, setForceFullSync] = useState(false);
     const [result, setResult] = useState<string | null>(null);
 
-    const fetchStatus = useCallback(async () => {
+    const listHttp = useHttp({});
+    const dispatchHttp = useHttp({
+        jobs: [] as string[],
+        force_full: false,
+    });
+
+    const fetchStatus = useCallback(() => {
         setLoading(true);
-        try {
-            const data = await api.get<SyncJob[]>('/locations/sync-status');
-            setJobs(data);
-        } catch {
-            // silently fail
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        listHttp.get('/locations/sync-status', {
+            onSuccess: (data: SyncJob[]) => {
+                setJobs(data);
+                setLoading(false);
+            },
+            onError: () => {
+                setLoading(false);
+            },
+        });
+    }, [listHttp]);
 
     useEffect(() => {
         fetchStatus();
-    }, [fetchStatus]);
+    }, []);
 
     const toggleJob = (key: string) => {
         setSelected((prev) => {
@@ -75,21 +81,21 @@ export default function SyncManager() {
 
     const handleDispatch = async () => {
         if (selected.size === 0) return;
-        setDispatching(true);
         setResult(null);
-        try {
-            const data = await api.post<{ message: string }>('/locations/sync-jobs', {
-                jobs: Array.from(selected),
-                force_full: forceFullSync,
-            });
-            setResult(data.message);
-            setSelected(new Set());
-            fetchStatus();
-        } catch {
-            setResult('Failed to dispatch jobs.');
-        } finally {
-            setDispatching(false);
-        }
+        dispatchHttp.setData({
+            jobs: Array.from(selected),
+            force_full: forceFullSync,
+        });
+        dispatchHttp.post('/locations/sync-jobs', {
+            onSuccess: (data: { message: string }) => {
+                setResult(data.message);
+                setSelected(new Set());
+                fetchStatus();
+            },
+            onError: () => {
+                setResult('Failed to dispatch jobs.');
+            },
+        });
     };
 
     if (loading) {
@@ -165,8 +171,8 @@ export default function SyncManager() {
                         Force full sync
                     </Label>
                 </div>
-                <Button onClick={handleDispatch} disabled={selected.size === 0 || dispatching}>
-                    {dispatching ? (
+                <Button onClick={handleDispatch} disabled={selected.size === 0 || dispatchHttp.processing}>
+                    {dispatchHttp.processing ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Dispatching...

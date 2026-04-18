@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CostCodeSelector } from '@/pages/purchasing/costCodeSelector';
-import { api, ApiError } from '@/lib/api';
+import { useHttp } from '@inertiajs/react';
 import { Check, ChevronDown, ChevronUp, Edit3, Loader2, Lock, Save, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -103,6 +103,8 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editStates, setEditStates] = useState<Record<number, EditState>>({});
 
+    const http = useHttp<Record<string, any>>({});
+
     if (pendingItems.length === 0) return null;
 
     const getPath = (item: LineItem): 'not_in_price_list' | 'custom_length' => {
@@ -159,7 +161,7 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
         }));
     };
 
-    const applyResolution = async (item: LineItem) => {
+    const applyResolution = (item: LineItem) => {
         const es = editStates[item.id];
         if (!es) return;
 
@@ -192,18 +194,21 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
         }
 
         setApplying(item.id);
-        try {
-            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
-            setEditingId(null);
-            onResolved();
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to apply resolution');
-        } finally {
-            setApplying(null);
-        }
+        http.setData(payload);
+        http.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
+            onSuccess: () => {
+                setEditingId(null);
+                setApplying(null);
+                onResolved();
+            },
+            onError: () => {
+                toast.error('Failed to apply resolution');
+                setApplying(null);
+            },
+        });
     };
 
-    const quickApply = async (item: LineItem) => {
+    const quickApply = (item: LineItem) => {
         const calculated = getCalculatedPrice(item);
         if (!calculated) {
             toast.error('Cannot calculate price — rate per unit is missing or zero');
@@ -246,34 +251,40 @@ export function SmartPricingCards({ requisitionId, lineItems, projectNumber, cos
         };
 
         setApplying(item.id);
-        try {
-            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, payload);
-            onResolved();
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to apply pricing');
-        } finally {
-            setApplying(null);
-        }
+        http.setData(payload);
+        http.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
+            onSuccess: () => {
+                setApplying(null);
+                onResolved();
+            },
+            onError: () => {
+                toast.error('Failed to apply pricing');
+                setApplying(null);
+            },
+        });
     };
 
-    const dismissItem = async (item: LineItem) => {
+    const dismissItem = (item: LineItem) => {
         setApplying(item.id);
-        try {
-            await api.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
-                line_item_id: item.id,
-                resolution_type: 'direct_price',
-                new_code: item.code ?? '',
-                description: item.description,
-                qty: item.qty,
-                unit_cost: item.unit_cost ?? 0,
-                cost_code: item.cost_code ?? '',
-            });
-            onResolved();
-        } catch (err: unknown) {
-            toast.error(err instanceof ApiError ? ((err.data?.error as string) || err.message) : 'Failed to dismiss item');
-        } finally {
-            setApplying(null);
-        }
+        http.setData({
+            line_item_id: item.id,
+            resolution_type: 'direct_price',
+            new_code: item.code ?? '',
+            description: item.description,
+            qty: item.qty,
+            unit_cost: item.unit_cost ?? 0,
+            cost_code: item.cost_code ?? '',
+        });
+        http.post(`/requisition/${requisitionId}/smart-pricing-apply`, {
+            onSuccess: () => {
+                setApplying(null);
+                onResolved();
+            },
+            onError: () => {
+                toast.error('Failed to dismiss item');
+                setApplying(null);
+            },
+        });
     };
 
     const updateEditState = (itemId: number, updates: Partial<EditState>) => {

@@ -3,8 +3,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { api } from '@/lib/api';
-import { router } from '@inertiajs/react';
+import { router, useHttp } from '@inertiajs/react';
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -20,7 +19,10 @@ export function ReplicateFloorsDialog({ drawingId, drawingTitle, open, onOpenCha
     const [prefix, setPrefix] = useState('Level');
     const [startFloor, setStartFloor] = useState(1);
     const [endFloor, setEndFloor] = useState(10);
-    const [loading, setLoading] = useState(false);
+
+    const http = useHttp({
+        floor_labels: [] as string[],
+    });
 
     const floorLabels = useMemo(() => {
         const labels: string[] = [];
@@ -34,20 +36,17 @@ export function ReplicateFloorsDialog({ drawingId, drawingTitle, open, onOpenCha
 
     const handleReplicate = async () => {
         if (floorLabels.length === 0) return;
-        setLoading(true);
-        try {
-            const response = await api.post<{ success: boolean; message?: string }>(`/drawings/${drawingId}/replicate-floors`, {
-                floor_labels: floorLabels,
-            });
-            toast.success(response.message || `${floorLabels.length} floor drawings created.`);
-            onOpenChange(false);
-            router.reload();
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Replication failed';
-            toast.error(message);
-        } finally {
-            setLoading(false);
-        }
+        http.setData({ floor_labels: floorLabels });
+        http.post(`/drawings/${drawingId}/replicate-floors`, {
+            onSuccess: (data: { success: boolean; message?: string }) => {
+                toast.success(data.message || `${floorLabels.length} floor drawings created.`);
+                onOpenChange(false);
+                router.reload();
+            },
+            onError: () => {
+                toast.error('Replication failed');
+            },
+        });
     };
 
     return (
@@ -114,11 +113,11 @@ export function ReplicateFloorsDialog({ drawingId, drawingTitle, open, onOpenCha
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={loading}>
+                    <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={http.processing}>
                         Cancel
                     </Button>
                     <Button size="sm" onClick={handleReplicate} disabled={loading || floorLabels.length === 0}>
-                        {loading && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                        {http.processing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                         Create {floorLabels.length} Drawing{floorLabels.length !== 1 ? 's' : ''}
                     </Button>
                 </DialogFooter>

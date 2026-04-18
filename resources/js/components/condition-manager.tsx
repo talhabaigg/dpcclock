@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
+import { useHttp } from '@inertiajs/react';
 import {
     DollarSign,
     Hash,
@@ -131,14 +132,6 @@ type ConditionManagerProps = {
     onConditionsChange: (conditions: TakeoffCondition[]) => void;
 };
 
-function getCsrfToken() {
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-}
-function getXsrfToken() {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-}
-
 const PRESET_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 const STYLE_ICONS = {
@@ -250,12 +243,10 @@ export function ConditionManager({
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [editing, setEditing] = useState(false);
     const [creating, setCreating] = useState(false);
-    const [saving, setSaving] = useState(false);
 
     // Condition Types
     const [conditionTypes, setConditionTypes] = useState<ConditionType[]>([]);
     const [newTypeName, setNewTypeName] = useState('');
-    const [creatingType, setCreatingType] = useState(false);
 
     // Form state
     const [formName, setFormName] = useState('');
@@ -325,6 +316,19 @@ export function ConditionManager({
 
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
+
+    // HTTP instances
+    const loadConditionsHttp = useHttp({});
+    const loadTemplatesHttp = useHttp({});
+    const loadTypesHttp = useHttp({});
+    const createTypeHttp = useHttp({});
+    const deleteTypeHttp = useHttp({});
+    const saveConditionHttp = useHttp({});
+    const deleteConditionHttp = useHttp({});
+    const searchMaterialsHttp = useHttp({});
+    const searchCostCodesHttp = useHttp({});
+    const searchLccsHttp = useHttp({});
+    const createLccHttp = useHttp({});
 
     // Load conditions, pay rate templates, and condition types
     useEffect(() => {

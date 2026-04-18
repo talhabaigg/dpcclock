@@ -30,8 +30,7 @@
 
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
-import { api } from '@/lib/api';
+import { Head, router, useHttp } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CostBreakdownDialog } from './CostBreakdownDialog';
@@ -139,10 +138,15 @@ const LabourForecastShow = ({
     const costCalculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // ========================================================================
+    // HTTP: useHttp instances
+    // ========================================================================
+    const costCalcHttp = useHttp<{ weeks: unknown[] }, { costs: Record<string, number> }>({ weeks: [] });
+    const budgetHttp = useHttp({});
+
+    // ========================================================================
     // STATE: Budget
     // ========================================================================
     const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
-    const [isBudgetLoading, setIsBudgetLoading] = useState(false);
 
     // ========================================================================
     // DERIVED DATA: Work Types
@@ -424,7 +428,7 @@ const LabourForecastShow = ({
             clearTimeout(costCalculationTimeoutRef.current);
         }
 
-        costCalculationTimeoutRef.current = setTimeout(async () => {
+        costCalculationTimeoutRef.current = setTimeout(() => {
             const headcountRows = rowData.filter((r) => !r.isOvertimeRow && !r.isLeaveRow && !r.isRdoRow && !r.isPublicHolidayRow);
 
             const weeksData = weeks.map((week) => {
@@ -466,15 +470,18 @@ const LabourForecastShow = ({
                 return;
             }
 
-            try {
-                setIsCalculatingCosts(true);
-                const result = await api.post<{ costs: Record<string, number> }>(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, { weeks: weeksWithData });
-                setWeeklyCosts({ ...newCosts, ...result.costs });
-            } catch {
-                setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
-            } finally {
-                setIsCalculatingCosts(false);
-            }
+            setIsCalculatingCosts(true);
+            costCalcHttp.setData({ weeks: weeksWithData });
+            costCalcHttp.post(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, {
+                onSuccess: (result) => {
+                    setWeeklyCosts({ ...newCosts, ...result.costs });
+                    setIsCalculatingCosts(false);
+                },
+                onError: () => {
+                    setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
+                    setIsCalculatingCosts(false);
+                },
+            });
         }, 500);
 
         return () => {
@@ -486,19 +493,14 @@ const LabourForecastShow = ({
     // EFFECT: Fetch budget data
     // ========================================================================
     useEffect(() => {
-        const fetchBudgetData = async () => {
-            setIsBudgetLoading(true);
-            try {
-                const data = await api.get(`/location/${location.id}/labour-forecast/budget-summary`);
+        budgetHttp.get(`/location/${location.id}/labour-forecast/budget-summary`, {
+            onSuccess: (data) => {
                 setBudgetData(data);
-            } catch {
+            },
+            onError: () => {
                 setBudgetData(null);
-            } finally {
-                setIsBudgetLoading(false);
-            }
-        };
-
-        fetchBudgetData();
+            },
+        });
     }, [location.id]);
 
     // ========================================================================
@@ -1050,7 +1052,7 @@ const LabourForecastShow = ({
                             <SummaryCards
                                 grandTotalCost={grandTotalCost}
                                 remainingToForecast={remainingToForecast}
-                                isBudgetLoading={isBudgetLoading}
+                                isBudgetLoading={budgetHttp.processing}
                                 onCostClick={() => setProjectCostBreakdownOpen(true)}
                             />
                         )}
