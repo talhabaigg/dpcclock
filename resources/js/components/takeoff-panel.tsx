@@ -219,7 +219,7 @@ export function TakeoffPanel({
                                 <div className="border-b px-2 py-1.5">
                                     <div className="flex items-center gap-1.5">
                                         <Scale className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Scale</span>
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Scale</span>
                                         <div className="flex-1" />
                                         {hasCalibration && !readOnly && (
                                             <button
@@ -673,7 +673,7 @@ export function TakeoffPanel({
                                                                 <Icon className="h-2 w-2" />
                                                                 <span>{TYPE_LABELS[c.type]}</span>
                                                                 {c.pricing_method === 'unit_rate' && (
-                                                                    <span className="rounded-[2px] border px-0.5 text-[8px]">UR</span>
+                                                                    <span className="rounded-[2px] border px-0.5 text-[9px]">UR</span>
                                                                 )}
                                                                 {measureCount > 0 && <span>{measureCount} meas.</span>}
                                                             </div>
@@ -724,12 +724,12 @@ export function TakeoffPanel({
                                     <>
                                         {/* Table header */}
                                         <div className="sticky top-0 z-10 grid grid-cols-[22px_1fr_32px_56px_56px_68px] items-center border-b bg-muted/60 px-2 py-1">
-                                            <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">#</span>
-                                            <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Name</span>
-                                            <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Type</span>
-                                            <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Qty</span>
-                                            <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Rate</span>
-                                            <span className="text-right text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">#</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Name</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Type</span>
+                                            <span className="text-right text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Qty</span>
+                                            <span className="text-right text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Rate</span>
+                                            <span className="text-right text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
                                         </div>
 
                                         {/* Grouped rows by condition type — only conditions with measurements */}
@@ -867,14 +867,14 @@ export function TakeoffPanel({
                                                                 <span className="truncate text-[10px] pr-1">
                                                                     {c.name}
                                                                 </span>
-                                                                <span className="text-[8px] text-muted-foreground">
+                                                                <span className="text-[9px] text-muted-foreground">
                                                                     {TYPE_LABELS[c.type]}
                                                                 </span>
                                                                 <span className="text-right font-mono text-[10px] tabular-nums">
                                                                     {c.type === 'count'
                                                                         ? Math.round(effectiveMeasuredQty)
                                                                         : effectiveMeasuredQty.toFixed(1)}
-                                                                    <span className="ml-0.5 text-[8px] text-muted-foreground">{unitLabel}</span>
+                                                                    <span className="ml-0.5 text-[9px] text-muted-foreground">{unitLabel}</span>
                                                                 </span>
                                                                 <span className="text-right font-mono text-[10px] tabular-nums">
                                                                     ${fmtNum(totalRatePerUnit)}
@@ -887,7 +887,7 @@ export function TakeoffPanel({
                                                             </div>
                                                             {areaName && (
                                                                 <div className="mt-px pl-[22px]">
-                                                                    <span className="rounded-sm bg-muted/60 px-1 py-px text-[8px] text-muted-foreground">
+                                                                    <span className="rounded-sm bg-muted/60 px-1 py-px text-[9px] text-muted-foreground">
                                                                         {areaName}
                                                                     </span>
                                                                 </div>

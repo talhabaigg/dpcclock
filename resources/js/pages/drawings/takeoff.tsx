@@ -640,22 +640,22 @@ export default function DrawingTakeoff() {
                             size="sm"
                             variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('pan')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="relative h-6 w-6 rounded-sm p-0"
                             title="Pan mode (P)"
                         >
                             <Hand className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">P</kbd>
+                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">P</kbd>
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'select' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode('select')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="relative h-6 w-6 rounded-sm p-0"
                             title="Add observation (O)"
                         >
                             <MousePointer className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">O</kbd>
+                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">O</kbd>
                         </Button>
                     </div>
 
@@ -680,60 +680,60 @@ export default function DrawingTakeoff() {
                             size="sm"
                             variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="relative h-6 w-6 rounded-sm p-0"
                             title="Calibrate scale (S)"
                             disabled={!showTakeoffPanel || !canEditTakeoff}
                         >
                             <Scale className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">S</kbd>
+                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">S</kbd>
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                             title={!calibration ? 'Set scale first' : 'Measure line (L)'}
                             disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
                         >
                             <Minus className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">L</kbd>
+                            Line
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                             title={!calibration ? 'Set scale first' : 'Measure area (A)'}
                             disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
                         >
                             <Pentagon className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">A</kbd>
+                            Area
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                             title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
                             disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
                         >
                             <Square className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">R</kbd>
+                            Rect
                         </Button>
                         <Button
                             type="button"
                             size="sm"
                             variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
                             onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
                             title="Count items (C)"
                             disabled={!showTakeoffPanel || !canEditTakeoff}
                         >
                             <Hash className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">C</kbd>
+                            Count
                         </Button>
                         <div className="bg-border mx-px h-4 w-px" />
                         <Button
@@ -741,12 +741,12 @@ export default function DrawingTakeoff() {
                             size="sm"
                             variant={snapEnabled ? 'secondary' : 'ghost'}
                             onClick={() => setSnapEnabled(prev => !prev)}
-                            className="group/btn relative h-6 w-6 rounded-sm p-0"
+                            className="relative h-6 w-6 rounded-sm p-0"
                             title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
                             disabled={!showTakeoffPanel || !canEditTakeoff}
                         >
                             <Magnet className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute -bottom-0.5 -right-0.5 hidden rounded-[2px] border bg-muted px-0.5 text-[8px] leading-[10px] font-mono text-muted-foreground group-hover/btn:block">N</kbd>
+                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">N</kbd>
                         </Button>
                     </div>
 
@@ -1029,7 +1029,7 @@ export default function DrawingTakeoff() {
                         </div>
                     )}
 
-                    <div className="relative flex-1 overflow-hidden">
+                    <div className="relative isolate flex-1 overflow-hidden">
                         <LeafletDrawingViewer
                             tiles={drawing.tiles_info || undefined}
                             imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}

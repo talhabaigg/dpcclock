@@ -726,7 +726,7 @@ export default function DrawingProduction() {
             {/* Main content area */}
             <div className="relative flex flex-1 overflow-hidden">
                 {/* Drawing Viewer */}
-                <div className="relative flex-1 overflow-hidden">
+                <div className="relative isolate flex-1 overflow-hidden">
                     <LeafletDrawingViewer
                         tiles={drawing.tiles_info || undefined}
                         imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}

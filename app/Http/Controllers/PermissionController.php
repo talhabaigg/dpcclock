@@ -72,7 +72,6 @@ class PermissionController extends Controller
             'Forecasting' => ['description' => 'Financial forecasting tools', 'icon' => 'TrendingUp'],
             'Budget' => ['description' => 'Budget and target management', 'icon' => 'Target'],
             'Variations' => ['description' => 'Variation management', 'icon' => 'GitBranch'],
-            'QA Stages' => ['description' => 'Quality assurance stages', 'icon' => 'CheckSquare'],
             'Reports' => ['description' => 'Report generation and viewing', 'icon' => 'FileSpreadsheet'],
             'System' => ['description' => 'System administration', 'icon' => 'Settings'],
             'Other' => ['description' => 'Custom permissions', 'icon' => 'Key'],

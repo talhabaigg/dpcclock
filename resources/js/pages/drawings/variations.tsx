@@ -357,7 +357,7 @@ export default function DrawingVariations() {
         >
             {/* Main Viewer + Side Panel */}
             <div className="relative flex flex-1 overflow-hidden">
-                <div className="relative flex-1 overflow-hidden">
+                <div className="relative isolate flex-1 overflow-hidden">
                     <LeafletDrawingViewer
                         tiles={drawing.tiles_info || undefined}
                         imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}

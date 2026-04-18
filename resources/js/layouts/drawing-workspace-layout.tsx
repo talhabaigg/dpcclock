@@ -118,8 +118,8 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
             <Head title={displayName} />
 
             <div className="flex h-[calc(100vh-4rem)] flex-col">
-                {/* Unified Toolbar */}
-                <div className="bg-background flex shrink-0 items-center gap-1 border-b px-1 py-0.5">
+                {/* Row 1 — Context: file menu, drawing navigation, workspace tabs, version */}
+                <div className="bg-background flex shrink-0 items-center gap-2 border-b px-2 py-0.5">
                     <Menubar className="h-auto rounded-none border-none bg-transparent p-0 shadow-none">
                         <MenubarMenu>
                             <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">File</MenubarTrigger>
@@ -182,107 +182,67 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                             </MenubarContent>
                         </MenubarMenu>
                     </Menubar>
-                    <div className="bg-border h-4 w-px" />
-                    {/* Back */}
-                    <Link href={`/projects/${projectId}/drawings`}>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0">
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                        </Button>
-                    </Link>
-
-                    {/* Drawing Selector */}
-                    {drawings.length > 1 ? (
-                        <div className="flex items-center gap-0.5">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 rounded-sm p-0"
-                                disabled={!prevDrawing}
-                                onClick={() => prevDrawing && navigateToDrawing(prevDrawing.id)}
-                                title={prevDrawing ? `Previous: ${prevDrawing.display_name}` : 'No previous drawing'}
-                            >
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                            </Button>
-                            <Select
-                                value={String(drawing.id)}
-                                onValueChange={(value) => navigateToDrawing(Number(value))}
-                            >
-                                <SelectTrigger className="h-6 w-[160px] rounded-sm text-[11px] font-semibold">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {drawings.map((d) => (
-                                        <SelectItem key={d.id} value={String(d.id)}>
-                                            <div className="flex items-center gap-1.5">
-                                                {d.has_takeoff && (
-                                                    <Ruler className="h-3 w-3 shrink-0 text-blue-500" />
-                                                )}
-                                                <span className="truncate">{d.display_name}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 rounded-sm p-0"
-                                disabled={!nextDrawing}
-                                onClick={() => nextDrawing && navigateToDrawing(nextDrawing.id)}
-                                title={nextDrawing ? `Next: ${nextDrawing.display_name}` : 'No next drawing'}
-                            >
-                                <ChevronRight className="h-3.5 w-3.5" />
-                            </Button>
-                        </div>
-                    ) : (
-                        <span className="text-[11px] font-semibold">{displayName}</span>
-                    )}
 
                     <div className="bg-border h-4 w-px" />
 
-                    {/* Map Controls */}
-                    {mapControls && (
-                        <>
-                            <div className="bg-background flex items-center rounded-sm border p-px">
+                    {/* Drawing navigation group */}
+                    <div className="flex items-center gap-0.5">
+                        <Link href={`/projects/${projectId}/drawings`}>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0" title="Back to drawings">
+                                <ArrowLeft className="h-3.5 w-3.5" />
+                            </Button>
+                        </Link>
+                        {drawings.length > 1 ? (
+                            <>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 w-6 rounded-sm p-0"
-                                    onClick={mapControls.zoomIn}
-                                    title="Zoom in"
+                                    disabled={!prevDrawing}
+                                    onClick={() => prevDrawing && navigateToDrawing(prevDrawing.id)}
+                                    title={prevDrawing ? `Previous: ${prevDrawing.display_name}` : 'No previous drawing'}
                                 >
-                                    <Plus className="h-3 w-3" />
+                                    <ChevronLeft className="h-3.5 w-3.5" />
                                 </Button>
+                                <Select
+                                    value={String(drawing.id)}
+                                    onValueChange={(value) => navigateToDrawing(Number(value))}
+                                >
+                                    <SelectTrigger className="h-6 w-[160px] rounded-sm text-[11px] font-semibold">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {drawings.map((d) => (
+                                            <SelectItem key={d.id} value={String(d.id)}>
+                                                <div className="flex items-center gap-1.5">
+                                                    {d.has_takeoff && (
+                                                        <Ruler className="h-3 w-3 shrink-0 text-blue-500" />
+                                                    )}
+                                                    <span className="truncate">{d.display_name}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 w-6 rounded-sm p-0"
-                                    onClick={mapControls.zoomOut}
-                                    title="Zoom out"
+                                    disabled={!nextDrawing}
+                                    onClick={() => nextDrawing && navigateToDrawing(nextDrawing.id)}
+                                    title={nextDrawing ? `Next: ${nextDrawing.display_name}` : 'No next drawing'}
                                 >
-                                    <Minus className="h-3 w-3" />
+                                    <ChevronRight className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 rounded-sm p-0"
-                                    onClick={mapControls.fitToScreen}
-                                    title="Fit to screen"
-                                >
-                                    <Maximize className="h-3 w-3" />
-                                </Button>
-                            </div>
-                            <div className="bg-border h-4 w-px" />
-                        </>
-                    )}
+                            </>
+                        ) : (
+                            <span className="px-1.5 text-[11px] font-semibold">{displayName}</span>
+                        )}
+                    </div>
 
-                    {/* Page-specific toolbar (measurement tools, LCC indicator, etc.) */}
-                    {toolbar}
-
-                    {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Tab Bar */}
+                    {/* Workspace Tab Bar */}
                     <div className="bg-muted flex items-center rounded-md p-0.5">
                         {visibleTabs.map((tab) => {
                             const isActive = tab.key === activeTab
@@ -304,11 +264,10 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                         })}
                     </div>
 
-                    <div className="bg-border h-4 w-px" />
-
                     {/* Version Selector */}
                     {revisions.length > 1 && (
                         <>
+                            <div className="bg-border h-4 w-px" />
                             <Select
                                 value={String(drawing.id)}
                                 onValueChange={(value) => {
@@ -331,7 +290,7 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                                     {rev.id === drawing.id && ' (Current)'}
                                                 </span>
                                                 {rev.status === 'active' && (
-                                                    <Badge variant="secondary" className="h-3.5 text-[8px]">
+                                                    <Badge variant="secondary" className="h-3.5 text-[9px]">
                                                         Latest
                                                     </Badge>
                                                 )}
@@ -340,17 +299,52 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <div className="bg-border h-4 w-px" />
                         </>
                     )}
-
-                    {/* Download */}
-                    <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0" asChild>
-                        <a href={`/drawings/${drawing.id}/download`} download>
-                            <Download className="h-3 w-3" />
-                        </a>
-                    </Button>
                 </div>
+
+                {/* Row 2 — Tools: map controls + page-specific toolbar */}
+                {(mapControls || toolbar) && (
+                    <div className="bg-muted/30 flex shrink-0 min-h-[30px] items-center gap-2 border-b px-2 py-0.5">
+                        {mapControls && (
+                            <>
+                                <div className="bg-background flex items-center rounded-sm border p-px">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 rounded-sm p-0"
+                                        onClick={mapControls.zoomIn}
+                                        title="Zoom in"
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 rounded-sm p-0"
+                                        onClick={mapControls.zoomOut}
+                                        title="Zoom out"
+                                    >
+                                        <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 rounded-sm p-0"
+                                        onClick={mapControls.fitToScreen}
+                                        title="Fit to screen"
+                                    >
+                                        <Maximize className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                                {toolbar && <div className="bg-border h-4 w-px" />}
+                            </>
+                        )}
+
+                        {/* Page-specific toolbar (measurement tools, bid context, compare) */}
+                        {toolbar}
+                    </div>
+                )}
 
                 {/* Takeoff sub-tabs: Measure | Conditions | Estimate */}
                 {TAKEOFF_SUBTAB_KEYS.has(activeTab) && (
