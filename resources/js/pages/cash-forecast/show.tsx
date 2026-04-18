@@ -1,6 +1,15 @@
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem, SharedData } from '@/types';
@@ -24,13 +33,13 @@ import {
     GeneralCostsModal,
     GstBreakdownModal,
     JobRow,
-    RetentionSettingsModal,
     NetCashflowRow,
     PaymentRulesDialog,
+    RetentionSettingsModal,
     RunningBalanceRow,
     SettingsModal,
-    TableBody,
     SummaryCardsGrid,
+    TableBody,
     VendorJobRow,
     VendorPaymentDelayModal,
     VendorRow,
@@ -140,10 +149,7 @@ const ShowCashForecast = ({
     });
 
     // Track which vendors have payment delays configured
-    const vendorDelayVendors = useMemo(
-        () => new Set(vendorPaymentDelays.map((delay) => delay.vendor)),
-        [vendorPaymentDelays],
-    );
+    const vendorDelayVendors = useMemo(() => new Set(vendorPaymentDelays.map((delay) => delay.vendor)), [vendorPaymentDelays]);
 
     // Computed values
     const endingBalance = startingBalance + (runningBalances[runningBalances.length - 1] ?? 0);
@@ -260,9 +266,8 @@ const ShowCashForecast = ({
                 },
                 onError: (errors) => {
                     clearTimeout(timeout);
-                    const errorMessage = typeof errors === 'object' && errors !== null
-                        ? Object.values(errors).flat().join(', ')
-                        : 'Failed to delete general cost';
+                    const errorMessage =
+                        typeof errors === 'object' && errors !== null ? Object.values(errors).flat().join(', ') : 'Failed to delete general cost';
                     toast.error(errorMessage || 'Failed to delete general cost');
                     onComplete?.();
                 },
@@ -330,19 +335,13 @@ const ShowCashForecast = ({
         const waterfallChartSvg = captureSvg('chart-waterfall-print') || captureSvg('chart-waterfall');
 
         // Build month header cells
-        const monthHeaders = months
-            .map((m) => `<th>${formatMonthHeader(m.month)}</th>`)
-            .join('');
+        const monthHeaders = months.map((m) => `<th>${formatMonthHeader(m.month)}</th>`).join('');
 
         // Cash In row
-        const cashInCells = months
-            .map((m) => `<td>${fmtDollar(m.cash_in?.total ?? 0)}</td>`)
-            .join('');
+        const cashInCells = months.map((m) => `<td>${fmtDollar(m.cash_in?.total ?? 0)}</td>`).join('');
 
         // Cash Out row
-        const cashOutCells = months
-            .map((m) => `<td>${fmtDollar(m.cash_out?.total ?? 0)}</td>`)
-            .join('');
+        const cashOutCells = months.map((m) => `<td>${fmtDollar(m.cash_out?.total ?? 0)}</td>`).join('');
 
         // Net Cashflow row
         const netCells = months
@@ -462,17 +461,18 @@ const ShowCashForecast = ({
                         }
                         .summary-item {
                             padding: 12px 14px;
-                            border-left: 3px solid #1a3a5c;
-                            background: #f8f9fb;
+                            border: 1px solid #d6dee8;
+                            border-radius: 10px;
+                            background: #f7f9fb;
                         }
                         .summary-item label {
                             font-size: 8px;
-                            color: #1a3a5c;
+                            color: #4f6479;
                             text-transform: uppercase;
                             letter-spacing: 0.5px;
                             font-weight: 600;
                             display: block;
-                            margin-bottom: 4px;
+                            margin-bottom: 6px;
                         }
                         .summary-item .value {
                             font-size: 16px;
@@ -879,12 +879,12 @@ const ShowCashForecast = ({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashflow Forecast" />
-            <div className="bg-background text-foreground min-h-screen space-y-4 sm:space-y-6 p-3 sm:p-6 max-w-[100vw] overflow-x-hidden">
+            <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Cashflow Forecast</h1>
-                        <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">12-month rolling forecast</p>
+                        <h1 className="text-2xl font-semibold tracking-tight">Cashflow Forecast</h1>
+                        <p className="text-muted-foreground text-sm">12-month rolling forecast</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" className="gap-2" onClick={handlePrint}>
@@ -951,81 +951,108 @@ const ShowCashForecast = ({
                 />
 
                 {/* Charts Section */}
-                <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     {/* Monthly Cash Flow Chart */}
-                    <Card id="chart-bar" className="gap-0 overflow-hidden py-0">
-                        <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
-                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Monthly Cash Flow</span>
-                            <Button onClick={() => setShowFullscreenChart('bar')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
-                                <Maximize2 className="h-3 w-3" />
-                            </Button>
-                        </div>
-                        <div className="flex flex-1 items-center px-1 py-1.5 sm:px-2 sm:py-2">
-                            <CashFlowBarChart data={chartData} height={180} />
-                        </div>
+                    <Card id="chart-bar" size="sm" className="h-full gap-0 p-0">
+                        <CardHeader>
+                            <CardTitle className="text-sm">Monthly Cash Flow</CardTitle>
+                            <CardAction>
+                                <Button
+                                    onClick={() => setShowFullscreenChart('bar')}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    title="Fullscreen"
+                                >
+                                    <Maximize2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </CardAction>
+                        </CardHeader>
+                        <CardContent className="flex flex-1 items-stretch pt-3">
+                            <CashFlowBarChart data={chartData} height="100%" />
+                        </CardContent>
                     </Card>
 
                     {/* Cumulative Chart */}
-                    <Card id="chart-cumulative" className="gap-0 overflow-hidden py-0">
-                        <div className="bg-muted flex items-center justify-between border-b px-2 py-1.5 sm:px-3 sm:py-2">
-                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cumulative Cash Position</span>
-                            <Button onClick={() => setShowFullscreenChart('cumulative')} variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" title="Fullscreen">
-                                <Maximize2 className="h-3 w-3" />
-                            </Button>
-                        </div>
-                        <div className="flex flex-1 flex-col justify-center px-1 py-1.5 sm:px-2 sm:py-2">
-                            <CumulativeLineChart data={cumulativeData} height={180} startingBalance={startingBalance} />
-                            <div className="mt-1 text-center">
-                                <span className={`text-[10px] sm:text-xs font-medium ${endingBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <Card id="chart-cumulative" size="sm" className="h-full gap-0 p-0">
+                        <CardHeader>
+                            <CardTitle className="text-sm">Cumulative Cash Position</CardTitle>
+                            <CardAction>
+                                <Button
+                                    onClick={() => setShowFullscreenChart('cumulative')}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    title="Fullscreen"
+                                >
+                                    <Maximize2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </CardAction>
+                        </CardHeader>
+                        <CardContent className="flex flex-1 flex-col pt-3">
+                            <div className="flex-1">
+                                <CumulativeLineChart data={cumulativeData} height="100%" startingBalance={startingBalance} />
+                            </div>
+                            <div className="pt-2 text-center">
+                                <span
+                                    className={`text-xs font-medium ${endingBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+                                >
                                     Ending: ${formatAmount(endingBalance)}
                                 </span>
                             </div>
-                        </div>
+                        </CardContent>
                     </Card>
 
                     {/* Waterfall Chart */}
-                    <Card id="chart-waterfall" className="gap-0 overflow-hidden py-0">
-                        <div className="bg-muted flex flex-wrap items-center gap-1.5 sm:gap-2 border-b px-2 py-1.5 sm:px-3 sm:py-2">
-                            <span className="text-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Cash Waterfall</span>
-                            <div className="flex flex-1 items-center justify-end gap-1 sm:gap-1.5">
-                                <Select value={waterfallStartMonth} onValueChange={setWaterfallStartMonth}>
-                                    <SelectTrigger className="h-6 w-[80px] sm:w-[100px] text-[10px] sm:text-[11px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {waterfallMonthOptions.map((month) => (
-                                            <SelectItem key={`waterfall-start-${month}`} value={month}>
-                                                {formatMonthHeader(month)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <span className="text-muted-foreground text-[10px] sm:text-[11px]">to</span>
-                                <Select value={waterfallEndMonth} onValueChange={setWaterfallEndMonth}>
-                                    <SelectTrigger className="h-6 w-[80px] sm:w-[100px] text-[10px] sm:text-[11px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {waterfallMonthOptions.map((month) => (
-                                            <SelectItem key={`waterfall-end-${month}`} value={month}>
-                                                {formatMonthHeader(month)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" title="View Unmapped" asChild>
-                                    <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
-                                        <ExternalLink className="h-3 w-3" />
-                                    </Link>
-                                </Button>
-                                <Button onClick={() => setShowFullscreenChart('waterfall')} variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" title="Fullscreen">
-                                    <Maximize2 className="h-3 w-3" />
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="flex flex-1 flex-col justify-center px-1 py-1.5 sm:px-2 sm:py-2">
+                    <Card id="chart-waterfall" size="sm" className="gap-0 p-0">
+                        <CardHeader>
+                            <CardTitle className="text-sm">Cash Waterfall</CardTitle>
+                            <CardAction>
+                                <div className="flex items-center gap-2">
+                                    <Select value={waterfallStartMonth} onValueChange={setWaterfallStartMonth}>
+                                        <SelectTrigger className="h-[18px] w-[72px] px-1.5 py-0 text-[9px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {waterfallMonthOptions.map((month) => (
+                                                <SelectItem key={`waterfall-start-${month}`} value={month}>
+                                                    {formatMonthHeader(month)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={waterfallEndMonth} onValueChange={setWaterfallEndMonth}>
+                                        <SelectTrigger className="h-[18px] w-[72px] px-1.5 py-0 text-[9px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {waterfallMonthOptions.map((month) => (
+                                                <SelectItem key={`waterfall-end-${month}`} value={month}>
+                                                    {formatMonthHeader(month)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" title="View Unmapped" asChild>
+                                        <Link href={`/cash-forecast/unmapped?start_month=${waterfallStartMonth}&end_month=${waterfallEndMonth}`}>
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                        </Link>
+                                    </Button>
+                                    <Button
+                                        onClick={() => setShowFullscreenChart('waterfall')}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        title="Fullscreen"
+                                    >
+                                        <Maximize2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </CardAction>
+                        </CardHeader>
+                        <CardContent className="pt-3">
                             <WaterfallChart data={waterfallData} height={180} />
-                        </div>
+                        </CardContent>
                     </Card>
                 </div>
 
@@ -1070,7 +1097,6 @@ const ShowCashForecast = ({
                         />
                     </TableBody>
                 </CashFlowTableContainer>
-
             </div>
 
             {/* Modals */}
@@ -1137,10 +1163,10 @@ const ShowCashForecast = ({
                 sourceMonths={
                     cashOutAdjustmentHook.modalState.jobNumber && cashOutAdjustmentHook.modalState.costItem && cashOutAdjustmentHook.modalState.vendor
                         ? cashOutAdjustmentHook.getSourceMonths(
-                            cashOutAdjustmentHook.modalState.jobNumber,
-                            cashOutAdjustmentHook.modalState.costItem,
-                            cashOutAdjustmentHook.modalState.vendor,
-                        )
+                              cashOutAdjustmentHook.modalState.jobNumber,
+                              cashOutAdjustmentHook.modalState.costItem,
+                              cashOutAdjustmentHook.modalState.vendor,
+                          )
                         : []
                 }
                 splits={cashOutAdjustmentHook.modalState.splits}
@@ -1188,8 +1214,8 @@ const ShowCashForecast = ({
                     showFullscreenChart === 'bar'
                         ? 'Monthly Cash Flow'
                         : showFullscreenChart === 'cumulative'
-                            ? 'Cumulative Cash Position'
-                            : 'Cash Waterfall'
+                          ? 'Cumulative Cash Position'
+                          : 'Cash Waterfall'
                 }
             >
                 {showFullscreenChart === 'bar' && <CashFlowBarChart data={chartData} height={600} />}

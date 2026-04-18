@@ -1,12 +1,10 @@
 import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -23,7 +21,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, CirclePlus, Copy, Download, EllipsisVertical, Eye, FileText, LayoutGrid, LayoutList, MapPin, Pencil, RefreshCcw, Search, Send, SlidersHorizontal, Tag, Trash2, X } from 'lucide-react';
+import { Check, CirclePlus, Copy, Download, EllipsisVertical, Eye, FileText, LayoutGrid, LayoutList, Pencil, RefreshCcw, Search, Send, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import VariationCardsIndex from './index-partials/cardsIndex';
@@ -103,8 +101,6 @@ function VariationActions({ variation }: { variation: Variation }) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.visit(`/variations/${variation.id}/show`)}>
                     <Eye className="h-4 w-4" />
                     View
@@ -243,26 +239,23 @@ function PillFilter({
     options,
     value,
     onChange,
-    getClasses,
 }: {
     options: string[];
     value: string;
     onChange: (val: string | null) => void;
-    getClasses?: (opt: string) => string;
 }) {
     return (
         <div className="flex flex-wrap gap-1.5">
             {options.map((opt) => {
                 const isActive = value === opt;
-                const colorClasses = getClasses?.(opt) ?? '';
                 return (
                     <button
                         key={opt}
                         onClick={() => onChange(isActive ? null : opt)}
                         className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all',
+                            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors',
                             isActive
-                                ? colorClasses || 'bg-primary text-primary-foreground border-primary'
+                                ? 'bg-foreground text-background border-foreground'
                                 : 'bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground border-border',
                         )}
                     >
@@ -275,33 +268,27 @@ function PillFilter({
     );
 }
 
-// ── Filter Section Card ──────────────────────────────────────────────
+// ── Filter Section ───────────────────────────────────────────────────
 function FilterSection({
-    icon: Icon,
     label,
     value,
     onClear,
     children,
 }: {
-    icon: React.ComponentType<{ className?: string }>;
     label: string;
     value?: string;
     onClear: () => void;
     children: React.ReactNode;
 }) {
     return (
-        <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Icon className="text-muted-foreground h-4 w-4" />
-                    <Label className="text-sm font-medium">{label}</Label>
-                </div>
+        <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">{label}</Label>
                 {value && (
                     <button
                         onClick={onClear}
-                        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+                        className="text-muted-foreground hover:text-foreground text-xs transition-colors"
                     >
-                        <X className="h-3 w-3" />
                         Clear
                     </button>
                 )}
@@ -360,10 +347,8 @@ function FilterSheetButton({
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="space-y-3 px-1 pt-2 pb-4">
-                    {/* Status pills */}
+                <div className="space-y-6 px-1 pt-4 pb-4">
                     <FilterSection
-                        icon={SlidersHorizontal}
                         label="Status"
                         value={filters.status}
                         onClear={() => updateFilter('status', null)}
@@ -372,13 +357,10 @@ function FilterSheetButton({
                             options={filterOptions.statuses}
                             value={filters.status}
                             onChange={(val) => updateFilter('status', val)}
-                            getClasses={(opt) => getStatusClasses(opt)}
                         />
                     </FilterSection>
 
-                    {/* Type pills */}
                     <FilterSection
-                        icon={Tag}
                         label="Type"
                         value={filters.type}
                         onClear={() => updateFilter('type', null)}
@@ -390,10 +372,8 @@ function FilterSheetButton({
                         />
                     </FilterSection>
 
-                    {/* Location select (hidden when scoped to a specific location) */}
                     {showLocationFilter && filterOptions.locations && (
                         <FilterSection
-                            icon={MapPin}
                             label="Location"
                             value={filters.location}
                             onClear={() => updateFilter('location', null)}
@@ -436,6 +416,30 @@ function ActiveFilterBadges({
                 </Badge>
             ))}
         </div>
+    );
+}
+
+// ── Empty State ───────────────────────────────────────────────────────
+function VariationsEmpty({ hasFilters, onClear }: { hasFilters: boolean; onClear: () => void }) {
+    return (
+        <Empty className="border">
+            <EmptyMedia variant="icon">
+                <FileText />
+            </EmptyMedia>
+            <EmptyHeader>
+                <EmptyTitle>No variations found</EmptyTitle>
+                <EmptyDescription>
+                    {hasFilters ? 'Try adjusting your search or filters.' : 'Create your first variation to get started.'}
+                </EmptyDescription>
+            </EmptyHeader>
+            {hasFilters && (
+                <EmptyContent>
+                    <Button variant="outline" size="sm" onClick={onClear}>
+                        Clear filters
+                    </Button>
+                </EmptyContent>
+            )}
+        </Empty>
     );
 }
 
@@ -544,59 +548,46 @@ export default function VariationIndex() {
             <LoadingDialog open={syncDialogOpen} setOpen={setSyncDialogOpen} />
 
             <div className="@container flex min-w-0 flex-col gap-4 p-4">
-                {/* ── Summary Cards (location-scoped only) ─────────────── */}
                 {isLocationScoped && summaryCards && (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <Card className="@container/card">
-                            <CardHeader>
-                                <CardDescription>Total Approved Variations [Rev]</CardDescription>
-                                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                                    {formatCurrency(summaryCards.approvedRevenue)}
-                                </CardTitle>
-                                <CardAction />
-                            </CardHeader>
-                        </Card>
-                        <Card className="@container/card">
-                            <CardHeader>
-                                <CardDescription>Total Pending Variations [Rev]</CardDescription>
-                                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                                    {formatCurrency(summaryCards.pendingRevenue)}
-                                </CardTitle>
-                                <CardAction />
-                            </CardHeader>
-                        </Card>
+                    <div className="grid grid-cols-2 gap-6 sm:gap-10">
+                        <div>
+                            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Approved revenue</p>
+                            <p className="mt-1 text-2xl font-semibold tabular-nums @md:text-3xl">
+                                {formatCurrency(summaryCards.approvedRevenue)}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Pending revenue</p>
+                            <p className="mt-1 text-2xl font-semibold tabular-nums @md:text-3xl">
+                                {formatCurrency(summaryCards.pendingRevenue)}
+                            </p>
+                        </div>
                     </div>
                 )}
 
-                {/* ── Toolbar ──────────────────────────────────────────── */}
                 <div className="flex min-w-0 flex-col gap-3">
-                    {/* Row 1: Title + Create + Sync */}
                     <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h1 className="text-xl font-semibold tracking-tight">
-                                {isLocationScoped ? `${location.name} - Variations` : 'Variations'}
-                            </h1>
-                            <p className="text-muted-foreground text-sm">Manage and track change orders</p>
-                        </div>
+                        <h1 className="text-xl font-semibold tracking-tight">
+                            {isLocationScoped ? `${location.name} — Variations` : 'Variations'}
+                        </h1>
                         <div className="flex items-center gap-2">
                             <Link href={syncUrl} onClick={() => setSyncDialogOpen(true)}>
                                 <Button variant="outline" className="gap-2">
                                     <RefreshCcw className="h-4 w-4" />
-                                    {isLocationScoped ? 'Sync' : 'Sync All'}
+                                    {isLocationScoped ? 'Sync' : 'Sync all'}
                                 </Button>
                             </Link>
                             <Link href={isLocationScoped ? `/variations/create?location_id=${location.id}` : '/variations/create'}>
                                 <Button className="gap-2">
                                     <CirclePlus className="h-4 w-4" />
-                                    Create Variation
+                                    New variation
                                 </Button>
                             </Link>
                         </div>
                     </div>
 
-                    {/* Row 2 (wide): Search + Filters + Active badges */}
-                    <div className="hidden items-center gap-2 @3xl:flex">
-                        <div className="relative w-72">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative min-w-[200px] flex-1 @3xl:max-w-xs">
                             <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                             <Input
                                 type="text"
@@ -621,50 +612,15 @@ export default function VariationIndex() {
                             showLocationFilter={!isLocationScoped}
                         />
 
-                        <ActiveFilterBadges
-                            activeFilters={activeFilters}
-                            updateFilter={updateFilter}
-                        />
-
                         <div className="ml-auto">
                             <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
                         </div>
-                    </div>
 
-                    {/* Row 2 (narrow): Search full-width, filters + toggle below */}
-                    <div className="flex flex-col gap-2 @3xl:hidden">
-                        <div className="relative w-full">
-                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                            <Input
-                                type="text"
-                                placeholder="Search variations..."
-                                value={searchInput}
-                                onChange={(e) => handleSearchChange(e.target.value)}
-                                className="pl-9"
-                            />
-                            {searchInput && (
-                                <button onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
-                                    <X className="h-4 w-4" />
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <FilterSheetButton
-                                totalActiveFilters={totalActiveFilters}
-                                filters={filters}
-                                filterOptions={filterOptions}
-                                updateFilter={updateFilter}
-                                clearAllFilters={clearAllFilters}
-                                showLocationFilter={!isLocationScoped}
-                            />
-                            <div className="ml-auto">
-                                <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+                        {activeFilters.length > 0 && (
+                            <div className="w-full">
+                                <ActiveFilterBadges activeFilters={activeFilters} updateFilter={updateFilter} />
                             </div>
-                        </div>
-                        <ActiveFilterBadges
-                            activeFilters={activeFilters}
-                            updateFilter={updateFilter}
-                        />
+                        )}
                     </div>
                 </div>
 
@@ -672,26 +628,7 @@ export default function VariationIndex() {
                 <Tabs value={viewMode} onValueChange={handleViewModeChange}>
                     <TabsContent value="table" className="mt-0">
                 {reqs.length === 0 ? (
-                    <Empty className="border">
-                        <EmptyMedia variant="icon">
-                            <FileText />
-                        </EmptyMedia>
-                        <EmptyHeader>
-                            <EmptyTitle>No variations found</EmptyTitle>
-                            <EmptyDescription>
-                                {totalActiveFilters > 0 || searchInput
-                                    ? 'Try adjusting your search or filters.'
-                                    : 'Create your first variation to get started.'}
-                            </EmptyDescription>
-                        </EmptyHeader>
-                        {(totalActiveFilters > 0 || searchInput) && (
-                            <EmptyContent>
-                                <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                                    Clear filters
-                                </Button>
-                            </EmptyContent>
-                        )}
-                    </Empty>
+                    <VariationsEmpty hasFilters={totalActiveFilters > 0 || !!searchInput} onClear={clearAllFilters} />
                 ) : (
                     <>
                         {/* Card layout for narrow containers */}
@@ -871,26 +808,7 @@ export default function VariationIndex() {
 
                     <TabsContent value="cards" className="mt-0">
                         {reqs.length === 0 ? (
-                            <Empty className="border">
-                                <EmptyMedia variant="icon">
-                                    <FileText />
-                                </EmptyMedia>
-                                <EmptyHeader>
-                                    <EmptyTitle>No variations found</EmptyTitle>
-                                    <EmptyDescription>
-                                        {totalActiveFilters > 0 || searchInput
-                                            ? 'Try adjusting your search or filters.'
-                                            : 'Create your first variation to get started.'}
-                                    </EmptyDescription>
-                                </EmptyHeader>
-                                {(totalActiveFilters > 0 || searchInput) && (
-                                    <EmptyContent>
-                                        <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                                            Clear filters
-                                        </Button>
-                                    </EmptyContent>
-                                )}
-                            </Empty>
+                            <VariationsEmpty hasFilters={totalActiveFilters > 0 || !!searchInput} onClear={clearAllFilters} />
                         ) : (
                             <VariationCardsIndex filteredVariations={reqs} />
                         )}

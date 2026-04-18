@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { DatePickerDemo } from '@/components/date-picker';
+import { SearchSelect } from '@/components/search-select';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -10,16 +10,21 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
+import { format, isValid, parseISO } from 'date-fns';
 import { Download, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
@@ -152,7 +157,7 @@ type GeneralCostsModalProps = {
     onDelete: (id: number, onComplete?: () => void) => void;
 };
 
-export const GeneralCostsModal = ({
+const LegacyGeneralCostsModal = ({
     open,
     onOpenChange,
     generalCosts,
@@ -212,7 +217,13 @@ export const GeneralCostsModal = ({
 
     return (
         <>
-            <Dialog open={open} onOpenChange={(v) => { if (!v) cancelEdit(); onOpenChange(v); }}>
+            <Dialog
+                open={open}
+                onOpenChange={(v) => {
+                    if (!v) cancelEdit();
+                    onOpenChange(v);
+                }}
+            >
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>General Transactions</DialogTitle>
@@ -231,21 +242,17 @@ export const GeneralCostsModal = ({
                                                 className={cn(
                                                     'flex items-center justify-between rounded-lg p-3 transition-colors',
                                                     isConfirming
-                                                        ? 'bg-destructive/10 border-2 border-destructive'
+                                                        ? 'bg-destructive/10 border-destructive border-2'
                                                         : editingId === cost.id
-                                                            ? 'bg-primary/5 border-2 border-primary'
-                                                            : 'bg-muted'
+                                                          ? 'bg-primary/5 border-primary border-2'
+                                                          : 'bg-muted',
                                                 )}
                                             >
                                                 {isConfirming ? (
                                                     <>
                                                         <div className="space-y-1">
-                                                            <div className="text-destructive text-sm font-medium">
-                                                                Delete "{cost.name}"?
-                                                            </div>
-                                                            <div className="text-muted-foreground text-xs">
-                                                                This action cannot be undone
-                                                            </div>
+                                                            <div className="text-destructive text-sm font-medium">Delete "{cost.name}"?</div>
+                                                            <div className="text-muted-foreground text-xs">This action cannot be undone</div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <Button
@@ -327,9 +334,11 @@ export const GeneralCostsModal = ({
                                         Cancel Edit
                                     </Button>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="edit-cost-name">Name *</Label>
+                                        <Label className="text-xs" htmlFor="edit-cost-name">
+                                            Name *
+                                        </Label>
                                         <Input
                                             id="edit-cost-name"
                                             type="text"
@@ -339,7 +348,9 @@ export const GeneralCostsModal = ({
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="edit-cost-amount">Amount *</Label>
+                                        <Label className="text-xs" htmlFor="edit-cost-amount">
+                                            Amount *
+                                        </Label>
                                         <div className="relative">
                                             <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
                                             <Input
@@ -422,7 +433,9 @@ export const GeneralCostsModal = ({
                                         </Select>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="edit-cost-start-date">Start Date *</Label>
+                                        <Label className="text-xs" htmlFor="edit-cost-start-date">
+                                            Start Date *
+                                        </Label>
                                         <Input
                                             id="edit-cost-start-date"
                                             type="date"
@@ -432,7 +445,9 @@ export const GeneralCostsModal = ({
                                     </div>
                                     {editCost.type === 'recurring' && (
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs" htmlFor="edit-cost-end-date">End Date</Label>
+                                            <Label className="text-xs" htmlFor="edit-cost-end-date">
+                                                End Date
+                                            </Label>
                                             <Input
                                                 id="edit-cost-end-date"
                                                 type="date"
@@ -445,7 +460,9 @@ export const GeneralCostsModal = ({
                                         <Label className="text-xs">GST</Label>
                                         <Select
                                             value={editCost.gst_type ?? 'inclusive'}
-                                            onValueChange={(value) => setEditCost({ ...editCost, gst_type: value as 'inclusive' | 'exclusive' | 'free' })}
+                                            onValueChange={(value) =>
+                                                setEditCost({ ...editCost, gst_type: value as 'inclusive' | 'exclusive' | 'free' })
+                                            }
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder="GST treatment" />
@@ -474,9 +491,11 @@ export const GeneralCostsModal = ({
                         {editingId === null && (
                             <div className="space-y-4">
                                 <Label>Add New Transaction</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="cost-name">Name *</Label>
+                                        <Label className="text-xs" htmlFor="cost-name">
+                                            Name *
+                                        </Label>
                                         <Input
                                             id="cost-name"
                                             type="text"
@@ -486,7 +505,9 @@ export const GeneralCostsModal = ({
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="cost-amount">Amount *</Label>
+                                        <Label className="text-xs" htmlFor="cost-amount">
+                                            Amount *
+                                        </Label>
                                         <div className="relative">
                                             <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
                                             <Input
@@ -589,7 +610,9 @@ export const GeneralCostsModal = ({
                                         </Select>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs" htmlFor="cost-start-date">Start Date *</Label>
+                                        <Label className="text-xs" htmlFor="cost-start-date">
+                                            Start Date *
+                                        </Label>
                                         <Input
                                             id="cost-start-date"
                                             type="date"
@@ -599,7 +622,9 @@ export const GeneralCostsModal = ({
                                     </div>
                                     {newCost.type === 'recurring' && (
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs" htmlFor="cost-end-date">End Date</Label>
+                                            <Label className="text-xs" htmlFor="cost-end-date">
+                                                End Date
+                                            </Label>
                                             <Input
                                                 id="cost-end-date"
                                                 type="date"
@@ -640,13 +665,589 @@ export const GeneralCostsModal = ({
                         )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => { cancelEdit(); onOpenChange(false); }} disabled={isDeleting || isSaving}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                cancelEdit();
+                                onOpenChange(false);
+                            }}
+                            disabled={isDeleting || isSaving}
+                        >
                             Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>
+    );
+};
+
+type GeneralTransactionSearchOption = {
+    value: string;
+    label: string;
+};
+
+type GeneralTransactionEditorProps = {
+    mode: 'add' | 'edit';
+    value: Partial<GeneralCost>;
+    categories: Record<string, string>;
+    frequencies: Record<string, string>;
+    onChange: (cost: Partial<GeneralCost>) => void;
+    onSubmit: () => void;
+    onCancel?: () => void;
+    onDelete?: () => void;
+    isBusy?: boolean;
+};
+
+const getGeneralTransactionDateValue = (value?: string | null) => {
+    if (!value) return undefined;
+    const parsed = parseISO(value);
+    return isValid(parsed) ? parsed : undefined;
+};
+
+const toGeneralTransactionIsoDate = (value?: Date) => (value ? format(value, 'yyyy-MM-dd') : '');
+
+const formatGeneralTransactionDate = (value?: string | null) => {
+    const date = getGeneralTransactionDateValue(value);
+    return date ? format(date, 'dd MMM yyyy') : null;
+};
+
+const formatGeneralTransactionSchedule = (cost: GeneralCost, frequencies: Record<string, string>) => {
+    if (cost.type === 'one_off') return 'One-off';
+    return frequencies[cost.frequency ?? 'monthly'] ?? 'Recurring';
+};
+
+const formatGeneralTransactionTiming = (cost: GeneralCost) => {
+    const startLabel = formatGeneralTransactionDate(cost.start_date);
+    const endLabel = formatGeneralTransactionDate(cost.end_date);
+
+    if (cost.type === 'one_off') {
+        return startLabel ? `Scheduled ${startLabel}` : 'Scheduled once';
+    }
+
+    if (startLabel && endLabel) {
+        return `${startLabel} to ${endLabel}`;
+    }
+
+    if (startLabel) {
+        return `From ${startLabel}`;
+    }
+
+    return 'Recurring';
+};
+
+const GeneralTransactionEditor = ({
+    mode,
+    value,
+    categories,
+    frequencies,
+    onChange,
+    onSubmit,
+    onCancel,
+    onDelete,
+    isBusy = false,
+}: GeneralTransactionEditorProps) => {
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const typeValue = value.type ?? 'recurring';
+    const categoryOptions: GeneralTransactionSearchOption[] = [
+        { value: 'none', label: 'No category' },
+        ...Object.entries(categories).map(([key, label]) => ({ value: key, label })),
+    ];
+    const frequencyOptions: GeneralTransactionSearchOption[] = Object.entries(frequencies).map(([key, label]) => ({ value: key, label }));
+    const submitDisabled = !value.name || value.amount === undefined || value.amount === null || !value.start_date || isBusy;
+
+    return (
+        <div className="mx-auto max-w-md space-y-5">
+            <div className="space-y-1">
+                <h3 className="text-sm font-medium">{mode === 'edit' ? 'Edit transaction' : 'Add transaction'}</h3>
+                <p className="text-muted-foreground text-sm">
+                    {mode === 'edit'
+                        ? 'Update the transaction details and save when the forecast is correct.'
+                        : 'Add a recurring or one-off entry that should appear in the cash forecast.'}
+                </p>
+            </div>
+
+            <div className="space-y-4">
+                <div className="space-y-1.5">
+                    <Label className="text-sm" htmlFor={`transaction-name-${mode}`}>
+                        Name
+                    </Label>
+                    <Input
+                        id={`transaction-name-${mode}`}
+                        type="text"
+                        value={value.name ?? ''}
+                        onChange={(e) => onChange({ ...value, name: e.target.value })}
+                        placeholder="e.g. Office Rent"
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm" htmlFor={`transaction-amount-${mode}`}>
+                        Amount
+                    </Label>
+                    <div className="relative">
+                        <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                        <Input
+                            id={`transaction-amount-${mode}`}
+                            type="number"
+                            inputMode="decimal"
+                            value={value.amount ?? ''}
+                            onChange={(e) =>
+                                onChange({
+                                    ...value,
+                                    amount: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                                })
+                            }
+                            className="pl-8"
+                            placeholder="0.00"
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm">Cash flow</Label>
+                    <ToggleGroup
+                        variant="outline"
+                        className="w-full"
+                        value={[value.flow_type ?? 'cash_out']}
+                        onValueChange={(nextValue) => {
+                            const next = nextValue[0];
+                            if (!next) return;
+                            onChange({ ...value, flow_type: next as 'cash_in' | 'cash_out' });
+                        }}
+                    >
+                        <ToggleGroupItem value="cash_out" className="flex-1">
+                            Cash Out
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="cash_in" className="flex-1">
+                            Cash In
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm">Transaction type</Label>
+                    <ToggleGroup
+                        variant="outline"
+                        className="w-full"
+                        value={[typeValue]}
+                        onValueChange={(nextValue) => {
+                            const next = nextValue[0];
+                            if (!next) return;
+                            onChange({
+                                ...value,
+                                type: next as 'one_off' | 'recurring',
+                                frequency: next === 'recurring' ? (value.frequency ?? 'monthly') : null,
+                                end_date: next === 'recurring' ? (value.end_date ?? null) : null,
+                            });
+                        }}
+                    >
+                        <ToggleGroupItem value="recurring" className="flex-1">
+                            Recurring
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="one_off" className="flex-1">
+                            One-off
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </div>
+
+                {typeValue === 'recurring' ? (
+                    <div className="space-y-1.5">
+                        <Label className="text-sm">Frequency</Label>
+                        <SearchSelect
+                            options={frequencyOptions}
+                            optionName="frequency"
+                            selectedOption={value.frequency ?? 'monthly'}
+                            onValueChange={(nextValue) => onChange({ ...value, frequency: nextValue })}
+                        />
+                    </div>
+                ) : null}
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm">Category</Label>
+                    <SearchSelect
+                        options={categoryOptions}
+                        optionName="category"
+                        selectedOption={value.category || 'none'}
+                        onValueChange={(nextValue) => onChange({ ...value, category: nextValue === 'none' ? '' : nextValue })}
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm">Start date</Label>
+                    <DatePickerDemo
+                        value={getGeneralTransactionDateValue(value.start_date)}
+                        onChange={(nextDate) => onChange({ ...value, start_date: toGeneralTransactionIsoDate(nextDate) })}
+                        placeholder="Select start date"
+                        className="w-full"
+                        displayFormat="dd MMM yyyy"
+                    />
+                </div>
+
+                {typeValue === 'recurring' ? (
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                            <Label className="text-sm">End date</Label>
+                            {value.end_date ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onChange({ ...value, end_date: '' })}
+                                    className="text-muted-foreground h-7 px-2 text-xs"
+                                >
+                                    Clear
+                                </Button>
+                            ) : null}
+                        </div>
+                        <DatePickerDemo
+                            value={getGeneralTransactionDateValue(value.end_date)}
+                            onChange={(nextDate) => onChange({ ...value, end_date: toGeneralTransactionIsoDate(nextDate) })}
+                            placeholder="Optional end date"
+                            className="w-full"
+                            displayFormat="dd MMM yyyy"
+                            fromDate={getGeneralTransactionDateValue(value.start_date)}
+                        />
+                    </div>
+                ) : null}
+
+                <div className="space-y-1.5">
+                    <Label className="text-sm">GST treatment</Label>
+                    <ToggleGroup
+                        variant="outline"
+                        className="w-full"
+                        value={[value.gst_type ?? 'inclusive']}
+                        onValueChange={(nextValue) => {
+                            const next = nextValue[0];
+                            if (!next) return;
+                            onChange({ ...value, gst_type: next as 'inclusive' | 'exclusive' | 'free' });
+                        }}
+                    >
+                        <ToggleGroupItem value="inclusive" className="flex-1">
+                            Incl. GST
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="exclusive" className="flex-1">
+                            Excl. GST
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="free" className="flex-1">
+                            No GST
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                {onDelete ? (
+                    <Popover open={deleteOpen} onOpenChange={setDeleteOpen}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={isBusy}
+                                className="text-muted-foreground hover:text-destructive sm:mr-auto"
+                            >
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                Delete
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" align="start" className="w-64">
+                            <PopoverHeader>
+                                <PopoverTitle>Delete this transaction?</PopoverTitle>
+                                <PopoverDescription>This can't be undone.</PopoverDescription>
+                            </PopoverHeader>
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                        setDeleteOpen(false);
+                                        onDelete();
+                                    }}
+                                >
+                                    Delete
+                                </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                ) : null}
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    {onCancel ? (
+                        <Button type="button" variant="outline" onClick={onCancel} disabled={isBusy}>
+                            Cancel
+                        </Button>
+                    ) : null}
+                    <Button type="button" onClick={onSubmit} disabled={submitDisabled}>
+                        {mode === 'edit' ? <Save className="mr-1 h-4 w-4" /> : <Plus className="mr-1 h-4 w-4" />}
+                        {mode === 'edit' ? (isBusy ? 'Saving...' : 'Save Changes') : 'Add Transaction'}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const GeneralCostsModal = ({
+    open,
+    onOpenChange,
+    generalCosts,
+    categories,
+    frequencies,
+    newCost,
+    onNewCostChange,
+    onAdd,
+    onUpdate,
+    onDelete,
+}: GeneralCostsModalProps) => {
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editCost, setEditCost] = useState<Partial<GeneralCost>>({});
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleDelete = (id: number) => {
+        setIsDeleting(true);
+        onDelete(id, () => {
+            setIsDeleting(false);
+            setEditingId(null);
+            setEditCost({});
+        });
+    };
+
+    const startEdit = (cost: GeneralCost) => {
+        setEditingId(cost.id);
+        setEditCost({
+            name: cost.name,
+            amount: cost.amount,
+            type: cost.type,
+            flow_type: cost.flow_type,
+            frequency: cost.frequency,
+            category: cost.category,
+            start_date: cost.start_date,
+            end_date: cost.end_date,
+            gst_type: cost.gst_type,
+            is_active: cost.is_active,
+        });
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditCost({});
+    };
+
+    const saveEdit = () => {
+        if (!editingId || !editCost.name || !editCost.amount || !editCost.start_date) return;
+        setIsSaving(true);
+        onUpdate(editingId, editCost, () => {
+            setIsSaving(false);
+            setEditingId(null);
+            setEditCost({});
+        });
+    };
+
+    const recurringCount = generalCosts.filter((cost) => cost.type === 'recurring').length;
+    const cashInCount = generalCosts.filter((cost) => cost.flow_type === 'cash_in').length;
+    const selectedCost = editingId !== null ? (generalCosts.find((cost) => cost.id === editingId) ?? null) : null;
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) cancelEdit();
+                onOpenChange(nextOpen);
+            }}
+        >
+            <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:w-full sm:max-w-3xl">
+                <DialogHeader className="border-b px-5 py-3 sm:px-6 sm:py-4">
+                    <div className="space-y-0.5">
+                        <DialogTitle className="text-base font-medium sm:text-lg">General Transactions</DialogTitle>
+                        <DialogDescription className="max-w-2xl text-sm">
+                            Manage recurring and one-off cash flow transactions.
+                        </DialogDescription>
+                    </div>
+                </DialogHeader>
+
+                <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)]">
+                    <aside className="bg-muted/15 flex min-h-0 flex-col border-b lg:border-r lg:border-b-0">
+                        <div className="border-b px-4 py-3 sm:px-5 sm:py-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 space-y-1">
+                                    <p className="text-sm font-medium">Existing transactions</p>
+                                    <p className="text-muted-foreground text-xs tabular-nums">
+                                        {generalCosts.length} total
+                                        <span aria-hidden className="mx-1.5 opacity-40">·</span>
+                                        {recurringCount} recurring
+                                        <span aria-hidden className="mx-1.5 opacity-40">·</span>
+                                        {cashInCount} cash in
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="shrink-0"
+                                    onClick={cancelEdit}
+                                >
+                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    New
+                                </Button>
+                            </div>
+                        </div>
+
+                        <ScrollArea className="max-h-[32vh] min-h-0 flex-1 lg:max-h-none">
+                            <div className="p-2 sm:p-2.5">
+                                {generalCosts.length === 0 ? (
+                                    <div className="rounded-lg border border-dashed px-3 py-6 text-center">
+                                        <p className="text-sm font-medium">No transactions yet</p>
+                                        <p className="text-muted-foreground mt-1 text-sm">Create the first recurring or one-off cash entry.</p>
+                                    </div>
+                                ) : (
+                                    (() => {
+                                        const recurringItems = generalCosts.filter((c) => c.type === 'recurring');
+                                        const oneOffItems = generalCosts.filter((c) => c.type !== 'recurring');
+
+                                        const renderItem = (cost: GeneralCost) => {
+                                            const isActive = editingId === cost.id;
+                                            const categoryLabel = cost.category ? (categories[cost.category] ?? cost.category) : 'No category';
+                                            const isCashIn = cost.flow_type === 'cash_in';
+                                            const trailing =
+                                                cost.type === 'recurring'
+                                                    ? (cost.frequency ? (frequencies[cost.frequency] ?? cost.frequency) : 'Recurring')
+                                                    : (formatGeneralTransactionDate(cost.start_date) || 'One-off');
+
+                                            return (
+                                                <button
+                                                    key={cost.id}
+                                                    type="button"
+                                                    onClick={() => startEdit(cost)}
+                                                    aria-current={isActive ? 'true' : undefined}
+                                                    className={cn(
+                                                        'focus-visible:ring-ring/40 w-full rounded-md px-2.5 py-2 text-left transition-colors duration-150 outline-none focus-visible:ring-2',
+                                                        isActive
+                                                            ? 'bg-background ring-foreground/25 ring-1 shadow-xs'
+                                                            : 'hover:bg-background/60',
+                                                    )}
+                                                >
+                                                    <div className="flex items-baseline justify-between gap-3">
+                                                        <p className="truncate text-sm font-medium">{cost.name}</p>
+                                                        <span
+                                                            className={cn(
+                                                                'shrink-0 text-sm font-medium tabular-nums',
+                                                                isCashIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                                                            )}
+                                                        >
+                                                            <span className="sr-only">{isCashIn ? 'Cash in: ' : 'Cash out: '}</span>
+                                                            {isCashIn ? '+' : '−'}${formatAmount(cost.amount)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                                                        {categoryLabel}
+                                                        <span aria-hidden className="mx-1 opacity-40">·</span>
+                                                        {trailing}
+                                                    </p>
+                                                </button>
+                                            );
+                                        };
+
+                                        return (
+                                            <div className="space-y-3">
+                                                {recurringItems.length > 0 && (
+                                                    <section>
+                                                        <p className="text-muted-foreground px-2.5 pt-1 pb-1 text-xs font-medium">
+                                                            Recurring
+                                                        </p>
+                                                        <div className="space-y-0.5">{recurringItems.map(renderItem)}</div>
+                                                    </section>
+                                                )}
+                                                {oneOffItems.length > 0 && (
+                                                    <section>
+                                                        <p className="text-muted-foreground px-2.5 pt-1 pb-1 text-xs font-medium">
+                                                            One-off
+                                                        </p>
+                                                        <div className="space-y-0.5">{oneOffItems.map(renderItem)}</div>
+                                                    </section>
+                                                )}
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </aside>
+
+                    <section className="flex min-h-0 flex-col">
+                        <div className="border-b px-5 py-3 sm:px-6 sm:py-4">
+                            {selectedCost ? (
+                                (() => {
+                                    const isCashIn = selectedCost.flow_type === 'cash_in';
+                                    const categoryLabel = selectedCost.category
+                                        ? (categories[selectedCost.category] ?? selectedCost.category)
+                                        : 'No category';
+                                    return (
+                                        <div className="min-w-0 space-y-1">
+                                            <div className="flex items-baseline justify-between gap-3">
+                                                <p className="truncate text-base font-medium">{selectedCost.name}</p>
+                                                <span
+                                                    className={cn(
+                                                        'shrink-0 text-base font-medium tabular-nums',
+                                                        isCashIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                                                    )}
+                                                >
+                                                    <span className="sr-only">{isCashIn ? 'Cash in: ' : 'Cash out: '}</span>
+                                                    {isCashIn ? '+' : '−'}${formatAmount(selectedCost.amount)}
+                                                </span>
+                                            </div>
+                                            <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+                                                <span>{formatGeneralTransactionSchedule(selectedCost, frequencies)}</span>
+                                                <span aria-hidden className="opacity-40">·</span>
+                                                <span>{formatGeneralTransactionTiming(selectedCost)}</span>
+                                                <span aria-hidden className="opacity-40">·</span>
+                                                <span>{categoryLabel}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            ) : (
+                                <div className="space-y-0.5">
+                                    <p className="text-sm font-medium">New transaction</p>
+                                    <p className="text-muted-foreground text-sm">Fill in the details below to add it to the forecast.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <ScrollArea className="min-h-0 flex-1">
+                            <div className="px-5 py-4 sm:px-6">
+                                {selectedCost ? (
+                                    <GeneralTransactionEditor
+                                        mode="edit"
+                                        value={editCost}
+                                        categories={categories}
+                                        frequencies={frequencies}
+                                        onChange={setEditCost}
+                                        onSubmit={saveEdit}
+                                        onCancel={cancelEdit}
+                                        onDelete={() => handleDelete(selectedCost.id)}
+                                        isBusy={isSaving}
+                                    />
+                                ) : (
+                                    <GeneralTransactionEditor
+                                        mode="add"
+                                        value={newCost}
+                                        categories={categories}
+                                        frequencies={frequencies}
+                                        onChange={onNewCostChange}
+                                        onSubmit={onAdd}
+                                        isBusy={isDeleting}
+                                    />
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </section>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 };
 
@@ -664,10 +1265,10 @@ type SplitRowProps = {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SplitRow = ({ monthValue, amount, monthOptions, onMonthChange, onAmountChange, onRemove, monthLabel = 'Month' }: SplitRowProps) => (
-    <div className="border-border grid grid-cols-12 items-center gap-1.5 sm:gap-2 border-t px-2 sm:px-3 py-1.5 sm:py-2">
+    <div className="border-border grid grid-cols-12 items-center gap-1.5 border-t px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-2">
         <div className="col-span-5">
             <Select value={monthValue} onValueChange={onMonthChange}>
-                <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
+                <SelectTrigger className="h-8 text-xs sm:h-9 sm:text-sm">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -682,11 +1283,21 @@ const SplitRow = ({ monthValue, amount, monthOptions, onMonthChange, onAmountCha
         <div className="col-span-4 sm:col-span-5">
             <div className="relative">
                 <span className="text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2 text-xs">$</span>
-                <Input type="number" value={amount} onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)} className="h-8 sm:h-9 pl-5 text-xs sm:text-sm" />
+                <Input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)}
+                    className="h-8 pl-5 text-xs sm:h-9 sm:text-sm"
+                />
             </div>
         </div>
-        <div className="col-span-3 sm:col-span-2 flex items-center justify-end">
-            <Button variant="ghost" size="sm" onClick={onRemove} className="text-destructive hover:text-destructive h-7 px-1.5 sm:px-3 text-[10px] sm:text-sm">
+        <div className="col-span-3 flex items-center justify-end sm:col-span-2">
+            <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRemove}
+                className="text-destructive hover:text-destructive h-7 px-1.5 text-[10px] sm:px-3 sm:text-sm"
+            >
                 <Trash2 className="h-3.5 w-3.5 sm:hidden" />
                 <span className="hidden sm:inline">Remove</span>
             </Button>
@@ -704,7 +1315,7 @@ const SplitTable = ({
     onSplitChange,
     onRemoveSplit,
 }: {
-    splits: Array<{ amount: number;[key: string]: unknown }>;
+    splits: Array<{ amount: number; [key: string]: unknown }>;
     monthOptions: string[];
     monthColumnLabel: string;
     emptyMessage: string;
@@ -713,14 +1324,12 @@ const SplitTable = ({
     onRemoveSplit: (index: number) => void;
 }) => (
     <div className="border-border overflow-hidden rounded-lg border">
-        <div className="bg-muted text-muted-foreground grid grid-cols-12 gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium">
+        <div className="bg-muted text-muted-foreground grid grid-cols-12 gap-1.5 px-2 py-1.5 text-[10px] font-medium sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
             <div className="col-span-5">{monthColumnLabel}</div>
             <div className="col-span-4 sm:col-span-5">Amount</div>
-            <div className="col-span-3 sm:col-span-2 text-right">Action</div>
+            <div className="col-span-3 text-right sm:col-span-2">Action</div>
         </div>
-        {splits.length === 0 && (
-            <div className="text-muted-foreground px-3 py-3 text-sm">{emptyMessage}</div>
-        )}
+        {splits.length === 0 && <div className="text-muted-foreground px-3 py-3 text-sm">{emptyMessage}</div>}
         {splits.map((split, index) => (
             <SplitRow
                 key={`${String(split[monthKey])}-${index}`}
@@ -748,16 +1357,29 @@ const SplitActions = ({
     maxOffset?: number;
 }) => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onAddSplit} className="h-7 sm:h-8 text-xs">
+        <Button type="button" variant="outline" size="sm" onClick={onAddSplit} className="h-7 text-xs sm:h-8">
             <Plus className="mr-1 h-3 w-3" />
             Add Split
         </Button>
-        <Separator orientation="vertical" className="h-4 hidden sm:block" />
-        <Button type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(0)} className="h-7 sm:h-8 text-[10px] sm:text-xs px-2 sm:px-3">
+        <Separator orientation="vertical" className="hidden h-4 sm:block" />
+        <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onSetSingleSplit(0)}
+            className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs"
+        >
             Same Month
         </Button>
         {Array.from({ length: maxOffset }, (_, i) => i + 1).map((offset) => (
-            <Button key={offset} type="button" variant="secondary" size="sm" onClick={() => onSetSingleSplit(offset)} className="h-7 sm:h-8 text-[10px] sm:text-xs px-2 sm:px-3">
+            <Button
+                key={offset}
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => onSetSingleSplit(offset)}
+                className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs"
+            >
                 +{offset}m
             </Button>
         ))}
@@ -776,7 +1398,7 @@ const SplitSummary = ({
     isOverBudget: boolean;
     overLabel?: string;
 }) => (
-    <div className="text-muted-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[10px] sm:text-xs">
+    <div className="text-muted-foreground flex flex-col items-start justify-between gap-1 text-[10px] sm:flex-row sm:items-center sm:text-xs">
         <div className="tabular-nums">
             Total split: ${formatAmount(splitTotal)} / ${formatAmount(sourceAmount)}
         </div>
@@ -878,9 +1500,9 @@ export const CashInAdjustmentModal = ({
                                         <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-muted-foreground font-mono text-xs">{txn.invoice_number}</span>
-                                                {txn.memo && <span className="text-muted-foreground truncate text-xs max-w-[200px]">{txn.memo}</span>}
+                                                {txn.memo && <span className="text-muted-foreground max-w-[200px] truncate text-xs">{txn.memo}</span>}
                                             </div>
-                                            <span className="tabular-nums font-medium">${formatAmount(txn.amount)}</span>
+                                            <span className="font-medium tabular-nums">${formatAmount(txn.amount)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -898,7 +1520,12 @@ export const CashInAdjustmentModal = ({
                         />
 
                         <SplitActions onAddSplit={onAddSplit} onSetSingleSplit={onSetSingleSplit} />
-                        <SplitSummary splitTotal={splitTotal} sourceAmount={sourceAmount} isOverBudget={isOverBudget} overLabel="Split exceeds billed amount" />
+                        <SplitSummary
+                            splitTotal={splitTotal}
+                            sourceAmount={sourceAmount}
+                            isOverBudget={isOverBudget}
+                            overLabel="Split exceeds billed amount"
+                        />
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={onReset}>
@@ -1161,7 +1788,9 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
     const [page, setPage] = React.useState(0);
 
     // Reset page when filter changes
-    React.useEffect(() => { setPage(0); }, [filter]);
+    React.useEffect(() => {
+        setPage(0);
+    }, [filter]);
 
     const filteredRows = React.useMemo(() => {
         if (!filter) return [];
@@ -1210,20 +1839,20 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
                     <div className="text-muted-foreground py-8 text-center text-sm">No breakdown data available for this cell</div>
                 ) : (
                     <ScrollArea className="max-h-[70vh]">
-                        <div className="space-y-4 sm:space-y-6 pr-4">
+                        <div className="space-y-4 pr-4 sm:space-y-6">
                             {/* Summary bar */}
                             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">Ex-GST</div>
-                                    <div className="text-foreground text-xs sm:text-sm font-semibold tabular-nums">${formatAmount(grandExGst)}</div>
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">Ex-GST</div>
+                                    <div className="text-foreground text-xs font-semibold tabular-nums sm:text-sm">${formatAmount(grandExGst)}</div>
                                 </div>
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">GST</div>
-                                    <div className="text-foreground text-xs sm:text-sm font-semibold tabular-nums">${formatAmount(grandGst)}</div>
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">GST</div>
+                                    <div className="text-foreground text-xs font-semibold tabular-nums sm:text-sm">${formatAmount(grandGst)}</div>
                                 </div>
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">Total</div>
-                                    <div className="text-foreground text-xs sm:text-sm font-semibold tabular-nums">${formatAmount(grandTotal)}</div>
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">Total</div>
+                                    <div className="text-foreground text-xs font-semibold tabular-nums sm:text-sm">${formatAmount(grandTotal)}</div>
                                 </div>
                             </div>
 
@@ -1261,8 +1890,7 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
                                                 {group.rows
                                                     .sort(
                                                         (a, b) =>
-                                                            a.source_month.localeCompare(b.source_month) ||
-                                                            a.job_number.localeCompare(b.job_number),
+                                                            a.source_month.localeCompare(b.source_month) || a.job_number.localeCompare(b.job_number),
                                                     )
                                                     .map((row, idx) => (
                                                         <tr key={idx} className="border-border/50 hover:bg-muted/50 border-b last:border-0">
@@ -1280,13 +1908,11 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
                                                                 {row.vendor ?? '-'}
                                                             </td>
                                                             <td className="px-3 py-2">
-                                                                <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5">
+                                                                <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5">
                                                                     {row.rule}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-3 py-2 text-right tabular-nums">
-                                                                ${formatAmount(row.ex_gst_amount)}
-                                                            </td>
+                                                            <td className="px-3 py-2 text-right tabular-nums">${formatAmount(row.ex_gst_amount)}</td>
                                                             <td className="px-3 py-2 text-right tabular-nums">
                                                                 {row.gst_amount !== 0 ? `$${formatAmount(row.gst_amount)}` : '-'}
                                                             </td>
@@ -1329,9 +1955,10 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
                     </ScrollArea>
                 )}
                 {filteredRows.length > BREAKDOWN_PAGE_SIZE && (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t pt-3">
+                    <div className="flex flex-col items-center justify-between gap-2 border-t pt-3 sm:flex-row">
                         <span className="text-muted-foreground text-[10px] sm:text-xs">
-                            {page * BREAKDOWN_PAGE_SIZE + 1}–{Math.min((page + 1) * BREAKDOWN_PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+                            {page * BREAKDOWN_PAGE_SIZE + 1}–{Math.min((page + 1) * BREAKDOWN_PAGE_SIZE, filteredRows.length)} of{' '}
+                            {filteredRows.length}
                         </span>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)} className="h-7 text-xs">
@@ -1340,7 +1967,13 @@ export const AmountBreakdownModal = ({ open, onOpenChange, filter, breakdownRows
                             <span className="text-muted-foreground text-[10px] sm:text-xs">
                                 {page + 1}/{totalPages}
                             </span>
-                            <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="h-7 text-xs">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page >= totalPages - 1}
+                                onClick={() => setPage(page + 1)}
+                                className="h-7 text-xs"
+                            >
                                 Next
                             </Button>
                         </div>
@@ -1361,9 +1994,9 @@ type FullscreenChartModalProps = {
 
 export const FullscreenChartModal = ({ open, onOpenChange, title, children }: FullscreenChartModalProps) => (
     <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex h-[95vh] max-h-[95vh] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-none flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-none">
-            <div className="flex items-center justify-between bg-muted px-3 py-2 sm:px-4 sm:py-2.5">
-                <span className="text-xs sm:text-sm font-medium tracking-wide text-foreground uppercase">{title}</span>
+        <DialogContent className="flex h-[95vh] max-h-[95vh] w-[calc(100vw-1rem)] max-w-none flex-col gap-0 overflow-hidden rounded-xl p-0 sm:w-[calc(100vw-2rem)] sm:max-w-none">
+            <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5">
+                <span className="text-foreground text-xs font-medium tracking-wide uppercase sm:text-sm">{title}</span>
             </div>
             <div className="flex min-h-0 flex-1 flex-col justify-center p-2 sm:p-4">{children}</div>
         </DialogContent>
@@ -1523,12 +2156,19 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] sm:max-w-5xl">
-                <DialogHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <DialogHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <DialogTitle className="text-sm sm:text-base">GST Breakdown by Quarter</DialogTitle>
-                        <DialogDescription className="text-xs hidden sm:block">Review collected and paid GST per quarter with transaction-level detail.</DialogDescription>
+                        <DialogDescription className="hidden text-xs sm:block">
+                            Review collected and paid GST per quarter with transaction-level detail.
+                        </DialogDescription>
                     </div>
-                    <Button variant="outline" size="sm" className="gap-2 self-start sm:self-auto h-7 sm:h-8 text-xs" onClick={() => exportToExcel(currentQuarter)}>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-2 self-start text-xs sm:h-8 sm:self-auto"
+                        onClick={() => exportToExcel(currentQuarter)}
+                    >
                         <Download className="h-3.5 w-3.5" />
                         Export
                     </Button>
@@ -1536,9 +2176,13 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
                 <Tabs value={selectedQuarter} onValueChange={setSelectedQuarter} className="w-full">
                     <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
                         {gstBreakdown.map((q) => (
-                            <TabsTrigger key={q.quarter} value={q.quarter} className="text-[10px] sm:text-xs whitespace-nowrap px-2 sm:px-3 py-1 sm:py-1.5">
+                            <TabsTrigger
+                                key={q.quarter}
+                                value={q.quarter}
+                                className="px-2 py-1 text-[10px] whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-xs"
+                            >
                                 {q.quarter_label}
-                                <span className={`ml-1 sm:ml-2 text-[8px] sm:text-[10px] ${q.net >= 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                                <span className={`ml-1 text-[8px] sm:ml-2 sm:text-[10px] ${q.net >= 0 ? 'text-destructive' : 'text-emerald-600'}`}>
                                     {q.net >= 0 ? 'Pay' : 'Ref'}
                                 </span>
                             </TabsTrigger>
@@ -1546,26 +2190,26 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
                     </TabsList>
                     {gstBreakdown.map((q) => (
                         <TabsContent key={q.quarter} value={q.quarter} className="mt-4">
-                            <div className="mb-3 sm:mb-4 grid grid-cols-3 gap-1.5 sm:gap-3">
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">Collected</div>
-                                    <div className="text-foreground text-xs sm:text-sm font-semibold tabular-nums">
+                            <div className="mb-3 grid grid-cols-3 gap-1.5 sm:mb-4 sm:gap-3">
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">Collected</div>
+                                    <div className="text-foreground text-xs font-semibold tabular-nums sm:text-sm">
                                         ${formatAmount(q.collected.total)}
                                     </div>
                                     <div className="text-muted-foreground text-[8px] sm:text-[10px]">{q.collected.transactions.length} txns</div>
                                 </div>
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">Paid</div>
-                                    <div className="text-foreground text-xs sm:text-sm font-semibold tabular-nums">
-                                        ${formatAmount(q.paid.total)}
-                                    </div>
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">Paid</div>
+                                    <div className="text-foreground text-xs font-semibold tabular-nums sm:text-sm">${formatAmount(q.paid.total)}</div>
                                     <div className="text-muted-foreground text-[8px] sm:text-[10px]">{q.paid.transactions.length} txns</div>
                                 </div>
-                                <div className="rounded-md border px-2 sm:px-3 py-1.5 sm:py-2">
-                                    <div className="text-muted-foreground text-[9px] sm:text-[11px] font-medium">
+                                <div className="rounded-md border px-2 py-1.5 sm:px-3 sm:py-2">
+                                    <div className="text-muted-foreground text-[9px] font-medium sm:text-[11px]">
                                         {q.net >= 0 ? 'Payable' : 'Refund'}
                                     </div>
-                                    <div className={`text-xs sm:text-sm font-semibold tabular-nums ${q.net >= 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                    <div
+                                        className={`text-xs font-semibold tabular-nums sm:text-sm ${q.net >= 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}
+                                    >
                                         ${formatAmount(Math.abs(q.net))}
                                     </div>
                                     <div className="text-muted-foreground text-[8px] sm:text-[10px]">Due: {formatMonthHeader(q.pay_month)}</div>
@@ -1575,7 +2219,7 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
                             <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
                                 <div className="min-w-0 space-y-1.5 sm:space-y-2">
                                     <Label className="text-muted-foreground text-[10px] sm:text-xs">GST Collected (Revenue)</Label>
-                                    <ScrollArea className="h-[200px] sm:h-[350px] rounded-md border p-2 sm:p-3">
+                                    <ScrollArea className="h-[200px] rounded-md border p-2 sm:h-[350px] sm:p-3">
                                         <div className="min-w-full overflow-x-auto">
                                             <GstTransactionTable transactions={q.collected.transactions} type="collected" />
                                         </div>
@@ -1583,7 +2227,7 @@ export const GstBreakdownModal = ({ open, onOpenChange, gstBreakdown }: GstBreak
                                 </div>
                                 <div className="min-w-0 space-y-1.5 sm:space-y-2">
                                     <Label className="text-muted-foreground text-[10px] sm:text-xs">GST Paid (Costs)</Label>
-                                    <ScrollArea className="h-[200px] sm:h-[350px] rounded-md border p-2 sm:p-3">
+                                    <ScrollArea className="h-[200px] rounded-md border p-2 sm:h-[350px] sm:p-3">
                                         <div className="min-w-full overflow-x-auto">
                                             <GstTransactionTable transactions={q.paid.transactions} type="paid" />
                                         </div>
@@ -1682,7 +2326,8 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                                     {retentionSummary.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
-                                                No jobs with retention data found. Retention data is loaded from Premier ERP progress billing summaries.
+                                                No jobs with retention data found. Retention data is loaded from Premier ERP progress billing
+                                                summaries.
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -1729,13 +2374,14 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                                                 </TableCell>
                                                 <TableCell>
                                                     {job.cap_reached ? (
-                                                        <Badge variant="secondary">
-                                                            Cap Reached
-                                                        </Badge>
+                                                        <Badge variant="secondary">Cap Reached</Badge>
                                                     ) : job.contract_sum > 0 ? (
                                                         <Badge variant="outline">
-                                                            {((job.retainage_to_date / (job.contract_sum * (job.retention_cap_pct / 100))) * 100).toFixed(0)}% of
-                                                            cap
+                                                            {(
+                                                                (job.retainage_to_date / (job.contract_sum * (job.retention_cap_pct / 100))) *
+                                                                100
+                                                            ).toFixed(0)}
+                                                            % of cap
                                                         </Badge>
                                                     ) : (
                                                         <span className="text-muted-foreground">-</span>
@@ -1764,7 +2410,12 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                                                     <div className="flex gap-1">
                                                         {isEditing ? (
                                                             <>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => saveEdit(job.job_number)}>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7"
+                                                                    onClick={() => saveEdit(job.job_number)}
+                                                                >
                                                                     <Save className="h-3.5 w-3.5" />
                                                                 </Button>
                                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
@@ -1773,7 +2424,12 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => startEdit(job)}>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 text-xs"
+                                                                    onClick={() => startEdit(job)}
+                                                                >
                                                                     Edit
                                                                 </Button>
                                                                 {!job.is_auto && (
@@ -1799,7 +2455,7 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                         </div>
                     </ScrollArea>
 
-                    <DialogFooter className="flex-col sm:flex-row gap-2">
+                    <DialogFooter className="flex-col gap-2 sm:flex-row">
                         <p className="text-muted-foreground mr-auto text-[10px] sm:text-xs">
                             Auto rates inferred from Premier ERP. Override to set custom terms.
                         </p>
@@ -1810,19 +2466,23 @@ export const RetentionSettingsModal = ({ open, onOpenChange, retentionSummary }:
                 </DialogContent>
             </Dialog>
 
-            <AlertDialog open={confirmResetJob !== null} onOpenChange={(open) => { if (!open) setConfirmResetJob(null); }}>
+            <AlertDialog
+                open={confirmResetJob !== null}
+                onOpenChange={(open) => {
+                    if (!open) setConfirmResetJob(null);
+                }}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Reset to Auto-Inferred Rate?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will remove the manual override for job {confirmResetJob} and revert to the rate inferred from Premier ERP billing data.
+                            This will remove the manual override for job {confirmResetJob} and revert to the rate inferred from Premier ERP billing
+                            data.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => confirmResetJob && resetToAuto(confirmResetJob)}>
-                            Reset to Auto
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={() => confirmResetJob && resetToAuto(confirmResetJob)}>Reset to Auto</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

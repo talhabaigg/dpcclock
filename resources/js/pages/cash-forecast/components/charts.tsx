@@ -1,32 +1,22 @@
-import {
-    type ChartConfig,
-    ChartContainer,
-    ChartLegend,
-    ChartLegendContent,
-    ChartTooltip,
-    ChartTooltipContent,
-} from '@/components/ui/chart';
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useMemo } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts';
 import type { ChartDataPoint, CumulativeDataPoint, WaterfallDataPoint } from '../types';
 import { formatCompactAmount } from '../utils';
 
-// ── Shared palette ───────────────────────────────────────────────────────────
 const COLORS = {
-    cashIn:   '#5b9bd5',  // soft blue   — income
-    cashOut:  '#d4a054',  // soft amber  — expenses
-    netPos:   '#5a9a6e',  // soft green  — net positive
-    netNeg:   '#c06060',  // soft red    — net negative
-    neutral:  '#6b7280',  // gray-500   — cumulative line
-    muted:    '#6b7280',  // gray-500   — totals / reference
+    cashIn: '#5b9bd5',
+    cashOut: '#d4a054',
+    netPos: '#5a9a6e',
+    netNeg: '#c06060',
+    neutral: '#6b7280',
+    muted: '#6b7280',
 } as const;
 
-// ── Cash Flow Bar Chart ──────────────────────────────────────────────────────
-
 const cashFlowConfig = {
-    cashIn:  { label: 'Cash In',  color: COLORS.cashIn },
+    cashIn: { label: 'Cash In', color: COLORS.cashIn },
     cashOut: { label: 'Cash Out', color: COLORS.cashOut },
-    net:     { label: 'Net',      color: COLORS.netPos },
+    net: { label: 'Net', color: COLORS.netPos },
 } satisfies ChartConfig;
 
 type BarChartProps = {
@@ -37,11 +27,7 @@ type BarChartProps = {
 
 export const CashFlowBarChart = ({ data, height = 260, showLabels = true }: BarChartProps) => {
     return (
-        <ChartContainer
-            config={cashFlowConfig}
-            className="aspect-auto w-full"
-            style={{ height: typeof height === 'number' ? height : '100%' }}
-        >
+        <ChartContainer config={cashFlowConfig} className="aspect-auto w-full" style={{ height: typeof height === 'number' ? height : '100%' }}>
             <BarChart data={data} barCategoryGap="18%">
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} hide={!showLabels} tick={{ fontSize: 11 }} interval={2} />
@@ -60,8 +46,6 @@ export const CashFlowBarChart = ({ data, height = 260, showLabels = true }: BarC
     );
 };
 
-// ── Cumulative Line Chart ────────────────────────────────────────────────────
-
 const cumulativeConfig = {
     value: { label: 'Cumulative Cash', color: COLORS.neutral },
 } satisfies ChartConfig;
@@ -76,11 +60,7 @@ export const CumulativeLineChart = ({ data, height = 260, startingBalance = 0 }:
     const adjustedData = useMemo(() => data.map((d) => ({ ...d, value: startingBalance + d.value })), [data, startingBalance]);
 
     return (
-        <ChartContainer
-            config={cumulativeConfig}
-            className="aspect-auto w-full"
-            style={{ height: typeof height === 'number' ? height : '100%' }}
-        >
+        <ChartContainer config={cumulativeConfig} className="aspect-auto w-full" style={{ height: typeof height === 'number' ? height : '100%' }}>
             <AreaChart data={adjustedData}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
@@ -97,8 +77,6 @@ export const CumulativeLineChart = ({ data, height = 260, startingBalance = 0 }:
         </ChartContainer>
     );
 };
-
-// ── Waterfall Chart ──────────────────────────────────────────────────────────
 
 const waterfallConfig = {
     increase: { label: 'Increase', color: COLORS.netPos },
@@ -201,7 +179,9 @@ export const WaterfallChart = ({ data, height = 260, showDataLabels = false }: W
                                 }
                             />
                         ))}
-                        {showDataLabels && <LabelList dataKey="rawValue" position="top" formatter={formatCompactAmount} style={{ fontSize: 8, fill: '#333' }} />}
+                        {showDataLabels && (
+                            <LabelList dataKey="rawValue" position="top" formatter={formatCompactAmount} style={{ fontSize: 8, fill: '#333' }} />
+                        )}
                     </Bar>
                 </BarChart>
             </ChartContainer>

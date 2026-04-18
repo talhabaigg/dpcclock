@@ -23,26 +23,31 @@ type TableHeaderProps = {
 };
 
 // Shared sticky-cell shadow class for horizontal scroll indication
-const stickyColClass = 'sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]';
+const stickyColClass = 'sticky left-0 z-10 border-r border-border/60 bg-background';
 // Total column left-border separator
-const totalColBorder = 'border-l-2 border-l-muted-foreground/20';
+const totalColBorder = 'border-l border-border/60';
 
 export const CashFlowTableHeader = ({ months, currentMonth }: TableHeaderProps) => (
     <TableHeader>
-        <TableRow className="bg-muted hover:bg-muted">
-            <TableHead className={`bg-muted ${stickyColClass} min-w-[140px] sm:min-w-[220px] px-2 sm:px-4 py-2.5 sm:py-3.5 font-semibold text-xs sm:text-sm text-foreground/80 uppercase tracking-wider`}>Category</TableHead>
+        <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className={`${stickyColClass} text-muted-foreground min-w-[160px] px-3 py-3 text-xs font-semibold tracking-wide uppercase`}>
+                Category
+            </TableHead>
             {months.map((month) => (
                 <TableHead
                     key={month.month}
-                    className={`min-w-[75px] sm:min-w-[95px] px-1.5 sm:px-3 py-2.5 sm:py-3.5 text-right font-semibold text-[10px] sm:text-xs ${
-                        month.month === currentMonth ? 'bg-primary/10 border-b-2 border-b-primary' : 'text-muted-foreground'
+                    className={`min-w-[92px] px-3 py-3 text-right text-[11px] font-semibold ${
+                        month.month === currentMonth ? 'bg-accent/70 text-foreground' : 'text-muted-foreground'
                     }`}
                 >
-                    <div className={month.month === currentMonth ? 'text-primary font-bold' : ''}>{formatMonthHeader(month.month)}</div>
-                    {month.month === currentMonth && <div className="text-primary text-[9px] sm:text-[10px] font-medium mt-0.5">Current</div>}
+                    <div>{formatMonthHeader(month.month)}</div>
                 </TableHead>
             ))}
-            <TableHead className={`bg-muted min-w-[80px] sm:min-w-[110px] px-2 sm:px-4 py-2.5 sm:py-3.5 text-right font-bold text-xs sm:text-sm text-foreground/80 uppercase tracking-wider ${totalColBorder}`}>Total</TableHead>
+            <TableHead
+                className={`text-muted-foreground min-w-[104px] px-3 py-3 text-right text-xs font-semibold tracking-wide uppercase ${totalColBorder}`}
+            >
+                Total
+            </TableHead>
         </TableRow>
     </TableHeader>
 );
@@ -60,15 +65,12 @@ type SectionRowProps = {
 
 export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, currentMonth, onCellClick }: SectionRowProps) => {
     const isIn = type === 'in';
-    const textClass = 'text-foreground';
-    const bgClass = isIn ? 'bg-muted/50' : 'bg-muted/40';
-    const hoverClass = 'hover:bg-muted/70';
-    const stickyBg = 'bg-muted/60';
+    const stickyBg = 'bg-muted/35';
 
     return (
-        <TableRow className={`${bgClass} ${hoverClass} cursor-pointer border-t border-t-border/60`} onClick={onToggle}>
-            <TableCell className={`px-2 sm:px-4 py-2.5 sm:py-3.5 font-semibold text-xs sm:text-sm ${textClass} ${stickyColClass} ${stickyBg}`}>
-                <span className="inline-flex items-center gap-1.5 sm:gap-2">
+        <TableRow className="bg-muted/30 hover:bg-muted/45 cursor-pointer" onClick={onToggle}>
+            <TableCell className={`${stickyColClass} ${stickyBg} px-3 py-3 font-semibold`}>
+                <span className="inline-flex items-center gap-2">
                     <ExpandIcon expanded={expanded} />
                     Cash {isIn ? 'In' : 'Out'}
                 </span>
@@ -78,7 +80,7 @@ export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, cu
                 return (
                     <TableCell
                         key={month.month}
-                        className={`px-1.5 sm:px-3 py-2.5 sm:py-3.5 text-right text-[10px] sm:text-sm font-medium tabular-nums ${textClass} ${month.month === currentMonth ? 'bg-primary/5' : ''} ${onCellClick ? 'cursor-pointer hover:underline' : ''}`}
+                        className={`px-3 py-3 text-right text-sm font-medium tabular-nums ${month.month === currentMonth ? 'bg-accent/50' : ''} ${onCellClick ? 'cursor-pointer hover:underline' : ''}`}
                         onClick={(e) => {
                             if (onCellClick && value !== 0) {
                                 e.stopPropagation();
@@ -90,7 +92,7 @@ export const CashFlowSectionRow = ({ type, expanded, onToggle, months, total, cu
                     </TableCell>
                 );
             })}
-            <TableCell className={`px-2 sm:px-4 py-2.5 sm:py-3.5 text-right text-[10px] sm:text-sm font-bold tabular-nums ${textClass} ${stickyBg} ${totalColBorder}`}>
+            <TableCell className={`bg-muted/18 px-3 py-3 text-right text-sm font-semibold tabular-nums ${totalColBorder}`}>
                 {formatAmount(total)}
             </TableCell>
         </TableRow>
@@ -164,14 +166,16 @@ export const CostItemRow = ({
     };
 
     return (
-        <TableRow className="cursor-pointer hover:bg-muted/40 transition-colors" onClick={onToggle}>
-            <TableCell className={`bg-background ${stickyColClass} px-2 sm:px-4 py-2 sm:py-2.5 pl-5 sm:pl-8`}>
-                <span className="inline-flex items-center gap-1 sm:gap-2">
+        <TableRow className="hover:bg-muted/25 cursor-pointer transition-colors" onClick={onToggle}>
+            <TableCell className={`${stickyColClass} px-3 py-2.5 pl-6`}>
+                <span className="inline-flex items-center gap-2">
                     {itemCount > 0 ? <ExpandIcon expanded={expanded} /> : <span className="w-4" />}
-                    <span className="text-muted-foreground bg-muted/80 rounded px-1 sm:px-1.5 py-0.5 font-mono text-[10px] sm:text-xs">{costItemCode}</span>
-                    <span className="font-medium text-xs sm:text-sm truncate max-w-[60px] sm:max-w-none">{getCostItemLabel(costItemCode, description, costCodeDescriptions)}</span>
-                    {itemCount > 0 && <span className="text-muted-foreground text-[10px] sm:text-xs hidden sm:inline">({itemCount})</span>}
-                    <span className="hidden sm:inline">{aggregatedSource && <SourceIndicator source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource} />}</span>
+                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">{costItemCode}</span>
+                    <span className="truncate text-sm font-medium">{getCostItemLabel(costItemCode, description, costCodeDescriptions)}</span>
+                    {itemCount > 0 && <span className="text-muted-foreground hidden text-xs sm:inline">({itemCount})</span>}
+                    <span className="hidden sm:inline">
+                        {aggregatedSource && <SourceIndicator source={aggregatedSource === 'mixed' ? 'mixed' : aggregatedSource} />}
+                    </span>
                 </span>
             </TableCell>
             {months.map((month) => {
@@ -181,7 +185,7 @@ export const CostItemRow = ({
                 return (
                     <TableCell
                         key={month.month}
-                        className={`px-1.5 sm:px-3 py-2 sm:py-2.5 text-right text-[10px] sm:text-sm tabular-nums ${month.month === currentMonth ? 'bg-primary/5' : ''} ${onCellClick && item ? 'cursor-pointer hover:underline' : ''}`}
+                        className={`px-3 py-2.5 text-right text-sm tabular-nums ${month.month === currentMonth ? 'bg-accent/45' : ''} ${onCellClick && item ? 'cursor-pointer hover:underline' : ''}`}
                         onClick={(e) => {
                             if (onCellClick && item) {
                                 e.stopPropagation();
@@ -193,7 +197,9 @@ export const CostItemRow = ({
                     </TableCell>
                 );
             })}
-            <TableCell className={`bg-muted/30 px-2 sm:px-4 py-2 sm:py-2.5 text-right text-[10px] sm:text-sm font-medium tabular-nums ${totalColBorder}`}>{formatAmount(total)}</TableCell>
+            <TableCell className={`bg-muted/15 px-3 py-2.5 text-right text-sm font-medium tabular-nums ${totalColBorder}`}>
+                {formatAmount(total)}
+            </TableCell>
         </TableRow>
     );
 };
@@ -233,14 +239,14 @@ export const JobRow = ({
     };
 
     return (
-        <TableRow className="bg-muted/30 hover:bg-muted/40">
-            <TableCell className={`text-muted-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-8 sm:pl-14`}>
-                <div className="flex items-center justify-between gap-1 sm:gap-2">
-                    <span className="inline-flex items-center gap-1 sm:gap-2">
+        <TableRow className="bg-muted/18 hover:bg-muted/28">
+            <TableCell className={`${stickyColClass} bg-muted/10 text-muted-foreground px-3 py-2 pl-10`}>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2">
                         <ChevronRight className="text-muted-foreground/50 h-3 w-3 shrink-0" />
-                        <span className="font-mono text-[10px] sm:text-xs">{jobNumber}</span>
+                        <span className="font-mono text-xs">{jobNumber}</span>
                         {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
+                            <Badge variant="secondary" className="hidden sm:inline-flex">
                                 Adj
                             </Badge>
                         )}
@@ -254,7 +260,7 @@ export const JobRow = ({
                                 e.stopPropagation();
                                 onAdjust();
                             }}
-                            className="h-auto p-0 text-[8px] sm:text-[10px] tracking-wide uppercase"
+                            className="h-auto p-0 text-xs"
                         >
                             Adjust
                         </Button>
@@ -270,7 +276,7 @@ export const JobRow = ({
                 return (
                     <TableCell
                         key={month.month}
-                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${month.month === currentMonth ? 'bg-accent/40' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
                         onClick={() => {
                             if (onCellClick && jobData) {
                                 onCellClick({ month: month.month, flowType, costItem: costItemCode, jobNumber });
@@ -278,13 +284,17 @@ export const JobRow = ({
                         }}
                     >
                         <div className="flex items-center justify-end gap-1">
-                            {source && <span className="hidden sm:inline"><SourceIndicator source={source} className="mr-1" /></span>}
+                            {source && (
+                                <span className="hidden sm:inline">
+                                    <SourceIndicator source={source} className="mr-1" />
+                                </span>
+                            )}
                             <span>{jobData ? formatAmount(jobData.total) : <span className="text-muted-foreground/30">-</span>}</span>
                         </div>
                     </TableCell>
                 );
             })}
-            <TableCell className={`text-muted-foreground bg-muted/30 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+            <TableCell className={`bg-muted/15 text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${totalColBorder}`}>
                 {formatAmount(total)}
             </TableCell>
         </TableRow>
@@ -318,20 +328,22 @@ export const VendorRow = ({
     onCellClick,
 }: VendorRowProps) => {
     return (
-        <TableRow className="bg-muted/30 hover:bg-muted/40">
-            <TableCell className={`text-muted-foreground ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-8 sm:pl-14 bg-muted`}>
-                <div className="flex items-center justify-between gap-1 sm:gap-2">
-                    <span className="inline-flex items-center gap-1 sm:gap-2 min-w-0">
+        <TableRow className="bg-muted/18 hover:bg-muted/28">
+            <TableCell className={`${stickyColClass} bg-muted/10 text-muted-foreground px-3 py-2 pl-10`}>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex min-w-0 items-center gap-2">
                         <ChevronRight className="text-muted-foreground/50 h-3 w-3 shrink-0" />
-                        <span className="text-[10px] sm:text-xs truncate max-w-[60px] sm:max-w-none">{vendor}</span>
-                        <span className="hidden sm:inline"><SourceIndicator source={source} /></span>
+                        <span className="truncate text-xs">{vendor}</span>
+                        <span className="hidden sm:inline">
+                            <SourceIndicator source={source} />
+                        </span>
                         {hasAdjustment && (
-                            <Badge variant="secondary" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
+                            <Badge variant="secondary" className="hidden sm:inline-flex">
                                 Adj
                             </Badge>
                         )}
                         {hasVendorDelay && !hasAdjustment && (
-                            <Badge variant="outline" className="text-[8px] sm:text-[10px] tracking-wide uppercase hidden sm:inline-flex">
+                            <Badge variant="outline" className="hidden sm:inline-flex">
                                 Delay
                             </Badge>
                         )}
@@ -345,7 +357,7 @@ export const VendorRow = ({
                                 e.stopPropagation();
                                 onAdjust();
                             }}
-                            className="h-auto p-0 text-[8px] sm:text-[10px] tracking-wide uppercase shrink-0"
+                            className="h-auto shrink-0 p-0 text-xs"
                         >
                             Adjust
                         </Button>
@@ -359,7 +371,7 @@ export const VendorRow = ({
                 return (
                     <TableCell
                         key={month.month}
-                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && vendorData ? 'cursor-pointer hover:underline' : ''}`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${month.month === currentMonth ? 'bg-accent/40' : ''} ${onCellClick && vendorData ? 'cursor-pointer hover:underline' : ''}`}
                         onClick={() => {
                             if (onCellClick && vendorData) {
                                 onCellClick({ month: month.month, flowType: 'cash_out', costItem: costItemCode, vendor });
@@ -370,7 +382,7 @@ export const VendorRow = ({
                     </TableCell>
                 );
             })}
-            <TableCell className={`text-muted-foreground bg-muted/30 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+            <TableCell className={`bg-muted/15 text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${totalColBorder}`}>
                 {formatAmount(total)}
             </TableCell>
         </TableRow>
@@ -390,11 +402,11 @@ type VendorJobRowProps = {
 
 export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, currentMonth, onCellClick }: VendorJobRowProps) => {
     return (
-        <TableRow className="hover:bg-muted/30">
-            <TableCell className={`text-muted-foreground bg-background ${stickyColClass} px-2 sm:px-4 py-1.5 sm:py-2 pl-12 sm:pl-20`}>
-                <span className="inline-flex items-center gap-1.5 sm:gap-2">
-                    <span className="bg-muted-foreground/30 h-1.5 w-1.5 rounded-full shrink-0" />
-                    <span className="font-mono text-[10px] sm:text-xs">{jobNumber}</span>
+        <TableRow className="hover:bg-muted/15">
+            <TableCell className={`${stickyColClass} text-muted-foreground px-3 py-2 pl-14`}>
+                <span className="inline-flex items-center gap-2">
+                    <span className="bg-muted-foreground/30 h-1.5 w-1.5 shrink-0 rounded-full" />
+                    <span className="font-mono text-xs">{jobNumber}</span>
                 </span>
             </TableCell>
             {months.map((month) => {
@@ -405,7 +417,7 @@ export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, c
                 return (
                     <TableCell
                         key={month.month}
-                        className={`text-muted-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${month.month === currentMonth ? 'bg-primary/10' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
+                        className={`text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${month.month === currentMonth ? 'bg-accent/35' : ''} ${onCellClick && jobData ? 'cursor-pointer hover:underline' : ''}`}
                         onClick={() => {
                             if (onCellClick && jobData) {
                                 onCellClick({ month: month.month, flowType: 'cash_out', costItem: costItemCode, vendor, jobNumber });
@@ -416,7 +428,7 @@ export const VendorJobRow = ({ jobNumber, vendor, costItemCode, months, total, c
                     </TableCell>
                 );
             })}
-            <TableCell className={`text-muted-foreground bg-muted/20 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-[10px] sm:text-xs tabular-nums ${totalColBorder}`}>
+            <TableCell className={`bg-muted/10 text-muted-foreground px-3 py-2 text-right text-xs tabular-nums ${totalColBorder}`}>
                 {formatAmount(total)}
             </TableCell>
         </TableRow>
@@ -431,26 +443,22 @@ type NetCashflowRowProps = {
 };
 
 export const NetCashflowRow = ({ months, total, currentMonth }: NetCashflowRowProps) => (
-    <TableRow className="bg-muted/80 hover:bg-muted border-t-2 border-t-foreground/15 border-b border-b-border/50">
-        <TableCell className={`text-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-3 sm:py-4 font-bold text-xs sm:text-sm`}>
-            <span className="inline-flex items-center gap-1.5 sm:gap-2">
-                Net Cashflow
-            </span>
-        </TableCell>
+    <TableRow className="bg-muted/35 hover:bg-muted/45">
+        <TableCell className={`${stickyColClass} bg-muted/30 px-3 py-3 font-semibold`}>Net Cashflow</TableCell>
         {months.map((month) => (
             <TableCell
                 key={month.month}
-                className={`px-1.5 sm:px-3 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums ${
+                className={`px-3 py-3 text-right text-sm font-medium tabular-nums ${
                     month.net >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
-                } ${month.month === currentMonth ? 'bg-primary/5' : ''}`}
+                } ${month.month === currentMonth ? 'bg-accent/45' : ''}`}
             >
                 {formatAmount(month.net ?? 0)}
             </TableCell>
         ))}
         <TableCell
-            className={`px-2 sm:px-4 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums ${
+            className={`bg-muted/20 px-3 py-3 text-right text-sm font-medium tabular-nums ${
                 total >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
-            } bg-muted ${totalColBorder}`}
+            } ${totalColBorder}`}
         >
             {formatAmount(total)}
         </TableCell>
@@ -467,26 +475,20 @@ type RunningBalanceRowProps = {
 };
 
 export const RunningBalanceRow = ({ months, runningBalances, startingBalance, endingBalance, currentMonth }: RunningBalanceRowProps) => (
-    <TableRow className="bg-muted/40 hover:bg-muted/60">
-        <TableCell className={`text-foreground bg-muted ${stickyColClass} px-2 sm:px-4 py-3 sm:py-4 font-semibold text-xs sm:text-sm`}>
-            <span className="inline-flex items-center gap-1.5 sm:gap-2">
-                Running Balance
-            </span>
-        </TableCell>
+    <TableRow className="bg-muted/18 hover:bg-muted/28">
+        <TableCell className={`${stickyColClass} bg-muted/10 px-3 py-3 font-semibold`}>Running Balance</TableCell>
         {runningBalances.map((balance, idx) => {
             const withStarting = startingBalance + balance;
             return (
                 <TableCell
                     key={months[idx].month}
-                    className={`px-1.5 sm:px-3 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-semibold tabular-nums text-foreground ${months[idx].month === currentMonth ? 'bg-primary/5' : ''}`}
+                    className={`text-foreground px-3 py-3 text-right text-sm font-medium tabular-nums ${months[idx].month === currentMonth ? 'bg-accent/40' : ''}`}
                 >
                     {formatAmount(withStarting)}
                 </TableCell>
             );
         })}
-        <TableCell
-            className={`px-2 sm:px-4 py-3 sm:py-4 text-right text-[10px] sm:text-sm font-bold tabular-nums text-foreground bg-muted ${totalColBorder}`}
-        >
+        <TableCell className={`bg-muted/20 text-foreground px-3 py-3 text-right text-sm font-medium tabular-nums ${totalColBorder}`}>
             {formatAmount(endingBalance)}
         </TableCell>
     </TableRow>
@@ -502,24 +504,24 @@ type CashFlowTableContainerProps = {
 
 export const CashFlowTableContainer = ({
     title = 'Detailed Monthly Breakdown',
-    description = 'Click rows to expand and see project-level details',
+    description = 'Expand rows to inspect cost items, jobs, and vendors by month.',
     children,
     showSourceLegend = true,
 }: CashFlowTableContainerProps) => (
-    <Card className="gap-0 rounded-xl overflow-hidden py-0 shadow-sm border">
-        <CardHeader className="bg-muted/60 border-b px-3 py-2.5 sm:px-5 sm:py-3.5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <CardTitle className="text-foreground text-sm sm:text-base font-bold">{title}</CardTitle>
-                    <CardDescription className="text-muted-foreground text-xs hidden sm:block mt-0.5">{description}</CardDescription>
+    <Card className="gap-0 p-0">
+        <CardHeader className="border-b px-3 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid gap-1">
+                    <CardTitle className="text-base">{title}</CardTitle>
+                    <CardDescription className="text-xs">{description}</CardDescription>
                 </div>
-                <div className="hidden sm:block">
-                    {showSourceLegend && <DataSourceLegend />}
-                </div>
+                <div className="hidden sm:block">{showSourceLegend && <DataSourceLegend />}</div>
             </div>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-            <Table aria-label="Cash flow forecast breakdown by month" className="min-w-[900px]">{children}</Table>
+        <CardContent className="overflow-x-auto p-0">
+            <Table aria-label="Cash flow forecast breakdown by month" className="min-w-[980px]">
+                {children}
+            </Table>
         </CardContent>
     </Card>
 );
