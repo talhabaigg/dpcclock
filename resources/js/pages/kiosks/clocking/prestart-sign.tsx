@@ -82,21 +82,14 @@ export default function PrestartSign() {
     const safetyConcernCount = prestart.safety_concerns?.length ?? 0;
     const totalItems = activityCount + safetyConcernCount;
 
-    const [acceptedActivities, setAcceptedActivities] = useState<boolean[]>(new Array(activityCount).fill(false));
+    const [activitiesAcknowledged, setActivitiesAcknowledged] = useState(false);
     const [acceptedConcerns, setAcceptedConcerns] = useState<boolean[]>(new Array(safetyConcernCount).fill(false));
     const [checklistAcknowledged, setChecklistAcknowledged] = useState(false);
 
     const allAccepted =
         checklistAcknowledged &&
-        (totalItems === 0 || (acceptedActivities.every(Boolean) && acceptedConcerns.every(Boolean)));
-
-    const toggleActivity = (i: number) => {
-        setAcceptedActivities((prev) => {
-            const next = [...prev];
-            next[i] = !next[i];
-            return next;
-        });
-    };
+        activitiesAcknowledged &&
+        (safetyConcernCount === 0 || acceptedConcerns.every(Boolean));
 
     const toggleConcern = (i: number) => {
         setAcceptedConcerns((prev) => {
@@ -223,17 +216,14 @@ export default function PrestartSign() {
 
                         {prestart.activities && prestart.activities.length > 0 && (
                             <div>
-                                <p className="mb-2 font-medium text-muted-foreground">Activities:</p>
-                                <div className="space-y-2">
+                                <p className="mb-2 font-medium text-muted-foreground">General Site Works / Activities:</p>
+                                <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                                     {prestart.activities.map((a, i) => (
-                                        <label key={i} className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', acceptedActivities[i] ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
-                                            <Checkbox checked={acceptedActivities[i]} onCheckedChange={() => toggleActivity(i)} className="mt-0.5 h-5 w-5" />
-                                            <span className={cn('flex-1', acceptedActivities[i] && 'text-emerald-800')}>{a.description}</span>
-                                        </label>
+                                        <li key={i}>{a.description}</li>
                                     ))}
-                                </div>
+                                </ul>
                                 {activityFiles.length > 0 && (
-                                    <div className="mt-2 space-y-0.5 pl-8">
+                                    <div className="mb-3 space-y-0.5 pl-5">
                                         {activityFiles.map((f) => (
                                             <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
                                                 {f.file_name}
@@ -241,6 +231,10 @@ export default function PrestartSign() {
                                         ))}
                                     </div>
                                 )}
+                                <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', activitiesAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
+                                    <Checkbox checked={activitiesAcknowledged} onCheckedChange={() => setActivitiesAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
+                                    <span className={cn('flex-1 font-medium', activitiesAcknowledged && 'text-emerald-800')}>I acknowledge the above activities</span>
+                                </label>
                             </div>
                         )}
 

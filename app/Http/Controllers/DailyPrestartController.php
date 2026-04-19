@@ -510,10 +510,14 @@ class DailyPrestartController extends Controller
             ]);
         }
 
-        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name,employees.display_name')
             ->forLocation($location->id)
             ->forDate(now('Australia/Brisbane')->toDateString())
-            ->get();
+            ->get()
+            ->filter(function ($training) use ($employee) {
+                return $training->employees->contains('id', $employee->id);
+            })
+            ->values();
 
         return Inertia::render('kiosks/clocking/prestart-sign', [
             'kiosk' => $kiosk,
