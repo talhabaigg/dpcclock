@@ -118,7 +118,6 @@ class LoadTimesheetsForLocation implements ShouldQueue
                 'clock_in' => $clock_in->toDateTimeString(),
                 'clock_out' => $clock_out->toDateTimeString(),
                 'eh_location_id' => $locationId,
-                'eh_kiosk_id' => $kioskId,
                 'eh_employee_id' => $ehId,
                 'eh_worktype_id' => $data['workTypeId'],
                 'eh_timesheet_id' => $eh_timesheet_id,
@@ -129,6 +128,11 @@ class LoadTimesheetsForLocation implements ShouldQueue
                 'laser_allowance' => in_array($allowancesMap['laser_allowance'], $data['shiftConditionIds'] ?? [], true),
                 'setout_allowance' => in_array($allowancesMap['setout_allowance'], $data['shiftConditionIds'] ?? [], true),
             ];
+
+            // Only set kiosk_id if we found a valid one (non-zero)
+            if ($kioskId > 0) {
+                $payLoad['eh_kiosk_id'] = $kioskId;
+            }
 
             $clock = Clock::query()
                 ->when($eh_timesheet_id, fn ($q) => $q->orWhere('eh_timesheet_id', $eh_timesheet_id))
@@ -151,9 +155,23 @@ class LoadTimesheetsForLocation implements ShouldQueue
             }
 
             if ($clock) {
+                // Only update eh_kiosk_id if we have a valid one (non-zero)
+                // This prevents overwriting valid kiosk values with 0 for locations without kiosks
+                if ($kioskId === 0) {
+                    unset($payLoad['eh_kiosk_id']);
+                }
                 $clock->fill($payLoad)->save();
                 $updated++;
             } else {
+                // Only create if we have a valid kiosk_id
+                if ($kioskId === 0) {
+                    Log::warning('Skipping clock creation: no kiosk found', [
+                        'employee_id' => $ehId,
+                        'location_id' => $locationId,
+                        'clock_in' => $clock_in->toDateString(),
+                    ]);
+                    continue;
+                }
                 Clock::create($payLoad);
                 $created++;
             }
@@ -171,10 +189,12 @@ class LoadTimesheetsForLocation implements ShouldQueue
     {
         $location = $locations->firstWhere('eh_location_id', $locationId);
         $parentLocation = $locations->firstWhere('eh_location_id', $location?->eh_parent_id);
-        $kioskFromSub = $parentLocation ? $kiosks->firstWhere('eh_location_id', $location->id) : null;
-        $kioskFromSelf = $location ? $kiosks->firstWhere('eh_location_id', $location->id) : null;
 
-        return (int) ($kioskFromSub->eh_kiosk_id ?? $kioskFromSelf->eh_kiosk_id ?? 0);
+        // Search for kiosk by EH location ID (not database ID)
+        $kioskFromParent = $parentLocation ? $kiosks->firstWhere('eh_location_id', $parentLocation->eh_location_id) : null;
+        $kioskFromSelf = $location ? $kiosks->firstWhere('eh_location_id', $location->eh_location_id) : null;
+
+        return (int) ($kioskFromParent->eh_kiosk_id ?? $kioskFromSelf->eh_kiosk_id ?? 0);
     }
 
     private function fetchAllTimesheets()

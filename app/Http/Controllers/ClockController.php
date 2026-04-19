@@ -907,11 +907,24 @@ class ClockController extends Controller
             ->whereBetween('clock_in', [$startDate, $endDate])
             ->get();
 
-        $kiosks = Kiosk::with('location')->select('eh_kiosk_id', 'name', 'eh_location_id')->get();
+        // Get current user's assigned kiosk (if they are a kiosk manager)
+        $userManagedKiosks = auth()->user()?->managedKiosks()->select('kiosks.id')->get() ?? collect();
+
+        // If user is a kiosk manager, only show their kiosk(s). Otherwise show all.
+        $kioskQuery = Kiosk::with('location')->select('kiosks.eh_kiosk_id', 'kiosks.name', 'kiosks.eh_location_id', 'kiosks.id');
+        if ($userManagedKiosks->count() > 0) {
+            $kioskIds = $userManagedKiosks->pluck('id')->toArray();
+            $kioskQuery->whereIn('kiosks.id', $kioskIds);
+        }
+
+        $kiosks = $kioskQuery->get();
         foreach ($kiosks as $kiosk) {
             $kiosk->locations = Location::where('eh_parent_id', $kiosk->eh_location_id)->pluck('external_id')->toArray();
         }
-        $locations = Location::pluck('external_id')->toArray();
+
+        // Only show locations under the user's accessible kiosks
+        $kioskLocationIds = $kiosks->pluck('eh_location_id')->toArray();
+        $locations = Location::whereIn('eh_location_id', $kioskLocationIds)->pluck('external_id')->toArray();
 
         return Inertia::render('timesheets/show', [
             'timesheets' => $timesheets,
@@ -1036,7 +1049,6 @@ class ClockController extends Controller
                 'clock_in' => $start?->toDateTimeString(),
                 'clock_out' => $end?->toDateTimeString(),
                 'eh_location_id' => $timesheet['locationId'] ?? null,
-                'eh_kiosk_id' => $kioskId ?: null,
                 'eh_worktype_id' => $timesheet['workTypeId'] ?? null,
                 // Set both IDs, preserving existing if missing from API
                 'eh_timesheet_id' => $ehId ?? $clock?->eh_timesheet_id,
@@ -1048,12 +1060,23 @@ class ClockController extends Controller
                 'setout_allowance' => in_array($allowancesMap['setout_allowance'], $timesheet['shiftConditionIds'] ?? [], true),
             ];
 
+            // Only include eh_kiosk_id if we have a valid one
+            if ($kioskId > 0) {
+                $payload['eh_kiosk_id'] = $kioskId;
+            }
+
             if ($clock) {
+                // For updates: only update eh_kiosk_id if we have a valid kiosk
+                if ($kioskId === 0) {
+                    unset($payload['eh_kiosk_id']);
+                }
                 $clock->fill($payload)->save();
             } else {
-                // choose the strongest match key available for creation
-                $create = $payload;
-                Clock::create($create);
+                // For new clocks: only create if we have a valid kiosk_id
+                if ($kioskId === 0) {
+                    continue;
+                }
+                Clock::create($payload);
             }
         }
 

@@ -10,6 +10,7 @@ use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\Training;
 use App\Models\User;
+use App\Models\Worktype;
 use App\Services\WeatherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -152,6 +153,49 @@ class DailyPrestartController extends Controller
     {
         $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee']);
 
+        // Get location kiosk employees
+        $kioskEmployees = collect();
+        $location = $dailyPrestart->location;
+        if ($location) {
+            $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
+            if ($kiosk) {
+                $kioskEmployees = $kiosk->employees()->get(['employees.id', 'employees.name', 'employees.preferred_name', 'employees.eh_employee_id']);
+            }
+        }
+
+        // Get signed employee IDs
+        $signedIds = $dailyPrestart->signatures->pluck('employee_id')->toArray();
+
+        // Get unsigned employees with their absence status from timesheet
+        $unsignedEmployees = $kioskEmployees
+            ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
+            ->map(function ($emp) use ($dailyPrestart) {
+                // Check for clock entries on that date
+                $clocks = Clock::where('eh_employee_id', $emp->eh_employee_id)
+                    ->whereDate('clock_in', $dailyPrestart->work_date)
+                    ->with('worktype')
+                    ->get();
+
+                // Check if they have any regular clock (present at site)
+                $regularClocks = $clocks->filter(fn ($c) => ! $this->isLeaveWorktype($c->worktype?->name ?? ''));
+                $isPresent = $regularClocks->count() > 0;
+
+                // If they're not present, check if they have a leave entry
+                $leaveWorktype = null;
+                if (! $isPresent && $clocks->count() > 0) {
+                    $leaveClock = $clocks->first(fn ($c) => $this->isLeaveWorktype($c->worktype?->name ?? ''));
+                    $leaveWorktype = $leaveClock?->worktype?->name;
+                }
+
+                return [
+                    'id' => $emp->id,
+                    'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
+                    'is_present_at_site' => $isPresent,
+                    'absence_reason' => $this->mapWorktypeToReason($leaveWorktype),
+                ];
+            })
+            ->values();
+
         $trainings = Training::with('employees')
             ->forLocation($dailyPrestart->location_id)
             ->forDate($dailyPrestart->work_date)
@@ -159,6 +203,7 @@ class DailyPrestartController extends Controller
 
         return Inertia::render('daily-prestarts/show', [
             'prestart' => $dailyPrestart,
+            'unsignedEmployees' => $unsignedEmployees,
             'trainings' => $trainings,
         ]);
     }
@@ -558,5 +603,52 @@ class DailyPrestartController extends Controller
                 $prestart->addMedia($file)->toMediaCollection('builders_prestart_file');
             }
         }
+    }
+
+    private function isLeaveWorktype(?string $worktypeName): bool
+    {
+        if (! $worktypeName) {
+            return false;
+        }
+
+        $leaveKeywords = [
+            'annual leave',
+            'personal',
+            'carer',
+            'sick',
+            'training',
+            'rdo',
+            'unpaid',
+            'workcover',
+            'long service',
+            'public holiday',
+            'industrial',
+        ];
+
+        $lowerName = strtolower($worktypeName);
+
+        return collect($leaveKeywords)->some(fn ($keyword) => str_contains($lowerName, $keyword));
+    }
+
+    private function mapWorktypeToReason(?string $worktypeName): ?string
+    {
+        if (! $worktypeName) {
+            return null;
+        }
+
+        $lower = strtolower($worktypeName);
+
+        return match (true) {
+            str_contains($lower, 'annual') => 'Annual Leave',
+            str_contains($lower, 'personal') || str_contains($lower, 'carer') || str_contains($lower, 'sick') => 'Sick Leave',
+            str_contains($lower, 'training') || str_contains($lower, 'tafe') => 'Training',
+            str_contains($lower, 'rdo') => 'RDO Taken',
+            str_contains($lower, 'unpaid') => 'Unpaid Leave',
+            str_contains($lower, 'workcover') => 'Workcover',
+            str_contains($lower, 'long service') => 'Long Service Leave',
+            str_contains($lower, 'public holiday') => 'Public Holiday',
+            str_contains($lower, 'industrial') => 'Industrial Action',
+            default => $worktypeName,
+        };
     }
 }

@@ -1,9 +1,9 @@
-import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import WeatherWidget from '@/components/weather-widget';
+import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { CheckCircle2, Download, GraduationCap, Pencil } from 'lucide-react';
@@ -20,6 +20,13 @@ interface Signature {
     signature: string;
     signed_at: string;
     employee: { id: number; name: string; preferred_name: string | null } | null;
+}
+
+interface UnsignedEmployee {
+    id: number;
+    name: string;
+    is_present_at_site: boolean;
+    absence_reason: string | null;
 }
 
 interface Prestart {
@@ -49,6 +56,7 @@ interface TrainingItem {
 
 interface Props {
     prestart: Prestart;
+    unsignedEmployees: UnsignedEmployee[];
     trainings: TrainingItem[];
 }
 
@@ -61,7 +69,7 @@ const DAILY_CHECKLIST = [
     'Current Licences & Qualifications are relevant to work tasks',
 ];
 
-export default function DailyPrestartShow({ prestart, trainings }: Props) {
+export default function DailyPrestartShow({ prestart, unsignedEmployees, trainings }: Props) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
@@ -84,7 +92,7 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-lg font-semibold">Daily Prestart</h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {prestart.location?.name ?? '-'} &middot; {prestart.work_date_formatted ?? prestart.work_date}
                             {prestart.foreman && <> &middot; {prestart.foreman.name}</>}
                         </p>
@@ -126,10 +134,16 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                             </ul>
                             {activityMedia.length > 0 && (
                                 <div className="mt-4">
-                                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Attached Files</h4>
+                                    <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
                                     <div className="space-y-1">
                                         {activityMedia.map((m) => (
-                                            <a key={m.id} href={m.original_url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 hover:underline">
+                                            <a
+                                                key={m.id}
+                                                href={m.original_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block text-sm text-blue-600 hover:underline"
+                                            >
                                                 {m.file_name}
                                             </a>
                                         ))}
@@ -171,10 +185,16 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                             </ul>
                             {safetyConcernMedia.length > 0 && (
                                 <div className="mt-4">
-                                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Attached Files</h4>
+                                    <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
                                     <div className="space-y-1">
                                         {safetyConcernMedia.map((m) => (
-                                            <a key={m.id} href={m.original_url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 hover:underline">
+                                            <a
+                                                key={m.id}
+                                                href={m.original_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block text-sm text-blue-600 hover:underline"
+                                            >
                                                 {m.file_name}
                                             </a>
                                         ))}
@@ -201,13 +221,13 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                                         {t.title}
                                         {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
                                     </p>
-                                    {t.room && <p className="text-sm text-muted-foreground">{t.room}</p>}
+                                    {t.room && <p className="text-muted-foreground text-sm">{t.room}</p>}
                                     {t.employees.length > 0 && (
                                         <p className="mt-1 text-sm">
                                             {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
                                         </p>
                                     )}
-                                    {t.notes && <p className="mt-1 text-sm italic text-muted-foreground">{t.notes}</p>}
+                                    {t.notes && <p className="text-muted-foreground mt-1 text-sm italic">{t.notes}</p>}
                                 </div>
                             ))}
                         </CardContent>
@@ -223,10 +243,59 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                         <CardContent>
                             <div className="space-y-1">
                                 {buildersPrestartMedia.map((m) => (
-                                    <a key={m.id} href={m.original_url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 hover:underline">
+                                    <a
+                                        key={m.id}
+                                        href={m.original_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="block text-sm text-blue-600 hover:underline"
+                                    >
                                         {m.file_name}
                                     </a>
                                 ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Unsigned Employees */}
+                {unsignedEmployees.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Not Signed ({unsignedEmployees.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Employee</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {unsignedEmployees.map((emp) => (
+                                            <TableRow key={emp.id}>
+                                                <TableCell>{emp.name}</TableCell>
+                                                <TableCell>
+                                                    {emp.is_present_at_site ? (
+                                                        <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
+                                                            Present - Not Signed
+                                                        </Badge>
+                                                    ) : emp.absence_reason ? (
+                                                        <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
+                                                            {emp.absence_reason}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
+                                                            No Record
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </div>
                         </CardContent>
                     </Card>
@@ -239,7 +308,7 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                     </CardHeader>
                     <CardContent>
                         {prestart.signatures.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No signatures yet.</p>
+                            <p className="text-muted-foreground text-sm">No signatures yet.</p>
                         ) : (
                             <div className="rounded-md border">
                                 <Table>
@@ -256,7 +325,11 @@ export default function DailyPrestartShow({ prestart, trainings }: Props) {
                                                 <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
                                                 <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
                                                 <TableCell>
-                                                    <img src={sig.signature} alt="Signature" className="h-10 max-w-[200px] object-contain" />
+                                                    <img
+                                                        src={sig.signature}
+                                                        alt="Signature"
+                                                        className="h-10 max-w-[200px] object-contain dark:invert"
+                                                    />
                                                 </TableCell>
                                             </TableRow>
                                         ))}
