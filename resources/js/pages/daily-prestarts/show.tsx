@@ -1,14 +1,14 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { CheckCircle2, Download, GraduationCap, Pencil } from 'lucide-react';
+import { CheckCircle2, Download, GraduationCap, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 
 interface MediaItem {
@@ -337,7 +337,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                 onClick={() => openNoteEditor(emp)}
                                                                 className="h-6 w-6 p-0"
                                                             >
-                                                                <Pencil className="h-3.5 w-3.5" />
+                                                                <MessageSquare className="h-3.5 w-3.5" />
                                                             </Button>
                                                         </div>
                                                         {emp.note && (
@@ -396,31 +396,31 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                 </Card>
             </div>
 
-            {/* Note Editor Dialog */}
-            <Dialog open={editingEmployeeId !== null} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Add Note</DialogTitle>
-                        <DialogDescription>Explain the absence or provide additional context</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <Textarea
-                            placeholder="e.g., 2 days at MAR01 (discussed with supervisor at MAR01)"
-                            value={noteText}
-                            onChange={(e) => setNoteText(e.target.value)}
-                            className="min-h-24"
-                        />
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
-                                Cancel
-                            </Button>
-                            <Button onClick={saveNote} disabled={isSaving}>
-                                {isSaving ? 'Saving...' : 'Save Note'}
-                            </Button>
+            {/* Note Editor Popover - rendered outside table to prevent closure on click */}
+            {editingEmployeeId !== null && (
+                <Popover open={editingEmployeeId !== null} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
+                    <PopoverTrigger asChild style={{ display: 'none' }} />
+                    <PopoverContent className="w-80" side="left">
+                        <div className="space-y-3">
+                            <h4 className="font-medium text-sm">Add Note</h4>
+                            <Textarea
+                                placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
+                                value={noteText}
+                                onChange={(e) => setNoteText(e.target.value)}
+                                className="min-h-20 text-sm"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
+                                    Cancel
+                                </Button>
+                                <Button size="sm" onClick={saveNote} disabled={isSaving}>
+                                    {isSaving ? 'Saving...' : 'Save'}
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    </PopoverContent>
+                </Popover>
+            )}
         </AppLayout>
     );
 }
