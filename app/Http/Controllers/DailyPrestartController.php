@@ -201,6 +201,7 @@ class DailyPrestartController extends Controller
                             'is_present_at_site' => true,
                             'absence_reason' => null,
                             'note' => $note,
+                            'clock_in_time' => $firstWorkClock->created_at->format('g:i a'),
                         ];
                     } else {
                         // Clocked in at a different location
@@ -215,6 +216,7 @@ class DailyPrestartController extends Controller
                             'is_present_at_site' => false,
                             'absence_reason' => "Clocked in at {$parentCode}",
                             'note' => $note,
+                            'clock_in_time' => $firstWorkClock->created_at->format('g:i a'),
                         ];
                     }
                 }
@@ -236,6 +238,7 @@ class DailyPrestartController extends Controller
                             'is_present_at_site' => false,
                             'absence_reason' => "On {$leaveReason}",
                             'note' => $note,
+                            'clock_in_time' => null,
                         ];
                     } else {
                         // On leave at a different location
@@ -250,6 +253,7 @@ class DailyPrestartController extends Controller
                             'is_present_at_site' => false,
                             'absence_reason' => "Other project - {$leaveReason} at {$parentCode}",
                             'note' => $note,
+                            'clock_in_time' => null,
                         ];
                     }
                 }
@@ -261,6 +265,7 @@ class DailyPrestartController extends Controller
                     'is_present_at_site' => false,
                     'absence_reason' => 'Absent (Unexplained)',
                     'note' => $note,
+                    'clock_in_time' => null,
                 ];
             })
             ->values();
