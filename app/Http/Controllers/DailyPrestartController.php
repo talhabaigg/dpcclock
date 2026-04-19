@@ -176,7 +176,7 @@ class DailyPrestartController extends Controller
                 // Get all clock entries for this employee on the prestart date, ordered chronologically
                 $clocks = Clock::where('eh_employee_id', $emp->eh_employee_id)
                     ->whereDate('clock_in', $dailyPrestart->work_date)
-                    ->with(['worktype', 'location'])
+                    ->with(['worktype', 'kiosk.location'])
                     ->orderBy('clock_in', 'asc')
                     ->get();
 
@@ -189,7 +189,7 @@ class DailyPrestartController extends Controller
 
                 // Determine status based on first work clock
                 if ($firstWorkClock) {
-                    $clockLocationId = $firstWorkClock->eh_location_id;
+                    $clockLocationId = $firstWorkClock->kiosk?->eh_location_id;
                     $prestartLocationId = $dailyPrestart->location->eh_location_id;
                     $isAtCorrectLocation = $clockLocationId === $prestartLocationId;
 
@@ -204,10 +204,11 @@ class DailyPrestartController extends Controller
                         ];
                     } else {
                         // Clocked in at a different location
-                        $clockedAtLocation = $firstWorkClock->location;
+                        $clockedAtLocation = $firstWorkClock->kiosk?->location;
+                        $kioskName = $firstWorkClock->kiosk?->name;
                         $parentCode = $clockedAtLocation
                             ? $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name)
-                            : 'Different Location';
+                            : ($kioskName ?? 'Different Location');
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
@@ -222,7 +223,7 @@ class DailyPrestartController extends Controller
                 $firstLeaveClock = $clocks->first(fn ($c) => $this->isLeaveWorktype($c->worktype?->name ?? ''));
 
                 if ($firstLeaveClock) {
-                    $clockLocationId = $firstLeaveClock->eh_location_id;
+                    $clockLocationId = $firstLeaveClock->kiosk?->eh_location_id;
                     $prestartLocationId = $dailyPrestart->location->eh_location_id;
                     $isAtCorrectLocation = $clockLocationId === $prestartLocationId;
                     $leaveReason = $this->mapWorktypeToReason($firstLeaveClock->worktype?->name);
@@ -238,10 +239,11 @@ class DailyPrestartController extends Controller
                         ];
                     } else {
                         // On leave at a different location
-                        $clockedAtLocation = $firstLeaveClock->location;
+                        $clockedAtLocation = $firstLeaveClock->kiosk?->location;
+                        $kioskName = $firstLeaveClock->kiosk?->name;
                         $parentCode = $clockedAtLocation
                             ? $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name)
-                            : 'Different Location';
+                            : ($kioskName ?? 'Different Location');
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,

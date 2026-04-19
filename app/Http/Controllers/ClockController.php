@@ -105,7 +105,7 @@ class ClockController extends Controller
                 'eh_employee_id' => $employee->eh_employee_id,
                 'clock_in' => $clockIn,
             ],
-            [] // no extra attributes for now
+            [] // eh_location_id intentionally left empty
         );
 
         return redirect()
