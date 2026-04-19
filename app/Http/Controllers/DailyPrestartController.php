@@ -205,7 +205,7 @@ class DailyPrestartController extends Controller
                     } else {
                         // Clocked in at a different location
                         $clockedAtLocation = $firstWorkClock->location;
-                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id ?? '');
+                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name);
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
@@ -237,7 +237,7 @@ class DailyPrestartController extends Controller
                     } else {
                         // On leave at a different location
                         $clockedAtLocation = $firstLeaveClock->location;
-                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id ?? '');
+                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name);
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
@@ -699,12 +699,16 @@ class DailyPrestartController extends Controller
         }
     }
 
-    private function extractParentLocationCode(string $externalId): string
+    private function extractParentLocationCode(?string $externalId, ?string $fallbackName = null): string
     {
         // Extract the part before "::" (e.g., "COA00" from "COA00::Level 01-001_INT_FRAMING")
-        // If no "::", return the whole string
+        if (!$externalId) {
+            return $fallbackName ?? 'Unknown Location';
+        }
+
         $parts = explode('::', $externalId);
-        return trim($parts[0]) ?: $externalId;
+        $code = trim($parts[0]);
+        return $code ?: ($fallbackName ?? 'Unknown Location');
     }
 
     private function isLeaveWorktype(?string $worktypeName): bool
