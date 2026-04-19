@@ -5,14 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import {
-    ColumnDef,
-    SortingState,
-    flexRender,
-    getCoreRowModel,
-    getSortedRowModel,
-    useReactTable,
-} from '@tanstack/react-table';
+import { ColumnDef, SortingState, flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
 import { ArrowUpDown, Building2, ChevronRight, DollarSign, TrendingUp, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CostBreakdownDialog } from './CostBreakdownDialog';
@@ -69,10 +62,7 @@ const formatCurrency = (value: number) =>
     }).format(value);
 
 const SortableHeader = ({ column, children }: { column: any; children: React.ReactNode }) => (
-    <button
-        className="flex items-center gap-1 hover:text-foreground"
-        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-    >
+    <button className="hover:text-foreground flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
         {children}
         <ArrowUpDown className="h-3 w-3" />
     </button>
@@ -100,9 +90,7 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
             const status = (row.getValue('forecast_status') as string) || 'not_started';
             const config = statusConfig[status] || statusConfig.not_started;
             return (
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}>
-                    {config.label}
-                </span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}>{config.label}</span>
             );
         },
     },
@@ -136,7 +124,7 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
                             e.stopPropagation();
                             onCostClick(location.id, location.name);
                         }}
-                        className="cursor-pointer font-medium text-green-700 hover:text-green-800 hover:underline dark:text-green-400 dark:hover:text-green-300 tabular-nums"
+                        className="cursor-pointer font-medium text-green-700 tabular-nums hover:text-green-800 hover:underline dark:text-green-400 dark:hover:text-green-300"
                     >
                         {formatCurrency(value)}
                     </button>
@@ -217,54 +205,78 @@ const LabourForecastIndex = ({ locations, currentWeekEnding, forecastMonth }: La
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
                     <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
+                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Total Jobs</CardDescription>
-                                <span className="text-muted-foreground/60"><Building2 className="h-4 w-4" /></span>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
+                                    Total Jobs
+                                </CardDescription>
+                                <span className="text-muted-foreground/60">
+                                    <Building2 className="h-4 w-4" />
+                                </span>
                             </div>
                         </CardHeader>
                         <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">{stats.totalJobs}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">{stats.jobsStaffedThisWeek} staffed this week</p>
+                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">{stats.totalJobs}</CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">
+                                {stats.jobsStaffedThisWeek} staffed this week
+                            </p>
                         </CardContent>
                     </Card>
 
                     <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
+                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Weekly Headcount</CardDescription>
-                                <span className="text-muted-foreground/60"><Users className="h-4 w-4" /></span>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
+                                    Weekly Headcount
+                                </CardDescription>
+                                <span className="text-muted-foreground/60">
+                                    <Users className="h-4 w-4" />
+                                </span>
                             </div>
                         </CardHeader>
                         <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">{stats.totalHeadcount.toLocaleString()}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">W/E {currentWeekEnding}</p>
+                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
+                                {stats.totalHeadcount.toLocaleString()}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">W/E {currentWeekEnding}</p>
                         </CardContent>
                     </Card>
 
                     <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
+                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Weekly Labour Cost</CardDescription>
-                                <span className="text-muted-foreground/60"><DollarSign className="h-4 w-4" /></span>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
+                                    Weekly Labour Cost
+                                </CardDescription>
+                                <span className="text-muted-foreground/60">
+                                    <DollarSign className="h-4 w-4" />
+                                </span>
                             </div>
                         </CardHeader>
                         <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(stats.totalCost)}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">W/E {currentWeekEnding}</p>
+                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
+                                {formatCurrency(stats.totalCost)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">W/E {currentWeekEnding}</p>
                         </CardContent>
                     </Card>
 
                     <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="bg-muted px-2 py-1.5 sm:px-3 sm:py-2">
+                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] sm:text-xs font-medium tracking-wide uppercase">Avg Cost / Head</CardDescription>
-                                <span className="text-muted-foreground/60"><TrendingUp className="h-4 w-4" /></span>
+                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
+                                    Avg Cost / Head
+                                </CardDescription>
+                                <span className="text-muted-foreground/60">
+                                    <TrendingUp className="h-4 w-4" />
+                                </span>
                             </div>
                         </CardHeader>
                         <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(stats.avgCostPerHead)}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 text-[10px] sm:text-xs hidden sm:block">Per week</p>
+                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
+                                {formatCurrency(stats.avgCostPerHead)}
+                            </CardTitle>
+                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">Per week</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -318,7 +330,7 @@ const LabourForecastIndex = ({ locations, currentWeekEnding, forecastMonth }: La
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={columns.length} className="text-muted-foreground h-24 text-center">
                                         {searchQuery || statusFilter !== 'all'
                                             ? 'No forecasts match your filters.'
                                             : 'No job locations with labour forecast data.'}

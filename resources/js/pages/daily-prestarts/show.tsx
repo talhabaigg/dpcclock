@@ -27,6 +27,7 @@ interface UnsignedEmployee {
     name: string;
     is_present_at_site: boolean;
     absence_reason: string | null;
+    note: string | null;
 }
 
 interface Prestart {
@@ -278,19 +279,26 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                             <TableRow key={emp.id}>
                                                 <TableCell>{emp.name}</TableCell>
                                                 <TableCell>
-                                                    {emp.is_present_at_site ? (
-                                                        <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-                                                            Present - Not Signed
-                                                        </Badge>
-                                                    ) : emp.absence_reason ? (
-                                                        <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
-                                                            {emp.absence_reason}
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
-                                                            No Record
-                                                        </Badge>
-                                                    )}
+                                                    <div className="space-y-2">
+                                                        {emp.is_present_at_site ? (
+                                                            <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
+                                                                Present - Not Signed
+                                                            </Badge>
+                                                        ) : emp.absence_reason ? (
+                                                            <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
+                                                                {emp.absence_reason}
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
+                                                                No Record
+                                                            </Badge>
+                                                        )}
+                                                        {emp.note && (
+                                                            <div className="text-xs text-slate-600 italic mt-1 bg-slate-50 p-2 rounded border border-slate-200">
+                                                                {emp.note}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}

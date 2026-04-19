@@ -102,6 +102,11 @@ class DailyPrestart extends Model implements HasMedia
         return $this->hasMany(DailyPrestartSignature::class);
     }
 
+    public function absenceNotes(): HasMany
+    {
+        return $this->hasMany(DailyPrestartAbsenceNote::class);
+    }
+
     // --- Scopes ---
 
     public function scopeActive($query)

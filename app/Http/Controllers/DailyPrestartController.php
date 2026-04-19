@@ -9,8 +9,6 @@ use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\Training;
-use App\Models\User;
-use App\Models\Worktype;
 use App\Services\WeatherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -151,7 +149,7 @@ class DailyPrestartController extends Controller
 
     public function show(DailyPrestart $dailyPrestart)
     {
-        $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee']);
+        $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee', 'absenceNotes']);
 
         // Get location kiosk employees
         $kioskEmployees = collect();
@@ -170,28 +168,93 @@ class DailyPrestartController extends Controller
         $unsignedEmployees = $kioskEmployees
             ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
             ->map(function ($emp) use ($dailyPrestart) {
-                // Check for clock entries on that date
+                // Get any note for this employee
+                $note = $dailyPrestart->absenceNotes
+                    ->where('employee_id', $emp->id)
+                    ->first()?->note;
+
+                // Get all clock entries for this employee on the prestart date, ordered chronologically
                 $clocks = Clock::where('eh_employee_id', $emp->eh_employee_id)
                     ->whereDate('clock_in', $dailyPrestart->work_date)
-                    ->with('worktype')
+                    ->with(['worktype', 'location'])
+                    ->orderBy('clock_in', 'asc')
                     ->get();
 
-                // Check if they have any regular clock (present at site)
-                $regularClocks = $clocks->filter(fn ($c) => ! $this->isLeaveWorktype($c->worktype?->name ?? ''));
-                $isPresent = $regularClocks->count() > 0;
+                // Find the first "work" clock (open clocks or closed clocks with non-leave worktype)
+                $firstWorkClock = $clocks->first(function ($clock) {
+                    $isOpenClock = is_null($clock->clock_out);
+                    $isNonLeaveWorktype = ! $this->isLeaveWorktype($clock->worktype?->name ?? '');
+                    return $isOpenClock || $isNonLeaveWorktype;
+                });
 
-                // If they're not present, check if they have a leave entry
-                $leaveWorktype = null;
-                if (! $isPresent && $clocks->count() > 0) {
-                    $leaveClock = $clocks->first(fn ($c) => $this->isLeaveWorktype($c->worktype?->name ?? ''));
-                    $leaveWorktype = $leaveClock?->worktype?->name;
+                // Determine status based on first work clock
+                if ($firstWorkClock) {
+                    $clockLocationId = $firstWorkClock->eh_location_id;
+                    $prestartLocationId = $dailyPrestart->location->eh_location_id;
+                    $isAtCorrectLocation = $clockLocationId === $prestartLocationId;
+
+                    if ($isAtCorrectLocation) {
+                        // Clocked in at the correct location
+                        return [
+                            'id' => $emp->id,
+                            'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
+                            'is_present_at_site' => true,
+                            'absence_reason' => null,
+                            'note' => $note,
+                        ];
+                    } else {
+                        // Clocked in at a different location
+                        $clockedAtLocation = $firstWorkClock->location;
+                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id ?? '');
+                        return [
+                            'id' => $emp->id,
+                            'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
+                            'is_present_at_site' => false,
+                            'absence_reason' => "Clocked in at {$parentCode}",
+                            'note' => $note,
+                        ];
+                    }
                 }
 
+                // No work clocks found, check for leave clocks
+                $firstLeaveClock = $clocks->first(fn ($c) => $this->isLeaveWorktype($c->worktype?->name ?? ''));
+
+                if ($firstLeaveClock) {
+                    $clockLocationId = $firstLeaveClock->eh_location_id;
+                    $prestartLocationId = $dailyPrestart->location->eh_location_id;
+                    $isAtCorrectLocation = $clockLocationId === $prestartLocationId;
+                    $leaveReason = $this->mapWorktypeToReason($firstLeaveClock->worktype?->name);
+
+                    if ($isAtCorrectLocation) {
+                        // On leave at the correct location
+                        return [
+                            'id' => $emp->id,
+                            'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
+                            'is_present_at_site' => false,
+                            'absence_reason' => "On {$leaveReason}",
+                            'note' => $note,
+                        ];
+                    } else {
+                        // On leave at a different location
+                        $clockedAtLocation = $firstLeaveClock->location;
+                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id ?? '');
+                        return [
+                            'id' => $emp->id,
+                            'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
+                            'is_present_at_site' => false,
+                            'absence_reason' => "Other project - {$leaveReason} at {$parentCode}",
+                            'note' => $note,
+                        ];
+                    }
+                }
+
+                // No clocks at all
                 return [
                     'id' => $emp->id,
                     'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
-                    'is_present_at_site' => $isPresent,
-                    'absence_reason' => $this->mapWorktypeToReason($leaveWorktype),
+                    'is_present_at_site' => false,
+                    'absence_reason' => 'Absent (Unexplained)',
+                    'note' => $note,
                 ];
             })
             ->values();
@@ -291,6 +354,37 @@ class DailyPrestartController extends Controller
 
         return redirect()->route('daily-prestarts.index')
             ->with('success', 'Daily prestart deleted successfully.');
+    }
+
+    public function updateAbsenceNote(Request $request, DailyPrestart $dailyPrestart, Employee $employee)
+    {
+        // Check if user has permission to edit this prestart
+        // (foreman of prestart or kiosk manager or admin)
+        $kiosk = Kiosk::where('eh_location_id', $dailyPrestart->location->eh_location_id)->first();
+        $isKioskManager = $kiosk && $kiosk->managers()->where('users.id', auth()->id())->exists();
+        $isForeman = $dailyPrestart->foreman_id === auth()->id();
+        $isAdmin = auth()->user()?->hasRole('admin');
+
+        if (!$isKioskManager && !$isForeman && !$isAdmin) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        DailyPrestartAbsenceNote::updateOrCreate(
+            [
+                'daily_prestart_id' => $dailyPrestart->id,
+                'employee_id' => $employee->id,
+            ],
+            [
+                'note' => $request->note ?? null,
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        return response()->json(['success' => true]);
     }
 
     public function lock(DailyPrestart $dailyPrestart)
@@ -603,6 +697,14 @@ class DailyPrestartController extends Controller
                 $prestart->addMedia($file)->toMediaCollection('builders_prestart_file');
             }
         }
+    }
+
+    private function extractParentLocationCode(string $externalId): string
+    {
+        // Extract the part before "::" (e.g., "COA00" from "COA00::Level 01-001_INT_FRAMING")
+        // If no "::", return the whole string
+        $parts = explode('::', $externalId);
+        return trim($parts[0]) ?: $externalId;
     }
 
     private function isLeaveWorktype(?string $worktypeName): bool
