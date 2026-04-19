@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Clock;
 use App\Models\DailyPrestart;
+use App\Models\DailyPrestartAbsenceNote;
 use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
@@ -377,7 +378,7 @@ class DailyPrestartController extends Controller
         $isAdmin = auth()->user()?->hasRole('admin');
 
         if (!$isKioskManager && !$isForeman && !$isAdmin) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return back()->withErrors(['error' => 'Unauthorized']);
         }
 
         $request->validate([
@@ -395,7 +396,7 @@ class DailyPrestartController extends Controller
             ]
         );
 
-        return response()->json(['success' => true]);
+        return back();
     }
 
     public function lock(DailyPrestart $dailyPrestart)
@@ -510,14 +511,25 @@ class DailyPrestartController extends Controller
             ]);
         }
 
-        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name,employees.display_name')
+        $trainings = Training::with('employees')
             ->forLocation($location->id)
             ->forDate(now('Australia/Brisbane')->toDateString())
             ->get()
-            ->filter(function ($training) use ($employee) {
-                return $training->employees->contains('id', $employee->id);
-            })
-            ->values();
+            ->map(function ($training) {
+                return [
+                    'id' => $training->id,
+                    'title' => $training->title,
+                    'time' => $training->time,
+                    'room' => $training->room,
+                    'notes' => $training->notes,
+                    'employees' => $training->employees->map(fn ($e) => [
+                        'id' => $e->id,
+                        'name' => $e->name,
+                        'preferred_name' => $e->preferred_name,
+                        'display_name' => $e->display_name,
+                    ])->toArray(),
+                ];
+            });
 
         return Inertia::render('kiosks/clocking/prestart-sign', [
             'kiosk' => $kiosk,

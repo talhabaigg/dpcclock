@@ -8,7 +8,7 @@ import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { CheckCircle2, Download, GraduationCap, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Download, GraduationCap, MessageSquare, Pencil } from 'lucide-react';
 import { useState } from 'react';
 
 interface MediaItem {
@@ -90,19 +90,18 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
     const saveNote = () => {
         if (editingEmployeeId === null) return;
-        setIsSaving(true);
 
         router.post(
             route('daily-prestarts.update-absence-note', { dailyPrestart: prestart.id, employee: editingEmployeeId }),
             { note: noteText || null },
             {
+                onBefore: () => setIsSaving(true),
                 onSuccess: () => {
                     setEditingEmployeeId(null);
-                    setIsSaving(false);
+                    setNoteText('');
                 },
-                onError: () => {
-                    setIsSaving(false);
-                },
+                onFinish: () => setIsSaving(false),
+                preserveScroll: true,
             }
         );
     };
@@ -331,14 +330,54 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                     <span className="text-xs text-slate-500 ml-2">at {emp.clock_in_time}</span>
                                                                 )}
                                                             </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => openNoteEditor(emp)}
-                                                                className="h-6 w-6 p-0"
-                                                            >
-                                                                <MessageSquare className="h-3.5 w-3.5" />
-                                                            </Button>
+                                                            {editingEmployeeId === emp.id && (
+                                                                <Popover open={true} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-6 w-6 p-0"
+                                                                        >
+                                                                            <MessageSquare className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-80" side="left">
+                                                                        <div className="space-y-3">
+                                                                            <h4 className="font-medium text-sm">Add Note</h4>
+                                                                            <Textarea
+                                                                                placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
+                                                                                value={noteText}
+                                                                                onChange={(e) => setNoteText(e.target.value)}
+                                                                                onKeyDown={(e) => {
+                                                                                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                                                                        e.preventDefault();
+                                                                                        saveNote();
+                                                                                    }
+                                                                                }}
+                                                                                className="min-h-20 text-sm"
+                                                                            />
+                                                                            <div className="flex justify-end gap-2">
+                                                                                <Button variant="outline" size="sm" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
+                                                                                    Cancel
+                                                                                </Button>
+                                                                                <Button size="sm" onClick={saveNote} disabled={isSaving}>
+                                                                                    {isSaving ? 'Saving...' : 'Save'}
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            )}
+                                                            {editingEmployeeId !== emp.id && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => openNoteEditor(emp)}
+                                                                    className="h-6 w-6 p-0"
+                                                                >
+                                                                    <MessageSquare className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                         {emp.note && (
                                                             <div className="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
@@ -396,31 +435,6 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                 </Card>
             </div>
 
-            {/* Note Editor Popover - rendered outside table to prevent closure on click */}
-            {editingEmployeeId !== null && (
-                <Popover open={editingEmployeeId !== null} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
-                    <PopoverTrigger asChild style={{ display: 'none' }} />
-                    <PopoverContent className="w-80" side="left">
-                        <div className="space-y-3">
-                            <h4 className="font-medium text-sm">Add Note</h4>
-                            <Textarea
-                                placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
-                                value={noteText}
-                                onChange={(e) => setNoteText(e.target.value)}
-                                className="min-h-20 text-sm"
-                            />
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
-                                    Cancel
-                                </Button>
-                                <Button size="sm" onClick={saveNote} disabled={isSaving}>
-                                    {isSaving ? 'Saving...' : 'Save'}
-                                </Button>
-                            </div>
-                        </div>
-                    </PopoverContent>
-                </Popover>
-            )}
         </AppLayout>
     );
 }

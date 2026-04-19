@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\SilicaOption;
+use App\Models\Training;
 use App\Support\FeatureFlags;
 use App\Services\KioskService;
 use Illuminate\Http\Request;
@@ -104,12 +105,31 @@ class KioskAuthController extends Controller
                     ->exists();
 
                 if (! $alreadySigned) {
+                    $trainings = Training::with('employees')
+                        ->forLocation($location->id)
+                        ->forDate(now('Australia/Brisbane')->toDateString())
+                        ->get()
+                        ->map(fn ($t) => [
+                            'id' => $t->id,
+                            'title' => $t->title,
+                            'time' => $t->time,
+                            'room' => $t->room,
+                            'notes' => $t->notes,
+                            'employees' => $t->employees->map(fn ($e) => [
+                                'id' => $e->id,
+                                'name' => $e->name,
+                                'preferred_name' => $e->preferred_name,
+                                'display_name' => $e->display_name,
+                            ])->toArray(),
+                        ]);
+
                     return Inertia::render('kiosks/clocking/prestart-sign', [
                         'kiosk' => $kiosk,
                         'employee' => $employee,
                         'prestart' => $prestart,
                         'employees' => $employees,
                         'adminMode' => $adminMode,
+                        'trainings' => $trainings,
                     ]);
                 }
             }

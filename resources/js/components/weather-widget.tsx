@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { ArrowDown, ArrowUp, Cloud, CloudRain, Droplets, Sun, Wind } from 'lucide-react';
 
 interface WeatherData {
@@ -24,6 +25,7 @@ interface WeatherData {
 interface WeatherWidgetProps {
     weather: WeatherData | null;
     compact?: boolean;
+    dense?: boolean;
 }
 
 function GoogleWeatherIcon({ iconBaseUri, size = 48 }: { iconBaseUri?: string | null; size?: number }) {
@@ -39,7 +41,7 @@ function GoogleWeatherIcon({ iconBaseUri, size = 48 }: { iconBaseUri?: string | 
     );
 }
 
-export default function WeatherWidget({ weather, compact = false }: WeatherWidgetProps) {
+export default function WeatherWidget({ weather, compact = false, dense = false }: WeatherWidgetProps) {
     if (!weather || (!weather.current && !weather.forecast)) {
         return (
             <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -75,72 +77,97 @@ export default function WeatherWidget({ weather, compact = false }: WeatherWidge
 
     return (
         <div className="overflow-hidden rounded-xl border border-sky-200/60 dark:border-sky-800/40 bg-gradient-to-br from-sky-50 via-blue-50/80 to-indigo-50/50 dark:from-sky-950/30 dark:via-blue-950/20 dark:to-indigo-950/10">
-            <div className="p-4">
-                {/* Current conditions */}
-                {current && (
-                    <div className="flex items-center gap-4">
-                        <GoogleWeatherIcon iconBaseUri={current.icon_code} size={56} />
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
-                                {current.temp != null && (
-                                    <span className="text-4xl font-bold tracking-tighter">
-                                        {Math.round(current.temp)}°
-                                    </span>
-                                )}
-                                {current.condition && (
-                                    <span className="text-sm font-medium text-muted-foreground">
-                                        {current.condition}
-                                    </span>
-                                )}
-                            </div>
-                            {current.feels_like != null && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Feels like {Math.round(current.feels_like)}°
-                                </p>
+            {dense ? (
+                current && (
+                    <div className="flex items-center gap-3 px-3 py-2">
+                        <GoogleWeatherIcon iconBaseUri={current.icon_code} size={32} />
+                        {current.temp != null && (
+                            <span className="text-xl font-bold tracking-tighter">{Math.round(current.temp)}°</span>
+                        )}
+                        {current.condition && (
+                            <span className="truncate text-xs text-muted-foreground">{current.condition}</span>
+                        )}
+                        <div className="ml-auto flex items-center gap-2.5 text-xs">
+                            {current.humidity != null && (
+                                <span className="flex items-center gap-1"><Droplets className="h-3 w-3 text-blue-500" />{current.humidity}%</span>
+                            )}
+                            {current.wind_speed != null && (
+                                <span className="flex items-center gap-1"><Wind className="h-3 w-3 text-teal-500" />{Math.round(current.wind_speed)}</span>
+                            )}
+                            {current.uv_index != null && (
+                                <span className="flex items-center gap-1"><Sun className="h-3 w-3 text-amber-500" />{current.uv_index}</span>
                             )}
                         </div>
                     </div>
-                )}
+                )
+            ) : (
+                <div className="p-4">
+                    {/* Current conditions */}
+                    {current && (
+                        <div className="flex items-center gap-4">
+                            <GoogleWeatherIcon iconBaseUri={current.icon_code} size={56} />
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline gap-2">
+                                    {current.temp != null && (
+                                        <span className="text-4xl font-bold tracking-tighter">
+                                            {Math.round(current.temp)}°
+                                        </span>
+                                    )}
+                                    {current.condition && (
+                                        <span className="text-sm font-medium text-muted-foreground">
+                                            {current.condition}
+                                        </span>
+                                    )}
+                                </div>
+                                {current.feels_like != null && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Feels like {Math.round(current.feels_like)}°
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
-                {/* Stats row */}
-                {current && (
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                        {current.humidity != null && (
-                            <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                <Droplets className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-xs text-muted-foreground leading-none">Humidity</p>
-                                    <p className="text-sm font-semibold leading-tight">{current.humidity}%</p>
+                    {/* Stats row */}
+                    {current && (
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                            {current.humidity != null && (
+                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
+                                    <Droplets className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground leading-none">Humidity</p>
+                                        <p className="text-sm font-semibold leading-tight">{current.humidity}%</p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        {current.wind_speed != null && (
-                            <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                <Wind className="h-3.5 w-3.5 text-teal-500 shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-xs text-muted-foreground leading-none">Wind</p>
-                                    <p className="text-sm font-semibold leading-tight">{Math.round(current.wind_speed)} km/h</p>
+                            )}
+                            {current.wind_speed != null && (
+                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
+                                    <Wind className="h-3.5 w-3.5 text-teal-500 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground leading-none">Wind</p>
+                                        <p className="text-sm font-semibold leading-tight">{Math.round(current.wind_speed)} km/h</p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        {current.uv_index != null && (
-                            <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                <Sun className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-xs text-muted-foreground leading-none">UV Index</p>
-                                    <p className="text-sm font-semibold leading-tight">{current.uv_index}</p>
+                            )}
+                            {current.uv_index != null && (
+                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
+                                    <Sun className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground leading-none">UV Index</p>
+                                        <p className="text-sm font-semibold leading-tight">{current.uv_index}</p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Forecast bar */}
             {forecast && (
-                <div className="flex items-center justify-between gap-3 border-t border-sky-200/60 dark:border-sky-800/40 bg-white/40 dark:bg-white/5 px-4 py-2.5 text-sm">
+                <div className={cn('flex items-center justify-between gap-3 border-t border-sky-200/60 dark:border-sky-800/40 bg-white/40 dark:bg-white/5', dense ? 'px-3 py-1 text-xs' : 'px-4 py-2.5 text-sm')}>
                     <div className="flex items-center gap-2">
-                        {forecast.icon_code && current && (
+                        {forecast.icon_code && current && !dense && (
                             <GoogleWeatherIcon iconBaseUri={forecast.icon_code} size={28} />
                         )}
                         <span className="font-medium">Today</span>
@@ -148,7 +175,7 @@ export default function WeatherWidget({ weather, compact = false }: WeatherWidge
                             <span className="text-muted-foreground hidden sm:inline">{forecast.condition}</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className={cn('flex items-center', dense ? 'gap-2' : 'gap-3')}>
                         {forecast.high != null && (
                             <span className="flex items-center gap-0.5 font-semibold">
                                 <ArrowUp className="h-3 w-3 text-red-400" />
@@ -163,7 +190,7 @@ export default function WeatherWidget({ weather, compact = false }: WeatherWidge
                         )}
                         {forecast.rain_chance != null && (
                             <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                                <CloudRain className="h-3.5 w-3.5" />
+                                <CloudRain className="h-3 w-3" />
                                 {forecast.rain_chance}%
                             </span>
                         )}

@@ -6,7 +6,7 @@ import WeatherWidget from '@/components/weather-widget';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, FileText, GraduationCap, LogIn } from 'lucide-react';
+import { ArrowLeft, Clock, FileText, GraduationCap, LogIn, MapPin, Users } from 'lucide-react';
 import SignaturePad from 'signature_pad';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
@@ -77,27 +77,8 @@ export default function PrestartSign() {
     const [success, setSuccess] = useState(false);
     const [sigError, setSigError] = useState('');
 
-    // Track acceptance of each activity and safety concern
-    const activityCount = prestart.activities?.length ?? 0;
-    const safetyConcernCount = prestart.safety_concerns?.length ?? 0;
-    const totalItems = activityCount + safetyConcernCount;
-
-    const [activitiesAcknowledged, setActivitiesAcknowledged] = useState(false);
-    const [acceptedConcerns, setAcceptedConcerns] = useState<boolean[]>(new Array(safetyConcernCount).fill(false));
-    const [checklistAcknowledged, setChecklistAcknowledged] = useState(false);
-
-    const allAccepted =
-        checklistAcknowledged &&
-        activitiesAcknowledged &&
-        (safetyConcernCount === 0 || acceptedConcerns.every(Boolean));
-
-    const toggleConcern = (i: number) => {
-        setAcceptedConcerns((prev) => {
-            const next = [...prev];
-            next[i] = !next[i];
-            return next;
-        });
-    };
+    const [allAcknowledged, setAllAcknowledged] = useState(false);
+    const allAccepted = allAcknowledged;
 
 
     const initPad = useCallback(() => {
@@ -211,19 +192,19 @@ export default function PrestartSign() {
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base">Prestart Summary</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                        <WeatherWidget weather={prestart.weather as any} />
+                    <CardContent className="space-y-4 text-sm">
+                        <WeatherWidget weather={prestart.weather as any} dense />
 
                         {prestart.activities && prestart.activities.length > 0 && (
                             <div>
-                                <p className="mb-2 font-medium text-muted-foreground">General Site Works / Activities:</p>
-                                <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                <p className="mb-1 font-medium text-muted-foreground">Activities</p>
+                                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                                     {prestart.activities.map((a, i) => (
                                         <li key={i}>{a.description}</li>
                                     ))}
                                 </ul>
                                 {activityFiles.length > 0 && (
-                                    <div className="mb-3 space-y-0.5 pl-5">
+                                    <div className="mt-1 space-y-0.5 pl-5">
                                         {activityFiles.map((f) => (
                                             <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
                                                 {f.file_name}
@@ -231,90 +212,107 @@ export default function PrestartSign() {
                                         ))}
                                     </div>
                                 )}
-                                <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', activitiesAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
-                                    <Checkbox checked={activitiesAcknowledged} onCheckedChange={() => setActivitiesAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
-                                    <span className={cn('flex-1 font-medium', activitiesAcknowledged && 'text-emerald-800')}>I acknowledge the above activities</span>
-                                </label>
                             </div>
                         )}
 
-                    </CardContent>
-                </Card>
+                        {prestart.safety_concerns && prestart.safety_concerns.length > 0 && (
+                            <div>
+                                <p className="mb-1 font-medium text-muted-foreground">Safety Concerns</p>
+                                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                    {prestart.safety_concerns.map((s, i) => (
+                                        <li key={i}>{s.description}</li>
+                                    ))}
+                                </ul>
+                                {safetyConcernFiles.length > 0 && (
+                                    <div className="mt-1 space-y-0.5 pl-5">
+                                        {safetyConcernFiles.map((f) => (
+                                            <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
+                                                {f.file_name}
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                {/* Training Booked */}
-                {trainings && trainings.length > 0 && (
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <GraduationCap className="h-4 w-4" />
-                                Training Booked
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3 text-sm">
-                            {trainings.map((t) => (
-                                <div key={t.id} className="rounded-lg border bg-blue-50/50 p-3 dark:bg-blue-950/20">
-                                    <p className="font-medium">
-                                        {t.title}
-                                        {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
-                                    </p>
-                                    {t.room && <p className="text-xs text-muted-foreground">{t.room}</p>}
-                                    {t.employees.length > 0 && (
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
-                                        </p>
-                                    )}
-                                    {t.notes && <p className="mt-1 text-xs italic text-muted-foreground">{t.notes}</p>}
+                        <div>
+                            <p className="mb-1 font-medium text-muted-foreground">Daily Checklist</p>
+                            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                {DAILY_CHECKLIST.map((item, i) => (
+                                    <li key={i}>{item}</li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {trainings && trainings.length > 0 && (
+                            <div>
+                                <p className="mb-1.5 flex items-center gap-1.5 font-medium text-muted-foreground">
+                                    <GraduationCap className="h-4 w-4" />
+                                    Training Booked
+                                </p>
+                                <div className="space-y-2">
+                                    {trainings.map((t) => (
+                                        <div
+                                            key={t.id}
+                                            className="overflow-hidden rounded-lg border border-indigo-200/70 bg-gradient-to-br from-indigo-50 to-blue-50/60 dark:border-indigo-900/50 dark:from-indigo-950/30 dark:to-blue-950/20"
+                                        >
+                                            <div className="flex items-start gap-3 p-3">
+                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                                    <GraduationCap className="h-5 w-5" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-semibold leading-tight">{t.title}</p>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                        {t.time && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Clock className="h-3 w-3" />
+                                                                {t.time}
+                                                            </span>
+                                                        )}
+                                                        {t.room && (
+                                                            <span className="flex items-center gap-1">
+                                                                <MapPin className="h-3 w-3" />
+                                                                {t.room}
+                                                            </span>
+                                                        )}
+                                                        {t.employees.length > 0 && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Users className="h-3 w-3" />
+                                                                {t.employees.length} attending
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {t.employees.length > 0 && (
+                                                        <div className="mt-2 flex flex-wrap gap-1">
+                                                            {t.employees.map((e) => (
+                                                                <span
+                                                                    key={e.id}
+                                                                    className="rounded-full bg-white/70 px-2 py-0.5 text-xs text-indigo-900 dark:bg-white/10 dark:text-indigo-200"
+                                                                >
+                                                                    {e.display_name || e.preferred_name || e.name}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {t.notes && (
+                                                        <p className="mt-2 border-t border-indigo-200/50 pt-2 text-xs italic text-muted-foreground dark:border-indigo-900/50">
+                                                            {t.notes}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
+                            </div>
+                        )}
 
-                {/* Daily Checklist */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Daily Checklist</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                            {DAILY_CHECKLIST.map((item, i) => (
-                                <li key={i}>{item}</li>
-                            ))}
-                        </ul>
-                        <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', checklistAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
-                            <Checkbox checked={checklistAcknowledged} onCheckedChange={() => setChecklistAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
-                            <span className={cn('flex-1 font-medium', checklistAcknowledged && 'text-emerald-800')}>I acknowledge and confirm all of the above</span>
+                        <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', allAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
+                            <Checkbox checked={allAcknowledged} onCheckedChange={() => setAllAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
+                            <span className={cn('flex-1 font-medium', allAcknowledged && 'text-emerald-800')}>I acknowledge and confirm all of the above activities, safety concerns, and checklist items</span>
                         </label>
                     </CardContent>
                 </Card>
-
-                {/* Safety Concerns */}
-                {prestart.safety_concerns && prestart.safety_concerns.length > 0 && (
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-base">Safety Concerns</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-2">
-                                {prestart.safety_concerns.map((s, i) => (
-                                    <label key={i} className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', acceptedConcerns[i] ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
-                                        <Checkbox checked={acceptedConcerns[i]} onCheckedChange={() => toggleConcern(i)} className="mt-0.5 h-5 w-5" />
-                                        <span className={cn('flex-1', acceptedConcerns[i] && 'text-emerald-800')}>{s.description}</span>
-                                    </label>
-                                ))}
-                            </div>
-                            {safetyConcernFiles.length > 0 && (
-                                <div className="mt-2 space-y-0.5 pl-8">
-                                    {safetyConcernFiles.map((f) => (
-                                        <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
-                                            {f.file_name}
-                                        </a>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
 
                 {/* Signature Pad */}
                 <Card>
