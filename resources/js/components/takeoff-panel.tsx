@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { PatternSwatch, type TakeoffCondition } from './condition-manager';
+import { type TakeoffCondition } from './condition-manager';
 import {
     Box,
     Calculator,
@@ -290,7 +290,7 @@ export function TakeoffPanel({
                                 {activeCondition && (
                                     <div className="border-b px-2 py-1.5" style={{ borderLeftWidth: 3, borderLeftColor: activeCondition.color }}>
                                         <div className="flex items-center gap-1.5">
-                                            <PatternSwatch pattern={activeCondition.pattern} color={activeCondition.color} opacity={activeCondition.opacity ?? 50} size={12} />
+                                            <div className="h-3 w-3 shrink-0 rounded-sm border" style={{ backgroundColor: activeCondition.color, opacity: (activeCondition.opacity ?? 50) / 100 }} />
                                             <span className="flex-1 truncate text-[11px] font-semibold">{activeCondition.name}</span>
                                             <span className="rounded-sm bg-muted px-1 py-px text-[9px] font-medium text-muted-foreground">
                                                 {TYPE_LABELS[activeCondition.type]}
@@ -666,7 +666,7 @@ export function TakeoffPanel({
                                                             onActivateCondition(isActive ? null : c.id);
                                                         }}
                                                     >
-                                                        <PatternSwatch pattern={c.pattern} color={c.color} opacity={c.opacity ?? 50} size={12} />
+                                                        <div className="h-3 w-3 shrink-0 rounded-sm border" style={{ backgroundColor: c.color, opacity: (c.opacity ?? 50) / 100 }} />
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-1">
                                                                 {c.condition_number != null && (

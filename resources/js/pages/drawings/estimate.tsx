@@ -14,7 +14,6 @@ type EstimateRow = {
     name: string;
     condition_type: string;
     color: string;
-    pattern: string | null;
     qty1: number;
     uom1: string;
     qty2: number | null;
@@ -52,18 +51,11 @@ function fmtInt(val: number): string {
     return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-/** Render a small condition color swatch */
-function ColorSwatch({ color, pattern }: { color: string; pattern: string | null }) {
-    const isHatch = pattern === 'crosshatch' || pattern === 'diagonal';
+function ColorSwatch({ color }: { color: string }) {
     return (
         <span
             className="inline-block h-3.5 w-3.5 shrink-0 rounded-[2px] border border-black/20"
-            style={{
-                backgroundColor: color,
-                backgroundImage: isHatch
-                    ? `repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.25) 2px, rgba(0,0,0,0.25) 3px)`
-                    : undefined,
-            }}
+            style={{ backgroundColor: color }}
         />
     );
 }
@@ -281,7 +273,7 @@ function GroupSection({
                 <TableRow key={r.condition_id}>
                     <TableCell className="py-1">
                         <div className="flex items-center gap-1.5">
-                            <ColorSwatch color={r.color} pattern={r.pattern} />
+                            <ColorSwatch color={r.color} />
                             <span className="font-mono text-xs text-muted-foreground">
                                 {r.condition_number ?? ''}
                             </span>

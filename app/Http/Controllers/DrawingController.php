@@ -743,7 +743,6 @@ class DrawingController extends Controller
                 'name' => $condition->name,
                 'condition_type' => $condition->conditionType?->name ?? 'Uncategorized',
                 'color' => $condition->color ?? '#888888',
-                'pattern' => $condition->pattern,
                 'qty1' => round($qty1, 0),
                 'uom1' => $uom1,
                 'qty2' => $qty2,

@@ -264,18 +264,6 @@ export default function DrawingProduction() {
             });
     }, [initialMeasurements, selectedLccId, statuses, segmentStatuses, hideComplete]);
 
-    // Condition patterns for the viewer
-    const conditionPatterns = useMemo(() => {
-        const map: Record<number, string> = {};
-        if (!initialMeasurements) return map;
-        for (const m of initialMeasurements) {
-            if (m.takeoff_condition_id && m.condition) {
-                map[m.takeoff_condition_id] = 'solid';
-            }
-        }
-        return map;
-    }, [initialMeasurements]);
-
     const conditionOpacities = useMemo(() => {
         const map: Record<number, number> = {};
         if (!initialMeasurements) return map;
@@ -745,7 +733,6 @@ export default function DrawingProduction() {
                         measurements={visibleMeasurements}
                         selectedMeasurementId={selectedMeasurementId}
                         calibration={initialCalibration}
-                        conditionPatterns={conditionPatterns}
                         conditionOpacities={conditionOpacities}
                         onCalibrationComplete={() => {}}
                         onMeasurementComplete={() => {}}

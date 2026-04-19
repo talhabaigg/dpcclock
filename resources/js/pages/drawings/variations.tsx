@@ -102,14 +102,6 @@ export default function DrawingVariations() {
     const saveMeasurementHttp = useHttp({});
     const generatePremierHttp = useHttp({});
 
-    const conditionPatterns = useMemo(() => {
-        const map: Record<number, string> = {};
-        for (const c of conditions) {
-            if (c.pattern) map[c.id] = c.pattern;
-        }
-        return map;
-    }, [conditions]);
-
     const conditionOpacities = useMemo(() => {
         const map: Record<number, number> = {};
         for (const c of conditions) {
@@ -323,7 +315,6 @@ export default function DrawingVariations() {
                         measurements={measurements}
                         selectedMeasurementId={selectedMeasurementId}
                         calibration={calibration}
-                        conditionPatterns={conditionPatterns}
                         conditionOpacities={conditionOpacities}
                         onCalibrationComplete={handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}

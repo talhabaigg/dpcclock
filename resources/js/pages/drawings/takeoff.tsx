@@ -18,6 +18,7 @@ import { ObservationDialog } from '@/components/observation-dialog';
 import CalibrationDialog from '@/components/calibration-dialog';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { api } from '@/lib/api';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useObservations } from '@/hooks/use-observations';
@@ -224,14 +225,12 @@ export default function DrawingTakeoff() {
         },
     });
 
-    const { conditionPatterns, conditionOpacities } = useMemo(() => {
-        const patterns: Record<number, string> = {};
+    const conditionOpacities = useMemo(() => {
         const opacities: Record<number, number> = {};
         for (const c of conditions) {
-            if (c.pattern) patterns[c.id] = c.pattern;
             opacities[c.id] = c.opacity ?? 50;
         }
-        return { conditionPatterns: patterns, conditionOpacities: opacities };
+        return opacities;
     }, [conditions]);
 
     const activeConditionDisplay = useMemo(() => {
@@ -1048,7 +1047,6 @@ export default function DrawingTakeoff() {
                             measurements={visibleMeasurements}
                             selectedMeasurementId={selectedMeasurementId}
                             calibration={calibration}
-                            conditionPatterns={conditionPatterns}
                             conditionOpacities={conditionOpacities}
                             onCalibrationComplete={cal.handleCalibrationComplete}
                             onMeasurementComplete={handleMeasurementComplete}

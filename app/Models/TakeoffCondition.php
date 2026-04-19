@@ -16,7 +16,6 @@ class TakeoffCondition extends Model
         'condition_number',
         'type',
         'color',
-        'pattern',
         'opacity',
         'description',
         'pricing_method',

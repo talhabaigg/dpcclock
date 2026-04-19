@@ -92,7 +92,6 @@ export default function DrawingQA() {
                         measurements={[]}
                         selectedMeasurementId={null}
                         calibration={null}
-                        conditionPatterns={{}}
                         onCalibrationComplete={() => {}}
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={() => {}}

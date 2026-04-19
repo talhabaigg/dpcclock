@@ -1,14 +1,18 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConditionDetailGrid } from '@/components/condition-detail-grid';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import {
-    DollarSign,
     Hash,
     Loader2,
     Maximize2,
@@ -18,7 +22,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 export type ConditionCostCode = {
@@ -61,7 +65,6 @@ export type TakeoffCondition = {
     condition_number: number | null;
     type: 'linear' | 'area' | 'count';
     color: string;
-    pattern: 'none' | 'solid' | 'transparent' | 'horizontal' | 'vertical' | 'backward_diagonal' | 'forward_diagonal' | 'crosshatch' | 'diagonal_crosshatch';
     opacity: number;
     description: string | null;
     height: number | null;
@@ -145,93 +148,6 @@ const STYLE_LABELS: Record<string, string> = {
     count: 'Each',
 };
 
-const PATTERN_OPTIONS: { value: TakeoffCondition['pattern']; label: string }[] = [
-    { value: 'none', label: 'None' },
-    { value: 'solid', label: 'Solid' },
-    { value: 'transparent', label: 'Transparent' },
-    { value: 'horizontal', label: 'Horizontal' },
-    { value: 'vertical', label: 'Vertical' },
-    { value: 'backward_diagonal', label: 'Back Diag.' },
-    { value: 'forward_diagonal', label: 'Fwd Diag.' },
-    { value: 'crosshatch', label: 'Crosshatch' },
-    { value: 'diagonal_crosshatch', label: 'Diag. Cross' },
-];
-
-/** Renders an SVG preview of a fill pattern swatch */
-export function PatternSwatch({ pattern, color, opacity, size = 24 }: { pattern: TakeoffCondition['pattern']; color: string; opacity: number; size?: number }) {
-    const uid = useId();
-    const id = `pat-${uid.replace(/:/g, '')}`;
-    const o = opacity / 100;
-
-    const patternDefs: Record<string, React.ReactNode> = {
-        none: null,
-        solid: null,
-        transparent: null,
-        horizontal: (
-            <pattern id={id} width={size} height="4" patternUnits="userSpaceOnUse">
-                <line x1="0" y1="2" x2={size} y2="2" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
-            </pattern>
-        ),
-        vertical: (
-            <pattern id={id} width="4" height={size} patternUnits="userSpaceOnUse">
-                <line x1="2" y1="0" x2="2" y2={size} stroke={color} strokeWidth="1.5" strokeOpacity={o} />
-            </pattern>
-        ),
-        backward_diagonal: (
-            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-                <line x1="0" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
-            </pattern>
-        ),
-        forward_diagonal: (
-            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <line x1="0" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1.5" strokeOpacity={o} />
-            </pattern>
-        ),
-        crosshatch: (
-            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse">
-                <line x1="0" y1="3" x2="6" y2="3" stroke={color} strokeWidth="1" strokeOpacity={o} />
-                <line x1="3" y1="0" x2="3" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
-            </pattern>
-        ),
-        diagonal_crosshatch: (
-            <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse">
-                <line x1="0" y1="0" x2="6" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
-                <line x1="6" y1="0" x2="0" y2="6" stroke={color} strokeWidth="1" strokeOpacity={o} />
-            </pattern>
-        ),
-    };
-
-    let fill: string;
-    let fillOpacity = o;
-    if (pattern === 'none') {
-        fill = 'transparent';
-        fillOpacity = 0;
-    } else if (pattern === 'solid') {
-        fill = color;
-    } else if (pattern === 'transparent') {
-        fill = color;
-        fillOpacity = o * 0.35;
-    } else {
-        fill = `url(#${id})`;
-        fillOpacity = 1; // pattern itself has the opacity
-    }
-
-    return (
-        <svg width={size} height={size} className="shrink-0">
-            <defs>{patternDefs[pattern]}</defs>
-            <rect
-                x="0.5" y="0.5"
-                width={size - 1} height={size - 1}
-                fill={fill}
-                fillOpacity={fillOpacity}
-                stroke={color}
-                strokeWidth="1"
-                strokeOpacity={o}
-            />
-        </svg>
-    );
-}
-
 export function ConditionManager({
     open,
     onOpenChange,
@@ -242,21 +158,21 @@ export function ConditionManager({
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [editing, setEditing] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     // Condition Types
     const [conditionTypes, setConditionTypes] = useState<ConditionType[]>([]);
     const [newTypeName, setNewTypeName] = useState('');
+    const [creatingType, setCreatingType] = useState(false);
 
     // Form state
     const [formName, setFormName] = useState('');
     const [formType, setFormType] = useState<'linear' | 'area' | 'count'>('linear');
     const [formConditionTypeId, setFormConditionTypeId] = useState<string>('');
     const [formColor, setFormColor] = useState('#3b82f6');
-    const [formPattern, setFormPattern] = useState<TakeoffCondition['pattern']>('solid');
     const [formOpacity, setFormOpacity] = useState(50);
     const [formDescription, setFormDescription] = useState('');
     const [formHeight, setFormHeight] = useState('');
-    const [formThickness, setFormThickness] = useState('');
     const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up' | 'detailed'>('unit_rate');
 
     // Unit Rate form state
@@ -304,8 +220,6 @@ export function ConditionManager({
         default_hourly_rate: number | null;
     }>>([]);
     const [lccSearch, setLccSearch] = useState('');
-    const [lccResults, setLccResults] = useState<LccSearchResult[]>([]);
-    const [searchingLccs, setSearchingLccs] = useState(false);
     const [showCreateLcc, setShowCreateLcc] = useState(false);
     const [newLccCode, setNewLccCode] = useState('');
     const [newLccName, setNewLccName] = useState('');
@@ -316,7 +230,10 @@ export function ConditionManager({
     // Pay rate templates
     const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
 
-    // Load conditions, pay rate templates, and condition types
+    // All labour cost codes for this location (used by the combobox)
+    const [allLccs, setAllLccs] = useState<LccSearchResult[]>([]);
+
+    // Load conditions, pay rate templates, condition types, and labour cost codes
     useEffect(() => {
         if (!open || !locationId) return;
         fetch(`/locations/${locationId}/takeoff-conditions`, {
@@ -337,6 +254,14 @@ export function ConditionManager({
             .then((data) => {
                 setPayRateTemplates(data.templates || []);
             })
+            .catch(() => {});
+
+        fetch(`/locations/${locationId}/labour-cost-codes`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.ok ? res.json() : { codes: [] })
+            .then((data) => setAllLccs(data.codes || []))
             .catch(() => {});
 
         fetchConditionTypes();
@@ -420,11 +345,9 @@ export function ConditionManager({
         setFormType('linear');
         setFormConditionTypeId('');
         setFormColor('#3b82f6');
-        setFormPattern('solid');
         setFormOpacity(50);
         setFormDescription('');
         setFormHeight('');
-        setFormThickness('');
         setFormPricingMethod('unit_rate');
         setFormLabourUnitRate('');
         setFormCostCodes([]);
@@ -440,7 +363,6 @@ export function ConditionManager({
         setNewTypeName('');
         setFormLccs([]);
         setLccSearch('');
-        setLccResults([]);
         setShowCreateLcc(false);
         setNewLccCode('');
         setNewLccName('');
@@ -453,11 +375,9 @@ export function ConditionManager({
         setFormType(c.type);
         setFormConditionTypeId(c.condition_type_id?.toString() || '');
         setFormColor(c.color);
-        setFormPattern(c.pattern || 'solid');
         setFormOpacity(c.opacity ?? 50);
         setFormDescription(c.description || '');
         setFormHeight(c.height?.toString() || '');
-        setFormThickness(c.thickness?.toString() || '');
         setFormPricingMethod(c.pricing_method || 'build_up');
         setFormLabourUnitRate(c.labour_unit_rate?.toString() || '');
         setFormCostCodes(
@@ -530,11 +450,9 @@ export function ConditionManager({
                 type: formType,
                 condition_type_id: formConditionTypeId ? parseInt(formConditionTypeId) : null,
                 color: formColor,
-                pattern: formPattern,
                 opacity: formOpacity,
                 description: formDescription || null,
                 height: formHeight ? parseFloat(formHeight) : null,
-                thickness: formThickness ? parseFloat(formThickness) : null,
                 pricing_method: formPricingMethod,
             };
 
@@ -675,26 +593,6 @@ export function ConditionManager({
         return () => clearTimeout(timeout);
     }, [costCodeSearch, locationId]);
 
-    // Labour Cost Code search
-    useEffect(() => {
-        if (!lccSearch.trim() || lccSearch.length < 2) {
-            setLccResults([]);
-            return;
-        }
-        const timeout = setTimeout(() => {
-            setSearchingLccs(true);
-            fetch(`/locations/${locationId}/labour-cost-codes/search?q=${encodeURIComponent(lccSearch)}`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            })
-                .then((res) => res.json())
-                .then((data) => setLccResults(data.items || []))
-                .catch(() => setLccResults([]))
-                .finally(() => setSearchingLccs(false));
-        }, 300);
-        return () => clearTimeout(timeout);
-    }, [lccSearch, locationId]);
-
     const addMaterial = (item: MaterialSearchResult) => {
         if (formMaterials.some((m) => m.material_item_id === item.id)) {
             toast.error('Material already added.');
@@ -768,7 +666,6 @@ export function ConditionManager({
             },
         ]);
         setLccSearch('');
-        setLccResults([]);
     };
 
     const removeLcc = (index: number) => {
@@ -808,6 +705,7 @@ export function ConditionManager({
                 throw new Error(msg);
             }
             const created: LccSearchResult = await res.json();
+            setAllLccs((prev) => [...prev, created]);
             addLcc(created);
             setShowCreateLcc(false);
             setNewLccCode('');
@@ -823,535 +721,517 @@ export function ConditionManager({
     };
 
     const showForm = creating || editing;
-    const isDetailedView = selectedCondition?.pricing_method === 'detailed' || (showForm && formPricingMethod === 'detailed');
+    // Resolve the measurement unit that the pricing is expressed in.
+    const formUnit = formType === 'count'
+        ? 'each'
+        : (formType === 'area' || (formType === 'linear' && formHeight))
+            ? 'm²'
+            : 'lm';
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={`${isDetailedView ? 'sm:max-w-[95vw] xl:max-w-7xl' : 'sm:max-w-3xl'} max-h-[90vh] flex flex-col gap-0 p-0 transition-all`}>
-                <DialogHeader className="border-b px-4 py-2.5">
-                    <DialogTitle className="flex items-center gap-1.5 text-sm">
-                        <DollarSign className="h-3.5 w-3.5" />
-                        Manage Conditions
-                    </DialogTitle>
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
+                <DialogHeader className="border-b px-5 py-3">
+                    <DialogTitle className="text-base">Conditions</DialogTitle>
                 </DialogHeader>
 
                 <div className="flex flex-1 min-h-0">
                     {/* Left: Condition List */}
-                    <div className="w-56 shrink-0 flex flex-col border-r bg-muted/20">
-                        <div className="border-b px-2 py-1.5">
-                            <Button size="sm" className="h-7 w-full rounded-sm gap-1 text-[11px]" onClick={handleCreate}>
-                                <Plus className="h-3 w-3" />
+                    <div className="w-64 shrink-0 flex flex-col border-r">
+                        <div className="border-b p-3">
+                            <Button size="sm" className="w-full gap-1.5" onClick={handleCreate}>
+                                <Plus className="h-3.5 w-3.5" />
                                 New Condition
                             </Button>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-y-auto">
-                            <div className="py-0.5">
-                                {(['linear', 'area', 'count'] as const).map((type) => {
-                                    const items = groupedConditions[type];
-                                    if (!items?.length) return null;
-                                    const Icon = STYLE_ICONS[type];
-                                    return (
-                                        <div key={type}>
-                                            <div className="flex items-center gap-1.5 bg-muted/40 border-b px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                                                <Icon className="h-2.5 w-2.5" />
-                                                {STYLE_LABELS[type]}
-                                                <span className="ml-auto rounded-sm bg-muted px-1 py-px text-[9px]">{items.length}</span>
-                                            </div>
-                                            {items.map((c) => (
-                                                <div
-                                                    key={c.id}
-                                                    className={`group flex min-w-0 items-center gap-1.5 border-b border-border/50 px-2 py-1.5 text-[11px] cursor-pointer transition-colors hover:bg-muted/50 ${selectedId === c.id && !creating ? 'bg-background border-l-2' : ''}`}
-                                                    style={selectedId === c.id && !creating ? { borderLeftColor: c.color } : undefined}
-                                                    onClick={() => handleSelect(c.id)}
-                                                >
-                                                    <PatternSwatch pattern={c.pattern} color={c.color} opacity={c.opacity ?? 50} size={12} />
-                                                    <span className="min-w-0 truncate flex-1 font-medium">
-                                                        {c.condition_number != null && (
-                                                            <span className="font-mono text-[9px] text-muted-foreground mr-0.5">#{c.condition_number}</span>
-                                                        )}
-                                                        {c.name}
-                                                    </span>
-                                                    <button
-                                                        className="h-5 w-5 shrink-0 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-colors"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDelete(c.id);
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-2.5 w-2.5" />
-                                                    </button>
-                                                </div>
-                                            ))}
+                        <div className="flex-1 min-h-0 overflow-y-auto p-1">
+                            {(['linear', 'area', 'count'] as const).map((type) => {
+                                const items = groupedConditions[type];
+                                if (!items?.length) return null;
+                                const Icon = STYLE_ICONS[type];
+                                return (
+                                    <div key={type} className="mb-3 last:mb-0">
+                                        <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-xs text-muted-foreground">
+                                            <Icon className="h-3 w-3" />
+                                            <span className="font-medium">{STYLE_LABELS[type]}</span>
+                                            <span className="ml-auto tabular-nums">{items.length}</span>
                                         </div>
-                                    );
-                                })}
-                                {conditions.length === 0 && (
-                                    <p className="text-[11px] text-muted-foreground text-center py-8">
-                                        No conditions yet.
-                                    </p>
-                                )}
-                            </div>
+                                        <div className="space-y-px">
+                                            {items.map((c) => {
+                                                const isSelected = selectedId === c.id && !creating;
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        className={`group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left transition-colors ${
+                                                            isSelected ? 'bg-accent' : 'hover:bg-accent/50'
+                                                        }`}
+                                                        onClick={() => handleSelect(c.id)}
+                                                    >
+                                                        <div
+                                                            className="h-3 w-3 shrink-0 rounded-sm"
+                                                            style={{ backgroundColor: c.color, opacity: (c.opacity ?? 50) / 100 }}
+                                                        />
+                                                        <span className="min-w-0 truncate flex-1">{c.name}</span>
+                                                        <span
+                                                            role="button"
+                                                            tabIndex={-1}
+                                                            className="h-5 w-5 shrink-0 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-colors"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDelete(c.id);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {conditions.length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-10 px-4">
+                                    No conditions yet.
+                                </p>
+                            )}
                         </div>
                     </div>
 
                     {/* Right: Detail / Form */}
-                    <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                    <div className="flex-1 min-h-0 overflow-y-auto p-5">
                         {showForm ? (
-                            <div className="space-y-3">
-                                {/* 1. Name + Style */}
-                                <div className={`grid gap-2 ${formPricingMethod !== 'unit_rate' ? 'grid-cols-[1fr_120px]' : ''}`}>
-                                    <div className="grid gap-1">
-                                        <Label className="text-[11px] font-semibold">Name</Label>
-                                        <Input
-                                            value={formName}
-                                            onChange={(e) => setFormName(e.target.value)}
-                                            placeholder="e.g. WT14 - Firefly Sarking"
-                                            className="h-7 text-xs rounded-sm"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    {formPricingMethod !== 'unit_rate' && (
-                                        <div className="grid gap-1">
-                                            <Label className="text-[11px] font-semibold">Style</Label>
-                                            <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={editing}>
-                                                <SelectTrigger className="h-7 text-xs rounded-sm">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="linear">Linear</SelectItem>
-                                                    <SelectItem value="area">Area</SelectItem>
-                                                    <SelectItem value="count">Each</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
+                            <div className="space-y-6">
+                                {/* Name */}
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="cond-name">Name</Label>
+                                    <Input
+                                        id="cond-name"
+                                        value={formName}
+                                        onChange={(e) => setFormName(e.target.value)}
+                                        placeholder="e.g. WT14 — Firefly Sarking"
+                                        autoFocus
+                                    />
                                 </div>
 
-                                {/* 2. Pricing Method Toggle */}
-                                <div className="grid gap-1">
-                                    <Label className="text-[11px] font-semibold">Pricing Method</Label>
-                                    <div className="grid grid-cols-3 gap-1">
-                                        <button
-                                            type="button"
-                                            className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
-                                                formPricingMethod === 'unit_rate'
-                                                    ? 'border-primary bg-primary/10 text-primary'
-                                                    : 'border-border hover:bg-muted/50'
-                                            }`}
-                                            onClick={() => setFormPricingMethod('unit_rate')}
-                                        >
-                                            Unit Rate
-                                            <span className="block text-[9px] font-normal text-muted-foreground">
-                                                Cost codes + flat $/unit
-                                            </span>
-                                        </button>
-                                        {!import.meta.env.PROD && (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
-                                                        formPricingMethod === 'build_up'
-                                                            ? 'border-primary bg-primary/10 text-primary'
-                                                            : 'border-border hover:bg-muted/50'
-                                                    }`}
-                                                    onClick={() => setFormPricingMethod('build_up')}
-                                                >
-                                                    Build-Up
-                                                    <span className="block text-[9px] font-normal text-muted-foreground">
-                                                        Materials + production rate
-                                                    </span>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className={`rounded-sm border px-2 py-1.5 text-[11px] font-medium transition-colors text-left ${
-                                                        formPricingMethod === 'detailed'
-                                                            ? 'border-primary bg-primary/10 text-primary'
-                                                            : 'border-border hover:bg-muted/50'
-                                                    }`}
-                                                    onClick={() => setFormPricingMethod('detailed')}
-                                                >
-                                                    Detailed
-                                                    <span className="block text-[9px] font-normal text-muted-foreground">
-                                                        Line items + sections
-                                                    </span>
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
+                                {/* Measurement */}
+                                <div className="space-y-1.5">
+                                    <Label>Measurement</Label>
+                                    <ToggleGroup
+                                        variant="outline"
+                                        value={[formType]}
+                                        onValueChange={(next) => {
+                                            const v = next[0];
+                                            if (v) setFormType(v as typeof formType);
+                                        }}
+                                        disabled={editing}
+                                        className="w-full"
+                                    >
+                                        <ToggleGroupItem value="linear" className="flex-1">Linear</ToggleGroupItem>
+                                        <ToggleGroupItem value="area" className="flex-1">Area</ToggleGroupItem>
+                                        <ToggleGroupItem value="count" className="flex-1">Each</ToggleGroupItem>
+                                    </ToggleGroup>
                                 </div>
 
-                                {/* 7. Pricing-specific fields */}
+                                {/* Pricing method */}
+                                <div className="space-y-1.5">
+                                    <Label>Pricing method</Label>
+                                    <Tabs value={formPricingMethod} onValueChange={(v) => setFormPricingMethod(v as typeof formPricingMethod)}>
+                                        <TabsList className="w-full">
+                                            <TabsTrigger value="unit_rate" className="flex-1">Unit rate</TabsTrigger>
+                                            {!import.meta.env.PROD && (
+                                                <>
+                                                    <TabsTrigger value="build_up" className="flex-1">Build-up</TabsTrigger>
+                                                    <TabsTrigger value="detailed" className="flex-1">Detailed</TabsTrigger>
+                                                </>
+                                            )}
+                                        </TabsList>
+                                    </Tabs>
+                                    <p className="text-xs text-muted-foreground">
+                                        {formPricingMethod === 'unit_rate' && 'A flat rate per unit plus cost codes. Quickest to set up.'}
+                                        {formPricingMethod === 'build_up' && 'Cost built from materials and a labour production rate.'}
+                                        {formPricingMethod === 'detailed' && 'Line-item breakdown with sections, layers, and per-line costs.'}
+                                    </p>
+                                </div>
+
+                                {/* Pricing-specific details */}
                                 {formPricingMethod === 'detailed' ? (
-                                    <div className="rounded-sm border border-dashed p-3 text-center space-y-1">
-                                        <p className="text-xs text-muted-foreground">
-                                            Line items are managed in the detail grid after saving this condition.
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Save the condition first, then add materials and labour line items with sections, OC spacing, layers, and per-line costs.
-                                        </p>
+                                    <div className="rounded-md bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                                        Save the condition first. You'll then be able to add line items — grouped into sections, with layers and per-line costs — from the detail grid.
                                     </div>
                                 ) : formPricingMethod === 'unit_rate' ? (
-                                    <>
-                                        {/* Unit Rate: Labour */}
-                                        <div className="rounded-sm border p-2 space-y-2">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Labour
-                                            </h4>
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">
-                                                    Labour Rate ($/{formType === 'linear' && formHeight ? 'm2' : formType === 'area' ? 'sq m' : formType === 'count' ? 'ea' : 'unit'})
-                                                </Label>
+                                    <div className="space-y-5">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="cond-labour-rate">Labour rate</Label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                                                 <Input
+                                                    id="cond-labour-rate"
                                                     type="number"
                                                     step="0.01"
                                                     min="0"
                                                     value={formLabourUnitRate}
                                                     onChange={(e) => setFormLabourUnitRate(e.target.value)}
-                                                    placeholder="e.g. 10.00"
-                                                    className="h-7 text-xs rounded-sm"
+                                                    placeholder="10.00"
+                                                    className="pl-6 pr-16"
                                                 />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">per {formUnit}</span>
                                             </div>
                                         </div>
 
-                                        {/* Unit Rate: Cost Codes */}
-                                        <div className="rounded-sm border p-2 space-y-2">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Cost Codes
-                                            </h4>
-
-                                            {/* Cost Code Search */}
+                                        <div className="space-y-2">
+                                            <Label>Cost codes</Label>
                                             <div className="relative">
-                                                <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                                                 <Input
                                                     value={costCodeSearch}
                                                     onChange={(e) => setCostCodeSearch(e.target.value)}
-                                                    placeholder="Search cost codes..."
-                                                    className="h-7 text-xs pl-7 rounded-sm"
+                                                    placeholder="Search cost codes to add…"
+                                                    className="pl-8"
                                                 />
                                                 {searchingCostCodes && (
-                                                    <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
+                                                    <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
                                                 )}
                                                 {costCodeResults.length > 0 && (
-                                                    <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
+                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
                                                         {costCodeResults.map((item) => (
-                                                            <div
+                                                            <button
                                                                 key={item.id}
-                                                                className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
+                                                                type="button"
+                                                                className="flex w-full items-start gap-3 px-3 py-2 text-sm hover:bg-accent text-left"
                                                                 onClick={() => addCostCode(item)}
                                                             >
-                                                                <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
-                                                                <span className="truncate flex-1">{item.description}</span>
-                                                            </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="truncate">{item.description}</div>
+                                                                    <div className="font-mono text-xs text-muted-foreground">{item.code}</div>
+                                                                </div>
+                                                            </button>
                                                         ))}
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Cost Code Lines */}
-                                            {formCostCodes.length > 0 && (
-                                                <div className="space-y-0">
-                                                    <div className="grid grid-cols-[1fr_80px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
-                                                        <span>Cost Code</span>
-                                                        <span>Rate ($)</span>
-                                                        <span />
-                                                    </div>
+                                            {formCostCodes.length > 0 ? (
+                                                <div className="divide-y">
                                                     {formCostCodes.map((cc, idx) => (
-                                                        <div key={idx} className="grid grid-cols-[1fr_80px_24px] gap-1 items-center border-b border-border/50 py-0.5">
-                                                            <div className="text-[11px] truncate" title={`${cc.code} - ${cc.description}`}>
-                                                                <span className="font-mono text-muted-foreground">{cc.code}</span>{' '}
-                                                                <span>{cc.description}</span>
+                                                        <div key={idx} className="flex items-start gap-3 py-2">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-sm truncate">{cc.description}</div>
+                                                                <div className="font-mono text-xs text-muted-foreground mt-0.5">{cc.code}</div>
                                                             </div>
+                                                            <div className="relative shrink-0">
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={cc.unit_rate}
+                                                                    onChange={(e) => updateCostCodeRate(idx, e.target.value)}
+                                                                    className="h-8 w-28 pl-5 pr-2 text-right tabular-nums"
+                                                                    aria-label={`Rate per ${formUnit}`}
+                                                                />
+                                                            </div>
+                                                            <span className="text-xs text-muted-foreground shrink-0 pt-2">per {formUnit}</span>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeCostCode(idx)}>
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">Search above to add cost codes.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-5">
+                                        <div className="space-y-3">
+                                            <Label>Labour</Label>
+                                            <Tabs value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
+                                                <TabsList>
+                                                    <TabsTrigger value="manual">Manual rate</TabsTrigger>
+                                                    <TabsTrigger value="template">Pay rate template</TabsTrigger>
+                                                </TabsList>
+                                            </Tabs>
+
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                {formLabourSource === 'manual' ? (
+                                                    <div className="space-y-1.5">
+                                                        <Label className="font-normal text-muted-foreground">Hourly rate</Label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                                                             <Input
                                                                 type="number"
                                                                 step="0.01"
                                                                 min="0"
-                                                                value={cc.unit_rate}
-                                                                onChange={(e) => updateCostCodeRate(idx, e.target.value)}
-                                                                className="h-6 text-[11px] rounded-sm"
+                                                                value={formManualRate}
+                                                                onChange={(e) => setFormManualRate(e.target.value)}
+                                                                placeholder="85.00"
+                                                                className="pl-6 pr-12"
                                                             />
-                                                            <button
-                                                                className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
-                                                                onClick={() => removeCostCode(idx)}
-                                                            >
-                                                                <X className="h-2.5 w-2.5" />
-                                                            </button>
+                                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">/ hr</span>
                                                         </div>
-                                                    ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-1.5">
+                                                        <Label className="font-normal text-muted-foreground">Template</Label>
+                                                        <Select value={formTemplateId} onValueChange={setFormTemplateId}>
+                                                            <SelectTrigger><SelectValue placeholder="Choose a template…" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {payRateTemplates.map((t) => (
+                                                                    <SelectItem key={t.id} value={t.id.toString()}>
+                                                                        {t.custom_label || t.pay_rate_template?.name || `Template #${t.id}`}
+                                                                        {t.hourly_rate ? ` — $${parseFloat(String(t.hourly_rate)).toFixed(2)}/hr` : ''}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+                                                <div className="space-y-1.5">
+                                                    <Label className="font-normal text-muted-foreground">Production rate</Label>
+                                                    <div className="relative">
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={formProductionRate}
+                                                            onChange={(e) => setFormProductionRate(e.target.value)}
+                                                            placeholder="5.0"
+                                                            className="pr-24"
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{formUnit} / hr</span>
+                                                    </div>
                                                 </div>
-                                            )}
-
-                                            {formCostCodes.length === 0 && (
-                                                <p className="text-[10px] text-muted-foreground text-center py-3">
-                                                    Search and add cost codes above.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* Build-Up: Labour Section */}
-                                        <div className="rounded-sm border p-2 space-y-2">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Labour
-                                            </h4>
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Rate Source</Label>
-                                                <Select value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
-                                                    <SelectTrigger className="h-7 text-xs rounded-sm">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="manual">Manual All-in Rate</SelectItem>
-                                                        <SelectItem value="template">Pay Rate Template</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-
-                                            {formLabourSource === 'manual' ? (
-                                                <div className="grid gap-1">
-                                                    <Label className="text-[11px]">All-in Hourly Rate ($)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={formManualRate}
-                                                        onChange={(e) => setFormManualRate(e.target.value)}
-                                                        placeholder="e.g. 85.00"
-                                                        className="h-7 text-xs rounded-sm"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="grid gap-1">
-                                                    <Label className="text-[11px]">Pay Rate Template</Label>
-                                                    <Select value={formTemplateId} onValueChange={setFormTemplateId}>
-                                                        <SelectTrigger className="h-7 text-xs rounded-sm">
-                                                            <SelectValue placeholder="Select template..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {payRateTemplates.map((t) => (
-                                                                <SelectItem key={t.id} value={t.id.toString()}>
-                                                                    {t.custom_label || t.pay_rate_template?.name || `Template #${t.id}`}
-                                                                    {t.hourly_rate ? ` ($${parseFloat(String(t.hourly_rate)).toFixed(2)}/hr)` : ''}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
-
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Production Rate (units/hour)</Label>
-                                                <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={formProductionRate}
-                                                    onChange={(e) => setFormProductionRate(e.target.value)}
-                                                    placeholder="e.g. 5.0"
-                                                    className="h-7 text-xs rounded-sm"
-                                                />
-                                                <p className="text-[9px] text-muted-foreground">
-                                                    How many units of measurement a worker completes per hour.
-                                                </p>
                                             </div>
                                         </div>
 
-                                        {/* Build-Up: Materials Section */}
-                                        <div className="rounded-sm border p-2 space-y-2">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Materials
-                                            </h4>
-
-                                            {/* Material Search */}
+                                        <div className="space-y-2">
+                                            <Label>Materials</Label>
                                             <div className="relative">
-                                                <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                                                 <Input
                                                     value={materialSearch}
                                                     onChange={(e) => setMaterialSearch(e.target.value)}
-                                                    placeholder="Search materials..."
-                                                    className="h-7 text-xs pl-7 rounded-sm"
+                                                    placeholder="Search materials to add…"
+                                                    className="pl-8"
                                                 />
                                                 {searchingMaterials && (
-                                                    <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
+                                                    <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
                                                 )}
                                                 {materialResults.length > 0 && (
-                                                    <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
+                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
                                                         {materialResults.map((item) => (
-                                                            <div
+                                                            <button
                                                                 key={item.id}
-                                                                className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
+                                                                type="button"
+                                                                className="flex w-full items-start gap-3 px-3 py-2 text-sm hover:bg-accent text-left"
                                                                 onClick={() => addMaterial(item)}
                                                             >
-                                                                <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
-                                                                <span className="truncate flex-1">{item.description}</span>
-                                                                <span className="shrink-0 font-mono font-medium">${item.effective_unit_cost.toFixed(2)}</span>
-                                                            </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="truncate">{item.description}</div>
+                                                                    <div className="font-mono text-xs text-muted-foreground">{item.code}</div>
+                                                                </div>
+                                                                <span className="shrink-0 tabular-nums text-muted-foreground">${item.effective_unit_cost.toFixed(2)} each</span>
+                                                            </button>
                                                         ))}
                                                     </div>
                                                 )}
                                             </div>
-
-                                            {/* Material Lines */}
-                                            {formMaterials.length > 0 && (
-                                                <div className="space-y-0">
-                                                    <div className="grid grid-cols-[1fr_60px_60px_60px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
-                                                        <span>Material</span>
-                                                        <span>Qty/Unit</span>
-                                                        <span>Waste %</span>
-                                                        <span>$/Unit</span>
-                                                        <span />
-                                                    </div>
+                                            {formMaterials.length > 0 ? (
+                                                <div className="divide-y">
                                                     {formMaterials.map((m, idx) => (
-                                                        <div key={idx} className="grid grid-cols-[1fr_60px_60px_60px_24px] gap-1 items-center border-b border-border/50 py-0.5">
-                                                            <div className="text-[11px] truncate" title={`${m.code} - ${m.description}`}>
-                                                                <span className="font-mono text-muted-foreground">{m.code}</span>{' '}
-                                                                <span>{m.description}</span>
+                                                        <div key={idx} className="py-2.5 space-y-1.5">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="text-sm truncate">{m.description}</div>
+                                                                    <div className="font-mono text-xs text-muted-foreground mt-0.5">{m.code}</div>
+                                                                </div>
+                                                                <div className="text-sm tabular-nums text-muted-foreground shrink-0 pt-0.5">${m.unit_cost.toFixed(2)} each</div>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 -mt-0.5 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeMaterial(idx)}>
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                </Button>
                                                             </div>
-                                                            <Input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                value={m.qty_per_unit}
-                                                                onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
-                                                                className="h-6 text-[11px] rounded-sm"
-                                                            />
-                                                            <Input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                max="100"
-                                                                value={m.waste_percentage}
-                                                                onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
-                                                                className="h-6 text-[11px] rounded-sm"
-                                                            />
-                                                            <div className="text-[11px] text-right font-mono font-medium pr-0.5">
-                                                                ${m.unit_cost.toFixed(2)}
+                                                            <div className="flex items-center gap-2 pl-0">
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={m.qty_per_unit}
+                                                                    onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
+                                                                    className="h-8 w-20 text-right tabular-nums"
+                                                                    aria-label="Quantity per unit"
+                                                                />
+                                                                <span className="text-xs text-muted-foreground">per {formUnit}</span>
+                                                                <span className="text-xs text-muted-foreground mx-1">·</span>
+                                                                <div className="relative">
+                                                                    <Input
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        min="0"
+                                                                        max="100"
+                                                                        value={m.waste_percentage}
+                                                                        onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
+                                                                        className="h-8 w-20 pr-6 text-right tabular-nums"
+                                                                        aria-label="Waste percentage"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                                                                </div>
+                                                                <span className="text-xs text-muted-foreground">waste</span>
                                                             </div>
-                                                            <button
-                                                                className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
-                                                                onClick={() => removeMaterial(idx)}
-                                                            >
-                                                                <X className="h-2.5 w-2.5" />
-                                                            </button>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            )}
-
-                                            {formMaterials.length === 0 && (
-                                                <p className="text-[10px] text-muted-foreground text-center py-3">
-                                                    Search and add materials above.
-                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">Search above to add materials.</p>
                                             )}
                                         </div>
-                                    </>
+                                    </div>
                                 )}
 
                                 {formPricingMethod !== 'unit_rate' && (
                                     <>
-                                        {/* 3. General: Height + Thickness */}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Height (m)</Label>
-                                                <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={formHeight}
-                                                    onChange={(e) => setFormHeight(e.target.value)}
-                                                    placeholder="e.g. 2.70"
-                                                    className="h-7 text-xs rounded-sm"
-                                                />
-                                            </div>
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Thickness (m)</Label>
-                                                <Input
-                                                    type="number"
-                                                    step="0.001"
-                                                    min="0"
-                                                    value={formThickness}
-                                                    onChange={(e) => setFormThickness(e.target.value)}
-                                                    placeholder="e.g. 0.013"
-                                                    className="h-7 text-xs rounded-sm"
-                                                />
-                                            </div>
+                                        <Separator />
+
+                                        {/* Height */}
+                                        <div className="space-y-1.5 max-w-[220px]">
+                                            <Label>Height (m)</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={formHeight}
+                                                onChange={(e) => setFormHeight(e.target.value)}
+                                                placeholder="2.70"
+                                            />
                                         </div>
 
-                                        {/* 4. Appearance */}
-                                        <div className="grid gap-1.5">
-                                            <Label className="text-[11px] font-semibold">Appearance</Label>
-                                            <div className="flex items-center gap-1.5">
-                                                <label
-                                                    className="relative h-7 w-7 shrink-0 rounded-sm border-2 border-border cursor-pointer overflow-hidden transition-all hover:scale-105"
-                                                    style={{ backgroundColor: formColor }}
-                                                >
-                                                    <input
-                                                        type="color"
-                                                        value={formColor}
-                                                        onChange={(e) => setFormColor(e.target.value)}
-                                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                                    />
-                                                </label>
-                                                <Input
-                                                    value={formColor}
-                                                    onChange={(e) => {
-                                                        const v = e.target.value;
-                                                        if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setFormColor(v);
-                                                    }}
-                                                    maxLength={7}
-                                                    className="h-7 w-[5.5rem] font-mono text-[11px] px-1.5 rounded-sm"
-                                                    placeholder="#3b82f6"
-                                                />
-                                                <div className="flex gap-0.5">
-                                                    {PRESET_COLORS.map((color) => (
-                                                        <button
-                                                            key={color}
-                                                            type="button"
-                                                            className={`h-5 w-5 rounded-[2px] border transition-all ${formColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
-                                                            style={{ backgroundColor: color }}
-                                                            onClick={() => setFormColor(color)}
-                                                        />
-                                                    ))}
-                                                </div>
-                                                <div className="flex items-center gap-1.5 ml-auto">
-                                                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{formOpacity}%</span>
-                                                    <Slider
-                                                        min={5}
-                                                        max={100}
-                                                        step={5}
-                                                        value={[formOpacity]}
-                                                        onValueChange={([v]) => setFormOpacity(v)}
-                                                        className="w-20"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-9 gap-0.5">
-                                                {PATTERN_OPTIONS.map((opt) => (
+                                        {/* Appearance */}
+                                        <div className="space-y-1.5">
+                                            <Label>Appearance</Label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
                                                     <button
-                                                        key={opt.value}
                                                         type="button"
-                                                        title={opt.label}
-                                                        className={`rounded-sm border p-1 flex items-center justify-center transition-colors ${
-                                                            formPattern === opt.value
-                                                                ? 'border-primary bg-primary/10'
-                                                                : 'border-border hover:bg-muted/50'
-                                                        }`}
-                                                        onClick={() => setFormPattern(opt.value)}
+                                                        className="flex items-center gap-2 rounded-md border px-3 h-9 text-sm hover:bg-accent/50 transition-colors"
                                                     >
-                                                        <PatternSwatch pattern={opt.value} color={formColor} opacity={formOpacity} size={16} />
+                                                        <span
+                                                            className="h-4 w-4 rounded-sm border"
+                                                            style={{ backgroundColor: formColor, opacity: formOpacity / 100 }}
+                                                        />
+                                                        <span className="font-mono text-xs text-muted-foreground">{formColor}</span>
+                                                        <span className="text-xs text-muted-foreground tabular-nums">· {formOpacity}%</span>
                                                     </button>
-                                                ))}
-                                            </div>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-64 space-y-3" align="start">
+                                                    <div className="grid grid-cols-6 gap-1.5">
+                                                        {PRESET_COLORS.map((color) => (
+                                                            <button
+                                                                key={color}
+                                                                type="button"
+                                                                aria-label={`Color ${color}`}
+                                                                className={`h-7 w-7 rounded-sm border transition-all ${formColor === color ? 'ring-2 ring-ring ring-offset-1' : 'border-transparent'}`}
+                                                                style={{ backgroundColor: color }}
+                                                                onClick={() => setFormColor(color)}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <label
+                                                            className="relative h-8 w-8 shrink-0 rounded-md border cursor-pointer overflow-hidden"
+                                                            style={{ backgroundColor: formColor }}
+                                                        >
+                                                            <input
+                                                                type="color"
+                                                                value={formColor}
+                                                                onChange={(e) => setFormColor(e.target.value)}
+                                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                            />
+                                                        </label>
+                                                        <Input
+                                                            value={formColor}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setFormColor(v);
+                                                            }}
+                                                            maxLength={7}
+                                                            className="h-8 font-mono text-sm"
+                                                            placeholder="#3b82f6"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-muted-foreground">Opacity</span>
+                                                            <span className="text-xs font-mono tabular-nums">{formOpacity}%</span>
+                                                        </div>
+                                                        <Slider
+                                                            min={5}
+                                                            max={100}
+                                                            step={5}
+                                                            value={[formOpacity]}
+                                                            onValueChange={(v) => setFormOpacity(Array.isArray(v) ? v[0] : v)}
+                                                        />
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
 
-                                        {/* 5. Category + Notes */}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Category</Label>
+                                        {/* Category + Notes */}
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <Label>Category</Label>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button type="button" variant="ghost" size="sm" className="h-6 text-xs gap-1 text-muted-foreground">
+                                                                <Plus className="h-3 w-3" />
+                                                                Manage
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-64 space-y-3" align="end">
+                                                            <div className="flex gap-1.5">
+                                                                <Input
+                                                                    value={newTypeName}
+                                                                    onChange={(e) => setNewTypeName(e.target.value)}
+                                                                    placeholder="New category…"
+                                                                    className="h-8 text-sm"
+                                                                    onKeyDown={(e) => e.key === 'Enter' && handleCreateType()}
+                                                                />
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 shrink-0"
+                                                                    onClick={handleCreateType}
+                                                                    disabled={creatingType || !newTypeName.trim()}
+                                                                >
+                                                                    {creatingType ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                                                </Button>
+                                                            </div>
+                                                            {conditionTypes.length > 0 && (
+                                                                <div className="space-y-1">
+                                                                    <div className="text-xs text-muted-foreground">Existing</div>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {conditionTypes.map((ct) => (
+                                                                            <Badge key={ct.id} variant="secondary" className="gap-1 font-normal">
+                                                                                {ct.name}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDeleteType(ct.id)}
+                                                                                    className="text-muted-foreground hover:text-destructive"
+                                                                                >
+                                                                                    <X className="h-3 w-3" />
+                                                                                </button>
+                                                                            </Badge>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
                                                 <Select value={formConditionTypeId || '__none__'} onValueChange={(v) => setFormConditionTypeId(v === '__none__' ? '' : v)}>
-                                                    <SelectTrigger className="h-7 text-xs rounded-sm">
-                                                        <SelectValue placeholder="None" />
-                                                    </SelectTrigger>
+                                                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="__none__">None</SelectItem>
                                                         {conditionTypes.map((ct) => (
@@ -1361,231 +1241,232 @@ export function ConditionManager({
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                                <div className="flex gap-1 items-center">
-                                                    <Input
-                                                        value={newTypeName}
-                                                        onChange={(e) => setNewTypeName(e.target.value)}
-                                                        placeholder="New category..."
-                                                        className="h-6 text-[11px] flex-1 rounded-sm"
-                                                        onKeyDown={(e) => e.key === 'Enter' && handleCreateType()}
-                                                    />
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0 rounded-sm shrink-0"
-                                                        onClick={handleCreateType}
-                                                        disabled={creatingType || !newTypeName.trim()}
-                                                    >
-                                                        {creatingType ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
-                                                    </Button>
-                                                </div>
-                                                {conditionTypes.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {conditionTypes.map((ct) => (
-                                                            <Badge key={ct.id} variant="secondary" className="text-[9px] gap-0.5 pr-0.5 h-5 rounded-sm">
-                                                                {ct.name}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteType(ct.id)}
-                                                                    className="hover:text-red-500 transition-colors"
-                                                                >
-                                                                    <X className="h-2.5 w-2.5" />
-                                                                </button>
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
-                                            <div className="grid gap-1">
-                                                <Label className="text-[11px]">Notes</Label>
+                                            <div className="space-y-1.5">
+                                                <Label>Notes</Label>
                                                 <Textarea
                                                     value={formDescription}
                                                     onChange={(e) => setFormDescription(e.target.value)}
-                                                    placeholder="Notes about this condition..."
-                                                    className="h-14 resize-none text-xs rounded-sm"
+                                                    placeholder="Optional notes…"
+                                                    className="h-20 resize-none"
                                                 />
                                             </div>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Production tracking */}
+                                        <div className="space-y-2">
+                                            <div className="space-y-0.5">
+                                                <Label>Production tracking</Label>
+                                                <p className="text-xs text-muted-foreground">Link labour cost codes so this condition can be statused on drawings.</p>
+                                            </div>
+
+                                            {(() => {
+                                                const addedIds = new Set(formLccs.map((l) => l.labour_cost_code_id));
+                                                const available = allLccs.filter((l) => !addedIds.has(l.id));
+                                                const query = lccSearch.trim();
+                                                const hasExactMatch = query.length > 0 && allLccs.some((l) => l.code.toLowerCase() === query.toLowerCase());
+                                                return (
+                                                    <Combobox<LccSearchResult>
+                                                        items={available}
+                                                        value={null}
+                                                        inputValue={lccSearch}
+                                                        itemToStringLabel={(item) => `${item.code} ${item.name}`}
+                                                        itemToStringValue={(item) => String(item.id)}
+                                                        onInputValueChange={setLccSearch}
+                                                        onValueChange={(v) => {
+                                                            if (v) {
+                                                                addLcc(v);
+                                                                setLccSearch('');
+                                                            }
+                                                        }}
+                                                    >
+                                                        <ComboboxTrigger
+                                                            render={<Button type="button" variant="outline" className="w-full justify-between overflow-hidden font-normal" />}
+                                                            aria-label="Add labour cost code"
+                                                        >
+                                                            <span className="flex items-center gap-2 truncate text-muted-foreground">
+                                                                <Search className="h-3.5 w-3.5" />
+                                                                Search or create a labour cost code…
+                                                            </span>
+                                                        </ComboboxTrigger>
+
+                                                        <ComboboxContent className="w-(--anchor-width) p-0">
+                                                            <ComboboxInput placeholder="Type to search or create…" className="h-9" showTrigger={false} />
+                                                            <ComboboxEmpty>
+                                                                {query.length >= 2 && !hasExactMatch ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                                                                        onClick={() => {
+                                                                            setNewLccCode(query);
+                                                                            setNewLccName('');
+                                                                            setNewLccProdRate('');
+                                                                            setNewLccHourlyRate('');
+                                                                            setShowCreateLcc(true);
+                                                                            setLccSearch('');
+                                                                        }}
+                                                                    >
+                                                                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        <span>Create <span className="font-mono text-xs">&ldquo;{query}&rdquo;</span> as a new code</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="px-3 py-2 text-sm text-muted-foreground">No matches. Keep typing to create a new code.</span>
+                                                                )}
+                                                            </ComboboxEmpty>
+                                                            <ComboboxList>
+                                                                {(item: LccSearchResult) => (
+                                                                    <ComboboxItem key={item.id} value={item} className="items-start gap-3">
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="truncate">{item.name}</div>
+                                                                            <div className="font-mono text-xs text-muted-foreground">{item.code}</div>
+                                                                        </div>
+                                                                        {item.default_production_rate != null && (
+                                                                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{item.default_production_rate} / hr</span>
+                                                                        )}
+                                                                    </ComboboxItem>
+                                                                )}
+                                                            </ComboboxList>
+                                                        </ComboboxContent>
+                                                    </Combobox>
+                                                );
+                                            })()}
+
+                                            {showCreateLcc && (
+                                                <div className="rounded-md border border-dashed p-3 space-y-3">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-sm font-medium">New labour cost code</div>
+                                                        <p className="text-xs text-muted-foreground">It'll be saved to this project and added to this condition.</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="font-normal text-muted-foreground">Code</Label>
+                                                            <Input
+                                                                value={newLccCode}
+                                                                onChange={(e) => setNewLccCode(e.target.value)}
+                                                                placeholder="101_INT_FRM"
+                                                                className="h-8 font-mono"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="font-normal text-muted-foreground">Name</Label>
+                                                            <Input
+                                                                value={newLccName}
+                                                                onChange={(e) => setNewLccName(e.target.value)}
+                                                                placeholder="Frame internal walls"
+                                                                className="h-8"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="font-normal text-muted-foreground">Production rate</Label>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={newLccProdRate}
+                                                                    onChange={(e) => setNewLccProdRate(e.target.value)}
+                                                                    placeholder="5.0"
+                                                                    className="h-8 pr-10"
+                                                                />
+                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">/ hr</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="font-normal text-muted-foreground">Hourly rate</Label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={newLccHourlyRate}
+                                                                    onChange={(e) => setNewLccHourlyRate(e.target.value)}
+                                                                    placeholder="85.00"
+                                                                    className="h-8 pl-5"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 justify-end">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => { setShowCreateLcc(false); setNewLccCode(''); setNewLccName(''); setNewLccProdRate(''); setNewLccHourlyRate(''); setLccSearch(''); }}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={handleCreateLcc}
+                                                            disabled={creatingLcc || !newLccCode.trim() || !newLccName.trim()}
+                                                        >
+                                                            {creatingLcc && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                                                            Create & add
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {formLccs.length > 0 ? (
+                                                <div className="divide-y">
+                                                    {formLccs.map((l, idx) => (
+                                                        <div key={idx} className="py-2.5 space-y-1.5">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="text-sm truncate">{l.name}</div>
+                                                                    <div className="font-mono text-xs text-muted-foreground mt-0.5">{l.code}</div>
+                                                                </div>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 -mt-0.5 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeLcc(idx)}>
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={l.production_rate}
+                                                                    onChange={(e) => updateLccField(idx, 'production_rate', e.target.value)}
+                                                                    placeholder={l.default_production_rate?.toString() || '—'}
+                                                                    className="h-8 w-20 text-right tabular-nums"
+                                                                    aria-label="Production rate"
+                                                                />
+                                                                <span className="text-xs text-muted-foreground">{formUnit} / hr</span>
+                                                                <span className="text-xs text-muted-foreground mx-1">·</span>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        min="0"
+                                                                        value={l.hourly_rate}
+                                                                        onChange={(e) => updateLccField(idx, 'hourly_rate', e.target.value)}
+                                                                        placeholder={l.default_hourly_rate?.toString() || '—'}
+                                                                        className="h-8 w-24 pl-5 text-right tabular-nums"
+                                                                        aria-label="Hourly rate"
+                                                                    />
+                                                                </div>
+                                                                <span className="text-xs text-muted-foreground">/ hr</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">Search above or create a new one.</p>
+                                            )}
                                         </div>
                                     </>
                                 )}
 
-                                {/* 6. Labour Cost Codes (Production Tracking) — hidden for unit rate */}
-                                {formPricingMethod !== 'unit_rate' && <div className="rounded-sm border p-2 space-y-2">
-                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Labour Cost Codes (Production)
-                                    </h4>
-                                    <p className="text-[9px] text-muted-foreground">
-                                        Link labour cost codes for production tracking / statusing on drawings.
-                                    </p>
-
-                                    {/* LCC Search */}
-                                    <div className="relative">
-                                        <Search className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
-                                        <Input
-                                            value={lccSearch}
-                                            onChange={(e) => setLccSearch(e.target.value)}
-                                            placeholder="Search labour cost codes..."
-                                            className="h-7 text-xs pl-7 rounded-sm"
-                                        />
-                                        {searchingLccs && (
-                                            <Loader2 className="absolute right-2 top-1.5 h-3 w-3 animate-spin text-muted-foreground" />
-                                        )}
-                                        {lccResults.length > 0 && (
-                                            <div className="absolute z-50 mt-0.5 w-full rounded-sm border bg-popover shadow-lg max-h-40 overflow-y-auto">
-                                                {lccResults.map((item) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] cursor-pointer hover:bg-muted/50 border-b border-border/50 last:border-0"
-                                                        onClick={() => addLcc(item)}
-                                                    >
-                                                        <span className="font-mono text-muted-foreground shrink-0">{item.code}</span>
-                                                        <span className="truncate flex-1">{item.name}</span>
-                                                        {item.default_production_rate && (
-                                                            <span className="shrink-0 text-[9px] text-muted-foreground">{item.default_production_rate} u/hr</span>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Create new LCC inline */}
-                                    {!showCreateLcc ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 text-[10px] gap-1 rounded-sm"
-                                            onClick={() => setShowCreateLcc(true)}
-                                        >
-                                            <Plus className="h-2.5 w-2.5" />
-                                            New LCC
-                                        </Button>
-                                    ) : (
-                                        <div className="rounded-sm border border-dashed p-2 space-y-1.5">
-                                            <div className="grid grid-cols-2 gap-1.5">
-                                                <div className="grid gap-0.5">
-                                                    <Label className="text-[9px]">Code</Label>
-                                                    <Input
-                                                        value={newLccCode}
-                                                        onChange={(e) => setNewLccCode(e.target.value)}
-                                                        placeholder="e.g. 101_INT_FRM"
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-0.5">
-                                                    <Label className="text-[9px]">Name</Label>
-                                                    <Input
-                                                        value={newLccName}
-                                                        onChange={(e) => setNewLccName(e.target.value)}
-                                                        placeholder="e.g. Frame Internal Walls"
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-1.5">
-                                                <div className="grid gap-0.5">
-                                                    <Label className="text-[9px]">Default Prod Rate (u/hr)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={newLccProdRate}
-                                                        onChange={(e) => setNewLccProdRate(e.target.value)}
-                                                        placeholder="e.g. 5.0"
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-0.5">
-                                                    <Label className="text-[9px]">Default Hourly Rate ($)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={newLccHourlyRate}
-                                                        onChange={(e) => setNewLccHourlyRate(e.target.value)}
-                                                        placeholder="e.g. 85.00"
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-1 justify-end">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 text-[10px] rounded-sm"
-                                                    onClick={() => { setShowCreateLcc(false); setNewLccCode(''); setNewLccName(''); setNewLccProdRate(''); setNewLccHourlyRate(''); }}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    className="h-6 text-[10px] rounded-sm"
-                                                    onClick={handleCreateLcc}
-                                                    disabled={creatingLcc || !newLccCode.trim() || !newLccName.trim()}
-                                                >
-                                                    {creatingLcc ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 'Create & Add'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* LCC Lines */}
-                                    {formLccs.length > 0 && (
-                                        <div className="space-y-0">
-                                            <div className="grid grid-cols-[1fr_70px_70px_24px] gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1 py-0.5 bg-muted/30 border-b">
-                                                <span>Labour Cost Code</span>
-                                                <span>Prod Rate</span>
-                                                <span>$/hr</span>
-                                                <span />
-                                            </div>
-                                            {formLccs.map((l, idx) => (
-                                                <div key={idx} className="grid grid-cols-[1fr_70px_70px_24px] gap-1 items-center border-b border-border/50 py-0.5">
-                                                    <div className="text-[11px] truncate" title={`${l.code} - ${l.name}`}>
-                                                        <span className="font-mono text-muted-foreground">{l.code}</span>{' '}
-                                                        <span>{l.name}</span>
-                                                    </div>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={l.production_rate}
-                                                        onChange={(e) => updateLccField(idx, 'production_rate', e.target.value)}
-                                                        placeholder={l.default_production_rate?.toString() || '—'}
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={l.hourly_rate}
-                                                        onChange={(e) => updateLccField(idx, 'hourly_rate', e.target.value)}
-                                                        placeholder={l.default_hourly_rate?.toString() || '—'}
-                                                        className="h-6 text-[11px] rounded-sm"
-                                                    />
-                                                    <button
-                                                        className="h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-red-500"
-                                                        onClick={() => removeLcc(idx)}
-                                                    >
-                                                        <X className="h-2.5 w-2.5" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {formLccs.length === 0 && (
-                                        <p className="text-[10px] text-muted-foreground text-center py-2">
-                                            Search and add labour cost codes above, or create new ones.
-                                        </p>
-                                    )}
-                                </div>}
-
                                 {/* Save / Cancel */}
-                                <div className="flex justify-end gap-1.5 border-t pt-2">
+                                <div className="flex justify-end gap-2 border-t pt-4">
                                     <Button
                                         variant="outline"
-                                        size="sm"
-                                        className="h-7 rounded-sm text-[11px]"
                                         onClick={() => {
                                             setCreating(false);
                                             setEditing(false);
@@ -1593,288 +1474,206 @@ export function ConditionManager({
                                     >
                                         Cancel
                                     </Button>
-                                    <Button size="sm" className="h-7 rounded-sm text-[11px]" onClick={handleSave} disabled={saving || !formName.trim()}>
-                                        {saving ? (
-                                            <>
-                                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                                Saving...
-                                            </>
-                                        ) : editing ? (
-                                            'Update Condition'
-                                        ) : (
-                                            'Create Condition'
-                                        )}
+                                    <Button onClick={handleSave} disabled={saving || !formName.trim()}>
+                                        {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                                        {editing ? 'Update condition' : 'Create condition'}
                                     </Button>
                                 </div>
                             </div>
                         ) : selectedCondition ? (
-                            /* View Mode */
-                            <div className="space-y-2">
-                                {/* Header with name + edit button */}
-                                <div className="flex items-center gap-1.5 border-b pb-2">
-                                    <div
-                                        className="h-3 w-3 shrink-0 rounded-[2px]"
-                                        style={{ backgroundColor: selectedCondition.color }}
-                                    />
-                                    <h3 className="flex-1 truncate text-sm font-semibold">
-                                        {selectedCondition.condition_number != null && (
-                                            <span className="font-mono text-[11px] text-muted-foreground mr-1">#{selectedCondition.condition_number}</span>
-                                        )}
-                                        {selectedCondition.name}
-                                    </h3>
-                                    <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                                        {STYLE_LABELS[selectedCondition.type]}
-                                    </span>
-                                    <span className="rounded-sm border px-1.5 py-0.5 text-[9px] text-muted-foreground">
-                                        {selectedCondition.pricing_method === 'unit_rate' ? 'UR' : selectedCondition.pricing_method === 'detailed' ? 'DT' : 'BU'}
-                                    </span>
-                                    <Button size="sm" variant="outline" className="h-6 rounded-sm text-[11px] gap-1" onClick={handleEdit}>
-                                        <Pencil className="h-2.5 w-2.5" />
-                                        Edit
-                                    </Button>
-                                </div>
+                            (() => {
+                                const c = selectedCondition;
+                                const unit = c.type === 'count' ? 'each' : (c.type === 'area' || (c.type === 'linear' && c.height)) ? 'm²' : 'lm';
+                                const methodLabel = c.pricing_method === 'unit_rate' ? 'Unit rate' : c.pricing_method === 'detailed' ? 'Detailed' : 'Build-up';
+                                const fmt = (n: number | string | null | undefined, d = 2) => n == null ? '—' : Number(n).toFixed(d);
+                                const specRows: Array<[string, React.ReactNode]> = [
+                                    ['Measurement', STYLE_LABELS[c.type]],
+                                    ['Pricing', methodLabel],
+                                ];
+                                if (c.condition_type) specRows.push(['Category', c.condition_type.name]);
+                                if (c.height) specRows.push(['Height', `${c.height} m`]);
 
-                                {selectedCondition.condition_type && (
-                                    <div className="text-[11px]">
-                                        <span className="text-muted-foreground">Type:</span>{' '}
-                                        <span className="rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium">
-                                            {selectedCondition.condition_type.name}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {/* General Info */}
-                                {(selectedCondition.height || selectedCondition.thickness) && (
-                                    <div className="rounded-sm border p-2 space-y-1">
-                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                            General
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                                            {selectedCondition.height && (
-                                                <div>
-                                                    <span className="text-muted-foreground">Height:</span>{' '}
-                                                    <span className="font-mono font-medium">{selectedCondition.height}m</span>
-                                                </div>
-                                            )}
-                                            {selectedCondition.thickness && (
-                                                <div>
-                                                    <span className="text-muted-foreground">Thickness:</span>{' '}
-                                                    <span className="font-mono font-medium">{selectedCondition.thickness}m</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Appearance */}
-                                <div className="rounded-sm border p-2 space-y-1">
-                                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Appearance
-                                    </h4>
-                                    <div className="flex items-center gap-3 text-[11px]">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="h-3 w-3 rounded-[2px]" style={{ backgroundColor: selectedCondition.color, opacity: (selectedCondition.opacity ?? 50) / 100 }} />
-                                            <span className="font-mono text-muted-foreground">{selectedCondition.color}</span>
-                                        </div>
-                                        <span className="text-muted-foreground">{selectedCondition.opacity ?? 50}%</span>
-                                        <div className="flex items-center gap-1.5">
-                                            <PatternSwatch pattern={selectedCondition.pattern} color={selectedCondition.color} opacity={selectedCondition.opacity ?? 50} size={18} />
-                                            <span className="text-muted-foreground capitalize">{PATTERN_OPTIONS.find((p) => p.value === selectedCondition.pattern)?.label || selectedCondition.pattern}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {selectedCondition.pricing_method === 'unit_rate' ? (
-                                    <>
-                                        {/* Unit Rate View */}
-                                        {selectedCondition.type === 'linear' && selectedCondition.height && (
-                                            <div className="rounded-sm border p-2 space-y-1">
-                                                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                    Conversion
-                                                </h4>
-                                                <div className="text-[11px]">
-                                                    <span className="text-muted-foreground">Height:</span>{' '}
-                                                    <span className="font-mono font-medium">{selectedCondition.height}m</span>
-                                                    <span className="text-muted-foreground ml-1.5">(lm x {selectedCondition.height} = m2)</span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="rounded-sm border p-2 space-y-1">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Labour
-                                            </h4>
-                                            <div className="text-[11px]">
-                                                <span className="text-muted-foreground">Rate:</span>{' '}
-                                                <span className="font-mono font-medium">
-                                                    {selectedCondition.labour_unit_rate
-                                                        ? `$${selectedCondition.labour_unit_rate.toFixed(2)}/unit`
-                                                        : 'Not set'}
-                                                </span>
-                                            </div>
+                                return (
+                                    <div className="space-y-7">
+                                        {/* Header */}
+                                        <div className="flex items-start gap-3">
+                                            <div
+                                                className="h-5 w-5 mt-1 shrink-0 rounded-sm"
+                                                style={{ backgroundColor: c.color, opacity: (c.opacity ?? 50) / 100 }}
+                                            />
+                                            <h3 className="flex-1 text-lg font-semibold truncate">{c.name}</h3>
+                                            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleEdit}>
+                                                <Pencil className="h-3.5 w-3.5" />
+                                                Edit
+                                            </Button>
                                         </div>
 
-                                        <div className="rounded-sm border p-2 space-y-1">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Cost Codes ({(selectedCondition.cost_codes || []).length})
-                                            </h4>
-                                            {(selectedCondition.cost_codes || []).length > 0 ? (
-                                                <div className="space-y-0">
-                                                    {(selectedCondition.cost_codes || []).map((cc, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
-                                                            <div className="flex-1 truncate">
-                                                                <span className="font-mono text-muted-foreground">{cc.cost_code?.code}</span>{' '}
-                                                                <span>{cc.cost_code?.description}</span>
-                                                            </div>
-                                                            <span className="shrink-0 font-mono font-medium ml-2">${cc.unit_rate.toFixed(2)}/unit</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-[10px] text-muted-foreground">No cost codes added.</p>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* Build-Up View */}
-                                        <div className="rounded-sm border p-2 space-y-1">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Labour
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                                <div>
-                                                    <span className="text-muted-foreground">Source:</span>{' '}
-                                                    <span className="font-medium">
-                                                        {selectedCondition.labour_rate_source === 'manual' ? 'Manual' : 'Template'}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground">Rate:</span>{' '}
-                                                    <span className="font-mono font-medium">
-                                                        {selectedCondition.labour_rate_source === 'manual'
-                                                            ? selectedCondition.manual_labour_rate
-                                                                ? `$${selectedCondition.manual_labour_rate.toFixed(2)}/hr`
-                                                                : '—'
-                                                            : selectedCondition.pay_rate_template?.hourly_rate
-                                                                ? `$${parseFloat(String(selectedCondition.pay_rate_template.hourly_rate)).toFixed(2)}/hr`
-                                                                : '—'}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground">Prod. Rate:</span>{' '}
-                                                    <span className="font-mono font-medium">
-                                                        {selectedCondition.production_rate
-                                                            ? `${selectedCondition.production_rate} u/hr`
-                                                            : '—'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="rounded-sm border p-2 space-y-1">
-                                            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                Materials ({selectedCondition.materials.length})
-                                            </h4>
-                                            {selectedCondition.materials.length > 0 ? (
-                                                <div className="space-y-0">
-                                                    {selectedCondition.materials.map((m, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
-                                                            <div className="flex-1 truncate">
-                                                                <span className="font-mono text-muted-foreground">{m.material_item?.code}</span>{' '}
-                                                                <span>{m.material_item?.description}</span>
-                                                            </div>
-                                                            <div className="shrink-0 text-right ml-2 font-mono">
-                                                                <span className="font-medium">{m.qty_per_unit}</span>
-                                                                {m.waste_percentage > 0 && (
-                                                                    <span className="text-muted-foreground ml-0.5">(+{m.waste_percentage}%)</span>
-                                                                )}
-                                                                <span className="text-muted-foreground ml-1">
-                                                                    @ ${(m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0))).toFixed(2)}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-[10px] text-muted-foreground">No materials added.</p>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Labour Cost Codes (view) */}
-                                {(selectedCondition.condition_labour_codes || []).length > 0 && (
-                                    <div className="rounded-sm border p-2 space-y-1">
-                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                            Labour Cost Codes ({selectedCondition.condition_labour_codes!.length})
-                                        </h4>
-                                        <div className="space-y-0">
-                                            {selectedCondition.condition_labour_codes!.map((clc, idx) => (
-                                                <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/50 last:border-0">
-                                                    <div className="flex-1 truncate">
-                                                        <span className="font-mono text-muted-foreground">{clc.labour_cost_code?.code}</span>{' '}
-                                                        <span>{clc.labour_cost_code?.name}</span>
-                                                    </div>
-                                                    <div className="shrink-0 flex gap-2 ml-2 text-[10px] font-mono">
-                                                        {(clc.production_rate || clc.labour_cost_code?.default_production_rate) && (
-                                                            <span>
-                                                                {clc.production_rate ?? clc.labour_cost_code?.default_production_rate} u/hr
-                                                            </span>
-                                                        )}
-                                                        {(clc.hourly_rate || clc.labour_cost_code?.default_hourly_rate) && (
-                                                            <span className="text-muted-foreground">
-                                                                ${Number(clc.hourly_rate ?? clc.labour_cost_code?.default_hourly_rate ?? 0).toFixed(2)}/hr
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                        {/* Spec */}
+                                        <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+                                            {specRows.map(([label, value]) => (
+                                                <React.Fragment key={label}>
+                                                    <dt className="text-muted-foreground">{label}</dt>
+                                                    <dd>{value}</dd>
+                                                </React.Fragment>
                                             ))}
-                                        </div>
-                                    </div>
-                                )}
+                                        </dl>
 
-                                {selectedCondition.description && (
-                                    <div className="rounded-sm border p-2 space-y-1">
-                                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                            Notes
-                                        </h4>
-                                        <p className="text-[11px] text-muted-foreground">{selectedCondition.description}</p>
-                                    </div>
-                                )}
+                                        {c.pricing_method === 'unit_rate' ? (
+                                            <>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium">Labour</div>
+                                                    <p className="text-sm">
+                                                        {c.labour_unit_rate != null
+                                                            ? <>${fmt(c.labour_unit_rate)} <span className="text-muted-foreground">per {unit}</span></>
+                                                            : <span className="text-muted-foreground">Not set</span>}
+                                                    </p>
+                                                    {c.type === 'linear' && c.height && (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Measured in linear metres, priced per m² (multiplied by {c.height} m height).
+                                                        </p>
+                                                    )}
+                                                </div>
 
-                                {/* Detailed line items grid */}
-                                {selectedCondition.pricing_method === 'detailed' && (
-                                    <div className="mt-2">
-                                        <ConditionDetailGrid
-                                            conditionId={selectedCondition.id}
-                                            conditionType={selectedCondition.type}
-                                            conditionHeight={selectedCondition.height}
-                                            locationId={locationId}
-                                            lineItems={selectedCondition.line_items ?? []}
-                                            onLineItemsChange={(updatedItems) => {
-                                                const updated = conditions.map((c) =>
-                                                    c.id === selectedCondition.id ? { ...c, line_items: updatedItems } : c,
-                                                );
-                                                onConditionsChange(updated);
-                                            }}
-                                        />
+                                                <div className="space-y-2">
+                                                    <div className="text-sm font-medium">
+                                                        Cost codes <span className="text-muted-foreground font-normal">· {(c.cost_codes || []).length}</span>
+                                                    </div>
+                                                    {(c.cost_codes || []).length > 0 ? (
+                                                        <div className="divide-y">
+                                                            {(c.cost_codes || []).map((cc, idx) => (
+                                                                <div key={idx} className="py-2 text-sm">
+                                                                    <div className="flex items-baseline gap-3">
+                                                                        <span className="min-w-0 flex-1 truncate">{cc.cost_code?.description}</span>
+                                                                        <span className="shrink-0 tabular-nums">
+                                                                            ${fmt(cc.unit_rate)} <span className="text-muted-foreground">per {unit}</span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="font-mono text-xs text-muted-foreground mt-0.5">{cc.cost_code?.code}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground">No cost codes added.</p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <div className="text-sm font-medium">Labour</div>
+                                                    <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+                                                        <dt className="text-muted-foreground">Rate type</dt>
+                                                        <dd>{c.labour_rate_source === 'manual' ? 'Manual hourly rate' : 'Pay rate template'}</dd>
+
+                                                        <dt className="text-muted-foreground">Hourly rate</dt>
+                                                        <dd className="tabular-nums">
+                                                            {c.labour_rate_source === 'manual'
+                                                                ? c.manual_labour_rate != null ? `$${fmt(c.manual_labour_rate)} / hr` : '—'
+                                                                : c.pay_rate_template?.hourly_rate != null ? `$${fmt(c.pay_rate_template.hourly_rate)} / hr` : '—'}
+                                                        </dd>
+
+                                                        <dt className="text-muted-foreground">Production rate</dt>
+                                                        <dd className="tabular-nums">
+                                                            {c.production_rate != null
+                                                                ? <>{c.production_rate} <span className="text-muted-foreground">{unit} per hour</span></>
+                                                                : '—'}
+                                                        </dd>
+                                                    </dl>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="text-sm font-medium">
+                                                        Materials <span className="text-muted-foreground font-normal">· {c.materials.length}</span>
+                                                    </div>
+                                                    {c.materials.length > 0 ? (
+                                                        <div className="divide-y">
+                                                            {c.materials.map((m, idx) => {
+                                                                const unitCost = m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0));
+                                                                return (
+                                                                    <div key={idx} className="py-2 text-sm">
+                                                                        <div className="flex items-baseline gap-3">
+                                                                            <span className="min-w-0 flex-1 truncate">{m.material_item?.description}</span>
+                                                                            <span className="shrink-0 tabular-nums text-muted-foreground">
+                                                                                {m.qty_per_unit} per {unit}
+                                                                                {m.waste_percentage > 0 && <> · +{m.waste_percentage}% waste</>}
+                                                                                {' '}· ${fmt(unitCost)} each
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="font-mono text-xs text-muted-foreground mt-0.5">{m.material_item?.code}</div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground">No materials added.</p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {(c.condition_labour_codes || []).length > 0 && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <div className="text-sm font-medium">
+                                                        Production tracking <span className="text-muted-foreground font-normal">· {c.condition_labour_codes!.length}</span>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">Labour cost codes used to track progress on drawings.</p>
+                                                </div>
+                                                <div className="divide-y">
+                                                    {c.condition_labour_codes!.map((clc, idx) => {
+                                                        const prod = clc.production_rate ?? clc.labour_cost_code?.default_production_rate;
+                                                        const hr = clc.hourly_rate ?? clc.labour_cost_code?.default_hourly_rate;
+                                                        return (
+                                                            <div key={idx} className="py-2 text-sm">
+                                                                <div className="flex items-baseline gap-3">
+                                                                    <span className="min-w-0 flex-1 truncate">{clc.labour_cost_code?.name}</span>
+                                                                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                                                                        {prod != null && <>{prod} {unit} / hr</>}
+                                                                        {prod != null && hr != null && ' · '}
+                                                                        {hr != null && <>${fmt(hr)} / hr</>}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="font-mono text-xs text-muted-foreground mt-0.5">{clc.labour_cost_code?.code}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {c.description && (
+                                            <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1">
+                                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</div>
+                                                <p className="text-sm whitespace-pre-wrap leading-relaxed">{c.description}</p>
+                                            </div>
+                                        )}
+
+                                        {c.pricing_method === 'detailed' && (
+                                            <ConditionDetailGrid
+                                                conditionId={c.id}
+                                                conditionType={c.type}
+                                                conditionHeight={c.height}
+                                                locationId={locationId}
+                                                lineItems={c.line_items ?? []}
+                                                onLineItemsChange={(updatedItems) => {
+                                                    const updated = conditions.map((cc) =>
+                                                        cc.id === c.id ? { ...cc, line_items: updatedItems } : cc,
+                                                    );
+                                                    onConditionsChange(updated);
+                                                }}
+                                            />
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                );
+                            })()
                         ) : (
-                            <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
+                            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                                 Select a condition or create a new one.
                             </div>
                         )}
                     </div>
                 </div>
 
-                <DialogFooter className="border-t px-4 py-2">
-                    <Button variant="outline" size="sm" className="h-7 rounded-sm text-[11px]" onClick={() => onOpenChange(false)}>
-                        Close
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

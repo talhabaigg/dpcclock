@@ -66,7 +66,6 @@ type MeasurementLayerProps = {
     measurements: MeasurementData[];
     selectedMeasurementId: number | null;
     calibration: CalibrationData | null;
-    conditionPatterns?: Record<number, string>;
     conditionOpacities?: Record<number, number>;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
@@ -91,93 +90,6 @@ type MeasurementLayerProps = {
     // Hover highlight from panel
     hoveredMeasurementId?: number | null;
 };
-
-/** Create SVG pattern defs for hatching fill patterns and inject into the map SVG */
-function ensureFillPatternDefs(map: L.Map, conditionId: number, pattern: string, color: string, opacity: number): string | null {
-    const svgRoot = (map as unknown as { _renderer?: { _container?: SVGElement } })._renderer?._container
-        ?? map.getContainer().querySelector('svg.leaflet-zoom-animated');
-    if (!svgRoot) return null;
-
-    const patId = `cond-fill-${conditionId}`;
-    // Already exists? Just return the id
-    if (svgRoot.querySelector(`#${patId}`)) return patId;
-
-    let defs = svgRoot.querySelector('defs');
-    if (!defs) {
-        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        svgRoot.prepend(defs);
-    }
-
-    const o = opacity / 100;
-    const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
-    pat.setAttribute('id', patId);
-    pat.setAttribute('patternUnits', 'userSpaceOnUse');
-
-    const makeLine = (x1: string, y1: string, x2: string, y2: string, sw = '1.5') => {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1);
-        line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2);
-        line.setAttribute('y2', y2);
-        line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', sw);
-        line.setAttribute('stroke-opacity', o.toString());
-        return line;
-    };
-
-    switch (pattern) {
-        case 'horizontal':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.appendChild(makeLine('0', '4', '8', '4'));
-            break;
-        case 'vertical':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.appendChild(makeLine('4', '0', '4', '8'));
-            break;
-        case 'forward_diagonal':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.setAttribute('patternTransform', 'rotate(45)');
-            pat.appendChild(makeLine('0', '0', '0', '8'));
-            break;
-        case 'backward_diagonal':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.setAttribute('patternTransform', 'rotate(-45)');
-            pat.appendChild(makeLine('0', '0', '0', '8'));
-            break;
-        case 'crosshatch':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.appendChild(makeLine('0', '4', '8', '4', '1'));
-            pat.appendChild(makeLine('4', '0', '4', '8', '1'));
-            break;
-        case 'diagonal_crosshatch':
-            pat.setAttribute('width', '8');
-            pat.setAttribute('height', '8');
-            pat.appendChild(makeLine('0', '0', '8', '8', '1'));
-            pat.appendChild(makeLine('8', '0', '0', '8', '1'));
-            break;
-        default:
-            return null; // none, solid, transparent don't need SVG patterns
-    }
-
-    defs.appendChild(pat);
-    return patId;
-}
-
-/** Remove all injected fill pattern defs from the map SVG */
-function clearFillPatternDefs(map: L.Map) {
-    const svgRoot = (map as unknown as { _renderer?: { _container?: SVGElement } })._renderer?._container
-        ?? map.getContainer().querySelector('svg.leaflet-zoom-animated');
-    if (!svgRoot) return;
-    const defs = svgRoot.querySelector('defs');
-    if (defs) {
-        defs.querySelectorAll('[id^="cond-fill-"]').forEach((el) => el.remove());
-    }
-}
 
 function computePixelDistance(p1: Point, p2: Point, pixelW: number, pixelH: number): number {
     const dx = (p2.x - p1.x) * pixelW;
@@ -264,7 +176,6 @@ export function MeasurementLayer({
     measurements,
     selectedMeasurementId,
     calibration,
-    conditionPatterns,
     conditionOpacities,
     onCalibrationComplete,
     onMeasurementComplete,
@@ -471,7 +382,6 @@ export function MeasurementLayer({
     useEffect(() => {
         const group = savedLayersRef.current;
         group.clearLayers();
-        clearFillPatternDefs(map);
 
         measurements.forEach((m) => {
             const latlngs = m.points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
@@ -653,9 +563,6 @@ export function MeasurementLayer({
             } else {
                 const isMeasSelected = selectedMeasurementIds?.has(m.id) ?? false;
                 const isDeduction = !!m.parent_measurement_id;
-                const fillPattern = (!isDeduction && m.takeoff_condition_id && conditionPatterns)
-                    ? conditionPatterns[m.takeoff_condition_id] || 'solid'
-                    : 'solid';
                 const condOpacity = (!isDeduction && m.takeoff_condition_id && conditionOpacities)
                     ? (conditionOpacities[m.takeoff_condition_id] ?? 50) / 100
                     : 0.7;
@@ -675,42 +582,19 @@ export function MeasurementLayer({
                     }).addTo(group);
                 }
 
-                // Determine fill settings based on fill pattern
                 const polyFillColor = isDeduction ? '#ef4444' : displayColor;
-                let polyFillOpacity = isDeduction ? 0.3 : condOpacity;
-                const needsSvgPattern = !isDeduction && ['horizontal', 'vertical', 'backward_diagonal', 'forward_diagonal', 'crosshatch', 'diagonal_crosshatch'].includes(fillPattern);
-
-                if (!isDeduction) {
-                    if (fillPattern === 'none') {
-                        polyFillOpacity = 0;
-                    } else if (fillPattern === 'transparent') {
-                        polyFillOpacity = condOpacity * 0.35;
-                    }
-                }
+                const polyFillOpacity = isDeduction ? 0.3 : condOpacity;
 
                 const polygon = L.polygon(latlngs, {
                     color: displayColor,
                     weight: isMeasSelected ? weight + 2 : weight,
                     opacity: isDeduction ? 0.7 : opacity,
                     fillColor: polyFillColor,
-                    fillOpacity: needsSvgPattern ? 1 : polyFillOpacity,
+                    fillOpacity: polyFillOpacity,
                     dashArray: (isDeduction || isVariation) ? '12, 6' : undefined,
                 });
 
-                // Add polygon to group first so it has a DOM element
                 polygon.addTo(group);
-
-                // Apply SVG hatching pattern to the polygon's path element
-                if (needsSvgPattern && m.takeoff_condition_id) {
-                    const patId = ensureFillPatternDefs(map, m.takeoff_condition_id, fillPattern, m.color, (conditionOpacities?.[m.takeoff_condition_id] ?? 50));
-                    if (patId) {
-                        const el = (polygon as unknown as { _path?: SVGPathElement })._path;
-                        if (el) {
-                            el.setAttribute('fill', `url(#${patId})`);
-                            el.setAttribute('fill-opacity', '1');
-                        }
-                    }
-                }
 
                 // Add vertex circles
                 latlngs.forEach(ll => {
@@ -765,7 +649,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionPatterns, conditionOpacities, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionOpacities, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
 
     // Lightweight hover highlight (separate from main render to avoid full rebuild)
     useEffect(() => {

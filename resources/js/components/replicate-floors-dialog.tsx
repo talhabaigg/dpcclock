@@ -116,7 +116,7 @@ export function ReplicateFloorsDialog({ drawingId, drawingTitle, open, onOpenCha
                     <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={http.processing}>
                         Cancel
                     </Button>
-                    <Button size="sm" onClick={handleReplicate} disabled={loading || floorLabels.length === 0}>
+                    <Button size="sm" onClick={handleReplicate} disabled={http.processing || floorLabels.length === 0}>
                         {http.processing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                         Create {floorLabels.length} Drawing{floorLabels.length !== 1 ? 's' : ''}
                     </Button>
