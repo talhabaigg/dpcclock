@@ -205,7 +205,9 @@ class DailyPrestartController extends Controller
                     } else {
                         // Clocked in at a different location
                         $clockedAtLocation = $firstWorkClock->location;
-                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name);
+                        $parentCode = $clockedAtLocation
+                            ? $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name)
+                            : 'Different Location';
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
@@ -237,7 +239,9 @@ class DailyPrestartController extends Controller
                     } else {
                         // On leave at a different location
                         $clockedAtLocation = $firstLeaveClock->location;
-                        $parentCode = $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name);
+                        $parentCode = $clockedAtLocation
+                            ? $this->extractParentLocationCode($clockedAtLocation->external_id, $clockedAtLocation->name)
+                            : 'Different Location';
                         return [
                             'id' => $emp->id,
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
