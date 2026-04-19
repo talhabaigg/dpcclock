@@ -1,9 +1,4 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -14,13 +9,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -59,17 +53,10 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
-import ComparisonTab from './show-partials/ComparisonTab';
-import { SmartPricingCards } from './show-partials/SmartPricingCards';
 import { SmartPricingWizard } from '@/components/SmartPricingWizard';
+import ComparisonTab from './show-partials/ComparisonTab';
 import { DeliveryOrganizationPanel } from './show-partials/DeliveryOrganizationPanel';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Requisitions',
-        href: '/requisition/all',
-    },
-];
+import { SmartPricingCards } from './show-partials/SmartPricingCards';
 
 export default function RequisitionShow() {
     const { requisition, activities, flash, auth, costCodes } = usePage().props as unknown as {
@@ -121,7 +108,16 @@ export default function RequisitionShow() {
         };
         costCodes: { id: number; code: string; description: string }[];
     };
-
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: 'Requisitions',
+            href: '/requisition/all',
+        },
+        {
+            title: `${requisition.id}`,
+            href: '#',
+        },
+    ];
     // Check if any line items have base price (not from project list)
     const hasBasePriceItems = requisition.line_items?.some((item) => !item.price_list || item.price_list === 'base_price');
 
@@ -163,9 +159,7 @@ export default function RequisitionShow() {
         }
     };
 
-    const hasPendingSmartPricing = requisition.line_items?.some(
-        (item) => item.resolution_context?.status === 'pending_review',
-    );
+    const hasPendingSmartPricing = requisition.line_items?.some((item) => item.resolution_context?.status === 'pending_review');
 
     function handleSort(key: string) {
         if (sortKey === key) {
@@ -295,11 +289,7 @@ export default function RequisitionShow() {
         if (sortKey !== key) {
             return <ArrowUpDown className="h-3 w-3 shrink-0 opacity-40 transition-opacity group-hover:opacity-70" />;
         }
-        return sortDirection === 'asc' ? (
-            <ArrowUp className="h-3 w-3 shrink-0" />
-        ) : (
-            <ArrowDown className="h-3 w-3 shrink-0" />
-        );
+        return sortDirection === 'asc' ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />;
     };
 
     const getAriaSort = (key: string): 'ascending' | 'descending' | 'none' => {
@@ -355,18 +345,10 @@ export default function RequisitionShow() {
         { label: 'Processed', value: formatDateTime(requisition.processed_at) },
     ];
 
-    const renderDetailRow = (
-        { label, value }: { label: string; value: ReactNode },
-        tabular = false,
-    ) => (
+    const renderDetailRow = ({ label, value }: { label: string; value: ReactNode }, tabular = false) => (
         <div key={label} className="flex items-start justify-between gap-3 px-4 py-2">
             <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
-            <span
-                className={cn(
-                    'break-words text-right text-sm font-medium text-slate-700 dark:text-slate-200',
-                    tabular && 'tabular-nums',
-                )}
-            >
+            <span className={cn('text-right text-sm font-medium break-words text-slate-700 dark:text-slate-200', tabular && 'tabular-nums')}>
                 {value || <span className="text-slate-400">—</span>}
             </span>
         </div>
@@ -376,9 +358,9 @@ export default function RequisitionShow() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Requisition #${requisition.id}`} />
 
-            <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-slate-50/40 dark:bg-background [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0 [&_[data-slot=card-content]]:px-0 [&_[data-slot=card-footer]]:px-0 [&_[data-slot=card-header]]:px-0">
+            <div className="dark:bg-background flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-slate-50/40 [&_[data-slot=card-content]]:px-0 [&_[data-slot=card-footer]]:px-0 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0">
                 {/* Compact Header Bar */}
-                <div className="sticky top-0 z-10 border-b border-slate-200 bg-white dark:border-border dark:bg-background">
+                <div className="dark:border-border dark:bg-background sticky top-0 z-10 border-b border-slate-200 bg-white">
                     <div className="max-w-full px-3 py-3 sm:px-6 md:px-8">
                         {/* Top row: ID, Status, Key Stats */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -409,7 +391,6 @@ export default function RequisitionShow() {
                                         <TooltipContent className="max-w-xs">{statusConfig.description}</TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
-
                             </div>
 
                             <div className="flex items-center gap-2 text-sm sm:gap-4">
@@ -431,11 +412,7 @@ export default function RequisitionShow() {
                         <div className="-mx-1 mt-3 flex flex-wrap items-center gap-1.5 sm:mx-0 sm:gap-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
+                                    <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
                                         <MoreHorizontal className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         <span className="hidden sm:inline">More</span>
                                     </Button>
@@ -456,9 +433,7 @@ export default function RequisitionShow() {
                                         (requisition.status === 'pending' ||
                                             requisition.status === 'failed' ||
                                             requisition.status === 'office_review') && (
-                                            <DropdownMenuItem
-                                                onSelect={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}
-                                            >
+                                            <DropdownMenuItem onSelect={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}>
                                                 <RefreshCw className="h-4 w-4" />
                                                 Refresh Pricing
                                             </DropdownMenuItem>
@@ -470,9 +445,7 @@ export default function RequisitionShow() {
                                             Excel
                                         </a>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        onSelect={() => router.visit(`/requisition/${requisition.id}/print`)}
-                                    >
+                                    <DropdownMenuItem onSelect={() => router.visit(`/requisition/${requisition.id}/print`)}>
                                         <FileText className="h-4 w-4" />
                                         Print
                                     </DropdownMenuItem>
@@ -488,10 +461,7 @@ export default function RequisitionShow() {
 
                             {requisition.status === 'failed' && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
-                                    <Button
-                                        size="sm"
-                                        className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
-                                    >
+                                    <Button size="sm" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
                                         <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Retry
                                     </Button>
@@ -547,10 +517,7 @@ export default function RequisitionShow() {
                             {requisition.status === 'pending' && !hasBasePriceItems && (
                                 <div className="flex items-center gap-1">
                                     <Link href={`/requisition/${requisition.id}/api-send`}>
-                                        <Button
-                                            size="sm"
-                                            className="h-8 gap-1.5 rounded-r-none px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
-                                        >
+                                        <Button size="sm" className="h-8 gap-1.5 rounded-r-none px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
                                             <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             Send to Premier
                                         </Button>
@@ -645,10 +612,7 @@ export default function RequisitionShow() {
                             )}
                             {requisition.status === 'office_review' && canApprovePricing && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
-                                    <Button
-                                        size="sm"
-                                        className="h-8 gap-1.5 px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm"
-                                    >
+                                    <Button size="sm" className="h-8 gap-1.5 px-3 text-xs sm:h-9 sm:gap-2 sm:px-4 sm:text-sm">
                                         <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                         Send to Premier
                                     </Button>
@@ -675,7 +639,7 @@ export default function RequisitionShow() {
                         {/* Left Column - Details */}
                         <div>
                             {/* Details Card */}
-                            <Card className="overflow-hidden border-slate-200/60 dark:border-border">
+                            <Card className="dark:border-border overflow-hidden border-slate-200/60">
                                 <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:border-slate-800 dark:text-slate-400">
                                     Order
                                 </div>
@@ -747,9 +711,7 @@ export default function RequisitionShow() {
                                                     <Cuboid className="text-muted-foreground h-5 w-5" />
                                                 </div>
                                                 <p className="text-sm font-medium">No line items yet</p>
-                                                <p className="text-muted-foreground mt-1 text-xs">
-                                                    Items added to this requisition will appear here
-                                                </p>
+                                                <p className="text-muted-foreground mt-1 text-xs">Items added to this requisition will appear here</p>
                                             </div>
                                         ) : (
                                             <div className="overflow-x-auto">
@@ -1056,9 +1018,7 @@ export default function RequisitionShow() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
-                            Duplicate
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>Duplicate</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

@@ -1,7 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -13,6 +9,10 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -113,23 +113,17 @@ function RequisitionActions({ requisition }: { requisition: { id: number; is_tem
                             View Details
                         </DropdownMenuItem>
                     </Link>
-                    <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => router.post(`/requisition/${requisition.id}/copy`)}
-                    >
+                    <DropdownMenuItem className="gap-2" onSelect={() => router.post(`/requisition/${requisition.id}/copy`)}>
                         <Copy className="h-4 w-4" />
                         Copy
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                        className="gap-2"
-                        onSelect={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
-                    >
+                    <DropdownMenuItem className="gap-2" onSelect={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}>
                         <SquarePlus className="h-4 w-4" />
                         {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <AlertDialogTrigger asChild>
-                        <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                        <DropdownMenuItem className="text-destructive focus:text-destructive gap-2">
                             <Trash2 className="h-4 w-4" />
                             Delete
                         </DropdownMenuItem>
@@ -175,7 +169,10 @@ function RequisitionActionsMobile({ requisition }: { requisition: { id: number; 
                         <SheetTitle>Requisition #{requisition.id}</SheetTitle>
                     </SheetHeader>
                     <nav className="flex flex-col gap-1 px-4 pb-6">
-                        <Link href={`/requisition/${requisition.id}`} className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium">
+                        <Link
+                            href={`/requisition/${requisition.id}`}
+                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
+                        >
                             <Eye className="text-muted-foreground h-4 w-4" />
                             View Details
                         </Link>
@@ -272,10 +269,14 @@ export default function RequisitionList() {
     }, [reqs]);
 
     const bulkDelete = useCallback(() => {
-        router.post('/requisitions/bulk-delete', { ids: Array.from(selectedIds) }, {
-            preserveScroll: true,
-            onSuccess: () => setSelectedIds(new Set()),
-        });
+        router.post(
+            '/requisitions/bulk-delete',
+            { ids: Array.from(selectedIds) },
+            {
+                preserveScroll: true,
+                onSuccess: () => setSelectedIds(new Set()),
+            },
+        );
         setBulkDeleteConfirmOpen(false);
     }, [selectedIds]);
     const [localCostRange, setLocalCostRange] = useState<[number, number]>([
@@ -388,9 +389,7 @@ export default function RequisitionList() {
     ];
 
     const excludedFilterKeys = new Set(['search', 'min_cost', 'max_cost', 'templates_only', 'sort', 'direction']);
-    const activeFilters = Object.entries(filters).filter(
-        ([key, value]) => value && !excludedFilterKeys.has(key),
-    );
+    const activeFilters = Object.entries(filters).filter(([key, value]) => value && !excludedFilterKeys.has(key));
 
     const totalActiveFilters = activeFilters.length + (filters.templates_only ? 1 : 0);
 
@@ -427,7 +426,10 @@ export default function RequisitionList() {
                                 className="pl-9"
                             />
                             {searchInput && (
-                                <button onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
+                                <button
+                                    onClick={() => handleSearchChange('')}
+                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                >
                                     <X className="h-4 w-4" />
                                 </button>
                             )}
@@ -445,11 +447,7 @@ export default function RequisitionList() {
                         />
 
                         {/* Active filter badges */}
-                        <ActiveFilterBadges
-                            activeFilters={activeFilters}
-                            filters={filters}
-                            updateFilter={updateFilter}
-                        />
+                        <ActiveFilterBadges activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
 
                         <div className="ml-auto">
                             <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
@@ -468,7 +466,10 @@ export default function RequisitionList() {
                                 className="pl-9"
                             />
                             {searchInput && (
-                                <button onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2">
+                                <button
+                                    onClick={() => handleSearchChange('')}
+                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                >
                                     <X className="h-4 w-4" />
                                 </button>
                             )}
@@ -488,13 +489,7 @@ export default function RequisitionList() {
                                 <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
                             </div>
                         </div>
-                        {totalActiveFilters > 0 && (
-                            <ActiveFilterBadges
-                                activeFilters={activeFilters}
-                                filters={filters}
-                                updateFilter={updateFilter}
-                            />
-                        )}
+                        {totalActiveFilters > 0 && <ActiveFilterBadges activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />}
                     </div>
                 </div>
 
@@ -507,12 +502,7 @@ export default function RequisitionList() {
                                 Clear
                             </Button>
                         </div>
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            className="h-8 gap-1.5"
-                            onClick={() => setBulkDeleteConfirmOpen(true)}
-                        >
+                        <Button variant="destructive" size="sm" className="h-8 gap-1.5" onClick={() => setBulkDeleteConfirmOpen(true)}>
                             <Trash2 className="h-3.5 w-3.5" />
                             Delete
                         </Button>
@@ -544,291 +534,372 @@ export default function RequisitionList() {
                         isNavigating ? 'opacity-100' : 'opacity-0',
                     )}
                 >
-                    <div className="h-full w-2/5 animate-nav-slide bg-primary/80" />
+                    <div className="animate-nav-slide bg-primary/80 h-full w-2/5" />
                 </div>
 
                 {/* ── Content ──────────────────────────────────────────── */}
                 <div
-                    className={cn(
-                        'flex min-w-0 flex-col gap-4 transition-opacity duration-200',
-                        isNavigating && 'opacity-60',
-                    )}
+                    className={cn('flex min-w-0 flex-col gap-4 transition-opacity duration-200', isNavigating && 'opacity-60')}
                     aria-busy={isNavigating || undefined}
                 >
-                {viewMode === 'cards' ? (
-                    <CardsIndex filteredRequisitions={reqs} />
-                ) : (
-                    <>
-                        {reqs.length === 0 ? (
-                            <Empty className="border">
-                                <EmptyMedia variant="icon">
-                                    <ClipboardList />
-                                </EmptyMedia>
-                                <EmptyHeader>
-                                    <EmptyTitle>No requisitions found</EmptyTitle>
-                                    <EmptyDescription>
-                                        {totalActiveFilters > 0 || searchInput
-                                            ? 'Try adjusting your search or filters.'
-                                            : 'Create your first requisition to get started.'}
-                                    </EmptyDescription>
-                                </EmptyHeader>
-                                {(totalActiveFilters > 0 || searchInput) && (
-                                    <EmptyContent>
-                                        <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                                            Clear filters
-                                        </Button>
-                                    </EmptyContent>
-                                )}
-                            </Empty>
-                        ) : (
-                            <>
-                                {/* Card layout for narrow containers */}
-                                <div className="flex flex-col gap-2 @3xl:hidden">
-                                    {reqs.map((req) => (
-                                        <div key={req.id} className="bg-card overflow-hidden rounded-lg border p-4">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <Link href={`/requisition/${req.id}`} className="font-mono text-sm font-semibold hover:underline">
-                                                            #{req.id}
-                                                        </Link>
-                                                        <StatusBadge status={req.status} />
-                                                        {req.is_template && (
-                                                            <Badge variant="outline" className="text-[10px]">Template</Badge>
-                                                        )}
-                                                    </div>
-                                                    <p className="mt-1.5 truncate text-sm font-medium">{req.supplier?.name}</p>
-                                                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                                                        {req.location?.name && <span className="truncate">{req.location.name}</span>}
-                                                        {req.creator?.name && (
-                                                            <>
-                                                                <span className="text-border">·</span>
-                                                                <span>{req.creator.name}</span>
-                                                            </>
-                                                        )}
-                                                        <span className="text-border">·</span>
-                                                        <span className="tabular-nums">{new Date(req.date_required).toLocaleDateString('en-GB')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-1">
-                                                    <span className="tabular-nums text-sm font-semibold">
-                                                        {formatCurrency(req.line_items_sum_total_cost)}
-                                                    </span>
-                                                    <RequisitionActionsMobile requisition={req} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Table layout for wide containers */}
-                                <div className="hidden rounded-lg border @3xl:block">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                {canDelete && (
-                                                    <TableHead className="w-[40px] pl-4">
-                                                        <Checkbox
-                                                            checked={reqs.length > 0 && selectedIds.size === reqs.length}
-                                                            onCheckedChange={toggleSelectAll}
-                                                            aria-label="Select all"
-                                                        />
-                                                    </TableHead>
-                                                )}
-                                                <TableHead className={cn('w-[70px]', !canDelete && 'pl-4')}>
-                                                    <SortableHeader column="id" label="ID" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead>
-                                                    <SortableHeader column="supplier" label="Supplier" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @5xl:table-cell">
-                                                    <SortableHeader column="location" label="Project" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @4xl:table-cell">
-                                                    <SortableHeader column="po_number" label="PO #" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead>
-                                                    <SortableHeader column="status" label="Status" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @5xl:table-cell">Template</TableHead>
-                                                <TableHead className="hidden @6xl:table-cell">Order Ref</TableHead>
-                                                <TableHead className="hidden @4xl:table-cell">
-                                                    <SortableHeader column="creator" label="Created By" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @5xl:table-cell">
-                                                    <SortableHeader column="date_required" label="Date Required" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @6xl:table-cell">
-                                                    <SortableHeader column="created_at" label="Created" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @7xl:table-cell">
-                                                    <SortableHeader column="delivery_contact" label="Contact" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="hidden @7xl:table-cell">
-                                                    <SortableHeader column="deliver_to" label="Deliver To" sort={filters.sort} direction={filters.direction} onSort={handleSort} />
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    <SortableHeader column="value" label="Value" sort={filters.sort} direction={filters.direction} onSort={handleSort} align="right" />
-                                                </TableHead>
-                                                <TableHead className="w-[50px] pr-4"></TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {reqs.map((req) => (
-                                                <TableRow key={req.id} data-state={selectedIds.has(req.id) ? 'selected' : undefined}>
-                                                    {canDelete && (
-                                                        <TableCell className="pl-4">
-                                                            <Checkbox
-                                                                checked={selectedIds.has(req.id)}
-                                                                onCheckedChange={() => toggleSelect(req.id)}
-                                                                aria-label={`Select requisition ${req.id}`}
-                                                            />
-                                                        </TableCell>
-                                                    )}
-                                                    <TableCell className={cn(!canDelete && 'pl-4')}>
-                                                        <Link href={`/requisition/${req.id}`} className="text-foreground font-mono text-xs font-semibold hover:underline">
-                                                            #{req.id}
-                                                        </Link>
-                                                    </TableCell>
-
-                                                    <TableCell className="max-w-[200px]">
-                                                        <span className="text-foreground block truncate text-sm font-medium" title={req.supplier?.name}>
-                                                            {req.supplier?.name}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden max-w-[160px] @5xl:table-cell">
-                                                        <span className="block truncate text-sm" title={req.location?.name || undefined}>
-                                                            {req.location?.name || <span className="text-muted-foreground">—</span>}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden @4xl:table-cell">
-                                                        {req.po_number ? (
-                                                            <span className="bg-muted text-foreground inline-flex rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold">
-                                                                PO{req.po_number}
+                    {viewMode === 'cards' ? (
+                        <CardsIndex filteredRequisitions={reqs} />
+                    ) : (
+                        <>
+                            {reqs.length === 0 ? (
+                                <Empty className="border">
+                                    <EmptyMedia variant="icon">
+                                        <ClipboardList />
+                                    </EmptyMedia>
+                                    <EmptyHeader>
+                                        <EmptyTitle>No requisitions found</EmptyTitle>
+                                        <EmptyDescription>
+                                            {totalActiveFilters > 0 || searchInput
+                                                ? 'Try adjusting your search or filters.'
+                                                : 'Create your first requisition to get started.'}
+                                        </EmptyDescription>
+                                    </EmptyHeader>
+                                    {(totalActiveFilters > 0 || searchInput) && (
+                                        <EmptyContent>
+                                            <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                                                Clear filters
+                                            </Button>
+                                        </EmptyContent>
+                                    )}
+                                </Empty>
+                            ) : (
+                                <>
+                                    {/* Card layout for narrow containers */}
+                                    <div className="flex flex-col gap-2 @3xl:hidden">
+                                        {reqs.map((req) => (
+                                            <div key={req.id} className="bg-card overflow-hidden rounded-lg border p-4">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Link
+                                                                href={`/requisition/${req.id}`}
+                                                                className="font-mono text-sm font-semibold hover:underline"
+                                                            >
+                                                                #{req.id}
+                                                            </Link>
+                                                            <StatusBadge status={req.status} />
+                                                            {req.is_template && (
+                                                                <Badge variant="outline" className="text-[10px]">
+                                                                    Template
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="mt-1.5 truncate text-sm font-medium">{req.supplier?.name}</p>
+                                                        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                                            {req.location?.name && <span className="truncate">{req.location.name}</span>}
+                                                            {req.creator?.name && (
+                                                                <>
+                                                                    <span className="text-border">·</span>
+                                                                    <span>{req.creator.name}</span>
+                                                                </>
+                                                            )}
+                                                            <span className="text-border">·</span>
+                                                            <span className="tabular-nums">
+                                                                {new Date(req.date_required).toLocaleDateString('en-GB')}
                                                             </span>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm">—</span>
-                                                        )}
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        <StatusBadge status={req.status} />
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden @5xl:table-cell">
-                                                        {req.is_template ? (
-                                                            <Badge variant="secondary" className="text-[10px]">Template</Badge>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm">—</span>
-                                                        )}
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden max-w-[120px] @6xl:table-cell">
-                                                        <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.order_reference || '—'}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden @4xl:table-cell">
-                                                        <span className="text-muted-foreground text-sm">{req.creator?.name || '—'}</span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden @5xl:table-cell">
-                                                        <span className="text-muted-foreground tabular-nums text-sm">
-                                                            {new Date(req.date_required).toLocaleDateString('en-GB')}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden @6xl:table-cell">
-                                                        <span className="text-muted-foreground tabular-nums text-sm">
-                                                            {new Date(req.created_at).toLocaleDateString('en-GB')}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
-                                                        <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.delivery_contact || '—'}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="hidden max-w-[120px] @7xl:table-cell">
-                                                        <span className="text-muted-foreground block truncate text-sm">
-                                                            {req.deliver_to || '—'}
-                                                        </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        <span className="text-foreground tabular-nums text-sm font-semibold">
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex shrink-0 items-center gap-1">
+                                                        <span className="text-sm font-semibold tabular-nums">
                                                             {formatCurrency(req.line_items_sum_total_cost)}
                                                         </span>
-                                                    </TableCell>
-
-                                                    <TableCell className="pr-4">
-                                                        <RequisitionActions requisition={req} />
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-
-                                {/* Pagination */}
-                                {requisitions.last_page > 1 && (
-                                    <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-                                        <p className="text-muted-foreground text-sm">
-                                            Showing <span className="text-foreground font-medium">{requisitions.from}</span>–<span className="text-foreground font-medium">{requisitions.to}</span> of{' '}
-                                            <span className="text-foreground font-medium">{requisitions.total}</span> results
-                                        </p>
-                                        <Pagination>
-                                            <PaginationContent className="gap-1">
-                                                <PaginationItem>
-                                                    <PaginationPrevious
-                                                        href={requisitions.prev_page_url || '#'}
-                                                        className={cn(!requisitions.prev_page_url && 'pointer-events-none opacity-50')}
-                                                    />
-                                                </PaginationItem>
-
-                                                {(() => {
-                                                    const current = requisitions.current_page;
-                                                    const last = requisitions.last_page;
-                                                    const start = Math.max(1, current - 1);
-                                                    const end = Math.min(last, current + 1);
-                                                    const pages = [];
-                                                    for (let page = start; page <= end; page++) {
-                                                        const url = requisitions.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
-                                                        pages.push(
-                                                            <PaginationItem key={page} className="hidden sm:block">
-                                                                <PaginationLink href={url} isActive={current === page}>
-                                                                    {page}
-                                                                </PaginationLink>
-                                                            </PaginationItem>,
-                                                        );
-                                                    }
-                                                    return pages;
-                                                })()}
-
-                                                <PaginationItem className="sm:hidden">
-                                                    <span className="bg-primary text-primary-foreground flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium">
-                                                        {requisitions.current_page}
-                                                    </span>
-                                                </PaginationItem>
-
-                                                <PaginationItem>
-                                                    <PaginationNext
-                                                        href={requisitions.next_page_url || '#'}
-                                                        className={cn(!requisitions.next_page_url && 'pointer-events-none opacity-50')}
-                                                    />
-                                                </PaginationItem>
-                                            </PaginationContent>
-                                        </Pagination>
+                                                        <RequisitionActionsMobile requisition={req} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
-                            </>
-                        )}
-                    </>
-                )}
+
+                                    {/* Table layout for wide containers */}
+                                    <div className="hidden rounded-lg border @3xl:block">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="hover:bg-transparent">
+                                                    {canDelete && (
+                                                        <TableHead className="w-[40px] pl-4">
+                                                            <Checkbox
+                                                                checked={reqs.length > 0 && selectedIds.size === reqs.length}
+                                                                onCheckedChange={toggleSelectAll}
+                                                                aria-label="Select all"
+                                                            />
+                                                        </TableHead>
+                                                    )}
+                                                    <TableHead className={cn('w-[70px]', !canDelete && 'pl-4')}>
+                                                        <SortableHeader
+                                                            column="id"
+                                                            label="ID"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead>
+                                                        <SortableHeader
+                                                            column="supplier"
+                                                            label="Supplier"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @5xl:table-cell">
+                                                        <SortableHeader
+                                                            column="location"
+                                                            label="Project"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @4xl:table-cell">
+                                                        <SortableHeader
+                                                            column="po_number"
+                                                            label="PO #"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead>
+                                                        <SortableHeader
+                                                            column="status"
+                                                            label="Status"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @5xl:table-cell">Template</TableHead>
+                                                    <TableHead className="hidden @6xl:table-cell">Order Ref</TableHead>
+                                                    <TableHead className="hidden @4xl:table-cell">
+                                                        <SortableHeader
+                                                            column="creator"
+                                                            label="Created By"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @5xl:table-cell">
+                                                        <SortableHeader
+                                                            column="date_required"
+                                                            label="Date Required"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @6xl:table-cell">
+                                                        <SortableHeader
+                                                            column="created_at"
+                                                            label="Created"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @7xl:table-cell">
+                                                        <SortableHeader
+                                                            column="delivery_contact"
+                                                            label="Contact"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="hidden @7xl:table-cell">
+                                                        <SortableHeader
+                                                            column="deliver_to"
+                                                            label="Deliver To"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        <SortableHeader
+                                                            column="value"
+                                                            label="Value"
+                                                            sort={filters.sort}
+                                                            direction={filters.direction}
+                                                            onSort={handleSort}
+                                                            align="right"
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="w-[50px] pr-4"></TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {reqs.map((req) => (
+                                                    <TableRow key={req.id} data-state={selectedIds.has(req.id) ? 'selected' : undefined}>
+                                                        {canDelete && (
+                                                            <TableCell className="pl-4">
+                                                                <Checkbox
+                                                                    checked={selectedIds.has(req.id)}
+                                                                    onCheckedChange={() => toggleSelect(req.id)}
+                                                                    aria-label={`Select requisition ${req.id}`}
+                                                                />
+                                                            </TableCell>
+                                                        )}
+                                                        <TableCell className={cn(!canDelete && 'pl-4')}>
+                                                            <Link
+                                                                href={`/requisition/${req.id}`}
+                                                                className="text-foreground font-mono text-xs font-semibold hover:underline"
+                                                            >
+                                                                #{req.id}
+                                                            </Link>
+                                                        </TableCell>
+
+                                                        <TableCell className="max-w-[200px]">
+                                                            <span
+                                                                className="text-foreground block truncate text-sm font-medium"
+                                                                title={req.supplier?.name}
+                                                            >
+                                                                {req.supplier?.name}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden max-w-[160px] @5xl:table-cell">
+                                                            <span className="block truncate text-sm" title={req.location?.name || undefined}>
+                                                                {req.location?.name || <span className="text-muted-foreground">—</span>}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden @4xl:table-cell">
+                                                            {req.po_number ? (
+                                                                <span className="bg-muted text-foreground inline-flex rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold">
+                                                                    PO{req.po_number}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground text-sm">—</span>
+                                                            )}
+                                                        </TableCell>
+
+                                                        <TableCell>
+                                                            <StatusBadge status={req.status} />
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden @5xl:table-cell">
+                                                            {req.is_template ? (
+                                                                <Badge variant="secondary" className="text-[10px]">
+                                                                    Template
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-muted-foreground text-sm">—</span>
+                                                            )}
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden max-w-[120px] @6xl:table-cell">
+                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                                {req.order_reference || '—'}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden @4xl:table-cell">
+                                                            <span className="text-muted-foreground text-sm">{req.creator?.name || '—'}</span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden @5xl:table-cell">
+                                                            <span className="text-muted-foreground text-sm tabular-nums">
+                                                                {new Date(req.date_required).toLocaleDateString('en-GB')}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden @6xl:table-cell">
+                                                            <span className="text-muted-foreground text-sm tabular-nums">
+                                                                {new Date(req.created_at).toLocaleDateString('en-GB')}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden max-w-[120px] @7xl:table-cell">
+                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                                {req.delivery_contact || '—'}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="hidden max-w-[120px] @7xl:table-cell">
+                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                                {req.deliver_to || '—'}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="text-right">
+                                                            <span className="text-foreground text-sm font-semibold tabular-nums">
+                                                                {formatCurrency(req.line_items_sum_total_cost)}
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell className="pr-4">
+                                                            <RequisitionActions requisition={req} />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {requisitions.last_page > 1 && (
+                                        <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+                                            <p className="text-muted-foreground text-sm">
+                                                Showing <span className="text-foreground font-medium">{requisitions.from}</span>–
+                                                <span className="text-foreground font-medium">{requisitions.to}</span> of{' '}
+                                                <span className="text-foreground font-medium">{requisitions.total}</span> results
+                                            </p>
+                                            <Pagination>
+                                                <PaginationContent className="gap-1">
+                                                    <PaginationItem>
+                                                        <PaginationPrevious
+                                                            href={requisitions.prev_page_url || '#'}
+                                                            className={cn(!requisitions.prev_page_url && 'pointer-events-none opacity-50')}
+                                                        />
+                                                    </PaginationItem>
+
+                                                    {(() => {
+                                                        const current = requisitions.current_page;
+                                                        const last = requisitions.last_page;
+                                                        const start = Math.max(1, current - 1);
+                                                        const end = Math.min(last, current + 1);
+                                                        const pages = [];
+                                                        for (let page = start; page <= end; page++) {
+                                                            const url =
+                                                                requisitions.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
+                                                            pages.push(
+                                                                <PaginationItem key={page} className="hidden sm:block">
+                                                                    <PaginationLink href={url} isActive={current === page}>
+                                                                        {page}
+                                                                    </PaginationLink>
+                                                                </PaginationItem>,
+                                                            );
+                                                        }
+                                                        return pages;
+                                                    })()}
+
+                                                    <PaginationItem className="sm:hidden">
+                                                        <span className="bg-primary text-primary-foreground flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium">
+                                                            {requisitions.current_page}
+                                                        </span>
+                                                    </PaginationItem>
+
+                                                    <PaginationItem>
+                                                        <PaginationNext
+                                                            href={requisitions.next_page_url || '#'}
+                                                            className={cn(!requisitions.next_page_url && 'pointer-events-none opacity-50')}
+                                                        />
+                                                    </PaginationItem>
+                                                </PaginationContent>
+                                            </Pagination>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
         </AppLayout>
@@ -836,17 +907,7 @@ export default function RequisitionList() {
 }
 
 // ── Combobox Filter (searchable dropdown) ─────────────────────────────
-function ComboboxFilter({
-    label,
-    options,
-    value,
-    onChange,
-}: {
-    label: string;
-    options: string[];
-    value: string;
-    onChange: (value: string) => void;
-}) {
+function ComboboxFilter({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (value: string) => void }) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -856,10 +917,7 @@ function ComboboxFilter({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={cn(
-                        'h-9 w-full justify-between font-normal',
-                        !value && 'text-muted-foreground',
-                    )}
+                    className={cn('h-9 w-full justify-between font-normal', !value && 'text-muted-foreground')}
                 >
                     <span className="truncate">{value || `Select ${label.toLowerCase()}...`}</span>
                     <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -892,12 +950,7 @@ function ComboboxFilter({
                                         setOpen(false);
                                     }}
                                 >
-                                    <Check
-                                        className={cn(
-                                            'mr-2 h-3.5 w-3.5',
-                                            value === option ? 'opacity-100' : 'opacity-0',
-                                        )}
-                                    />
+                                    <Check className={cn('mr-2 h-3.5 w-3.5', value === option ? 'opacity-100' : 'opacity-0')} />
                                     <span className="truncate">{option}</span>
                                 </CommandItem>
                             ))}
@@ -935,11 +988,7 @@ function FilterSheetButton({
                 <Button variant="outline" size="sm" className="gap-2">
                     <SlidersHorizontal className="h-4 w-4" />
                     Filters
-                    {totalActiveFilters > 0 && (
-                        <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">
-                            {totalActiveFilters}
-                        </Badge>
-                    )}
+                    {totalActiveFilters > 0 && <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">{totalActiveFilters}</Badge>}
                 </Button>
             </SheetTrigger>
             <SheetContent className="w-full overflow-y-auto sm:max-w-sm">
@@ -1000,12 +1049,7 @@ function FilterSheetButton({
                     {/* Cost range */}
                     <div className="space-y-3">
                         <Label className="text-sm font-medium">Value Range</Label>
-                        <CostRangeSlider
-                            min={costRange.min}
-                            max={costRange.max}
-                            value={localCostRange}
-                            onChange={handleCostRangeChange}
-                        />
+                        <CostRangeSlider min={costRange.min} max={costRange.max} value={localCostRange} onChange={handleCostRangeChange} />
                     </div>
                 </div>
             </SheetContent>
@@ -1052,10 +1096,7 @@ function ActiveFilterBadges({
             {filters.templates_only && (
                 <Badge variant="secondary" className="gap-1 pr-1">
                     <span className="text-xs">Templates Only</span>
-                    <button
-                        className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
-                        onClick={() => updateFilter('templates_only', false)}
-                    >
+                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => updateFilter('templates_only', false)}>
                         <X className="h-3 w-3" />
                     </button>
                 </Badge>
