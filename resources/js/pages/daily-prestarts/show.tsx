@@ -1,12 +1,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import { CheckCircle2, Download, GraduationCap, Pencil } from 'lucide-react';
+import { useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -75,6 +78,34 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
+
+    const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
+    const [noteText, setNoteText] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const openNoteEditor = (employee: UnsignedEmployee) => {
+        setEditingEmployeeId(employee.id);
+        setNoteText(employee.note ?? '');
+    };
+
+    const saveNote = () => {
+        if (editingEmployeeId === null) return;
+        setIsSaving(true);
+
+        router.post(
+            route('daily-prestarts.update-absence-note', { dailyPrestart: prestart.id, employee: editingEmployeeId }),
+            { note: noteText || null },
+            {
+                onSuccess: () => {
+                    setEditingEmployeeId(null);
+                    setIsSaving(false);
+                },
+                onError: () => {
+                    setIsSaving(false);
+                },
+            }
+        );
+    };
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Daily Prestarts', href: '/daily-prestarts' },
@@ -281,23 +312,33 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                 <TableCell>{emp.name}</TableCell>
                                                 <TableCell>
                                                     <div className="space-y-2">
-                                                        <div>
-                                                            {emp.is_present_at_site ? (
-                                                                <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-                                                                    Present - Not Signed
-                                                                </Badge>
-                                                            ) : emp.absence_reason ? (
-                                                                <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
-                                                                    {emp.absence_reason}
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
-                                                                    No Record
-                                                                </Badge>
-                                                            )}
-                                                            {emp.clock_in_time && (
-                                                                <span className="text-xs text-slate-500 ml-2">at {emp.clock_in_time}</span>
-                                                            )}
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div>
+                                                                {emp.is_present_at_site ? (
+                                                                    <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
+                                                                        Present - Not Signed
+                                                                    </Badge>
+                                                                ) : emp.absence_reason ? (
+                                                                    <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
+                                                                        {emp.absence_reason}
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
+                                                                        No Record
+                                                                    </Badge>
+                                                                )}
+                                                                {emp.clock_in_time && (
+                                                                    <span className="text-xs text-slate-500 ml-2">at {emp.clock_in_time}</span>
+                                                                )}
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => openNoteEditor(emp)}
+                                                                className="h-6 w-6 p-0"
+                                                            >
+                                                                <Pencil className="h-3.5 w-3.5" />
+                                                            </Button>
                                                         </div>
                                                         {emp.note && (
                                                             <div className="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
@@ -354,6 +395,32 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Note Editor Dialog */}
+            <Dialog open={editingEmployeeId !== null} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Add Note</DialogTitle>
+                        <DialogDescription>Explain the absence or provide additional context</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <Textarea
+                            placeholder="e.g., 2 days at MAR01 (discussed with supervisor at MAR01)"
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            className="min-h-24"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
+                                Cancel
+                            </Button>
+                            <Button onClick={saveNote} disabled={isSaving}>
+                                {isSaving ? 'Saving...' : 'Save Note'}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
