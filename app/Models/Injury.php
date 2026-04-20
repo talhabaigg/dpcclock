@@ -15,7 +15,7 @@ class Injury extends Model implements HasMedia
     use HasComments, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
-        'id_formal', 'location_id', 'employee_id', 'employee_name', 'employee_address',
+        'id_formal', 'external_id', 'location_id', 'employee_id', 'employee_name', 'employee_address',
         'incident', 'incident_other', 'occurred_at', 'reported_by',
         'reported_at', 'reported_to', 'location_of_incident', 'description',
         'emergency_services', 'work_cover_claim',

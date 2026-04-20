@@ -449,7 +449,7 @@ export function createTargetRows(
         isActualMonth: {},
     };
 
-    const revenueOnlyRows = revenueRows.filter((r) => r.rowType === 'revenue');
+    const revenueOnlyRows = revenueRows.filter((r) => r.rowType === 'revenue' && !r.isCompanyGroup && !r.isTotal);
 
     months.forEach((month) => {
         // Sum revenue from pre-transformed rows (exclude cost/profit children)

@@ -67,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // SDS bulk import endpoint
     Route::post('/sds', [\App\Http\Controllers\SafetyDataSheetController::class, 'apiStore']);
 
+    // Injury import endpoint - lookup by date+email, attach PDF as comment, set external_id
+    Route::post('/injuries/import-comment', [\App\Http\Controllers\InjuryController::class, 'apiImportComment']);
+
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
 
