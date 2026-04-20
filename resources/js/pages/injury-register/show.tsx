@@ -72,8 +72,17 @@ function SystemComment({ comment }: { comment: CommentData }) {
                 </div>
                 {comment.body && (
                     <p className="text-muted-foreground mt-0.5 text-xs whitespace-pre-wrap"
-                       dangerouslySetInnerHTML={{ __html: comment.body.replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-medium">$1</strong>') }}
+                       dangerouslySetInnerHTML={{ __html: comment.body.replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-medium">$1</strong>').replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>') }}
                     />
+                )}
+                {comment.attachments.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                        {comment.attachments.map((att) => (
+                            <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs">
+                                <FileText className="h-3 w-3" /> {att.file_name}
+                            </a>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

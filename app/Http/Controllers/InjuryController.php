@@ -497,34 +497,45 @@ class InjuryController extends Controller
     {
         $request->validate([
             'occurred_at' => 'required|date',
-            'employee_email' => 'required|email',
+            'employee_email' => 'nullable|email',
             'employee_name' => 'nullable|string|max:255',
             'external_id' => 'required|string|max:50',
             'pdf' => 'required|file|max:20480',
         ]);
 
-        // Find employee by email
-        $employee = Employee::where('email', $request->employee_email)->first();
+        $occurredDate = \Carbon\Carbon::parse($request->occurred_at)->startOfDay();
+        $injury = null;
+        $matchMethod = null;
 
-        if (!$employee) {
-            return response()->json([
-                'status' => 'not_found',
-                'reason' => 'employee',
-                'message' => "No employee found with email: {$request->employee_email}",
-            ], 404);
+        // Try 1: match by email + date
+        if ($request->employee_email) {
+            $employee = Employee::where('email', $request->employee_email)->first();
+
+            if ($employee) {
+                $injury = Injury::where('employee_id', $employee->id)
+                    ->whereDate('occurred_at', $occurredDate)
+                    ->first();
+                if ($injury) {
+                    $matchMethod = 'email';
+                }
+            }
         }
 
-        // Find injury by date + employee
-        $occurredDate = \Carbon\Carbon::parse($request->occurred_at)->startOfDay();
-        $injury = Injury::where('employee_id', $employee->id)
-            ->whereDate('occurred_at', $occurredDate)
-            ->first();
+        // Try 2: fallback to employee_name + date
+        if (!$injury && $request->employee_name) {
+            $injury = Injury::where('employee_name', 'like', $request->employee_name)
+                ->whereDate('occurred_at', $occurredDate)
+                ->first();
+            if ($injury) {
+                $matchMethod = 'name';
+            }
+        }
 
         if (!$injury) {
             return response()->json([
                 'status' => 'not_found',
-                'reason' => 'injury',
-                'message' => "No injury found for {$employee->name} on {$occurredDate->toDateString()}",
+                'reason' => 'no_match',
+                'message' => "No injury found for " . ($request->employee_name ?? $request->employee_email) . " on {$occurredDate->toDateString()}",
             ], 404);
         }
 
@@ -532,19 +543,24 @@ class InjuryController extends Controller
         $injury->update(['external_id' => $request->external_id]);
 
         // Add PDF as a system comment with migration metadata
+        $displayName = $request->employee_name ?? $injury->employee_name;
+        $displayEmail = $request->employee_email ?? 'N/A';
+
         $metadata = [
             'source' => 'legacy_import',
             'external_id' => $request->external_id,
-            'employee_name' => $request->employee_name ?? $employee->name,
-            'employee_email' => $request->employee_email,
+            'employee_name' => $displayName,
+            'employee_email' => $displayEmail,
             'occurred_at' => $occurredDate->toDateString(),
+            'matched_by' => $matchMethod,
             'imported_at' => now()->toDateTimeString(),
         ];
 
         $body = "**[System Migration]** Injury report imported from legacy system.\n\n"
             . "**Legacy ID:** {$request->external_id}\n"
-            . "**Employee:** " . ($request->employee_name ?? $employee->name) . " ({$request->employee_email})\n"
-            . "**Date of Injury:** {$occurredDate->format('d/m/Y')}\n\n"
+            . "**Employee:** {$displayName}" . ($displayEmail !== 'N/A' ? " ({$displayEmail})" : '') . "\n"
+            . "**Date of Injury:** {$occurredDate->format('d/m/Y')}\n"
+            . "**Matched by:** {$matchMethod}\n\n"
             . "_This comment was automatically generated as part of a data migration and does not represent a manual entry._";
 
         $comment = $injury->addSystemComment($body, $metadata);
@@ -555,6 +571,7 @@ class InjuryController extends Controller
             'status' => 'ok',
             'injury_id' => $injury->id,
             'id_formal' => $injury->id_formal,
+            'matched_by' => $matchMethod,
             'comment_id' => $comment->id,
         ], 200);
     }
