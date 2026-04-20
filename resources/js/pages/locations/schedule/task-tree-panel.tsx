@@ -22,8 +22,8 @@ import { addMonths, endOfMonth, endOfQuarter, endOfWeek, format, startOfMonth, s
 import { ChevronRight, Filter, FolderOpen, Plus, X } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import TaskTreeRow from './task-tree-row';
-import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode } from './types';
-import { ROW_HEIGHT } from './types';
+import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode, TaskStatus } from './types';
+import { ROW_HEIGHT, STATUS_LABELS } from './types';
 
 interface DateRange {
     from: string | null;
@@ -57,7 +57,12 @@ interface TaskTreePanelProps {
     onStartDateRangeChange: (range: DateRange) => void;
     endDateRange: DateRange;
     onEndDateRangeChange: (range: DateRange) => void;
+    responsibleFilter: Set<string>;
+    onResponsibleFilterChange: (next: Set<string>) => void;
+    statusFilter: Set<TaskStatus | 'none'>;
+    onStatusFilterChange: (next: Set<TaskStatus | 'none'>) => void;
     payRateTemplates: PayRateTemplateOption[];
+    flashTaskId: number | null;
 }
 
 function fmtDate(d: Date): string {
@@ -144,7 +149,7 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
                         {presets.map((p) => (
                             <button
                                 key={p.label}
-                                className="bg-muted hover:bg-muted/80 rounded-md px-2 py-1 text-[10px] font-medium transition-colors"
+                                className="bg-muted hover:bg-muted/80 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
                                 onClick={() => {
                                     onChange(p.fn());
                                     setOpen(false);
@@ -158,11 +163,11 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
                     {/* Custom range */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="grid gap-1">
-                            <Label className="text-muted-foreground text-[10px]">From</Label>
+                            <Label className="text-muted-foreground text-[11px]">From</Label>
                             <DateRangeField value={range.from} onChange={(value) => onChange({ ...range, from: value })} />
                         </div>
                         <div className="grid gap-1">
-                            <Label className="text-muted-foreground text-[10px]">To</Label>
+                            <Label className="text-muted-foreground text-[11px]">To</Label>
                             <DateRangeField value={range.to} onChange={(value) => onChange({ ...range, to: value })} />
                         </div>
                     </div>
@@ -213,7 +218,12 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
             onStartDateRangeChange,
             endDateRange,
             onEndDateRangeChange,
+            responsibleFilter,
+            onResponsibleFilterChange,
+            statusFilter,
+            onStatusFilterChange,
             payRateTemplates,
+            flashTaskId,
         },
         ref,
     ) => {
@@ -441,8 +451,20 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                     )}
 
                     {visibleColumns.days && <span className="w-[40px] shrink-0 border-l px-2 text-center">Days</span>}
-                    {visibleColumns.responsible && <span className="w-[150px] shrink-0 border-l px-2 text-center">Responsible</span>}
-                    {visibleColumns.status && <span className="w-[120px] shrink-0 border-l px-2 text-center">Status</span>}
+                    {visibleColumns.responsible && (
+                        <div className="w-[150px] shrink-0 border-l">
+                            <ResponsibleFilter
+                                options={responsibleOptions}
+                                selected={responsibleFilter}
+                                onChange={onResponsibleFilterChange}
+                            />
+                        </div>
+                    )}
+                    {visibleColumns.status && (
+                        <div className="w-[120px] shrink-0 border-l">
+                            <StatusFilter selected={statusFilter} onChange={onStatusFilterChange} />
+                        </div>
+                    )}
                     <span className="w-[32px] shrink-0" />
                 </div>
                 <div className="bg-muted/30 border-b" style={{ height: 24 }} />
@@ -503,6 +525,7 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                                             canOutdent={flags?.canOutdent ?? false}
                                             showBaseline={showBaseline}
                                             resourceLabel={getResourceLabel(node)}
+                                            flash={flashTaskId === node.id}
                                         />
                                     );
                                 })}
@@ -518,3 +541,94 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
 TaskTreePanel.displayName = 'TaskTreePanel';
 
 export default TaskTreePanel;
+
+interface ColumnFilterProps<T extends string> {
+    label: string;
+    options: { value: T; label: string }[];
+    selected: Set<T>;
+    onChange: (next: Set<T>) => void;
+}
+
+function ColumnFilter<T extends string>({ label, options, selected, onChange }: ColumnFilterProps<T>) {
+    const [open, setOpen] = useState(false);
+    const isActive = selected.size > 0;
+
+    const toggle = (value: T) => {
+        const next = new Set(selected);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        onChange(next);
+    };
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'hover:bg-muted flex h-full w-full items-center justify-center gap-1 px-2 text-xs font-medium transition-colors',
+                        isActive && 'text-primary',
+                    )}
+                    title={isActive ? `${label} filtered (${selected.size})` : `Filter by ${label}`}
+                >
+                    <span className="truncate">{label}</span>
+                    <Filter className={cn('h-3 w-3 shrink-0', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0" align="start" side="bottom">
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                    <span className="text-xs font-medium">Filter by {label}</span>
+                    {isActive && (
+                        <button
+                            type="button"
+                            onClick={() => onChange(new Set())}
+                            className="text-muted-foreground hover:text-foreground text-[11px] underline-offset-2 hover:underline"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+                {options.length === 0 ? (
+                    <div className="text-muted-foreground py-4 text-center text-xs">No values to filter</div>
+                ) : (
+                    <ul className="max-h-[280px] overflow-auto p-1">
+                        {options.map((opt) => (
+                            <li key={opt.value}>
+                                <label className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5"
+                                        checked={selected.has(opt.value)}
+                                        onChange={() => toggle(opt.value)}
+                                    />
+                                    <span className="truncate">{opt.label}</span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function ResponsibleFilter({ options, selected, onChange }: { options: string[]; selected: Set<string>; onChange: (next: Set<string>) => void }) {
+    const entries = useMemo(() => {
+        const list = options.map((o) => ({ value: o, label: o }));
+        list.push({ value: '__none__', label: '— (unassigned)' });
+        return list;
+    }, [options]);
+    return <ColumnFilter<string> label="Responsible" options={entries} selected={selected} onChange={onChange} />;
+}
+
+function StatusFilter({ selected, onChange }: { selected: Set<TaskStatus | 'none'>; onChange: (next: Set<TaskStatus | 'none'>) => void }) {
+    const entries: { value: TaskStatus | 'none'; label: string }[] = [
+        { value: 'not_started', label: STATUS_LABELS.not_started },
+        { value: 'in_progress', label: STATUS_LABELS.in_progress },
+        { value: 'blocked', label: STATUS_LABELS.blocked },
+        { value: 'done', label: STATUS_LABELS.done },
+        { value: 'overdue', label: STATUS_LABELS.overdue },
+        { value: 'none', label: '— (no status)' },
+    ];
+    return <ColumnFilter<TaskStatus | 'none'> label="Status" options={entries} selected={selected} onChange={onChange} />;
+}

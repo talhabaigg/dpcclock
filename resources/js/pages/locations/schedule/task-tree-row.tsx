@@ -49,6 +49,7 @@ interface TaskTreeRowProps {
     canIndent: boolean;
     canOutdent: boolean;
     resourceLabel: string | null;
+    flash?: boolean;
 }
 
 interface TaskTreeRowContentProps {
@@ -72,6 +73,7 @@ interface TaskTreeRowContentProps {
     canIndent: boolean;
     canOutdent: boolean;
     resourceLabel: string | null;
+    flash?: boolean;
 }
 
 function formatDisplayDate(dateStr: string | null): string {
@@ -88,13 +90,13 @@ function DateCell({ value, onChange, disabled }: { value: string | null; onChang
     const selected = value ? parseISO(value) : undefined;
 
     if (disabled) {
-        return <span className="text-muted-foreground w-full truncate text-center text-[11px]">{formatDisplayDate(value)}</span>;
+        return <span className="text-muted-foreground w-full truncate text-center text-xs">{formatDisplayDate(value)}</span>;
     }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <button className="hover:text-primary w-full truncate text-center text-[11px]">{formatDisplayDate(value)}</button>
+                <button className="hover:text-primary w-full truncate text-center text-xs">{formatDisplayDate(value)}</button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
                 <Calendar
@@ -141,7 +143,7 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className={cn('hover:text-primary flex h-full w-full items-center gap-1 px-1 text-[11px]', !value && 'text-muted-foreground')}
+                    className={cn('hover:text-primary flex h-full w-full items-center gap-1 px-1 text-xs', !value && 'text-muted-foreground')}
                     title={value ?? 'Assign responsible party'}
                 >
                     <span className="flex-1 truncate text-center">{value || '—'}</span>
@@ -203,7 +205,7 @@ function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: Tas
                 <button
                     type="button"
                     className={cn(
-                        'hover:ring-ring/40 inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium hover:ring-2',
+                        'hover:ring-ring/40 inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs font-medium hover:ring-2',
                         STATUS_COLORS[effective],
                     )}
                     title={isOverride ? `Manual: ${STATUS_LABELS[effective]}` : `Auto: ${STATUS_LABELS[effective]}`}
@@ -375,7 +377,7 @@ function TaskTreeRowContent({
                                 size="sm"
                                 className={cn(
                                     'ml-1 h-6 w-6 shrink-0 p-0 transition-opacity',
-                                    isSelected ? 'opacity-100' : 'opacity-50 group-hover:opacity-100 focus-visible:opacity-100',
+                                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                                 )}
                                 aria-label={`Open actions for ${node.name}`}
                             >
@@ -416,7 +418,7 @@ function TaskTreeRowContent({
                     {visibleColumns.start && (
                         <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
                             {dragging ? (
-                                <span className="text-muted-foreground w-full truncate text-center text-[11px]">
+                                <span className="text-muted-foreground w-full truncate text-center text-xs">
                                     {formatDisplayDate(node.start_date)}
                                 </span>
                             ) : (
@@ -429,7 +431,7 @@ function TaskTreeRowContent({
                     {visibleColumns.finish && (
                         <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
                             {dragging ? (
-                                <span className="text-muted-foreground w-full truncate text-center text-[11px]">
+                                <span className="text-muted-foreground w-full truncate text-center text-xs">
                                     {formatDisplayDate(node.end_date)}
                                 </span>
                             ) : (
@@ -440,7 +442,7 @@ function TaskTreeRowContent({
 
                     {/* Working days column */}
                     {visibleColumns.days && (
-                        <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-[11px]">
+                        <div className="text-muted-foreground flex h-full w-[40px] shrink-0 items-center justify-center border-l text-xs">
                             {workingDays !== null ? `${workingDays}d` : '—'}
                         </div>
                     )}
@@ -449,7 +451,7 @@ function TaskTreeRowContent({
                     {visibleColumns.responsible && (
                         <div className="flex h-full w-[150px] shrink-0 items-center border-l">
                             {dragging ? (
-                                <span className="text-muted-foreground w-full truncate px-2 text-center text-[11px]">{node.responsible || '—'}</span>
+                                <span className="text-muted-foreground w-full truncate px-2 text-center text-xs">{node.responsible || '—'}</span>
                             ) : (
                                 <ResponsibleCell
                                     value={node.responsible}
@@ -466,7 +468,7 @@ function TaskTreeRowContent({
                             {dragging ? (
                                 <span
                                     className={cn(
-                                        'inline-flex h-6 items-center rounded-md px-2 text-[11px] font-medium',
+                                        'inline-flex h-6 items-center rounded-md px-2 text-xs font-medium',
                                         STATUS_COLORS[getEffectiveStatus(node)],
                                     )}
                                 >
@@ -511,6 +513,7 @@ function TaskTreeRowInner(props: TaskTreeRowProps) {
                 'group focus-within:bg-muted/40 relative flex items-center border-b transition-colors',
                 isGroup && 'font-medium',
                 isSelected && 'bg-muted/40 ring-primary/20 ring-1 ring-inset',
+                props.flash && 'animate-[flash-save_700ms_ease-out]',
             )}
             style={{ height: rowHeight, ...dragStyle }}
             onClick={() => props.onSelect(node.id)}
@@ -522,7 +525,7 @@ function TaskTreeRowInner(props: TaskTreeRowProps) {
                 type="button"
                 className={cn(
                     'text-muted-foreground/50 hover:text-foreground flex h-full w-4 shrink-0 items-center justify-center transition-opacity',
-                    isSelected ? 'opacity-100' : 'opacity-45 group-hover:opacity-100 focus-visible:opacity-100',
+                    isSelected ? 'opacity-100' : 'opacity-25 group-hover:opacity-100 focus-visible:opacity-100',
                 )}
                 style={{ cursor: 'grab', touchAction: 'none' }}
                 title="Drag to reorder (within same parent)"

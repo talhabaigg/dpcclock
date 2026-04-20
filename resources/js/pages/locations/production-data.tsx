@@ -148,17 +148,14 @@ export default function ProductionData() {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
-        previewHttp.setData(formData as any);
+        previewHttp.setData({ file: selectedFile } as any);
         previewHttp.post(`/locations/${location.id}/production-data/preview`, {
             onSuccess: (result: PreviewResponse) => {
                 setPreviewData(result);
                 setWizardStep(2);
             },
-            onError: () => {
-                toast.error('Failed to parse file.');
+            onError: (errors: Record<string, string>) => {
+                toast.error(Object.values(errors).flat().join(', ') || 'Failed to parse file.');
             },
         });
     };
@@ -166,11 +163,10 @@ export default function ProductionData() {
     const handleConfirmUpload = () => {
         if (!selectedFile || !reportDate) return;
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        formData.append('report_date', format(reportDate, 'yyyy-MM-dd'));
-
-        uploadHttp.setData(formData as any);
+        uploadHttp.setData({
+            file: selectedFile,
+            report_date: format(reportDate, 'yyyy-MM-dd'),
+        } as any);
         uploadHttp.post(`/locations/${location.id}/production-data/upload`, {
             onSuccess: (result: { success: boolean; total_rows: number; error_rows: number; errors: RowError[] }) => {
                 if (result.error_rows > 0) {

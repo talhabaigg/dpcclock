@@ -150,7 +150,7 @@ export default function EditTaskDialog({
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label>Saved Plan Start</Label>
+                                        <Label>Baseline Start</Label>
                                         <DatePickerDemo
                                             value={toDate(baselineStart)}
                                             onChange={(d) => setBaselineStart(toStr(d))}
@@ -159,7 +159,7 @@ export default function EditTaskDialog({
                                         />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label>Saved Plan Finish</Label>
+                                        <Label>Baseline Finish</Label>
                                         <DatePickerDemo
                                             value={toDate(baselineFinish)}
                                             onChange={(d) => setBaselineFinish(toStr(d))}

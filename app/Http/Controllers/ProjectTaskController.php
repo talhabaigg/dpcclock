@@ -693,6 +693,35 @@ class ProjectTaskController extends Controller
         ]);
     }
 
+    public function bulkUpdate(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'task_ids' => 'required|array|min:1',
+            'task_ids.*' => 'integer|exists:project_tasks,id',
+            'responsible' => 'sometimes|nullable|string|max:255',
+            'status' => 'sometimes|nullable|in:not_started,in_progress,blocked,done',
+            'is_owned' => 'sometimes|boolean',
+            'color' => 'sometimes|nullable|string|max:32',
+        ]);
+
+        $patch = collect($validated)
+            ->only(['responsible', 'status', 'is_owned', 'color'])
+            ->toArray();
+
+        if (empty($patch)) {
+            return response()->json(['success' => false, 'message' => 'No fields to update'], 422);
+        }
+
+        $location->projectTasks()
+            ->whereIn('id', $validated['task_ids'])
+            ->update($patch);
+
+        return response()->json([
+            'success' => true,
+            'tasks' => $location->projectTasks()->orderBy('sort_order')->get(),
+        ]);
+    }
+
     // ── Set Baseline ──
 
     public function setBaseline(Location $location)

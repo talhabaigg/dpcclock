@@ -18,6 +18,7 @@ interface GanttPanelProps {
     onCreateLink: (sourceId: number, sourcePoint: 'start' | 'finish', targetId: number, targetPoint: 'start' | 'finish') => void;
     onClickLink?: (link: TaskLink) => void;
     linkMode: boolean;
+    onEnableLinkMode?: () => void;
     showBaseline: boolean;
     onVerticalScroll?: (scrollTop: number) => void;
 }
@@ -46,6 +47,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
             onCreateLink,
             onClickLink,
             linkMode,
+            onEnableLinkMode,
             showBaseline,
             onVerticalScroll,
         },
@@ -77,6 +79,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
         const handleLinkDotClick = useCallback(
             (taskId: number, point: 'start' | 'finish') => {
                 if (!pendingLink) {
+                    if (!linkMode) onEnableLinkMode?.();
                     setPendingLink({ sourceId: taskId, sourcePoint: point });
                 } else {
                     if (pendingLink.sourceId !== taskId) {
@@ -86,7 +89,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
                     setMousePos(null);
                 }
             },
-            [pendingLink, onCreateLink],
+            [pendingLink, onCreateLink, linkMode, onEnableLinkMode],
         );
 
         const handleMouseMove = useCallback(
@@ -190,7 +193,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
             const today = startOfDay(new Date());
             const todayX = dateToX(today, rangeStart, dayWidth);
             if (todayX < 0 || todayX > totalWidth) return null;
-            return <div className="pointer-events-none absolute top-0 z-10 h-full w-px bg-red-500" style={{ left: todayX + dayWidth / 2 }} />;
+            return <div className="pointer-events-none absolute top-0 z-10 h-full w-px bg-blue-500" style={{ left: todayX + dayWidth / 2 }} />;
         }, [rangeStart, dayWidth, totalWidth]);
 
         return (

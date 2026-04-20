@@ -6,8 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import CsvImporterDialog from '@/components/csv-importer';
+import { api } from '@/lib/api';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import AddTaskDialog from './schedule/add-task-dialog';
+import ConfirmDialog from './schedule/confirm-dialog';
 import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
 import ScheduleToolbar from './schedule/schedule-toolbar';
@@ -32,6 +34,7 @@ import {
     flattenVisible,
     generateDayColumns,
     getDateRange,
+    getEffectiveStatus,
     getScrollOffsetForDate,
     getTaskDateBounds,
     propagateLinks,
@@ -98,6 +101,15 @@ export default function Schedule() {
     const [filterTaskId, setFilterTaskId] = useState<number | null>(null);
     const [startDateRange, setStartDateRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
     const [endDateRange, setEndDateRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
+    const [responsibleFilter, setResponsibleFilter] = useState<Set<string>>(new Set());
+    const [statusFilter, setStatusFilter] = useState<Set<TaskStatus | 'none'>>(new Set());
+    const [flashTaskId, setFlashTaskId] = useState<number | null>(null);
+    const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const flashSaved = useCallback((id: number) => {
+        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+        setFlashTaskId(id);
+        flashTimeoutRef.current = setTimeout(() => setFlashTaskId(null), 700);
+    }, []);
     const toggleFilter = useCallback((flag: FilterFlag) => {
         setActiveFilters((prev) => {
             const next = new Set(prev);
@@ -122,7 +134,9 @@ export default function Schedule() {
     const importHttp = useHttp({});
     const hierarchyHttp = useHttp({});
 
+    const [manualLoading, setLoading] = useState(false);
     const loading =
+        manualLoading ||
         reorderHttp.processing ||
         bulkOwnershipHttp.processing ||
         setBaselineHttp.processing ||
@@ -324,7 +338,9 @@ export default function Schedule() {
         const hasSearch = !!searchQuery.trim();
         const hasStartFilter = !!(startDateRange.from || startDateRange.to);
         const hasEndFilter = !!(endDateRange.from || endDateRange.to);
-        const needsFiltering = hasFlags || hasSearch || hasStartFilter || hasEndFilter;
+        const hasResponsibleFilter = responsibleFilter.size > 0;
+        const hasStatusFilter = statusFilter.size > 0;
+        const needsFiltering = hasFlags || hasSearch || hasStartFilter || hasEndFilter || hasResponsibleFilter || hasStatusFilter;
 
         if (needsFiltering) {
             const matchedIds = new Set<number>();
@@ -355,6 +371,18 @@ export default function Schedule() {
                     const q = searchQuery.trim().toLowerCase();
                     if (!t.name.toLowerCase().includes(q)) matches = false;
                 }
+                if (hasResponsibleFilter) {
+                    const key = t.responsible ?? '__none__';
+                    if (!responsibleFilter.has(key)) matches = false;
+                }
+                if (hasStatusFilter) {
+                    // Match against effective status (includes derived 'overdue') so filtering mirrors what's displayed.
+                    const key: TaskStatus | 'none' = t.start_date && t.end_date ? getEffectiveStatus(t) : (t.status ?? 'none');
+                    if (!statusFilter.has(key)) matches = false;
+                }
+                // Group rows never have a responsible/status of their own — exclude from column filters
+                // unless the group has matching descendants (handled by ancestor expansion below).
+                if ((hasResponsibleFilter || hasStatusFilter) && t.hasChildren) matches = false;
 
                 if (matches) matchedIds.add(t.id);
             }
@@ -380,7 +408,7 @@ export default function Schedule() {
         }
 
         return result;
-    }, [tree, expanded, taskRelations, activeFilters, filterTaskId, searchQuery, startDateRange, endDateRange]);
+    }, [tree, expanded, taskRelations, activeFilters, filterTaskId, searchQuery, startDateRange, endDateRange, responsibleFilter, statusFilter]);
 
     const visibleTasks = filteredTasks;
 
@@ -413,6 +441,61 @@ export default function Schedule() {
         const scrollLeft = getScrollOffsetForDate(new Date(), rangeStart, dayWidth, viewportWidth);
         ganttScrollRef.current.scrollTo({ left: scrollLeft, behavior: 'smooth' });
     }, [rangeStart, dayWidth]);
+
+    // Global keyboard shortcuts. Ignored while typing into inputs, selects, or contenteditable.
+    useEffect(() => {
+        const ZOOMS: ZoomLevel[] = ['year', 'quarter', 'month', 'week'];
+        function cycleZoom(dir: 1 | -1) {
+            const i = ZOOMS.indexOf(zoom);
+            if (i === -1) return;
+            const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, i + dir))];
+            if (next !== zoom) {
+                handleZoomChange(next);
+                toast(`Zoom: ${next[0].toUpperCase()}${next.slice(1)}`, { duration: 1200 });
+            }
+        }
+        function onKey(e: KeyboardEvent) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+
+            switch (e.key) {
+                case 't':
+                case 'T':
+                    e.preventDefault();
+                    goToToday();
+                    toast('Scrolled to today', { duration: 1200 });
+                    break;
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    document.getElementById('schedule-search-input')?.focus();
+                    toast('Search focused', { duration: 1200 });
+                    break;
+                case 'b':
+                case 'B':
+                    e.preventDefault();
+                    setShowBaseline((v) => {
+                        toast(v ? 'Baseline hidden' : 'Baseline shown', { duration: 1200 });
+                        return !v;
+                    });
+                    break;
+                case '+':
+                case '=':
+                    e.preventDefault();
+                    cycleZoom(1);
+                    break;
+                case '-':
+                case '_':
+                    e.preventDefault();
+                    cycleZoom(-1);
+                    break;
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [zoom, goToToday, handleZoomChange]);
 
     const autoFit = useCallback(() => {
         if (!ganttScrollRef.current) return;
@@ -604,14 +687,14 @@ export default function Schedule() {
             };
             for (const u of dateUpdates) {
                 updateDatesHttp.setData({ start_date: u.start_date, end_date: u.end_date });
-                updateDatesHttp.patch(`/tasks/${u.id}/dates`, { onError: rollback });
+                updateDatesHttp.patch(`/tasks/${u.id}/dates`, { onSuccess: () => flashSaved(u.id), onError: rollback });
             }
             for (const u of lagUpdates) {
                 updateLinkLagHttp.setData({ lag_days: u.lag_days });
                 updateLinkLagHttp.patch(`/task-links/${u.id}`, { onError: rollback });
             }
         },
-        [tasks, links],
+        [tasks, links, flashSaved],
     );
 
     const handleResponsibleChange = useCallback(
@@ -620,13 +703,14 @@ export default function Schedule() {
             setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, responsible: value } : t)));
             updateTaskHttp.setData({ responsible: value });
             updateTaskHttp.patch(`/tasks/${id}`, {
+                onSuccess: () => flashSaved(id),
                 onError: () => {
                     setTasks(prev);
                     toast.error('Failed to update responsible party');
                 },
             });
         },
-        [tasks],
+        [tasks, flashSaved],
     );
 
     const handleStatusChange = useCallback(
@@ -635,13 +719,14 @@ export default function Schedule() {
             setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, status } : t)));
             updateTaskHttp.setData({ status });
             updateTaskHttp.patch(`/tasks/${id}`, {
+                onSuccess: () => flashSaved(id),
                 onError: () => {
                     setTasks(prev);
                     toast.error('Failed to update status');
                 },
             });
         },
-        [tasks],
+        [tasks, flashSaved],
     );
 
     const responsibleOptions = useMemo(() => {
@@ -843,34 +928,108 @@ export default function Schedule() {
         [location.id, visibleTasks],
     );
 
+    const handleBulkSetResponsible = useCallback(
+        async (responsible: string | null) => {
+            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
+            if (taskIds.length === 0) return;
+
+            setLoading(true);
+            try {
+                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
+                    task_ids: taskIds,
+                    responsible,
+                });
+                setTasks(result.tasks);
+                toast.success(`Set responsible on ${taskIds.length} tasks`);
+            } catch {
+                toast.error('Failed to update tasks');
+            } finally {
+                setLoading(false);
+            }
+        },
+        [location.id, visibleTasks],
+    );
+
+    const handleBulkSetStatus = useCallback(
+        async (status: TaskStatus | null) => {
+            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
+            if (taskIds.length === 0) return;
+
+            setLoading(true);
+            try {
+                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
+                    task_ids: taskIds,
+                    status,
+                });
+                setTasks(result.tasks);
+                toast.success(`Set status on ${taskIds.length} tasks`);
+            } catch {
+                toast.error('Failed to update tasks');
+            } finally {
+                setLoading(false);
+            }
+        },
+        [location.id, visibleTasks],
+    );
+
+    const handleBulkSetColor = useCallback(
+        async (color: string | null) => {
+            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
+            if (taskIds.length === 0) return;
+
+            setLoading(true);
+            try {
+                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
+                    task_ids: taskIds,
+                    color,
+                });
+                setTasks(result.tasks);
+                toast.success(`Set color on ${taskIds.length} tasks`);
+            } catch {
+                toast.error('Failed to update tasks');
+            } finally {
+                setLoading(false);
+            }
+        },
+        [location.id, visibleTasks],
+    );
+
     // ── Import ──
 
-    const handleSetBaseline = useCallback(async () => {
+    const [setBaselineOpen, setSetBaselineOpen] = useState(false);
+    const [revertBaselineOpen, setRevertBaselineOpen] = useState(false);
+    const [clearAllOpen, setClearAllOpen] = useState(false);
+
+    const performSetBaseline = useCallback(async () => {
+        setSetBaselineOpen(false);
+        setLoading(true);
         try {
             const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/set-baseline`);
             setTasks(result.tasks);
-            toast.success('Saved plan updated');
+            toast.success('Baseline set');
         } catch {
-            toast.error('Failed to save current plan');
-        }
-    }, [location.id]);
-
-    const handleRevertToBaseline = useCallback(async () => {
-        if (!confirm('Restore dates from the saved plan? Current dates will be replaced.')) return;
-        setLoading(true);
-        try {
-            const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/revert-to-baseline`);
-            setTasks(result.tasks);
-            toast.success('Saved plan restored');
-        } catch {
-            toast.error('Failed to restore saved plan');
+            toast.error('Failed to set baseline');
         } finally {
             setLoading(false);
         }
     }, [location.id]);
 
-    const handleClearAll = useCallback(async () => {
-        if (!confirm('Delete ALL tasks and links for this location? This cannot be undone.')) return;
+    const performRevertToBaseline = useCallback(async () => {
+        setRevertBaselineOpen(false);
+        setLoading(true);
+        try {
+            const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/revert-to-baseline`);
+            setTasks(result.tasks);
+            toast.success('Restored to baseline');
+        } catch {
+            toast.error('Failed to restore to baseline');
+        } finally {
+            setLoading(false);
+        }
+    }, [location.id]);
+
+    const performClearAll = useCallback(async () => {
+        setClearAllOpen(false);
         setLoading(true);
         try {
             await api.delete(`/locations/${location.id}/tasks`);
@@ -883,6 +1042,10 @@ export default function Schedule() {
             setLoading(false);
         }
     }, [location.id]);
+
+    const handleSetBaseline = useCallback(() => setSetBaselineOpen(true), []);
+    const handleRevertToBaseline = useCallback(() => setRevertBaselineOpen(true), []);
+    const handleClearAll = useCallback(() => setClearAllOpen(true), []);
 
     const handleImport = useCallback(
         async (rows: Record<string, string>[]) => {
@@ -916,10 +1079,22 @@ export default function Schedule() {
 
             <div className="relative flex h-[calc(100vh-65px)] flex-col">
                 {loading && (
-                    <div className="bg-background/60 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-                        <div className="bg-card flex items-center gap-3 rounded-lg border px-6 py-4 shadow-lg">
-                            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />
-                            <span className="text-sm font-medium">Processing...</span>
+                    <div className="pointer-events-none absolute top-2 right-3 z-50">
+                        <div className="bg-card flex items-center gap-2 rounded-full border px-3 py-1.5 shadow-md">
+                            <div className="border-primary h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" />
+                            <span className="text-xs font-medium">
+                                {importHttp.processing
+                                    ? 'Importing tasks…'
+                                    : setBaselineHttp.processing
+                                      ? 'Saving baseline…'
+                                      : revertBaselineHttp.processing
+                                        ? 'Restoring baseline…'
+                                        : clearAllHttp.processing
+                                          ? 'Deleting tasks…'
+                                          : bulkOwnershipHttp.processing
+                                            ? 'Updating tasks…'
+                                            : 'Saving…'}
+                            </span>
                         </div>
                     </div>
                 )}
@@ -950,7 +1125,13 @@ export default function Schedule() {
                     onClearAll={handleClearAll}
                     onBulkMarkOwned={() => handleBulkMarkOwned(true)}
                     onBulkUnmarkOwned={() => handleBulkMarkOwned(false)}
-                    hasFilteredTasks={visibleTasks.length > 0}
+                    onBulkSetResponsible={handleBulkSetResponsible}
+                    onBulkSetStatus={handleBulkSetStatus}
+                    onBulkSetColor={handleBulkSetColor}
+                    responsibleOptions={responsibleOptions}
+                    filteredTaskCount={visibleTasks.filter((t) => !t.hasChildren).length}
+                    hasFilteredTasks={visibleTasks.filter((t) => !t.hasChildren).length > 0}
+                    hasColumnFilter={responsibleFilter.size > 0 || statusFilter.size > 0}
                     onImport={() => importBtnRef.current?.querySelector('button')?.click()}
                     sortMode={sortMode}
                     onSortModeChange={handleSortModeChange}
@@ -1007,7 +1188,12 @@ export default function Schedule() {
                         onStartDateRangeChange={setStartDateRange}
                         endDateRange={endDateRange}
                         onEndDateRangeChange={setEndDateRange}
+                        responsibleFilter={responsibleFilter}
+                        onResponsibleFilterChange={setResponsibleFilter}
+                        statusFilter={statusFilter}
+                        onStatusFilterChange={setStatusFilter}
                         payRateTemplates={payRateTemplates ?? []}
+                        flashTaskId={flashTaskId}
                     />
 
                     <div className="bg-border w-px" />
@@ -1024,6 +1210,7 @@ export default function Schedule() {
                         onCreateLink={handleCreateLink}
                         onClickLink={handleClickLink}
                         linkMode={linkMode}
+                        onEnableLinkMode={() => setLinkMode(true)}
                         showBaseline={showBaseline}
                         onVerticalScroll={handleGanttVerticalScroll}
                     />
@@ -1051,6 +1238,53 @@ export default function Schedule() {
                 onUpdateLink={handleUpdateLink}
                 payRateTemplates={payRateTemplates ?? []}
                 responsibleOptions={responsibleOptions}
+            />
+
+            <ConfirmDialog
+                open={setBaselineOpen}
+                onOpenChange={setSetBaselineOpen}
+                title="Set Baseline?"
+                description={
+                    <>
+                        <p>This captures the current task dates as the baseline (contract program).</p>
+                        <p className="font-medium text-foreground">Any existing baseline will be overwritten.</p>
+                    </>
+                }
+                confirmLabel="Set Baseline"
+                onConfirm={performSetBaseline}
+            />
+
+            <ConfirmDialog
+                open={revertBaselineOpen}
+                onOpenChange={setRevertBaselineOpen}
+                title="Restore to Baseline?"
+                description={
+                    <>
+                        <p>All task start and finish dates will be reset to their baseline values.</p>
+                        <p>Links, responsible parties, status, and ownership are not affected.</p>
+                        <p className="font-medium text-foreground">Your current actual dates will be overwritten.</p>
+                    </>
+                }
+                confirmLabel="Restore to Baseline"
+                destructive
+                onConfirm={performRevertToBaseline}
+            />
+
+            <ConfirmDialog
+                open={clearAllOpen}
+                onOpenChange={setClearAllOpen}
+                title="Delete ALL tasks?"
+                description={
+                    <>
+                        <p>This permanently deletes every task and link for <strong className="text-foreground">{location.name}</strong>.</p>
+                        <p className="font-medium text-foreground">This cannot be undone.</p>
+                    </>
+                }
+                confirmLabel="Delete Everything"
+                destructive
+                requireTyping={location.name}
+                typingLabel={`Type the project name "${location.name}" to confirm`}
+                onConfirm={performClearAll}
             />
         </AppLayout>
     );

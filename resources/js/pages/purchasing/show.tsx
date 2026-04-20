@@ -36,7 +36,6 @@ import {
     Cuboid,
     Edit3,
     FileSpreadsheet,
-    FileText,
     GitCompare,
     HelpCircle,
     History,

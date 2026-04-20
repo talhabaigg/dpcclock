@@ -856,3 +856,12 @@
     color: var(--foreground);
     font-weight: 600;
 }
+
+@keyframes flash-save {
+    0% {
+        background-color: rgb(34 197 94 / 0.35);
+    }
+    100% {
+        background-color: transparent;
+    }
+}

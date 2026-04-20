@@ -68,7 +68,7 @@ function GanttHeader({ days, dayWidth }: GanttHeaderProps) {
                 {yearGroups.map((g) => (
                     <div
                         key={g.label + g.startIdx}
-                        className="border-r text-center text-[11px] leading-5 font-semibold"
+                        className="border-r text-center text-xs leading-5 font-semibold"
                         style={{ width: g.count * dayWidth }}
                     >
                         {g.count * dayWidth > 28 ? g.label : ''}

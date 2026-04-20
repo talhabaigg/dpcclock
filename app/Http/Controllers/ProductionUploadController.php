@@ -56,7 +56,12 @@ class ProductionUploadController extends Controller
     public function preview(Request $request, Location $location)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt',
+            'file' => ['required', 'file', function ($attribute, $value, $fail) {
+                $ext = strtolower($value->getClientOriginalExtension());
+                if (!in_array($ext, ['csv', 'txt'])) {
+                    $fail('The file must be a CSV or TXT file.');
+                }
+            }],
         ]);
 
         $parsed = $this->parseCsv($request->file('file')->getRealPath());
@@ -82,7 +87,12 @@ class ProductionUploadController extends Controller
     public function upload(Request $request, Location $location)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt',
+            'file' => ['required', 'file', function ($attribute, $value, $fail) {
+                $ext = strtolower($value->getClientOriginalExtension());
+                if (!in_array($ext, ['csv', 'txt'])) {
+                    $fail('The file must be a CSV or TXT file.');
+                }
+            }],
             'report_date' => 'required|date',
         ]);
 

@@ -247,15 +247,23 @@ export default function GanttBar({
         );
     }
 
-    // Connector dot — click-based linking
+    // Connector dot — click-based linking. When link mode is off, dots stay
+    // hidden until the bar is hovered (purely visual — they don't capture pointer
+    // events, so resize handles remain usable). On hover of the dot itself they
+    // pop to full opacity and become clickable to auto-enter link mode.
     const connectorDot = (side: 'start' | 'finish') => (
         <div
+            role="button"
+            aria-label={side === 'start' ? 'Link from start of this task (predecessor)' : 'Link from finish of this task (successor)'}
+            title={side === 'start' ? 'Start — click to link (predecessor)' : 'Finish — click to link (successor)'}
             className={cn(
                 'absolute top-1/2 z-20 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-white transition-all',
                 isThisSource ? 'scale-125 bg-orange-600' : isLinking ? 'bg-green-500 hover:scale-125' : 'bg-orange-500 hover:scale-125',
+                !linkMode && 'pointer-events-none opacity-0 group-hover/bar:opacity-60',
                 side === 'start' ? '-left-[7px]' : '-right-[7px]',
             )}
             style={{ cursor: 'crosshair' }}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
                 e.stopPropagation();
                 onLinkDotClick?.(node.id, side);
@@ -284,7 +292,7 @@ export default function GanttBar({
         >
             {/* Drag preview tooltip */}
             {previewDates && (
-                <div className="pointer-events-none absolute -top-9 left-1/2 z-30 -translate-x-1/2 rounded bg-zinc-950/85 px-2 py-1 text-[10px] leading-tight whitespace-nowrap text-white shadow-lg">
+                <div className="pointer-events-none absolute -top-9 left-1/2 z-30 -translate-x-1/2 rounded bg-zinc-950/85 px-2 py-1 text-xs leading-tight whitespace-nowrap text-white shadow-lg">
                     <span>{previewDates.start}</span>
                     <span className="mx-1 text-white/50">→</span>
                     <span>{previewDates.end}</span>
@@ -292,13 +300,9 @@ export default function GanttBar({
                 </div>
             )}
 
-            {/* Link connector dots — only visible in link mode */}
-            {linkMode && (
-                <>
-                    {connectorDot('start')}
-                    {connectorDot('finish')}
-                </>
-            )}
+            {/* Link connector dots — always rendered but invisible until hover when link mode is off */}
+            {connectorDot('start')}
+            {connectorDot('finish')}
 
             {/* Left resize handle */}
             {!linkMode && (
@@ -311,7 +315,7 @@ export default function GanttBar({
             {/* Label — show live count during drag */}
             {displayWidth > 40 && (
                 <span
-                    className="pointer-events-none truncate px-2 text-[10px] font-medium text-white"
+                    className="pointer-events-none truncate px-2 text-xs font-medium text-white"
                     style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
                 >
                     {previewDates ? previewDates.days : workingDays}d
