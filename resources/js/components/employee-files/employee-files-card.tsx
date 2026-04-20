@@ -10,14 +10,17 @@ import UploadFileDialog from './upload-file-dialog';
 interface FileType {
     id: number;
     name: string;
-    category: string | null;
+    category: string[] | null;
     has_back_side: boolean;
+    expiry_requirement: 'required' | 'optional' | 'none';
+    requires_completed_date: boolean;
 }
 
 interface EmployeeFileRecord {
     id: number;
     document_number: string | null;
     expires_at: string | null;
+    completed_at: string | null;
     status: 'valid' | 'expired' | 'expiring_soon';
     notes: string | null;
     uploaded_by: string | null;
@@ -107,11 +110,11 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
         router.delete(`/employees/${employeeId}/files/${fileId}`, { preserveState: true, preserveScroll: true });
     };
 
-    // Group uploaded files by category
+    // Group uploaded files by first category
     const filesByCategory = useMemo(() => {
         const grouped: Record<string, EmployeeFileRecord[]> = {};
         for (const f of files) {
-            const cat = f.file_type.category || 'Other';
+            const cat = (f.file_type.category && f.file_type.category.length > 0) ? f.file_type.category[0] : 'Other';
             if (!grouped[cat]) grouped[cat] = [];
             grouped[cat].push(f);
         }
@@ -153,6 +156,9 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                         <div key={f.id} className="hover:bg-muted/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
                                             <StatusIcon status={f.status} />
                                             <span className="min-w-0 flex-1 truncate font-medium">{f.file_type.name}</span>
+                                            {f.completed_at && (
+                                                <span className="text-muted-foreground shrink-0 text-xs">Completed: {formatDate(f.completed_at)}</span>
+                                            )}
                                             {f.expires_at && (
                                                 <span className="text-muted-foreground shrink-0 text-xs">Exp: {formatDate(f.expires_at)}</span>
                                             )}

@@ -14,6 +14,8 @@ class EmployeeFileType extends Model
         'slug',
         'description',
         'has_back_side',
+        'expiry_requirement',
+        'requires_completed_date',
         'conditions',
         'is_active',
         'sort_order',
@@ -21,8 +23,10 @@ class EmployeeFileType extends Model
 
     protected $casts = [
         'has_back_side' => 'boolean',
+        'requires_completed_date' => 'boolean',
         'is_active' => 'boolean',
         'conditions' => 'array',
+        'category' => 'array',
     ];
 
     protected static function booted(): void

@@ -17,12 +17,14 @@ class EmployeeFile extends Model implements HasMedia
         'employee_file_type_id',
         'document_number',
         'expires_at',
+        'completed_at',
         'uploaded_by',
         'notes',
     ];
 
     protected $casts = [
         'expires_at' => 'date',
+        'completed_at' => 'date',
     ];
 
     public function registerMediaCollections(): void

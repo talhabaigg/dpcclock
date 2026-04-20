@@ -131,33 +131,31 @@ const RequisitionCard = ({ requisition, index = 0 }: RequisitionCardProps) => {
                                         variant="ghost"
                                         size="sm"
                                         className="text-muted-foreground hover:text-foreground h-6 w-6 rounded"
+                                        onClick={(e) => e.preventDefault()}
                                     >
                                         <EllipsisVertical className="h-3.5 w-3.5" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40">
-                                    <Link href={`/requisition/${requisition.id}`}>
-                                        <DropdownMenuItem className="text-xs">View Details</DropdownMenuItem>
-                                    </Link>
+                                <DropdownMenuContent align="end" className="w-40" onClick={(e) => e.stopPropagation()}>
+                                    <DropdownMenuItem className="text-xs" onClick={() => router.visit(`/requisition/${requisition.id}`)}>
+                                        View Details
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                         className="text-xs"
-                                        onSelect={() => router.post(`/requisition/${requisition.id}/copy`)}
+                                        onClick={() => router.post(`/requisition/${requisition.id}/copy`)}
                                     >
                                         Duplicate
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         className="text-xs"
-                                        onSelect={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
+                                        onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
                                     >
                                         {requisition.is_template ? 'Remove Template' : 'Save as Template'}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         className="text-destructive focus:text-destructive text-xs"
-                                        onSelect={(e) => {
-                                            e.preventDefault();
-                                            setDeleteOpen(true);
-                                        }}
+                                        onClick={() => setDeleteOpen(true)}
                                     >
                                         Delete
                                     </DropdownMenuItem>

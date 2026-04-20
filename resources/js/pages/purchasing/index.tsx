@@ -95,65 +95,84 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Actions dropdown (desktop) ────────────────────────────────────────
 function RequisitionActions({ requisition }: { requisition: { id: number; is_template: boolean } }) {
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+
     return (
-        <AlertDialog>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <span className="sr-only">Open menu</span>
-                        <EllipsisVertical className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <Link href={`/requisition/${requisition.id}`}>
-                        <DropdownMenuItem className="gap-2">
+        <>
+            <AlertDialog>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <span className="sr-only">Open menu</span>
+                            <EllipsisVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="gap-2" onClick={() => router.visit(`/requisition/${requisition.id}`)}>
                             <Eye className="h-4 w-4" />
                             View Details
                         </DropdownMenuItem>
-                    </Link>
-                    <DropdownMenuItem className="gap-2" onSelect={() => router.post(`/requisition/${requisition.id}/copy`)}>
-                        <Copy className="h-4 w-4" />
-                        Copy
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2" onSelect={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}>
-                        <SquarePlus className="h-4 w-4" />
-                        {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <AlertDialogTrigger asChild>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive gap-2">
-                            <Trash2 className="h-4 w-4" />
-                            Delete
+                        <DropdownMenuItem className="gap-2" onClick={() => setDuplicateOpen(true)}>
+                            <Copy className="h-4 w-4" />
+                            Copy
                         </DropdownMenuItem>
-                    </AlertDialogTrigger>
-                </DropdownMenuContent>
-            </DropdownMenu>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the requisition and all associated line items.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={() => router.delete(`/requisition/${requisition.id}`)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                        Delete
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                        <DropdownMenuItem className="gap-2" onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}>
+                            <SquarePlus className="h-4 w-4" />
+                            {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <AlertDialogTrigger asChild>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive gap-2">
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                            </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the requisition and all associated line items.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => router.delete(`/requisition/${requisition.id}`)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
+                            Duplicate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
 
 // ── Actions sheet (mobile) ────────────────────────────────────────────
 function RequisitionActionsMobile({ requisition }: { requisition: { id: number; is_template: boolean } }) {
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
 
     return (
         <>
@@ -177,7 +196,7 @@ function RequisitionActionsMobile({ requisition }: { requisition: { id: number; 
                             View Details
                         </Link>
                         <button
-                            onClick={() => router.post(`/requisition/${requisition.id}/copy`)}
+                            onClick={() => setDuplicateOpen(true)}
                             className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
                         >
                             <Copy className="text-muted-foreground h-4 w-4" />
@@ -217,6 +236,22 @@ function RequisitionActionsMobile({ requisition }: { requisition: { id: number; 
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
+                            Duplicate
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

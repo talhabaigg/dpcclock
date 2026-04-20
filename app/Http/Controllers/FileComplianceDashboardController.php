@@ -30,12 +30,21 @@ class FileComplianceDashboardController extends Controller
             $statuses = $requiredTypes->mapWithKeys(function (EmployeeFileType $type) use ($latest) {
                 $file = $latest->get($type->id);
 
-                return [$type->id => match (true) {
-                    $file === null => 'missing',
-                    $file->isExpired() => 'expired',
-                    $file->isExpiringSoon() => 'expiring_soon',
-                    default => 'valid',
-                }];
+                if ($file === null) {
+                    return [$type->id => 'missing'];
+                }
+
+                // Only check expiry if the file type tracks expiry
+                if ($type->expiry_requirement !== 'none') {
+                    if ($file->isExpired()) {
+                        return [$type->id => 'expired'];
+                    }
+                    if ($file->isExpiringSoon()) {
+                        return [$type->id => 'expiring_soon'];
+                    }
+                }
+
+                return [$type->id => 'valid'];
             });
 
             $nonCompliant = $statuses->filter(fn ($s) => in_array($s, ['missing', 'expired']))->count();

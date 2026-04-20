@@ -12,8 +12,10 @@ import Dropzone from 'shadcn-dropzone';
 interface FileType {
     id: number;
     name: string;
-    category: string | null;
+    category: string[] | null;
     has_back_side: boolean;
+    expiry_requirement: 'required' | 'optional' | 'none';
+    requires_completed_date: boolean;
 }
 
 interface Props {
@@ -27,6 +29,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
     const [category, setCategory] = useState('');
     const [typeId, setTypeId] = useState('');
     const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
+    const [completedAt, setCompletedAt] = useState<Date | undefined>(undefined);
     const [fileFront, setFileFront] = useState<File | null>(null);
     const [fileBack, setFileBack] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -34,19 +37,20 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
     const selectedType = fileTypes.find((t) => String(t.id) === typeId);
 
     const categories = useMemo(() => {
-        const cats = new Set(fileTypes.map((ft) => ft.category || 'Other'));
+        const cats = new Set(fileTypes.flatMap((ft) => ft.category ?? ['Other']));
         return Array.from(cats).sort();
     }, [fileTypes]);
 
     const filteredTypes = useMemo(() => {
         if (!category) return [];
-        return fileTypes.filter((ft) => (ft.category || 'Other') === category);
+        return fileTypes.filter((ft) => (ft.category ?? ['Other']).includes(category));
     }, [fileTypes, category]);
 
     const reset = () => {
         setCategory('');
         setTypeId('');
         setExpiresAt(undefined);
+        setCompletedAt(undefined);
         setFileFront(null);
         setFileBack(null);
     };
@@ -60,6 +64,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
             file_front: fileFront,
         };
         if (expiresAt) data.expires_at = format(expiresAt, 'yyyy-MM-dd');
+        if (completedAt) data.completed_at = format(completedAt, 'yyyy-MM-dd');
         if (fileBack) data.file_back = fileBack;
 
         router.post(`/employees/${employeeId}/files`, data, {
@@ -128,15 +133,34 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
 
                     {typeId && (
                         <>
-                            <div className="flex flex-col gap-1.5">
-                                <Label>Expiry Date</Label>
-                                <DatePickerDemo
-                                    value={expiresAt}
-                                    onChange={setExpiresAt}
-                                    placeholder="Select expiry date"
-                                    className="w-full"
-                                />
-                            </div>
+                            {selectedType?.requires_completed_date && (
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>Completed Date</Label>
+                                    <DatePickerDemo
+                                        value={completedAt}
+                                        onChange={setCompletedAt}
+                                        placeholder="Select completed date"
+                                        className="w-full"
+                                    />
+                                </div>
+                            )}
+
+                            {selectedType?.expiry_requirement !== 'none' && (
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>
+                                        Expiry Date
+                                        {selectedType?.expiry_requirement === 'optional' && (
+                                            <span className="text-muted-foreground ml-1 text-xs font-normal">(Optional)</span>
+                                        )}
+                                    </Label>
+                                    <DatePickerDemo
+                                        value={expiresAt}
+                                        onChange={setExpiresAt}
+                                        placeholder="Select expiry date"
+                                        className="w-full"
+                                    />
+                                </div>
+                            )}
 
                             <div className="flex flex-col gap-1.5">
                                 <Label>Front Side</Label>

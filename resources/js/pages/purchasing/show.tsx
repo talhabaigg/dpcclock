@@ -419,7 +419,7 @@ export default function RequisitionShow() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="w-48">
                                     <DropdownMenuItem
-                                        onSelect={() => router.visit(`/requisition/${requisition.id}/edit`)}
+                                        onClick={() => router.visit(`/requisition/${requisition.id}/edit`)}
                                         disabled={
                                             requisition.status !== 'pending' &&
                                             requisition.status !== 'failed' &&
@@ -433,7 +433,7 @@ export default function RequisitionShow() {
                                         (requisition.status === 'pending' ||
                                             requisition.status === 'failed' ||
                                             requisition.status === 'office_review') && (
-                                            <DropdownMenuItem onSelect={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}>
+                                            <DropdownMenuItem onClick={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}>
                                                 <RefreshCw className="h-4 w-4" />
                                                 Refresh Pricing
                                             </DropdownMenuItem>
@@ -445,7 +445,7 @@ export default function RequisitionShow() {
                                             Excel
                                         </a>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => setDuplicateOpen(true)}>
+                                    <DropdownMenuItem onClick={() => setDuplicateOpen(true)}>
                                         <Copy className="h-4 w-4" />
                                         Duplicate
                                     </DropdownMenuItem>

@@ -21,6 +21,7 @@ class EmployeeFileController extends Controller
                 'id' => $file->id,
                 'document_number' => $file->document_number,
                 'expires_at' => $file->expires_at?->toDateString(),
+                'completed_at' => $file->completed_at?->toDateString(),
                 'status' => $file->getStatus(),
                 'notes' => $file->notes,
                 'uploaded_by' => $file->uploadedBy?->name,
@@ -30,6 +31,8 @@ class EmployeeFileController extends Controller
                     'name' => $file->fileType->name,
                     'category' => $file->fileType->category,
                     'has_back_side' => $file->fileType->has_back_side,
+                    'expiry_requirement' => $file->fileType->expiry_requirement,
+                    'requires_completed_date' => $file->fileType->requires_completed_date,
                 ],
                 'front_url' => $file->getFrontUrl(),
                 'back_url' => $file->getBackUrl(),
@@ -40,7 +43,7 @@ class EmployeeFileController extends Controller
         $allFileTypes = EmployeeFileType::active()
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'name', 'category', 'has_back_side']);
+            ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date']);
 
         return response()->json([
             'files' => $files,
@@ -54,6 +57,7 @@ class EmployeeFileController extends Controller
             'employee_file_type_id' => 'required|exists:employee_file_types,id',
             'document_number' => 'nullable|string|max:255',
             'expires_at' => 'nullable|date',
+            'completed_at' => 'nullable|date',
             'notes' => 'nullable|string',
             'file_front' => 'required|file|max:10240',
             'file_back' => 'nullable|file|max:10240',
@@ -65,6 +69,7 @@ class EmployeeFileController extends Controller
             'employee_file_type_id' => $validated['employee_file_type_id'],
             'document_number' => $validated['document_number'] ?? null,
             'expires_at' => $validated['expires_at'] ?? null,
+            'completed_at' => $validated['completed_at'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'uploaded_by' => auth()->id(),
         ]);
@@ -85,6 +90,7 @@ class EmployeeFileController extends Controller
         $validated = $request->validate([
             'document_number' => 'nullable|string|max:255',
             'expires_at' => 'nullable|date',
+            'completed_at' => 'nullable|date',
             'notes' => 'nullable|string',
             'file_front' => 'nullable|file|max:10240',
             'file_back' => 'nullable|file|max:10240',
@@ -93,6 +99,7 @@ class EmployeeFileController extends Controller
         $employeeFile->update([
             'document_number' => $validated['document_number'] ?? null,
             'expires_at' => $validated['expires_at'] ?? null,
+            'completed_at' => $validated['completed_at'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
 

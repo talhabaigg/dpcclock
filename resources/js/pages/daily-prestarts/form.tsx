@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchSelect } from '@/components/search-select';
@@ -152,6 +153,14 @@ function EmployeeMultiSelect({
     );
 }
 
+const TRAINING_OPTIONS = [
+    'Workplace Impairment Training (WIT)',
+    'Supporting Positive Mental Health in the Construction Industry',
+    'Quantitative Fit Testing',
+    'Course in Crystalline Silica Exposure Prevention',
+    'Asbestos Awareness',
+];
+
 export default function DailyPrestartForm({ prestart, duplicateFrom, locations, locationKioskData, trainings: initialTrainings }: Props) {
     const isEdit = !!prestart;
     const source = prestart ?? duplicateFrom;
@@ -196,6 +205,19 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
             notes: t.notes ?? '',
             employee_ids: t.employees.map((e) => e.id),
         })),
+    );
+
+    // Track which trainings have "Other" selected
+    const [otherSelected, setOtherSelected] = useState<Record<number, boolean>>(
+        () => {
+            const map: Record<number, boolean> = {};
+            initialTrainings.forEach((t, i) => {
+                if (t.title && !TRAINING_OPTIONS.includes(t.title)) {
+                    map[i] = true;
+                }
+            });
+            return map;
+        },
     );
 
     const addTraining = () => {
@@ -433,8 +455,8 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-base font-semibold">Trainings</h3>
-                                <p className="text-sm text-muted-foreground">Schedule training sessions for employees on this day.</p>
+                                <h3 className="text-base font-semibold">Booked Training</h3>
+                                <p className="text-sm text-muted-foreground">Scheduled training on this day.</p>
                             </div>
                             <Button type="button" variant="outline" size="sm" onClick={addTraining} disabled={!data.location_id}>
                                 <Plus className="mr-1.5 h-4 w-4" />
@@ -443,7 +465,7 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                         </div>
 
                         {!data.location_id && trainingsList.length === 0 && (
-                            <p className="text-sm text-muted-foreground italic">Select a project to add trainings.</p>
+                            <p className="text-sm text-muted-foreground italic">Select a project to add training.</p>
                         )}
 
 
@@ -460,13 +482,37 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                                 </div>
 
                                 <div className="grid gap-3 sm:grid-cols-2">
-                                    <div className="sm:col-span-2">
+                                    <div className="sm:col-span-2 space-y-2">
                                         <Label>Title *</Label>
-                                        <Input
-                                            value={training.title}
-                                            onChange={(e) => updateTraining(index, 'title', e.target.value)}
-                                            placeholder="e.g. First Aid Refresh Training"
-                                        />
+                                        <Select
+                                            value={otherSelected[index] ? 'OTHER' : training.title}
+                                            onValueChange={(val) => {
+                                                if (val === 'OTHER') {
+                                                    setOtherSelected((prev) => ({ ...prev, [index]: true }));
+                                                    updateTraining(index, 'title', '');
+                                                } else {
+                                                    setOtherSelected((prev) => ({ ...prev, [index]: false }));
+                                                    updateTraining(index, 'title', val);
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select training..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {TRAINING_OPTIONS.map((opt) => (
+                                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                                ))}
+                                                <SelectItem value="OTHER">Other</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        {otherSelected[index] && (
+                                            <Input
+                                                value={training.title}
+                                                onChange={(e) => updateTraining(index, 'title', e.target.value)}
+                                                placeholder="Enter training name..."
+                                            />
+                                        )}
                                     </div>
                                     <div>
                                         <Label>Time</Label>

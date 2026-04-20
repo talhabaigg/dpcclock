@@ -29,9 +29,12 @@ class EmployeeFileTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'nullable|string|max:255',
+            'category' => 'nullable|array',
+            'category.*' => 'string|max:255',
             'description' => 'nullable|string',
             'has_back_side' => 'boolean',
+            'expiry_requirement' => 'in:required,optional,none',
+            'requires_completed_date' => 'boolean',
             'conditions' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
@@ -47,9 +50,12 @@ class EmployeeFileTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'nullable|string|max:255',
+            'category' => 'nullable|array',
+            'category.*' => 'string|max:255',
             'description' => 'nullable|string',
             'has_back_side' => 'boolean',
+            'expiry_requirement' => 'in:required,optional,none',
+            'requires_completed_date' => 'boolean',
             'conditions' => 'nullable|array',
             'is_active' => 'boolean',
         ]);

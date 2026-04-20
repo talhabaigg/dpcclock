@@ -29,10 +29,12 @@ interface Conditions {
 interface FileType {
     id: number;
     name: string;
-    category: string | null;
+    category: string[] | null;
     slug: string;
     description: string | null;
     has_back_side: boolean;
+    expiry_requirement: 'required' | 'optional' | 'none';
+    requires_completed_date: boolean;
     conditions: Conditions | null;
     is_active: boolean;
     sort_order: number;
@@ -47,9 +49,11 @@ interface PageProps {
 
 const EMPTY_FORM = {
     name: '',
-    category: '',
+    category: [] as string[],
     description: '',
     has_back_side: false,
+    expiry_requirement: 'optional' as 'required' | 'optional' | 'none',
+    requires_completed_date: false,
     conditions: null as Conditions | null,
     is_active: true,
 };
@@ -97,9 +101,11 @@ export default function EmployeeFileTypesIndex() {
         setEditingId(ft.id);
         setForm({
             name: ft.name,
-            category: ft.category ?? '',
+            category: ft.category ?? [],
             description: ft.description ?? '',
             has_back_side: ft.has_back_side,
+            expiry_requirement: ft.expiry_requirement ?? 'optional',
+            requires_completed_date: ft.requires_completed_date ?? false,
             conditions: ft.conditions ? { ...ft.conditions, rules: [...ft.conditions.rules] } : null,
             is_active: ft.is_active,
         });
@@ -182,7 +188,9 @@ export default function EmployeeFileTypesIndex() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Document Name</TableHead>
-                                <TableHead>Category</TableHead>
+                                <TableHead>Categories</TableHead>
+                                <TableHead>Expiry</TableHead>
+                                <TableHead>Completed Date</TableHead>
                                 <TableHead>Two-Sided</TableHead>
                                 <TableHead>Required For</TableHead>
                                 <TableHead>Status</TableHead>
@@ -192,7 +200,7 @@ export default function EmployeeFileTypesIndex() {
                         <TableBody>
                             {fileTypes.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
                                         No file types yet. Create one to get started.
                                     </TableCell>
                                 </TableRow>
@@ -200,7 +208,16 @@ export default function EmployeeFileTypesIndex() {
                             {fileTypes.map((ft) => (
                                 <TableRow key={ft.id} className={!ft.is_active ? 'opacity-50' : ''}>
                                     <TableCell className="font-medium">{ft.name}</TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{ft.category || '—'}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-wrap gap-1">
+                                            {(ft.category ?? []).map((cat) => (
+                                                <Badge key={cat} variant="outline" className="text-[10px]">{cat}</Badge>
+                                            ))}
+                                            {(!ft.category || ft.category.length === 0) && <span className="text-muted-foreground text-sm">—</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-sm capitalize">{ft.expiry_requirement ?? 'optional'}</TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
                                     <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
                                     <TableCell className="max-w-[300px] text-sm">{conditionSummary(ft.conditions, worktypes, locations)}</TableCell>
                                     <TableCell>
@@ -239,8 +256,36 @@ export default function EmployeeFileTypesIndex() {
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <Label>Category</Label>
-                            <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. General License, Training Certificate" />
+                            <Label>Categories</Label>
+                            <Input
+                                placeholder="Type a category and press Enter"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const val = e.currentTarget.value.trim();
+                                        if (val && !form.category.includes(val)) {
+                                            setForm({ ...form, category: [...form.category, val] });
+                                        }
+                                        e.currentTarget.value = '';
+                                    }
+                                }}
+                            />
+                            {form.category.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                    {form.category.map((cat) => (
+                                        <Badge key={cat} variant="secondary" className="gap-1">
+                                            {cat}
+                                            <button
+                                                type="button"
+                                                className="hover:text-foreground ml-0.5"
+                                                onClick={() => setForm({ ...form, category: form.category.filter((c) => c !== cat) })}
+                                            >
+                                                <X size={10} />
+                                            </button>
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col gap-1.5">
@@ -251,6 +296,25 @@ export default function EmployeeFileTypesIndex() {
                         <div className="flex items-center gap-3">
                             <Switch checked={form.has_back_side} onCheckedChange={(v) => setForm({ ...form, has_back_side: v })} />
                             <Label>Has back side (two-sided document)</Label>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Expiry Date</Label>
+                            <Select value={form.expiry_requirement} onValueChange={(v: 'required' | 'optional' | 'none') => setForm({ ...form, expiry_requirement: v })}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="required">Required</SelectItem>
+                                    <SelectItem value="optional">Optional</SelectItem>
+                                    <SelectItem value="none">Not applicable</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Switch checked={form.requires_completed_date} onCheckedChange={(v) => setForm({ ...form, requires_completed_date: v })} />
+                            <Label>Requires completed date</Label>
                         </div>
 
                         <div className="flex items-center gap-3">

@@ -53,6 +53,7 @@ interface Prestart {
 
 const DAILY_CHECKLIST = [
     "Today's trade specific works discussed and understood",
+    "Today's site works (builders prestart) discussed and understood",
     'All SWMS reviewed and understood',
     'Work permits in place as required and conditions understood',
     'Tools and equipment in working order with Test & Tag up to date',
@@ -248,7 +249,7 @@ export default function PrestartSign() {
                             <div>
                                 <p className="mb-1.5 flex items-center gap-1.5 font-medium text-muted-foreground">
                                     <GraduationCap className="h-4 w-4" />
-                                    Training Booked
+                                    Booked Training
                                 </p>
                                 <div className="space-y-2">
                                     {trainings.map((t) => (
