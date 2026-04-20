@@ -45,6 +45,7 @@ import {
     MoreHorizontal,
     Package,
     Pencil,
+    Printer,
     RefreshCw,
     RotateCcw,
     Send,
@@ -445,17 +446,19 @@ export default function RequisitionShow() {
                                             Excel
                                         </a>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => router.visit(`/requisition/${requisition.id}/print`)}>
-                                        <FileText className="h-4 w-4" />
-                                        Print
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onSelect={() => setDuplicateOpen(true)}>
                                         <Copy className="h-4 w-4" />
                                         Duplicate
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
+
+                            <Link href={`/requisition/${requisition.id}/print`}>
+                                <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
+                                    <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <span className="hidden sm:inline">Print</span>
+                                </Button>
+                            </Link>
 
                             <div className="flex-1" />
 
