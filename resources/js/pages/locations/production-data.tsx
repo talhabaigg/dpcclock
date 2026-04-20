@@ -142,46 +142,69 @@ export default function ProductionData() {
         setWizardOpen(true);
     };
 
-    const handlePreview = () => {
+    const csrfToken = () =>
+        (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
+
+    const handlePreview = async () => {
         if (!selectedFile || !reportDate) {
             toast.error('Please select a file and report date.');
             return;
         }
 
-        previewHttp.setData({ file: selectedFile } as any);
-        previewHttp.post(`/locations/${location.id}/production-data/preview`, {
-            onSuccess: (result: PreviewResponse) => {
-                setPreviewData(result);
-                setWizardStep(2);
-            },
-            onError: (errors: Record<string, string>) => {
-                toast.error(Object.values(errors).flat().join(', ') || 'Failed to parse file.');
-            },
-        });
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+
+        try {
+            const res = await fetch(`/locations/${location.id}/production-data/preview`, {
+                method: 'POST',
+                body: fd,
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                const errs = json.errors ? Object.values(json.errors).flat().join(', ') : json.message;
+                toast.error(errs || 'Failed to parse file.');
+                return;
+            }
+            setPreviewData(json as PreviewResponse);
+            setWizardStep(2);
+        } catch (e: any) {
+            toast.error(e?.message || 'Failed to parse file.');
+        }
     };
 
-    const handleConfirmUpload = () => {
+    const handleConfirmUpload = async () => {
         if (!selectedFile || !reportDate) return;
 
-        uploadHttp.setData({
-            file: selectedFile,
-            report_date: format(reportDate, 'yyyy-MM-dd'),
-        } as any);
-        uploadHttp.post(`/locations/${location.id}/production-data/upload`, {
-            onSuccess: (result: { success: boolean; total_rows: number; error_rows: number; errors: RowError[] }) => {
-                if (result.error_rows > 0) {
-                    toast.warning(`Uploaded ${result.total_rows} rows — ${result.error_rows} rows had errors.`);
-                } else {
-                    toast.success(`Uploaded ${result.total_rows} rows successfully.`);
-                }
-                setWizardOpen(false);
-                resetWizard();
-                router.reload();
-            },
-            onError: () => {
-                toast.error('Upload failed.');
-            },
-        });
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        fd.append('report_date', format(reportDate, 'yyyy-MM-dd'));
+
+        try {
+            const res = await fetch(`/locations/${location.id}/production-data/upload`, {
+                method: 'POST',
+                body: fd,
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                const errs = result.errors ? Object.values(result.errors).flat().join(', ') : result.message;
+                toast.error(errs || 'Upload failed.');
+                return;
+            }
+            if (result.error_rows > 0) {
+                toast.warning(`Uploaded ${result.total_rows} rows — ${result.error_rows} rows had errors.`);
+            } else {
+                toast.success(`Uploaded ${result.total_rows} rows successfully.`);
+            }
+            setWizardOpen(false);
+            resetWizard();
+            router.reload();
+        } catch {
+            toast.error('Upload failed.');
+        }
     };
 
     const handleViewDetail = (upload: ProductionUploadData) => {
