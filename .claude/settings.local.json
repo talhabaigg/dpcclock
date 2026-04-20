@@ -92,7 +92,9 @@
       "Bash(xargs kill *)",
       "WebSearch",
       "WebFetch(domain:inertiajs.com)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(cat)",
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -94,6 +94,40 @@ class SafetyDataSheetController extends Controller
         return redirect()->route('sds.index')->with('success', 'SDS created successfully.');
     }
 
+    public function apiStore(Request $request)
+    {
+        $validated = $request->validate([
+            'product_name' => 'required|string|max:255',
+            'manufacturer' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'hazard_classifications' => 'nullable|array',
+            'hazard_classifications.*' => 'string',
+            'expires_at' => 'required|date',
+            'sds_file' => 'required|file|max:20480',
+            'other_files' => 'nullable|array',
+            'other_files.*' => 'file|max:20480',
+        ]);
+
+        $sds = SafetyDataSheet::create([
+            'product_name' => $validated['product_name'],
+            'manufacturer' => $validated['manufacturer'],
+            'description' => $validated['description'] ?? null,
+            'hazard_classifications' => $validated['hazard_classifications'] ?? [],
+            'expires_at' => $validated['expires_at'],
+            'created_by' => auth()->id(),
+        ]);
+
+        $sds->addMedia($request->file('sds_file'))->toMediaCollection('sds_file');
+
+        if ($request->hasFile('other_files')) {
+            foreach ($request->file('other_files') as $file) {
+                $sds->addMedia($file)->toMediaCollection('other_files');
+            }
+        }
+
+        return response()->json(['id' => $sds->id, 'product_name' => $sds->product_name], 201);
+    }
+
     public function update(Request $request, SafetyDataSheet $sd)
     {
         $validated = $request->validate([

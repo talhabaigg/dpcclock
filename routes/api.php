@@ -64,6 +64,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+    // SDS bulk import endpoint
+    Route::post('/sds', [\App\Http\Controllers\SafetyDataSheetController::class, 'apiStore']);
+
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
 
