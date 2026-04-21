@@ -70,6 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Injury import endpoint - lookup by date+email, attach PDF as comment, set external_id
     Route::post('/injuries/import-comment', [\App\Http\Controllers\InjuryController::class, 'apiImportComment']);
 
+    // Employee file import endpoint - upload licence/cert documents by employee_id
+    Route::post('/employee-files/import', [\App\Http\Controllers\EmployeeFileController::class, 'apiImportFile']);
+
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
 

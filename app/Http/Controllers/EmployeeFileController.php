@@ -128,6 +128,59 @@ class EmployeeFileController extends Controller
         return redirect()->back()->with('success', 'File deleted successfully.');
     }
 
+    /**
+     * API endpoint for bulk importing employee files.
+     * Accepts multipart/form-data with employee_id, file type, metadata, and file.
+     */
+    public function apiImportFile(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'employee_file_type_id' => 'required|integer|exists:employee_file_types,id',
+            'document_number' => 'nullable|string|max:255',
+            'expires_at' => 'nullable|date',
+            'completed_at' => 'nullable|date',
+            'selected_options' => 'nullable|string', // JSON string from multipart
+            'notes' => 'nullable|string',
+            'file_front' => 'required|file|max:20480',
+            'file_back' => 'nullable|file|max:20480',
+        ]);
+
+        $employee = Employee::findOrFail($validated['employee_id']);
+
+        $selectedOptions = null;
+        if (!empty($validated['selected_options'])) {
+            $selectedOptions = json_decode($validated['selected_options'], true);
+            if (!is_array($selectedOptions)) {
+                $selectedOptions = null;
+            }
+        }
+
+        $employeeFile = $employee->employeeFiles()->create([
+            'employee_file_type_id' => $validated['employee_file_type_id'],
+            'document_number' => $validated['document_number'] ?? null,
+            'expires_at' => $validated['expires_at'] ?? null,
+            'completed_at' => $validated['completed_at'] ?? null,
+            'selected_options' => $selectedOptions,
+            'notes' => $validated['notes'] ?? null,
+            'uploaded_by' => auth()->id(),
+        ]);
+
+        $employeeFile->addMedia($request->file('file_front'))->toMediaCollection('file_front');
+
+        if ($request->hasFile('file_back')) {
+            $employeeFile->addMedia($request->file('file_back'))->toMediaCollection('file_back');
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'employee_file_id' => $employeeFile->id,
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'file_type_id' => $validated['employee_file_type_id'],
+        ], 201);
+    }
+
     public function download(Employee $employee, EmployeeFile $employeeFile, string $collection)
     {
         abort_unless($employeeFile->employee_id === $employee->id, 404);
