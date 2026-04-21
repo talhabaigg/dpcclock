@@ -301,48 +301,32 @@
             <td class="label">Police, Fire Services, Ambulance</td>
             <td class="value">{!! $boolVal($injury->emergency_services) !!}</td>
         </tr>
+        @if($injury->emergency_services && $injury->emergency_services_details)
+        <tr>
+            <td class="label">Details</td>
+            <td class="value">{{ $injury->emergency_services_details }}</td>
+        </tr>
+        @endif
     </table>
 
     {{-- Treatment --}}
-    <h2>Treatment</h2>
+    <h2>Type of Treatment Provided</h2>
     <table class="fields">
-        @if($injury->treatment)
         <tr>
-            <td class="label">Treatment Provided</td>
-            <td class="value">{!! $boolVal(true) !!}</td>
+            <td class="label">Treatment Type</td>
+            <td class="value">{{ $injury->treatment_type ? Injury::TREATMENT_TYPE_OPTIONS[$injury->treatment_type] ?? '—' : '—' }}</td>
         </tr>
+        @if($injury->treatment_details)
         <tr>
-            <td class="label">Treatment Date & Time</td>
-            <td class="value">{!! $dateVal($injury->treatment_at) !!}</td>
+            <td class="label">Details</td>
+            <td class="value">{{ $injury->treatment_details }}</td>
         </tr>
-        <tr>
-            <td class="label">Treatment Provider</td>
-            <td class="value">{{ $injury->treatment_provider ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="label">External Treatment</td>
-            <td class="value">{{ Injury::TREATMENT_EXTERNAL_OPTIONS[$injury->treatment_external] ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="label">External Location</td>
-            <td class="value">{{ $injury->treatment_external_location ?? '—' }}</td>
-        </tr>
-        @else
-        <tr>
-            <td class="label" colspan="2" style="color:#1a1a1a;">Worker did not seek treatment for the reported injury</td>
-        </tr>
-        @if($injury->no_treatment_reason)
-        <tr>
-            <td class="label">Reason</td>
-            <td class="value">{{ $injury->no_treatment_reason }}</td>
-        </tr>
-        @endif
         @endif
     </table>
 
     {{-- Witnesses --}}
     @if($injury->witnesses)
-    <h2>Witnesses</h2>
+    <h2>Were there any witnesses to the reported event?</h2>
     <div class="description-box">{{ $injury->witness_details ?? '—' }}</div>
     @endif
 

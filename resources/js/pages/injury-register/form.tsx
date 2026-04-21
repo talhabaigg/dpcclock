@@ -54,16 +54,14 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         reported_to: injury?.reported_to ?? '',
         description: injury?.description ?? '',
         emergency_services: injury?.emergency_services ?? false,
-        treatment: injury?.treatment ?? false,
-        treatment_at: injury?.treatment_at ? injury.treatment_at.slice(0, 16) : '',
-        treatment_provider: injury?.treatment_provider ?? '',
-        treatment_external: injury?.treatment_external ?? '',
-        treatment_external_location: injury?.treatment_external_location ?? '',
-        no_treatment_reason: injury?.no_treatment_reason ?? '',
+        emergency_services_details: injury?.emergency_services_details ?? '',
+        treatment_type: injury?.treatment_type ?? '',
+        treatment_details: injury?.treatment_details ?? '',
         follow_up: injury?.follow_up ?? false,
         follow_up_notes: injury?.follow_up_notes ?? '',
         witnesses: injury?.witnesses ?? false,
         witness_details: injury?.witness_details ?? '',
+        witness_files: [] as File[],
         natures: injury?.natures ?? ([] as string[]),
         natures_comments: injury?.natures_comments ?? '',
         mechanisms: injury?.mechanisms ?? ([] as string[]),
@@ -357,48 +355,84 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                     {step === 5 && (
                         <section className="space-y-6">
                             <div className="space-y-4">
-                                <h2 className="text-lg font-semibold">Treatment</h2>
+                                <h2 className="text-lg font-semibold">Emergency Services</h2>
                                 <YesNoButtons label="Emergency services called?" value={data.emergency_services} onChange={(v) => setData('emergency_services', v)} />
-                                <YesNoButtons label="Was treatment provided?" value={data.treatment} onChange={(v) => setData('treatment', v)} />
-                                {data.treatment ? (
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label className={labelClass}>Treatment Date & Time</Label>
-                                            <Input className={inputClass} type="datetime-local" value={data.treatment_at} onChange={(e) => setData('treatment_at', e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className={labelClass}>Treatment Provider</Label>
-                                            <Input className={inputClass} value={data.treatment_provider} onChange={(e) => setData('treatment_provider', e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className={labelClass}>External Treatment</Label>
-                                            <Select value={data.treatment_external} onValueChange={(v) => setData('treatment_external', v)}>
-                                                <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {Object.entries(options.treatmentExternal).map(([key, label]) => (
-                                                        <SelectItem key={key} value={key} className="py-3 text-base">{label}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className={labelClass}>External Treatment Location</Label>
-                                            <Input className={inputClass} value={data.treatment_external_location} onChange={(e) => setData('treatment_external_location', e.target.value)} />
-                                        </div>
-                                    </div>
-                                ) : (
+                                {data.emergency_services && (
                                     <div className="space-y-2">
-                                        <Label className={labelClass}>Reason no treatment was provided</Label>
-                                        <Textarea className={textareaClass} value={data.no_treatment_reason} onChange={(e) => setData('no_treatment_reason', e.target.value)} rows={3} />
+                                        <Label className={labelClass}>Provide details</Label>
+                                        <Input className={inputClass} value={data.emergency_services_details} onChange={(e) => setData('emergency_services_details', e.target.value)} placeholder="Provide details..." />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Type of treatment provided</h2>
+                                <div className="space-y-2">
+                                    <Label className={labelClass}>Type of treatment provided</Label>
+                                    <Select value={data.treatment_type} onValueChange={(v) => setData('treatment_type', v)}>
+                                        <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select treatment type..." /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="first_aid" className="py-3 text-base">First Aid only</SelectItem>
+                                            <SelectItem value="medical_centre" className="py-3 text-base">Medical Centre/GP</SelectItem>
+                                            <SelectItem value="hospital" className="py-3 text-base">Hospital</SelectItem>
+                                            <SelectItem value="other" className="py-3 text-base">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {data.treatment_type === 'first_aid' && (
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Details of the person who provided First Aid</Label>
+                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and details of person who provided First Aid..." />
+                                    </div>
+                                )}
+                                {data.treatment_type === 'medical_centre' && (
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Name & Address of the Medical Centre</Label>
+                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Medical Centre..." />
+                                    </div>
+                                )}
+                                {data.treatment_type === 'hospital' && (
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Name & Address of the Hospital</Label>
+                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Hospital..." />
+                                    </div>
+                                )}
+                                {data.treatment_type === 'other' && (
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Additional details</Label>
+                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter additional details..." />
                                     </div>
                                 )}
                             </div>
 
                             <div className="space-y-4">
                                 <h2 className="text-lg font-semibold">Witnesses</h2>
-                                <YesNoButtons label="Were there witnesses?" value={data.witnesses} onChange={(v) => setData('witnesses', v)} />
+                                <YesNoButtons label="Were there any witnesses to the reported event?" value={data.witnesses} onChange={(v) => setData('witnesses', v)} />
                                 {data.witnesses && (
-                                    <Textarea className={textareaClass} value={data.witness_details} onChange={(e) => setData('witness_details', e.target.value)} rows={3} placeholder="Witness names and details..." />
+                                    <div className="space-y-4">
+                                        <Textarea className={textareaClass} value={data.witness_details} onChange={(e) => setData('witness_details', e.target.value)} rows={3} placeholder="Please enter witness name and contact details or select worker if they are a current employee..." />
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>Upload witness report form</Label>
+                                            <Dropzone onDrop={(files) => setData('witness_files', [...data.witness_files, ...files])} accept={{ 'image/*': [], 'application/pdf': [] }}>
+                                                {(dropzone) => (
+                                                    <div className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition ${dropzone.isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}`}>
+                                                        <p className="text-muted-foreground text-sm">Drop witness report form here or click to browse</p>
+                                                    </div>
+                                                )}
+                                            </Dropzone>
+                                            {data.witness_files.length > 0 && (
+                                                <div className="space-y-2">
+                                                    {data.witness_files.map((file, i) => (
+                                                        <div key={i} className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
+                                                            <FileText size={16} className="text-muted-foreground shrink-0" />
+                                                            <span className="flex-1 truncate text-sm">{file.name}</span>
+                                                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setData('witness_files', data.witness_files.filter((_, j) => j !== i))}><X size={14} /></Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </section>

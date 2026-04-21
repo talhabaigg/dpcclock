@@ -28,13 +28,10 @@ class StoreInjuryRequest extends FormRequest
             'reported_to' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'emergency_services' => ['boolean'],
+            'emergency_services_details' => ['nullable', 'string', 'max:500'],
             'work_cover_claim' => ['boolean'],
-            'treatment' => ['boolean'],
-            'treatment_at' => ['nullable', 'date'],
-            'treatment_provider' => ['nullable', 'string', 'max:255'],
-            'treatment_external' => ['nullable', 'string', Rule::in(array_keys(Injury::TREATMENT_EXTERNAL_OPTIONS))],
-            'treatment_external_location' => ['nullable', 'string', 'max:500'],
-            'no_treatment_reason' => ['nullable', 'string'],
+            'treatment_type' => ['nullable', 'string', Rule::in(array_keys(Injury::TREATMENT_TYPE_OPTIONS))],
+            'treatment_details' => ['nullable', 'string', 'max:500'],
             'follow_up' => ['nullable', 'boolean'],
             'follow_up_notes' => ['nullable', 'string'],
             'work_days_missed' => ['nullable', 'integer', 'min:0'],
@@ -62,6 +59,8 @@ class StoreInjuryRequest extends FormRequest
             'body_location_image' => ['nullable', 'string'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:10240'],
+            'witness_files' => ['nullable', 'array'],
+            'witness_files.*' => ['file', 'max:10240'],
         ];
     }
 }

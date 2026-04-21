@@ -135,12 +135,18 @@ class InjuryController extends Controller
         $data['id_formal'] = Injury::generateFormalId();
         $data['created_by'] = auth()->id();
 
-        unset($data['files']);
+        unset($data['files'], $data['witness_files']);
 
         $injury = Injury::create($data);
 
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
+                $injury->addMedia($file)->toMediaCollection('files');
+            }
+        }
+
+        if ($request->hasFile('witness_files')) {
+            foreach ($request->file('witness_files') as $file) {
                 $injury->addMedia($file)->toMediaCollection('files');
             }
         }
@@ -232,12 +238,18 @@ class InjuryController extends Controller
         $data = $request->validated();
         $data['updated_by'] = auth()->id();
 
-        unset($data['files']);
+        unset($data['files'], $data['witness_files']);
 
         $injury->update($data);
 
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
+                $injury->addMedia($file)->toMediaCollection('files');
+            }
+        }
+
+        if ($request->hasFile('witness_files')) {
+            foreach ($request->file('witness_files') as $file) {
                 $injury->addMedia($file)->toMediaCollection('files');
             }
         }
@@ -467,7 +479,7 @@ class InjuryController extends Controller
         return [
             'incidents' => Injury::INCIDENT_OPTIONS,
             'reportTypes' => Injury::REPORT_TYPE_OPTIONS,
-            'treatmentExternal' => Injury::TREATMENT_EXTERNAL_OPTIONS,
+            'treatmentTypes' => Injury::TREATMENT_TYPE_OPTIONS,
             'natures' => Injury::NATURE_OPTIONS,
             'mechanisms' => Injury::MECHANISM_OPTIONS,
             'agencies' => Injury::AGENCY_OPTIONS,

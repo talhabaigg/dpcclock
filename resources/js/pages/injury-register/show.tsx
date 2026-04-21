@@ -433,14 +433,14 @@ export default function InjuryShow({ injury, comments, options }: Props) {
 
                             {/* Treatment */}
                             <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Treatment</h4>
-                                <SidebarField label="Emergency Services" value={injury.emergency_services ? 'Yes' : 'No'} />
-                                <SidebarField label="Treatment Provided" value={injury.treatment ? 'Yes' : 'No'} />
-                                {injury.treatment && (
-                                    <>
-                                        <SidebarField label="Provider" value={injury.treatment_provider} />
-                                        <SidebarField label="External" value={injury.treatment_external ? options.treatmentExternal[injury.treatment_external] : null} />
-                                    </>
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Emergency & Treatment</h4>
+                                <SidebarField label="Emergency Services Called" value={injury.emergency_services ? 'Yes' : 'No'} />
+                                {injury.emergency_services && injury.emergency_services_details && (
+                                    <SidebarField label="Emergency Details" value={injury.emergency_services_details} />
+                                )}
+                                <SidebarField label="Type of Treatment" value={injury.treatment_type ? options.treatmentTypes[injury.treatment_type] : 'N/A'} />
+                                {injury.treatment_details && (
+                                    <SidebarField label="Treatment Details" value={injury.treatment_details} />
                                 )}
                             </div>
 

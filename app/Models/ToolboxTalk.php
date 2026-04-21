@@ -42,14 +42,15 @@ class ToolboxTalk extends Model implements HasMedia
     protected $appends = ['meeting_date_formatted', 'is_locked'];
 
     public const SUBJECT_OPTIONS = [
-        'health_and_safety' => 'Health and Safety',
-        'environmental_issue' => 'Environmental Issue',
-        'quality_issue' => 'Quality Issue',
+        'hse' => 'HSE',
+        'quality' => 'Quality',
+        'training' => 'Training',
+        'other' => 'Other',
     ];
 
     public const GENERAL_ITEMS = [
         'All workers MUST attend the daily prestart meeting and sign in prior to commencing work.',
-        'All workers MUST wear Mandatory PPE as identified in the site-specific induction and as specified in all SWC SWMS.',
+        'All workers MUST wear Mandatory PPE as identified in the site-specific induction and as specified in all SWCP SWMS.',
         'All Incidents / Accidents MUST be reported immediately to your HSR or Foreman regardless of the severity or nature of the incident / accident.',
         'Workers MUST be fit for work, any pre-existing injuries / illnesses or conditions that may impact your ability to undertake work safely must be reported to your HSR or Foreman immediately.',
         'If you see anything that is deemed to be unsafe or something has the potential to cause harm, report it immediately to your HSR or Foreman.',

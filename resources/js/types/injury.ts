@@ -14,6 +14,7 @@ export interface Injury {
     location_of_incident: string | null;
     description: string | null;
     emergency_services: boolean;
+    emergency_services_details: string | null;
     work_cover_claim: boolean;
     claim_active: boolean;
     claim_type: string | null;
@@ -26,12 +27,8 @@ export interface Injury {
     suitable_duties_to: string | null;
     computed_suitable_duties_days: number;
     medical_expenses: number;
-    treatment: boolean;
-    treatment_at: string | null;
-    treatment_provider: string | null;
-    treatment_external: string | null;
-    treatment_external_location: string | null;
-    no_treatment_reason: string | null;
+    treatment_type: string | null;
+    treatment_details: string | null;
     follow_up: boolean | null;
     follow_up_notes: string | null;
     work_days_missed: number;
@@ -91,7 +88,7 @@ export interface InjuryMedia {
 export interface InjuryFormOptions {
     incidents: Record<string, string>;
     reportTypes: Record<string, string>;
-    treatmentExternal: Record<string, string>;
+    treatmentTypes: Record<string, string>;
     natures: Record<string, string>;
     mechanisms: Record<string, string>;
     agencies: Record<string, string>;
