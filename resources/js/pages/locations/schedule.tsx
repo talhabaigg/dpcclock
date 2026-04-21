@@ -199,7 +199,33 @@ export default function Schedule() {
     );
 
     const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
+    const treeBodyScrollRef = useRef<HTMLDivElement>(null);
+    const isSyncingScroll = useRef(false);
     const importBtnRef = useRef<HTMLDivElement>(null);
+
+    // Sync vertical scroll between tree body and gantt body via native listeners.
+    // Using native listeners avoids the React prop chain and ensures reliable sync.
+    useEffect(() => {
+        const treeEl = treeBodyScrollRef.current;
+        if (!treeEl) return;
+
+        const onTreeScroll = () => {
+            if (isSyncingScroll.current) return;
+            isSyncingScroll.current = true;
+            ganttScrollRef.current?.setScrollTop(treeEl.scrollTop);
+            requestAnimationFrame(() => { isSyncingScroll.current = false; });
+        };
+
+        treeEl.addEventListener('scroll', onTreeScroll, { passive: true });
+        return () => treeEl.removeEventListener('scroll', onTreeScroll);
+    }, []);
+
+    const handleGanttVerticalScroll = useCallback((scrollTop: number) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        if (treeBodyScrollRef.current) treeBodyScrollRef.current.scrollTop = scrollTop;
+        requestAnimationFrame(() => { isSyncingScroll.current = false; });
+    }, []);
 
     const dayWidth = customDayWidth ?? ZOOM_CONFIGS[zoom].dayWidth;
     const paddingDays = customDayWidth ? ZOOM_CONFIGS.year.paddingDays : ZOOM_CONFIGS[zoom].paddingDays;
@@ -1097,7 +1123,7 @@ export default function Schedule() {
                     }
                 />
 
-                <div className="flex min-h-0 flex-1 overflow-y-auto">
+                <div className="flex min-h-0 flex-1">
                     <TaskTreePanel
                         visibleTasks={visibleTasks}
                         allTasks={tasks}
@@ -1129,6 +1155,7 @@ export default function Schedule() {
                         onStatusFilterChange={setStatusFilter}
                         payRateTemplates={payRateTemplates ?? []}
                         flashTaskId={flashTaskId}
+                        bodyScrollRef={treeBodyScrollRef}
                     />
 
                     <div className="bg-border w-px" />
@@ -1147,6 +1174,7 @@ export default function Schedule() {
                         linkMode={linkMode}
                         onEnableLinkMode={() => setLinkMode(true)}
                         showBaseline={showBaseline}
+                        onVerticalScroll={handleGanttVerticalScroll}
                     />
                 </div>
             </div>

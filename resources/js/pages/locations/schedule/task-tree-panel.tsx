@@ -63,6 +63,8 @@ interface TaskTreePanelProps {
     onStatusFilterChange: (next: Set<TaskStatus | 'none'>) => void;
     payRateTemplates: PayRateTemplateOption[];
     flashTaskId: number | null;
+    bodyScrollRef?: React.RefObject<HTMLDivElement | null>;
+    onVerticalScroll?: (scrollTop: number) => void;
 }
 
 function fmtDate(d: Date): string {
@@ -222,6 +224,8 @@ function TaskTreePanel({
     onStatusFilterChange,
     payRateTemplates,
     flashTaskId,
+    bodyScrollRef,
+    onVerticalScroll,
 }: TaskTreePanelProps) {
         const [filterOpen, setFilterOpen] = useState(false);
         const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -365,10 +369,14 @@ function TaskTreePanel({
             (visibleColumns.responsible ? COL_WIDTHS.responsible : 0) +
             (visibleColumns.status ? COL_WIDTHS.status : 0);
 
+        const handleBodyScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+            onVerticalScroll?.(e.currentTarget.scrollTop);
+        }, [onVerticalScroll]);
+
         return (
-            <div className="flex shrink-0 flex-col" style={{ width: panelWidth }}>
+            <div className="flex shrink-0 flex-col min-h-0" style={{ width: panelWidth }}>
                 {/* Header */}
-                <div className="sticky top-0 z-20">
+                <div className="z-20">
                     <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
                         {/* Spacer aligned with the per-row drag handle */}
                         <span className="w-4 shrink-0" />
@@ -463,8 +471,8 @@ function TaskTreePanel({
                     <div className="bg-muted/30 border-b" style={{ height: 24 }} />
                 </div>
 
-                {/* Row area — vertical scrolling handled by the shared outer container */}
-                <div>
+                {/* Row area — own vertical scroll, synced with the gantt panel */}
+                <div className="flex-1 min-h-0 overflow-y-auto" ref={bodyScrollRef} onScroll={handleBodyScroll}>
                     {visibleTasks.length === 0 ? (
                         <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
                             No tasks yet. Click &quot;+&quot; to begin.

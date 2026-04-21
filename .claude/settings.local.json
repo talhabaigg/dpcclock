@@ -94,7 +94,8 @@
       "WebFetch(domain:inertiajs.com)",
       "Bash(git rm *)",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(node -e ' *)"
     ]
   }
 }
