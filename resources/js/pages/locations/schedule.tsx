@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type LocationBase } from '@/layouts/location-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useHttp, usePage } from '@inertiajs/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
 import CsvImporterDialog from '@/components/csv-importer';
@@ -14,18 +14,7 @@ import EditTaskDialog from './schedule/edit-task-dialog';
 import GanttPanel from './schedule/gantt-panel';
 import ScheduleToolbar from './schedule/schedule-toolbar';
 import TaskTreePanel from './schedule/task-tree-panel';
-import type {
-    ColumnKey,
-    ColumnVisibility,
-    FilterFlag,
-    LinkType,
-    ProjectTask,
-    SortMode,
-    TaskLink,
-    TaskNode,
-    TaskStatus,
-    ZoomLevel,
-} from './schedule/types';
+import type { ColumnKey, ColumnVisibility, FilterFlag, LinkType, ProjectTask, TaskLink, TaskNode, TaskStatus, ZoomLevel } from './schedule/types';
 import { DEFAULT_COLUMN_VISIBILITY, ZOOM_CONFIGS } from './schedule/types';
 import {
     buildTree,
@@ -40,7 +29,6 @@ import {
     propagateLinks,
     setNonWorkDays,
     setWorkingDays,
-    sortSiblings,
 } from './schedule/utils';
 
 type Location = LocationBase & {};
@@ -118,14 +106,31 @@ export default function Schedule() {
             return next;
         });
     }, []);
+    // Search input state lives in the toolbar; parent only receives the debounced value
+    // so typing doesn't re-render the 942-row gantt/tree on every keystroke.
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Global "F" to focus search (matches the placeholder hint). Skips when already typing.
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'f' && e.key !== 'F') return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const target = e.target as HTMLElement | null;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+            const input = document.getElementById('schedule-search-input') as HTMLInputElement | null;
+            if (!input) return;
+            e.preventDefault();
+            input.focus();
+            input.select();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
 
     const reorderHttp = useHttp({});
     const addTaskHttp = useHttp({});
     const deleteTaskHttp = useHttp({});
     const updateTaskHttp = useHttp({});
-    const updateDatesHttp = useHttp({});
-    const updateLinkLagHttp = useHttp({});
     const createLinkHttp = useHttp({});
     const bulkOwnershipHttp = useHttp({});
     const setBaselineHttp = useHttp({});
@@ -171,45 +176,8 @@ export default function Schedule() {
         [columnsStorageKey],
     );
 
-    const sortStorageKey = `schedule.sort.${location.id}`;
-    const [sortMode, setSortMode] = useState<SortMode>(() => {
-        if (typeof window === 'undefined') return 'manual';
-        const stored = window.localStorage.getItem(sortStorageKey);
-        const valid: SortMode[] = ['manual', 'start_asc', 'start_desc', 'finish_asc', 'name_asc'];
-        return (valid as string[]).includes(stored ?? '') ? (stored as SortMode) : 'manual';
-    });
-
-    const handleSortModeChange = useCallback(
-        (mode: SortMode) => {
-            setSortMode(mode);
-            try {
-                window.localStorage.setItem(sortStorageKey, mode);
-            } catch {
-                /* storage may be disabled */
-            }
-            if (mode === 'manual') return;
-
-            const updates = sortSiblings(tasks, mode);
-            if (updates.length === 0) return;
-
-            const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
-            const next = tasks.map((t) => (updateMap.has(t.id) ? { ...t, sort_order: updateMap.get(t.id)! } : t));
-            setTasks(next);
-
-            reorderHttp.setData({ tasks: updates });
-            reorderHttp.post(`/locations/${location.id}/tasks/reorder`, {
-                onError: () => {
-                    setTasks(tasks);
-                    toast.error('Failed to save sort order');
-                },
-            });
-        },
-        [tasks, location.id, sortStorageKey],
-    );
-
     const persistManualReorder = useCallback(
         (next: ProjectTask[]) => {
-            // Compute updates: any task whose new sort_order differs from its old one.
             const oldMap = new Map(tasks.map((t) => [t.id, t.sort_order]));
             const updates: { id: number; sort_order: number }[] = [];
             for (const t of next) {
@@ -218,14 +186,6 @@ export default function Schedule() {
             if (updates.length === 0) return;
 
             setTasks(next);
-            if (sortMode !== 'manual') {
-                setSortMode('manual');
-                try {
-                    window.localStorage.setItem(sortStorageKey, 'manual');
-                } catch {
-                    /* noop */
-                }
-            }
 
             reorderHttp.setData({ tasks: updates });
             reorderHttp.post(`/locations/${location.id}/tasks/reorder`, {
@@ -235,30 +195,11 @@ export default function Schedule() {
                 },
             });
         },
-        [tasks, location.id, sortMode, sortStorageKey],
+        [tasks, location.id],
     );
 
     const ganttScrollRef = useRef<import('./schedule/gantt-panel').GanttPanelHandle>(null);
-    const treeScrollRef = useRef<HTMLDivElement>(null);
     const importBtnRef = useRef<HTMLDivElement>(null);
-
-    // Sync vertical scroll: gantt → tree
-    const handleGanttVerticalScroll = useCallback((scrollTop: number) => {
-        if (treeScrollRef.current) {
-            treeScrollRef.current.scrollTop = scrollTop;
-        }
-    }, []);
-
-    // Sync vertical scroll: tree → gantt (via DOM event listener)
-    useEffect(() => {
-        const el = treeScrollRef.current;
-        if (!el) return;
-        const handler = () => {
-            ganttScrollRef.current?.setScrollTop(el.scrollTop);
-        };
-        el.addEventListener('scroll', handler);
-        return () => el.removeEventListener('scroll', handler);
-    }, []);
 
     const dayWidth = customDayWidth ?? ZOOM_CONFIGS[zoom].dayWidth;
     const paddingDays = customDayWidth ? ZOOM_CONFIGS.year.paddingDays : ZOOM_CONFIGS[zoom].paddingDays;
@@ -418,20 +359,26 @@ export default function Schedule() {
 
     // ── Tree handlers ──
 
+    // Expand/collapse triggers a re-render of up to ~1000 rows. Marking these updates as
+    // transitions lets React yield to the pointer/click paint so the chevron flips immediately.
+    const [, startExpandTransition] = useTransition();
+
     const handleToggle = useCallback((id: number) => {
-        setExpanded((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
+        startExpandTransition(() => {
+            setExpanded((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+            });
         });
     }, []);
 
     const expandAll = useCallback(() => {
-        setExpanded(new Set(taskRelations.allParentIds));
+        startExpandTransition(() => setExpanded(new Set(taskRelations.allParentIds)));
     }, [taskRelations]);
 
-    const collapseAll = useCallback(() => setExpanded(new Set()), []);
+    const collapseAll = useCallback(() => startExpandTransition(() => setExpanded(new Set())), []);
 
     // ── Navigation ──
 
@@ -679,19 +626,29 @@ export default function Schedule() {
             if (lagById.size > 0) setLinks(updatedLinks);
 
             // Persist all changes — moved task + cascaded successors + lag rewrites.
+            // Use `api.patch` directly (not the shared useHttp instance) so concurrent
+            // requests don't cancel each other. A single useHttp instance is interruptible:
+            // firing multiple .patch() calls in a loop would cancel all but the last,
+            // causing the moved task's own update to be silently dropped.
             const dateUpdates = [{ id, start_date: startDate, end_date: endDate }, ...cascaded];
+            let rolledBack = false;
             const rollback = () => {
+                if (rolledBack) return;
+                rolledBack = true;
                 setTasks(prev);
                 setLinks(prevLinks);
                 toast.error('Failed to update dates');
             };
-            for (const u of dateUpdates) {
-                updateDatesHttp.setData({ start_date: u.start_date, end_date: u.end_date });
-                updateDatesHttp.patch(`/tasks/${u.id}/dates`, { onSuccess: () => flashSaved(u.id), onError: rollback });
-            }
+            Promise.all(
+                dateUpdates.map((u) =>
+                    api
+                        .patch(`/tasks/${u.id}/dates`, { start_date: u.start_date, end_date: u.end_date })
+                        .then(() => flashSaved(u.id))
+                        .catch(rollback),
+                ),
+            );
             for (const u of lagUpdates) {
-                updateLinkLagHttp.setData({ lag_days: u.lag_days });
-                updateLinkLagHttp.patch(`/task-links/${u.id}`, { onError: rollback });
+                api.patch(`/task-links/${u.id}`, { lag_days: u.lag_days }).catch(rollback);
             }
         },
         [tasks, links, flashSaved],
@@ -865,16 +822,40 @@ export default function Schedule() {
 
     const handleUpdateLink = useCallback(
         async (linkId: number, patch: { type?: LinkType; lag_days?: number }) => {
-            const prev = links;
-            setLinks((curr) => curr.map((l) => (l.id === linkId ? { ...l, ...patch } : l)));
-            try {
-                await api.patch(`/task-links/${linkId}`, patch);
-            } catch {
-                setLinks(prev);
+            const prevLinks = links;
+            const prevTasks = tasks;
+
+            const targetLink = prevLinks.find((l) => l.id === linkId);
+            if (!targetLink) return;
+
+            // Apply the link change locally, then cascade successors using the updated link set.
+            const updatedLinks = prevLinks.map((l) => (l.id === linkId ? { ...l, ...patch } : l));
+            const cascaded = propagateLinks(targetLink.source_id, tasks, updatedLinks);
+
+            let finalTasks = tasks;
+            for (const u of cascaded) {
+                finalTasks = finalTasks.map((t) => (t.id === u.id ? { ...t, start_date: u.start_date, end_date: u.end_date } : t));
+            }
+            setLinks(updatedLinks);
+            if (cascaded.length > 0) setTasks(finalTasks);
+
+            const rollback = () => {
+                setLinks(prevLinks);
+                setTasks(prevTasks);
                 toast.error('Failed to update link');
+            };
+
+            try {
+                await Promise.all([
+                    api.patch(`/task-links/${linkId}`, patch),
+                    ...cascaded.map((u) => api.patch(`/tasks/${u.id}/dates`, { start_date: u.start_date, end_date: u.end_date })),
+                ]);
+                cascaded.forEach((u) => flashSaved(u.id));
+            } catch {
+                rollback();
             }
         },
-        [links],
+        [links, tasks, flashSaved],
     );
 
     const handleDeleteLink = useCallback(
@@ -904,94 +885,45 @@ export default function Schedule() {
         [visibleTasks],
     );
 
-    // ── Bulk ownership ──
+    // ── Bulk edit on filtered tasks ──
+
+    const visibleLeafIds = useCallback(() => visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id), [visibleTasks]);
+
+    const bulkUpdate = useCallback(
+        async (path: string, body: Record<string, unknown>, successLabel: (n: number) => string) => {
+            const ids = visibleLeafIds();
+            if (ids.length === 0) return;
+            setLoading(true);
+            try {
+                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(path, { task_ids: ids, ...body });
+                setTasks(result.tasks);
+                toast.success(successLabel(ids.length));
+            } catch {
+                toast.error('Failed to update tasks');
+            } finally {
+                setLoading(false);
+            }
+        },
+        [visibleLeafIds, location.id],
+    );
 
     const handleBulkMarkOwned = useCallback(
-        async (owned: boolean) => {
-            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
-            if (taskIds.length === 0) return;
-
-            setLoading(true);
-            try {
-                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-ownership`, {
-                    task_ids: taskIds,
-                    is_owned: owned,
-                });
-                setTasks(result.tasks);
-                toast.success(`${owned ? 'Marked' : 'Unmarked'} ${taskIds.length} tasks`);
-            } catch {
-                toast.error('Failed to update tasks');
-            } finally {
-                setLoading(false);
-            }
-        },
-        [location.id, visibleTasks],
+        (owned: boolean) =>
+            bulkUpdate(`/locations/${location.id}/tasks/bulk-ownership`, { is_owned: owned }, (n) => `${owned ? 'Marked' : 'Unmarked'} ${n} tasks`),
+        [bulkUpdate, location.id],
     );
-
     const handleBulkSetResponsible = useCallback(
-        async (responsible: string | null) => {
-            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
-            if (taskIds.length === 0) return;
-
-            setLoading(true);
-            try {
-                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
-                    task_ids: taskIds,
-                    responsible,
-                });
-                setTasks(result.tasks);
-                toast.success(`Set responsible on ${taskIds.length} tasks`);
-            } catch {
-                toast.error('Failed to update tasks');
-            } finally {
-                setLoading(false);
-            }
-        },
-        [location.id, visibleTasks],
+        (responsible: string | null) =>
+            bulkUpdate(`/locations/${location.id}/tasks/bulk-update`, { responsible }, (n) => `Set responsible on ${n} tasks`),
+        [bulkUpdate, location.id],
     );
-
     const handleBulkSetStatus = useCallback(
-        async (status: TaskStatus | null) => {
-            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
-            if (taskIds.length === 0) return;
-
-            setLoading(true);
-            try {
-                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
-                    task_ids: taskIds,
-                    status,
-                });
-                setTasks(result.tasks);
-                toast.success(`Set status on ${taskIds.length} tasks`);
-            } catch {
-                toast.error('Failed to update tasks');
-            } finally {
-                setLoading(false);
-            }
-        },
-        [location.id, visibleTasks],
+        (status: TaskStatus | null) => bulkUpdate(`/locations/${location.id}/tasks/bulk-update`, { status }, (n) => `Set status on ${n} tasks`),
+        [bulkUpdate, location.id],
     );
-
     const handleBulkSetColor = useCallback(
-        async (color: string | null) => {
-            const taskIds = visibleTasks.filter((t) => !t.hasChildren).map((t) => t.id);
-            if (taskIds.length === 0) return;
-
-            setLoading(true);
-            try {
-                const result = await api.post<{ success: boolean; tasks: ProjectTask[] }>(`/locations/${location.id}/tasks/bulk-update`, {
-                    task_ids: taskIds,
-                    color,
-                });
-                setTasks(result.tasks);
-                toast.success(`Set color on ${taskIds.length} tasks`);
-            } catch {
-                toast.error('Failed to update tasks');
-            } finally {
-                setLoading(false);
-            }
-        },
-        [location.id, visibleTasks],
+        (color: string | null) => bulkUpdate(`/locations/${location.id}/tasks/bulk-update`, { color }, (n) => `Set color on ${n} tasks`),
+        [bulkUpdate, location.id],
     );
 
     // ── Import ──
@@ -1079,22 +1011,20 @@ export default function Schedule() {
 
             <div className="relative flex h-[calc(100vh-65px)] flex-col">
                 {loading && (
-                    <div className="pointer-events-none absolute top-2 right-3 z-50">
-                        <div className="bg-card flex items-center gap-2 rounded-full border px-3 py-1.5 shadow-md">
-                            <div className="border-primary h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" />
-                            <span className="text-xs font-medium">
-                                {importHttp.processing
-                                    ? 'Importing tasks…'
-                                    : setBaselineHttp.processing
-                                      ? 'Saving baseline…'
-                                      : revertBaselineHttp.processing
-                                        ? 'Restoring baseline…'
-                                        : clearAllHttp.processing
-                                          ? 'Deleting tasks…'
-                                          : bulkOwnershipHttp.processing
-                                            ? 'Updating tasks…'
-                                            : 'Saving…'}
-                            </span>
+                    <div className="animate-in fade-in slide-in-from-top-1 pointer-events-none absolute top-2 right-3 z-50 duration-200">
+                        <div className="bg-background/90 border-border/80 text-muted-foreground flex items-center gap-2 rounded-full border px-3 py-1 text-xs backdrop-blur">
+                            <div className="border-muted-foreground/40 border-t-foreground h-3 w-3 animate-spin rounded-full border" />
+                            {importHttp.processing
+                                ? 'Importing tasks…'
+                                : setBaselineHttp.processing
+                                  ? 'Saving baseline…'
+                                  : revertBaselineHttp.processing
+                                    ? 'Restoring baseline…'
+                                    : clearAllHttp.processing
+                                      ? 'Deleting tasks…'
+                                      : bulkOwnershipHttp.processing
+                                        ? 'Updating tasks…'
+                                        : 'Saving…'}
                         </div>
                     </div>
                 )}
@@ -1130,16 +1060,22 @@ export default function Schedule() {
                     onBulkSetColor={handleBulkSetColor}
                     responsibleOptions={responsibleOptions}
                     filteredTaskCount={visibleTasks.filter((t) => !t.hasChildren).length}
-                    hasFilteredTasks={visibleTasks.filter((t) => !t.hasChildren).length > 0}
-                    hasColumnFilter={responsibleFilter.size > 0 || statusFilter.size > 0}
+                    hasActiveFilter={
+                        activeFilters.size > 0 ||
+                        !!searchQuery ||
+                        !!filterTaskId ||
+                        !!(startDateRange.from || startDateRange.to) ||
+                        !!(endDateRange.from || endDateRange.to) ||
+                        responsibleFilter.size > 0 ||
+                        statusFilter.size > 0
+                    }
                     onImport={() => importBtnRef.current?.querySelector('button')?.click()}
-                    sortMode={sortMode}
-                    onSortModeChange={handleSortModeChange}
                     startDateRange={startDateRange}
                     onClearStartDateRange={() => setStartDateRange({ from: null, to: null })}
                     endDateRange={endDateRange}
                     onClearEndDateRange={() => setEndDateRange({ from: null, to: null })}
                     calendarHref={`/locations/${location.id}/calendar`}
+                    reportHref={`/locations/${location.id}/schedule/report`}
                     importButton={
                         <div ref={importBtnRef}>
                             <CsvImporterDialog
@@ -1161,9 +1097,8 @@ export default function Schedule() {
                     }
                 />
 
-                <div className="bg-card m-2 flex min-h-0 flex-1 overflow-auto rounded-lg border md:m-4">
+                <div className="flex min-h-0 flex-1 overflow-y-auto">
                     <TaskTreePanel
-                        ref={treeScrollRef}
                         visibleTasks={visibleTasks}
                         allTasks={tasks}
                         expanded={expanded}
@@ -1212,7 +1147,6 @@ export default function Schedule() {
                         linkMode={linkMode}
                         onEnableLinkMode={() => setLinkMode(true)}
                         showBaseline={showBaseline}
-                        onVerticalScroll={handleGanttVerticalScroll}
                     />
                 </div>
             </div>
@@ -1234,6 +1168,7 @@ export default function Schedule() {
                 links={links}
                 allTasks={visibleTasks}
                 onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDelete}
                 onDeleteLink={handleDeleteLink}
                 onUpdateLink={handleUpdateLink}
                 payRateTemplates={payRateTemplates ?? []}
@@ -1247,7 +1182,7 @@ export default function Schedule() {
                 description={
                     <>
                         <p>This captures the current task dates as the baseline (contract program).</p>
-                        <p className="font-medium text-foreground">Any existing baseline will be overwritten.</p>
+                        <p className="text-foreground font-medium">Any existing baseline will be overwritten.</p>
                     </>
                 }
                 confirmLabel="Set Baseline"
@@ -1262,7 +1197,7 @@ export default function Schedule() {
                     <>
                         <p>All task start and finish dates will be reset to their baseline values.</p>
                         <p>Links, responsible parties, status, and ownership are not affected.</p>
-                        <p className="font-medium text-foreground">Your current actual dates will be overwritten.</p>
+                        <p className="text-foreground font-medium">Your current actual dates will be overwritten.</p>
                     </>
                 }
                 confirmLabel="Restore to Baseline"
@@ -1276,8 +1211,10 @@ export default function Schedule() {
                 title="Delete ALL tasks?"
                 description={
                     <>
-                        <p>This permanently deletes every task and link for <strong className="text-foreground">{location.name}</strong>.</p>
-                        <p className="font-medium text-foreground">This cannot be undone.</p>
+                        <p>
+                            This permanently deletes every task and link for <strong className="text-foreground">{location.name}</strong>.
+                        </p>
+                        <p className="text-foreground font-medium">This cannot be undone.</p>
                     </>
                 }
                 confirmLabel="Delete Everything"

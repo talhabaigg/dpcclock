@@ -20,7 +20,7 @@ import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { addMonths, endOfMonth, endOfQuarter, endOfWeek, format, startOfMonth, startOfQuarter, startOfWeek, subMonths } from 'date-fns';
 import { ChevronRight, Filter, FolderOpen, Plus, X } from 'lucide-react';
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import TaskTreeRow from './task-tree-row';
 import type { ColumnVisibility, PayRateTemplateOption, ProjectTask, TaskNode, TaskStatus } from './types';
 import { ROW_HEIGHT, STATUS_LABELS } from './types';
@@ -191,42 +191,38 @@ function DateRangeFilter({ label, range, onChange }: { label: string; range: Dat
     );
 }
 
-const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
-    (
-        {
-            visibleTasks,
-            allTasks,
-            expanded,
-            onToggle,
-            onAddChild,
-            onDelete,
-            onRename,
-            onDatesChange,
-            onResponsibleChange,
-            responsibleOptions,
-            onStatusChange,
-            visibleColumns,
-            onAddTask,
-            onManualReorder,
-            onIndent,
-            onOutdent,
-            showBaseline,
-            filterTaskId,
-            onFilterTaskChange,
-            rootTasks,
-            startDateRange,
-            onStartDateRangeChange,
-            endDateRange,
-            onEndDateRangeChange,
-            responsibleFilter,
-            onResponsibleFilterChange,
-            statusFilter,
-            onStatusFilterChange,
-            payRateTemplates,
-            flashTaskId,
-        },
-        ref,
-    ) => {
+function TaskTreePanel({
+    visibleTasks,
+    allTasks,
+    expanded,
+    onToggle,
+    onAddChild,
+    onDelete,
+    onRename,
+    onDatesChange,
+    onResponsibleChange,
+    responsibleOptions,
+    onStatusChange,
+    visibleColumns,
+    onAddTask,
+    onManualReorder,
+    onIndent,
+    onOutdent,
+    showBaseline,
+    filterTaskId,
+    onFilterTaskChange,
+    rootTasks,
+    startDateRange,
+    onStartDateRangeChange,
+    endDateRange,
+    onEndDateRangeChange,
+    responsibleFilter,
+    onResponsibleFilterChange,
+    statusFilter,
+    onStatusFilterChange,
+    payRateTemplates,
+    flashTaskId,
+}: TaskTreePanelProps) {
         const [filterOpen, setFilterOpen] = useState(false);
         const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
         const [activeDragId, setActiveDragId] = useState<number | null>(null);
@@ -372,105 +368,103 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
         return (
             <div className="flex shrink-0 flex-col" style={{ width: panelWidth }}>
                 {/* Header */}
-                <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
-                    {/* Spacer aligned with the per-row drag handle */}
-                    <span className="w-4 shrink-0" />
-                    <span className="flex-1 truncate px-3">Task Name</span>
+                <div className="sticky top-0 z-20">
+                    <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
+                        {/* Spacer aligned with the per-row drag handle */}
+                        <span className="w-4 shrink-0" />
+                        <span className="flex-1 truncate px-3">Task Name</span>
 
-                    {/* Task filter icon */}
-                    <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-                        <PopoverTrigger asChild>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className={cn('h-5 w-5', isFiltered && 'text-primary')}
-                                title={isFiltered ? 'Filtered — click to change' : 'Filter by task'}
-                            >
-                                <Filter className="h-3 w-3" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[250px] p-0" align="start">
-                            <Command>
-                                <CommandInput placeholder="Search tasks..." className="h-8 text-xs" />
-                                <CommandList className="max-h-[250px]">
-                                    <CommandEmpty>No tasks found.</CommandEmpty>
-                                    <CommandGroup>
-                                        <CommandItem
-                                            value="__all__"
-                                            onSelect={() => {
-                                                onFilterTaskChange(null);
-                                                setFilterOpen(false);
-                                            }}
-                                            className="text-xs"
-                                        >
-                                            All Tasks
-                                        </CommandItem>
-                                        {allFilterOptions.map((opt) => (
+                        {/* Task filter icon */}
+                        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className={cn('h-5 w-5', isFiltered && 'text-primary')}
+                                    title={isFiltered ? 'Filtered — click to change' : 'Filter by task'}
+                                >
+                                    <Filter className="h-3 w-3" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[250px] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search tasks..." className="h-8 text-xs" />
+                                    <CommandList className="max-h-[250px]">
+                                        <CommandEmpty>No tasks found.</CommandEmpty>
+                                        <CommandGroup>
                                             <CommandItem
-                                                key={opt.id}
-                                                value={opt.name}
+                                                value="__all__"
                                                 onSelect={() => {
-                                                    onFilterTaskChange(opt.id);
+                                                    onFilterTaskChange(null);
                                                     setFilterOpen(false);
                                                 }}
                                                 className="text-xs"
                                             >
-                                                <span className="flex items-center" style={{ paddingLeft: opt.depth * 12 }}>
-                                                    {opt.hasChildren ? (
-                                                        <FolderOpen className="text-muted-foreground mr-1 h-3 w-3 shrink-0" />
-                                                    ) : (
-                                                        <ChevronRight className="text-muted-foreground/50 mr-1 h-3 w-3 shrink-0" />
-                                                    )}
-                                                    <span className="truncate">{opt.name}</span>
-                                                </span>
+                                                All Tasks
                                             </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                            </Command>
-                        </PopoverContent>
-                    </Popover>
+                                            {allFilterOptions.map((opt) => (
+                                                <CommandItem
+                                                    key={opt.id}
+                                                    value={opt.name}
+                                                    onSelect={() => {
+                                                        onFilterTaskChange(opt.id);
+                                                        setFilterOpen(false);
+                                                    }}
+                                                    className="text-xs"
+                                                >
+                                                    <span className="flex items-center" style={{ paddingLeft: opt.depth * 12 }}>
+                                                        {opt.hasChildren ? (
+                                                            <FolderOpen className="text-muted-foreground mr-1 h-3 w-3 shrink-0" />
+                                                        ) : (
+                                                            <ChevronRight className="text-muted-foreground/50 mr-1 h-3 w-3 shrink-0" />
+                                                        )}
+                                                        <span className="truncate">{opt.name}</span>
+                                                    </span>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
 
-                    {/* Add task button */}
-                    <Button size="icon" variant="outline" className="mr-2 ml-1 h-5 w-5" onClick={onAddTask} title="Add task">
-                        <Plus className="h-3 w-3" />
-                    </Button>
+                        {/* Add task button */}
+                        <Button size="icon" variant="outline" className="mr-2 ml-1 h-5 w-5" onClick={onAddTask} title="Add task">
+                            <Plus className="h-3 w-3" />
+                        </Button>
 
-                    {/* Start date column header with filter */}
-                    {visibleColumns.start && (
-                        <div className="w-[95px] shrink-0 border-l">
-                            <DateRangeFilter label="Start" range={startDateRange} onChange={onStartDateRangeChange} />
-                        </div>
-                    )}
+                        {/* Start date column header with filter */}
+                        {visibleColumns.start && (
+                            <div className="w-[95px] shrink-0 border-l">
+                                <DateRangeFilter label="Start" range={startDateRange} onChange={onStartDateRangeChange} />
+                            </div>
+                        )}
 
-                    {/* Finish date column header with filter */}
-                    {visibleColumns.finish && (
-                        <div className="w-[95px] shrink-0 border-l">
-                            <DateRangeFilter label="Finish" range={endDateRange} onChange={onEndDateRangeChange} />
-                        </div>
-                    )}
+                        {/* Finish date column header with filter */}
+                        {visibleColumns.finish && (
+                            <div className="w-[95px] shrink-0 border-l">
+                                <DateRangeFilter label="Finish" range={endDateRange} onChange={onEndDateRangeChange} />
+                            </div>
+                        )}
 
-                    {visibleColumns.days && <span className="w-[40px] shrink-0 border-l px-2 text-center">Days</span>}
-                    {visibleColumns.responsible && (
-                        <div className="w-[150px] shrink-0 border-l">
-                            <ResponsibleFilter
-                                options={responsibleOptions}
-                                selected={responsibleFilter}
-                                onChange={onResponsibleFilterChange}
-                            />
-                        </div>
-                    )}
-                    {visibleColumns.status && (
-                        <div className="w-[120px] shrink-0 border-l">
-                            <StatusFilter selected={statusFilter} onChange={onStatusFilterChange} />
-                        </div>
-                    )}
-                    <span className="w-[32px] shrink-0" />
+                        {visibleColumns.days && <span className="w-[40px] shrink-0 border-l px-2 text-center">Days</span>}
+                        {visibleColumns.responsible && (
+                            <div className="w-[150px] shrink-0 border-l">
+                                <ResponsibleFilter options={responsibleOptions} selected={responsibleFilter} onChange={onResponsibleFilterChange} />
+                            </div>
+                        )}
+                        {visibleColumns.status && (
+                            <div className="w-[120px] shrink-0 border-l">
+                                <StatusFilter selected={statusFilter} onChange={onStatusFilterChange} />
+                            </div>
+                        )}
+                        <span className="w-[32px] shrink-0" />
+                    </div>
+                    <div className="bg-muted/30 border-b" style={{ height: 24 }} />
                 </div>
-                <div className="bg-muted/30 border-b" style={{ height: 24 }} />
 
-                {/* Scrollable rows */}
-                <div ref={ref} className="flex-1 overflow-x-hidden overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {/* Row area — vertical scrolling handled by the shared outer container */}
+                <div>
                     {visibleTasks.length === 0 ? (
                         <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
                             No tasks yet. Click &quot;+&quot; to begin.
@@ -535,10 +529,7 @@ const TaskTreePanel = forwardRef<HTMLDivElement, TaskTreePanelProps>(
                 </div>
             </div>
         );
-    },
-);
-
-TaskTreePanel.displayName = 'TaskTreePanel';
+}
 
 export default TaskTreePanel;
 

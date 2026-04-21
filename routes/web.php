@@ -496,6 +496,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Schedule / Gantt
         Route::middleware('permission:locations.schedule')->group(function () {
             Route::get('/locations/{location}/schedule', [LocationController::class, 'schedule'])->name('locations.schedule');
+            Route::get('/locations/{location}/schedule/report', [LocationController::class, 'scheduleReport'])->name('locations.schedule.report');
             Route::post('/locations/{location}/tasks', [ProjectTaskController::class, 'store'])->name('project-tasks.store');
             Route::post('/locations/{location}/tasks/reorder', [ProjectTaskController::class, 'reorder'])->name('project-tasks.reorder');
             Route::patch('/tasks/{task}', [ProjectTaskController::class, 'update'])->name('project-tasks.update');

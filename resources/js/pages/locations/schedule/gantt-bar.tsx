@@ -1,8 +1,9 @@
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskNode } from './types';
-import { addWorkingDays, countWorkingDays, dateToX, snapToWorkday, xToDate } from './utils';
+import { addWorkingDays, countWorkingDays, dateToX, diffWorkingDays, snapToWorkday, xToDate } from './utils';
 
 /** Format a date as YYYY-MM-DD in local timezone (not UTC) */
 function fmtLocalDate(d: Date): string {
@@ -63,6 +64,10 @@ export default function GanttBar({
     const displayWidth = baseWidth + (dragState?.activated ? offset.width : 0);
 
     const workingDays = hasDates ? countWorkingDays(startDate!, endDate!) : 0;
+
+    // Delay vs baseline (in working days). Positive = late, negative = early.
+    const baselineFinish = node.baseline_finish ? parseISO(node.baseline_finish) : null;
+    const delayDays = hasDates && baselineFinish ? diffWorkingDays(baselineFinish, endDate!) : 0;
 
     const handlePointerDown = useCallback(
         (type: 'move' | 'resize-left' | 'resize-right', e: React.PointerEvent) => {
@@ -271,7 +276,12 @@ export default function GanttBar({
         />
     );
 
+    const baselineStart = node.baseline_start ? parseISO(node.baseline_start) : null;
+    const fmt = (d: Date) => format(d, 'dd MMM yyyy');
+
     return (
+        <HoverCard open={dragState?.activated ? false : undefined}>
+            <HoverCardTrigger asChild delay={2000} closeDelay={100}>
         <div
             ref={barRef}
             className={cn(
@@ -312,13 +322,25 @@ export default function GanttBar({
                 />
             )}
 
-            {/* Label — show live count during drag */}
+            {/* Label — show live count during drag, plus delay vs baseline */}
             {displayWidth > 40 && (
                 <span
                     className="pointer-events-none truncate px-2 text-xs font-medium text-white"
                     style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
                 >
                     {previewDates ? previewDates.days : workingDays}d
+                    {!dragState?.activated && delayDays !== 0 && (
+                        <span
+                            className={cn(
+                                'ml-1 rounded px-1 py-px text-[9px] font-semibold',
+                                delayDays > 0 ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white',
+                            )}
+                            style={{ textShadow: 'none' }}
+                        >
+                            {delayDays > 0 ? '+' : ''}
+                            {delayDays}d
+                        </span>
+                    )}
                 </span>
             )}
 
@@ -330,5 +352,49 @@ export default function GanttBar({
                 />
             )}
         </div>
+            </HoverCardTrigger>
+            <HoverCardContent side="top" className="w-72">
+                <div className="space-y-2 text-xs">
+                    <div className="truncate text-sm font-semibold">{node.name}</div>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                        <span className="text-muted-foreground">Start</span>
+                        <span>{startDate ? fmt(startDate) : '—'}</span>
+                        <span className="text-muted-foreground">Finish</span>
+                        <span>{endDate ? fmt(endDate) : '—'}</span>
+                        <span className="text-muted-foreground">Duration</span>
+                        <span>{workingDays} working day{workingDays === 1 ? '' : 's'}</span>
+                        {(baselineStart || baselineFinish) && (
+                            <>
+                                <span className="text-muted-foreground">Baseline</span>
+                                <span>
+                                    {baselineStart ? fmt(baselineStart) : '—'} → {baselineFinish ? fmt(baselineFinish) : '—'}
+                                </span>
+                            </>
+                        )}
+                        {baselineFinish && (
+                            <>
+                                <span className="text-muted-foreground">Delay</span>
+                                <span
+                                    className={cn(
+                                        'font-semibold',
+                                        delayDays > 0 ? 'text-red-600 dark:text-red-400' : delayDays < 0 ? 'text-emerald-600 dark:text-emerald-400' : '',
+                                    )}
+                                >
+                                    {delayDays === 0
+                                        ? 'On baseline'
+                                        : `${delayDays > 0 ? '+' : ''}${delayDays} working day${Math.abs(delayDays) === 1 ? '' : 's'} ${delayDays > 0 ? 'late' : 'early'}`}
+                                </span>
+                            </>
+                        )}
+                        {node.responsible && (
+                            <>
+                                <span className="text-muted-foreground">Responsible</span>
+                                <span className="truncate">{node.responsible}</span>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </HoverCardContent>
+        </HoverCard>
     );
 }

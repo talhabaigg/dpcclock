@@ -34,7 +34,14 @@ function GanttRow({
     const rowHeight = hasBaseline ? ROW_HEIGHT + 16 : ROW_HEIGHT;
 
     return (
-        <div className="relative border-b" style={{ height: rowHeight }}>
+        <div
+            className="relative border-b"
+            style={{
+                height: rowHeight,
+                contentVisibility: 'auto',
+                containIntrinsicSize: `${rowHeight}px`,
+            }}
+        >
             {/* Actual bar — when baseline visible, shift up from center */}
             <div className="absolute inset-x-0" style={{ top: hasBaseline ? 4 : 0, height: ROW_HEIGHT }}>
                 <div className="relative h-full">

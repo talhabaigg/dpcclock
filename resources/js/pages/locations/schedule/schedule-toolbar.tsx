@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -18,9 +17,9 @@ import {
 } from '@/components/ui/menubar';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { ArrowDownUp, CalendarDays, CalendarRange, CheckSquare, Filter, HardHat, HelpCircle, Link2, Maximize2, Palette, Search, User, X } from 'lucide-react';
-import type { ColumnKey, ColumnVisibility, FilterFlag, SortMode, TaskStatus, ZoomLevel } from './types';
-import { COLUMN_LABELS, MANUAL_STATUSES, PRESET_COLORS, SORT_MODE_LABELS, STATUS_LABELS } from './types';
+import { CalendarDays, CalendarRange, FileText, Filter, ListChecks, Maximize2, Search, X } from 'lucide-react';
+import type { ColumnKey, ColumnVisibility, FilterFlag, TaskStatus, ZoomLevel } from './types';
+import { COLUMN_LABELS, MANUAL_STATUSES, PRESET_COLORS, STATUS_LABELS } from './types';
 
 interface ScheduleToolbarProps {
     zoom: ZoomLevel;
@@ -45,6 +44,7 @@ interface ScheduleToolbarProps {
     onSetBaseline: () => void;
     onRevertToBaseline: () => void;
     onClearAll: () => void;
+    onImport: () => void;
     onBulkMarkOwned: () => void;
     onBulkUnmarkOwned: () => void;
     onBulkSetResponsible: (value: string | null) => void;
@@ -52,17 +52,14 @@ interface ScheduleToolbarProps {
     onBulkSetColor: (color: string | null) => void;
     responsibleOptions: string[];
     filteredTaskCount: number;
-    hasFilteredTasks: boolean;
-    hasColumnFilter: boolean;
-    onImport: () => void;
-    sortMode: SortMode;
-    onSortModeChange: (mode: SortMode) => void;
+    hasActiveFilter: boolean;
     startDateRange: { from: string | null; to: string | null };
     onClearStartDateRange: () => void;
     endDateRange: { from: string | null; to: string | null };
     onClearEndDateRange: () => void;
     importButton?: React.ReactNode;
     calendarHref?: string;
+    reportHref?: string;
     visibleColumns: ColumnVisibility;
     onToggleColumn: (key: ColumnKey) => void;
 }
@@ -97,6 +94,7 @@ export default function ScheduleToolbar({
     onSetBaseline,
     onRevertToBaseline,
     onClearAll,
+    onImport,
     onBulkMarkOwned,
     onBulkUnmarkOwned,
     onBulkSetResponsible,
@@ -104,21 +102,32 @@ export default function ScheduleToolbar({
     onBulkSetColor,
     responsibleOptions,
     filteredTaskCount,
-    hasFilteredTasks,
-    hasColumnFilter,
-    onImport,
-    sortMode,
-    onSortModeChange,
+    hasActiveFilter,
     startDateRange,
     onClearStartDateRange,
     endDateRange,
     onClearEndDateRange,
     importButton,
     calendarHref,
+    reportHref,
     visibleColumns,
     onToggleColumn,
 }: ScheduleToolbarProps) {
     const columnKeys: ColumnKey[] = ['start', 'finish', 'days', 'responsible', 'status'];
+
+    // Local input state keeps typing responsive — only the debounced value is lifted to the parent.
+    const [searchInput, setSearchInput] = useState(searchQuery);
+    useEffect(() => {
+        // Sync down: if the parent clears search (e.g. chip removed), reflect it here.
+        if (searchQuery !== searchInput) setSearchInput(searchQuery);
+         
+    }, [searchQuery]);
+    useEffect(() => {
+        if (searchInput === searchQuery) return;
+        const handle = setTimeout(() => onSearchChange(searchInput), 250);
+        return () => clearTimeout(handle);
+    }, [searchInput, searchQuery, onSearchChange]);
+    const searchPending = searchInput !== searchQuery;
     return (
         <div className="flex flex-col">
             {/* Menu bar row */}
@@ -190,13 +199,20 @@ export default function ScheduleToolbar({
                     </MenubarMenu>
                 </Menubar>
 
-                {/* Import dialog (hidden, triggered via File > Import menu item) */}
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-1">
                     {calendarHref && (
-                        <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 text-xs">
+                        <Button asChild size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground h-7 gap-1.5 text-xs">
                             <Link href={calendarHref}>
                                 <CalendarRange className="h-3.5 w-3.5" />
                                 Project Calendar
+                            </Link>
+                        </Button>
+                    )}
+                    {reportHref && (
+                        <Button asChild size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground h-7 gap-1.5 text-xs">
+                            <Link href={reportHref}>
+                                <FileText className="h-3.5 w-3.5" />
+                                Variance Report
                             </Link>
                         </Button>
                     )}
@@ -207,14 +223,15 @@ export default function ScheduleToolbar({
             {/* Action toolbar row */}
             <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5">
                 {/* Zoom presets */}
-                <div className="bg-muted inline-flex items-center rounded-md p-0.5">
-                    {VIEW_OPTIONS.map((opt) => (
+                <div className="inline-flex h-7 items-center overflow-hidden rounded-md border">
+                    {VIEW_OPTIONS.map((opt, i) => (
                         <button
                             key={opt.key}
                             onClick={() => onZoomChange(opt.key)}
                             className={cn(
-                                'rounded-sm px-2.5 py-0.5 text-xs font-medium transition-colors',
-                                zoom === opt.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                                'px-2.5 text-xs font-medium transition-colors h-full',
+                                i > 0 && 'border-l',
+                                zoom === opt.key ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                             )}
                         >
                             {opt.label}
@@ -229,86 +246,31 @@ export default function ScheduleToolbar({
                 <Button size="icon" variant="outline" onClick={onAutoFit} title="Auto-fit" className="h-7 w-7">
                     <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
-                <div className="inline-flex items-center">
-                    <Button
-                        size="sm"
-                        variant={linkMode ? 'default' : 'outline'}
-                        onClick={onToggleLinkMode}
-                        title="Link tasks together"
-                        className="h-7 rounded-r-none border-r-0 text-xs"
-                    >
-                        <Link2 className="mr-1 h-3.5 w-3.5" />
-                        Link Tasks
-                    </Button>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                size="icon"
-                                variant={linkMode ? 'default' : 'outline'}
-                                className="h-7 w-6 rounded-l-none"
-                                title="How linking works"
-                                aria-label="How linking works"
-                            >
-                                <HelpCircle className="h-3.5 w-3.5" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-80 text-xs">
-                            <div className="space-y-2">
-                                <div className="font-semibold text-sm">Linking Tasks</div>
-                                <p className="text-muted-foreground">
-                                    Each task has two connector dots — one at the <strong>start</strong> and one at the <strong>finish</strong>. Hover over a bar
-                                    to reveal them.
-                                </p>
-                                <p className="text-muted-foreground">Click a dot on one task, then click a dot on another to create a dependency.</p>
-                                <div className="border-t pt-2">
-                                    <div className="font-medium mb-1">Dependency types</div>
-                                    <ul className="text-muted-foreground space-y-0.5">
-                                        <li><strong className="text-foreground">FS</strong> — Finish → Start (most common)</li>
-                                        <li><strong className="text-foreground">SS</strong> — Start → Start</li>
-                                        <li><strong className="text-foreground">FF</strong> — Finish → Finish</li>
-                                        <li><strong className="text-foreground">SF</strong> — Start → Finish</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                </div>
-
-                {/* Sort menu */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className={cn('h-7 text-xs', sortMode !== 'manual' && 'border-primary text-primary')}
-                            title={`Sort: ${SORT_MODE_LABELS[sortMode]}`}
-                        >
-                            <ArrowDownUp className="mr-1 h-3.5 w-3.5" />
-                            Sort
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                        <DropdownMenuRadioGroup value={sortMode} onValueChange={(v) => onSortModeChange(v as SortMode)}>
-                            {(Object.entries(SORT_MODE_LABELS) as [SortMode, string][]).map(([key, label]) => (
-                                <DropdownMenuRadioItem key={key} value={key} className="text-xs">
-                                    {label}
-                                </DropdownMenuRadioItem>
-                            ))}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                </DropdownMenu>
 
                 <div className="bg-border mx-1 h-4 w-px" />
 
                 {/* Search */}
                 <div className="relative">
-                    <Search className="text-muted-foreground absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2" />
+                    <Search
+                        className={cn(
+                            'text-muted-foreground absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 transition-opacity duration-150',
+                            searchPending && 'opacity-0',
+                        )}
+                        aria-hidden
+                    />
+                    <span
+                        className={cn(
+                            'border-muted-foreground/30 border-t-foreground absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border transition-opacity duration-150',
+                            searchPending ? 'opacity-100' : 'opacity-0',
+                        )}
+                        aria-hidden
+                    />
                     <Input
                         id="schedule-search-input"
                         className="h-7 w-[150px] pl-6 text-xs"
                         placeholder="Search tasks… (F)"
-                        value={searchQuery}
-                        onChange={(e) => onSearchChange(e.target.value)}
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
                     />
                 </div>
 
@@ -328,238 +290,28 @@ export default function ScheduleToolbar({
 
                 {/* Mode indicators — stay inline because they change what's rendered, not what's filtered */}
                 {showBaseline && (
-                    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
-                        Baseline
-                        <button onClick={onToggleBaseline} className="hover:text-foreground" aria-label="Hide baseline">
+                    <span className="text-muted-foreground border-muted-foreground/30 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]">
+                        Baseline overlay
+                        <button onClick={onToggleBaseline} className="hover:text-foreground -mr-1" aria-label="Hide baseline">
                             <X className="h-3 w-3" />
                         </button>
                     </span>
                 )}
 
-                {/* Bulk actions — visible whenever a filter narrows the visible set */}
-                <BulkActions
-                    activeFilters={activeFilters}
-                    searchQuery={searchQuery}
-                    filterTaskName={filterTaskName}
-                    startDateRange={startDateRange}
-                    endDateRange={endDateRange}
-                    filteredTaskCount={filteredTaskCount}
-                    hasFilteredTasks={hasFilteredTasks}
-                    hasColumnFilter={hasColumnFilter}
-                    responsibleOptions={responsibleOptions}
-                    onBulkMarkOwned={onBulkMarkOwned}
-                    onBulkUnmarkOwned={onBulkUnmarkOwned}
-                    onBulkSetResponsible={onBulkSetResponsible}
-                    onBulkSetStatus={onBulkSetStatus}
-                    onBulkSetColor={onBulkSetColor}
-                />
+                {hasActiveFilter && filteredTaskCount > 0 && (
+                    <BulkMenu
+                        count={filteredTaskCount}
+                        responsibleOptions={responsibleOptions}
+                        onMarkOwned={onBulkMarkOwned}
+                        onUnmark={onBulkUnmarkOwned}
+                        onSetResponsible={onBulkSetResponsible}
+                        onSetStatus={onBulkSetStatus}
+                        onSetColor={onBulkSetColor}
+                    />
+                )}
+
             </div>
         </div>
-    );
-}
-
-interface BulkActionsProps {
-    activeFilters: Set<FilterFlag>;
-    searchQuery: string;
-    filterTaskName: string | null;
-    startDateRange: { from: string | null; to: string | null };
-    endDateRange: { from: string | null; to: string | null };
-    filteredTaskCount: number;
-    hasFilteredTasks: boolean;
-    hasColumnFilter: boolean;
-    responsibleOptions: string[];
-    onBulkMarkOwned: () => void;
-    onBulkUnmarkOwned: () => void;
-    onBulkSetResponsible: (value: string | null) => void;
-    onBulkSetStatus: (status: TaskStatus | null) => void;
-    onBulkSetColor: (color: string | null) => void;
-}
-
-function BulkActions({
-    activeFilters,
-    searchQuery,
-    filterTaskName,
-    startDateRange,
-    endDateRange,
-    filteredTaskCount,
-    hasFilteredTasks,
-    hasColumnFilter,
-    responsibleOptions,
-    onBulkMarkOwned,
-    onBulkUnmarkOwned,
-    onBulkSetResponsible,
-    onBulkSetStatus,
-    onBulkSetColor,
-}: BulkActionsProps) {
-    const anyFilter =
-        activeFilters.size > 0 ||
-        !!searchQuery ||
-        !!filterTaskName ||
-        !!(startDateRange.from || startDateRange.to) ||
-        !!(endDateRange.from || endDateRange.to) ||
-        hasColumnFilter;
-
-    if (!anyFilter || !hasFilteredTasks) return null;
-
-    const n = filteredTaskCount;
-    const confirmAndRun = (label: string, fn: () => void) => {
-        if (window.confirm(`${label} on ${n} visible task${n === 1 ? '' : 's'}?`)) fn();
-    };
-
-    return (
-        <div className="ml-auto flex items-center gap-1.5 border-l pl-2">
-            <span className="text-muted-foreground text-xs">{n} visible:</span>
-            <Button
-                size="sm"
-                variant="default"
-                onClick={() => confirmAndRun('Mark as Ours', onBulkMarkOwned)}
-                title="Mark all visible tasks as ours"
-                className="h-7 text-xs"
-            >
-                <HardHat className="mr-1 h-3.5 w-3.5" />
-                Mark as Ours
-            </Button>
-            <Button
-                size="sm"
-                variant="outline"
-                onClick={() => confirmAndRun('Unmark', onBulkUnmarkOwned)}
-                title="Unmark all visible tasks"
-                className="h-7 text-xs"
-            >
-                Unmark
-            </Button>
-            <BulkResponsiblePicker options={responsibleOptions} count={n} onPick={onBulkSetResponsible} />
-            <BulkStatusPicker count={n} onPick={onBulkSetStatus} />
-            <BulkColorPicker count={n} onPick={onBulkSetColor} />
-        </div>
-    );
-}
-
-function BulkColorPicker({ count, onPick }: { count: number; onPick: (color: string | null) => void }) {
-    const [open, setOpen] = useState(false);
-    const commit = (c: string | null) => {
-        const label = c ?? 'default';
-        if (!window.confirm(`Set bar color to ${label} on ${count} visible task${count === 1 ? '' : 's'}?`)) return;
-        onPick(c);
-        setOpen(false);
-    };
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 text-xs" title="Bulk set bar color">
-                    <Palette className="mr-1 h-3.5 w-3.5" />
-                    Color…
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2" align="end">
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                        type="button"
-                        className="bg-primary h-6 w-6 rounded-full border-2 border-transparent transition-transform hover:scale-110"
-                        onClick={() => commit(null)}
-                        title="Default"
-                    />
-                    {PRESET_COLORS.map((c) => (
-                        <button
-                            key={c}
-                            type="button"
-                            className="h-6 w-6 rounded-full border-2 border-transparent transition-transform hover:scale-110"
-                            style={{ backgroundColor: c }}
-                            onClick={() => commit(c)}
-                            title={c}
-                        />
-                    ))}
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-}
-
-function BulkResponsiblePicker({ options, count, onPick }: { options: string[]; count: number; onPick: (value: string | null) => void }) {
-    const [open, setOpen] = useState(false);
-    const [query, setQuery] = useState('');
-    const trimmed = query.trim();
-    const q = trimmed.toLowerCase();
-    const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
-    const exists = trimmed && options.some((o) => o.toLowerCase() === q);
-
-    const commit = (next: string | null) => {
-        if (!window.confirm(`Set Responsible${next ? ` to "${next}"` : ' (clear)'} on ${count} visible task${count === 1 ? '' : 's'}?`)) return;
-        onPick(next);
-        setOpen(false);
-        setQuery('');
-    };
-
-    return (
-        <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setQuery(''); }}>
-            <PopoverTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 text-xs" title="Bulk set Responsible">
-                    <User className="mr-1 h-3.5 w-3.5" />
-                    Responsible…
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[240px] p-0" align="end" side="bottom">
-                <Command shouldFilter={false}>
-                    <CommandInput placeholder="Search or create…" className="h-8 text-xs" value={query} onValueChange={setQuery} />
-                    <CommandList className="max-h-[240px]">
-                        <CommandEmpty className="text-muted-foreground py-2 text-center text-xs">
-                            {trimmed ? 'No matches — use Create below.' : 'No options yet.'}
-                        </CommandEmpty>
-                        {filtered.length > 0 && (
-                            <CommandGroup heading="Existing">
-                                {filtered.map((opt) => (
-                                    <CommandItem key={opt} value={opt} onSelect={() => commit(opt)} className="text-xs">
-                                        {opt}
-                                    </CommandItem>
-                                ))}
-                            </CommandGroup>
-                        )}
-                        {trimmed && !exists && (
-                            <CommandGroup heading="Create">
-                                <CommandItem onSelect={() => commit(trimmed)} className="text-xs">
-                                    Create "{trimmed}"
-                                </CommandItem>
-                            </CommandGroup>
-                        )}
-                        <CommandGroup>
-                            <CommandItem onSelect={() => commit(null)} className="text-muted-foreground text-xs">
-                                Clear responsible
-                            </CommandItem>
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
-    );
-}
-
-function BulkStatusPicker({ count, onPick }: { count: number; onPick: (status: TaskStatus | null) => void }) {
-    const commit = (s: TaskStatus | null) => {
-        const label = s ? STATUS_LABELS[s] : 'Clear';
-        if (!window.confirm(`Set Status to "${label}" on ${count} visible task${count === 1 ? '' : 's'}?`)) return;
-        onPick(s);
-    };
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 text-xs" title="Bulk set Status">
-                    <CheckSquare className="mr-1 h-3.5 w-3.5" />
-                    Status…
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                {MANUAL_STATUSES.map((s) => (
-                    <DropdownMenuItem key={s} onSelect={() => commit(s)} className="text-xs">
-                        {STATUS_LABELS[s]}
-                    </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => commit(null)} className="text-muted-foreground text-xs">
-                    Clear status
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
     );
 }
 
@@ -654,5 +406,105 @@ function FilterSummary({
                 </ul>
             </PopoverContent>
         </Popover>
+    );
+}
+
+interface BulkMenuProps {
+    count: number;
+    responsibleOptions: string[];
+    onMarkOwned: () => void;
+    onUnmark: () => void;
+    onSetResponsible: (value: string | null) => void;
+    onSetStatus: (status: TaskStatus | null) => void;
+    onSetColor: (color: string | null) => void;
+}
+
+function BulkMenu({ count, responsibleOptions, onMarkOwned, onUnmark, onSetResponsible, onSetStatus, onSetColor }: BulkMenuProps) {
+    const noun = `${count} task${count === 1 ? '' : 's'}`;
+    const confirmAndRun = (label: string, fn: () => void) => {
+        if (window.confirm(`${label} on ${noun}?`)) fn();
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-px hover:shadow-sm active:translate-y-0"
+                    title="Bulk edit visible tasks"
+                >
+                    <ListChecks className="mr-1 h-3.5 w-3.5" />
+                    Bulk edit
+                    <span key={count} className="text-muted-foreground ml-1 inline-block tabular-nums duration-200 animate-in fade-in-50 slide-in-from-top-0.5 motion-reduce:animate-none">
+                        · {count}
+                    </span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+                <div className="text-muted-foreground px-2 py-1 text-[10px]">Acting on {noun}</div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => confirmAndRun('Mark as Ours', onMarkOwned)}>Mark as Ours</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => confirmAndRun('Unmark', onUnmark)}>Unmark</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>Set Responsible…</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-[280px] overflow-y-auto">
+                        {responsibleOptions.length === 0 && (
+                            <div className="text-muted-foreground px-2 py-1 text-[10px]">No existing responsibles</div>
+                        )}
+                        {responsibleOptions.map((opt) => (
+                            <DropdownMenuItem key={opt} onSelect={() => confirmAndRun(`Set Responsible to "${opt}"`, () => onSetResponsible(opt))}>
+                                {opt}
+                            </DropdownMenuItem>
+                        ))}
+                        {responsibleOptions.length > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuItem
+                            className="text-muted-foreground"
+                            onSelect={() => confirmAndRun('Clear Responsible', () => onSetResponsible(null))}
+                        >
+                            Clear
+                        </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>Set Status…</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                        {MANUAL_STATUSES.map((s) => (
+                            <DropdownMenuItem key={s} onSelect={() => confirmAndRun(`Set Status to "${STATUS_LABELS[s]}"`, () => onSetStatus(s))}>
+                                {STATUS_LABELS[s]}
+                            </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-muted-foreground" onSelect={() => confirmAndRun('Clear Status', () => onSetStatus(null))}>
+                            Clear
+                        </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>Set Colour…</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="p-2">
+                        <div className="flex flex-wrap gap-1.5">
+                            <button
+                                type="button"
+                                className="bg-primary h-6 w-6 rounded-full border-2 border-transparent transition-transform hover:scale-110"
+                                onClick={() => confirmAndRun('Set bar colour to default', () => onSetColor(null))}
+                                title="Default"
+                            />
+                            {PRESET_COLORS.map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    className="h-6 w-6 rounded-full border-2 border-transparent transition-transform hover:scale-110"
+                                    style={{ backgroundColor: c }}
+                                    onClick={() => confirmAndRun(`Set bar colour to ${c}`, () => onSetColor(c))}
+                                    title={c}
+                                />
+                            ))}
+                        </div>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }

@@ -255,6 +255,7 @@ function TaskTreeRowContent({
     const [editing, setEditing] = useState(false);
     const [editName, setEditName] = useState(node.name);
     const inputRef = useRef<HTMLInputElement>(null);
+    const showInteractiveControls = isSelected && !dragging;
 
     useEffect(() => {
         if (editing) {
@@ -331,7 +332,7 @@ function TaskTreeRowContent({
                 <div
                     className={cn('flex min-w-0 flex-1 items-center px-1', !editing && 'cursor-text')}
                     onClick={() => {
-                        if (!editing) {
+                        if (isSelected && !editing) {
                             setEditing(true);
                             setEditName(node.name);
                         }
@@ -369,16 +370,13 @@ function TaskTreeRowContent({
                     </span>
                 )}
 
-                {!dragging && (
+                {showInteractiveControls && (
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className={cn(
-                                    'ml-1 h-6 w-6 shrink-0 p-0 transition-opacity',
-                                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                                )}
+                                className={cn('ml-1 h-6 w-6 shrink-0 p-0 transition-opacity', 'opacity-100')}
                                 aria-label={`Open actions for ${node.name}`}
                             >
                                 <EllipsisVertical className="h-3 w-3" />
@@ -421,8 +419,12 @@ function TaskTreeRowContent({
                                 <span className="text-muted-foreground w-full truncate text-center text-xs">
                                     {formatDisplayDate(node.start_date)}
                                 </span>
+                            ) : showInteractiveControls && !isGroup ? (
+                                <DateCell value={node.start_date} onChange={handleStartChange} />
                             ) : (
-                                <DateCell value={node.start_date} onChange={handleStartChange} disabled={isGroup} />
+                                <span className="text-muted-foreground w-full truncate text-center text-xs">
+                                    {formatDisplayDate(node.start_date)}
+                                </span>
                             )}
                         </div>
                     )}
@@ -431,11 +433,11 @@ function TaskTreeRowContent({
                     {visibleColumns.finish && (
                         <div className="flex h-full w-[95px] shrink-0 items-center border-l px-1">
                             {dragging ? (
-                                <span className="text-muted-foreground w-full truncate text-center text-xs">
-                                    {formatDisplayDate(node.end_date)}
-                                </span>
+                                <span className="text-muted-foreground w-full truncate text-center text-xs">{formatDisplayDate(node.end_date)}</span>
+                            ) : showInteractiveControls && !isGroup ? (
+                                <DateCell value={node.end_date} onChange={handleEndChange} />
                             ) : (
-                                <DateCell value={node.end_date} onChange={handleEndChange} disabled={isGroup} />
+                                <span className="text-muted-foreground w-full truncate text-center text-xs">{formatDisplayDate(node.end_date)}</span>
                             )}
                         </div>
                     )}
@@ -452,12 +454,14 @@ function TaskTreeRowContent({
                         <div className="flex h-full w-[150px] shrink-0 items-center border-l">
                             {dragging ? (
                                 <span className="text-muted-foreground w-full truncate px-2 text-center text-xs">{node.responsible || '—'}</span>
-                            ) : (
+                            ) : showInteractiveControls ? (
                                 <ResponsibleCell
                                     value={node.responsible}
                                     options={responsibleOptions}
                                     onChange={(v) => onResponsibleChange(node.id, v)}
                                 />
+                            ) : (
+                                <span className="text-muted-foreground w-full truncate px-2 text-center text-xs">{node.responsible || '-'}</span>
                             )}
                         </div>
                     )}
@@ -474,8 +478,17 @@ function TaskTreeRowContent({
                                 >
                                     {STATUS_LABELS[getEffectiveStatus(node)]}
                                 </span>
-                            ) : (
+                            ) : showInteractiveControls ? (
                                 <StatusCell node={node} onChange={(s) => onStatusChange(node.id, s)} />
+                            ) : (
+                                <span
+                                    className={cn(
+                                        'inline-flex h-6 items-center rounded-md px-2 text-xs font-medium',
+                                        STATUS_COLORS[getEffectiveStatus(node)],
+                                    )}
+                                >
+                                    {STATUS_LABELS[getEffectiveStatus(node)]}
+                                </span>
                             )}
                         </div>
                     )}
@@ -515,7 +528,12 @@ function TaskTreeRowInner(props: TaskTreeRowProps) {
                 isSelected && 'bg-muted/40 ring-primary/20 ring-1 ring-inset',
                 props.flash && 'animate-[flash-save_700ms_ease-out]',
             )}
-            style={{ height: rowHeight, ...dragStyle }}
+            style={{
+                height: rowHeight,
+                contentVisibility: 'auto',
+                containIntrinsicSize: `${rowHeight}px`,
+                ...dragStyle,
+            }}
             onClick={() => props.onSelect(node.id)}
             onFocusCapture={() => props.onSelect(node.id)}
         >

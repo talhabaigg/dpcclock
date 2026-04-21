@@ -256,6 +256,30 @@ class LocationController extends Controller
     }
 
     /**
+     * Print-friendly schedule report: baseline (contract) vs current (forecast/actual)
+     * with variance highlighted — designed to be submitted to the builder as a delay
+     * notification when cascaded tasks slip past contract dates.
+     */
+    public function scheduleReport(Location $location)
+    {
+        $this->getLocationWithCounts($location);
+
+        $tasks = $location->projectTasks()
+            ->orderBy('sort_order')
+            ->get();
+
+        $links = \App\Models\ProjectTaskLink::where('location_id', $location->id)->get();
+
+        return Inertia::render('locations/schedule-report', [
+            'location' => $location,
+            'tasks' => $tasks,
+            'links' => $links,
+            'generatedAt' => now()->toIso8601String(),
+            'preparedBy' => auth()->user()?->name,
+        ]);
+    }
+
+    /**
      * Project dashboard landing page — select a job to view its dashboard.
      */
     public function projectDashboard()

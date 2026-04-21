@@ -20,7 +20,6 @@ interface GanttPanelProps {
     linkMode: boolean;
     onEnableLinkMode?: () => void;
     showBaseline: boolean;
-    onVerticalScroll?: (scrollTop: number) => void;
 }
 
 interface PendingLink {
@@ -49,7 +48,6 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
             linkMode,
             onEnableLinkMode,
             showBaseline,
-            onVerticalScroll,
         },
         ref,
     ) => {
@@ -140,13 +138,10 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
         const headerRef = useRef<HTMLDivElement>(null);
 
         const handleScroll = useCallback(() => {
-            if (scrollRef.current) {
-                onVerticalScroll?.(scrollRef.current.scrollTop);
-                if (headerRef.current) {
-                    headerRef.current.scrollLeft = scrollRef.current.scrollLeft;
-                }
+            if (scrollRef.current && headerRef.current) {
+                headerRef.current.scrollLeft = scrollRef.current.scrollLeft;
             }
-        }, [onVerticalScroll]);
+        }, []);
 
         // Sync header scroll on mount and when body scrolls
         useEffect(() => {
@@ -197,16 +192,17 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
         }, [rangeStart, dayWidth, totalWidth]);
 
         return (
-            <div className="flex min-w-[300px] flex-1 flex-col">
-                {/* Header — fixed, scrolls horizontally with body via shared width */}
-                <div className="overflow-hidden" ref={headerRef}>
+            <div className="flex min-w-[300px] flex-1 flex-col self-start">
+                {/* Header — sticky so it stays pinned as the shared outer container scrolls vertically.
+                    Its horizontal scroll is synced with the body below. */}
+                <div className="bg-background sticky top-0 z-20 overflow-hidden border-b" ref={headerRef}>
                     <div style={{ minWidth: totalWidth }}>
                         <GanttHeader days={days} dayWidth={dayWidth} />
                     </div>
                 </div>
 
-                {/* Body — scrolls both directions */}
-                <div ref={scrollRef} className="flex-1 overflow-auto" onScroll={handleScroll}>
+                {/* Body — horizontal scroll only; vertical is handled by the shared outer container */}
+                <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden" onScroll={handleScroll}>
                     <div style={{ minWidth: totalWidth }}>
                         <div ref={bodyRef} className="relative" onMouseMove={handleMouseMove} onClick={handleBodyClick}>
                             {/* Non-work-day background stripes — off-days (gray), RDO (amber), public holiday (blue), project (rose) */}
@@ -228,7 +224,7 @@ const GanttPanel = forwardRef<GanttPanelHandle, GanttPanelProps>(
                                 onClickLink={onClickLink}
                             />
 
-                            {/* Task rows */}
+                            {/* Virtualized task rows — only rendered when inside the scroll viewport */}
                             {visibleTasks.length === 0 ? (
                                 <div style={{ height: ROW_HEIGHT }} />
                             ) : (
