@@ -35,6 +35,7 @@ interface FileType {
     has_back_side: boolean;
     expiry_requirement: 'required' | 'optional' | 'none';
     requires_completed_date: boolean;
+    options: string[] | null;
     conditions: Conditions | null;
     is_active: boolean;
     sort_order: number;
@@ -54,6 +55,7 @@ const EMPTY_FORM = {
     has_back_side: false,
     expiry_requirement: 'optional' as 'required' | 'optional' | 'none',
     requires_completed_date: false,
+    options: [] as string[],
     conditions: null as Conditions | null,
     is_active: true,
 };
@@ -106,6 +108,7 @@ export default function EmployeeFileTypesIndex() {
             has_back_side: ft.has_back_side,
             expiry_requirement: ft.expiry_requirement ?? 'optional',
             requires_completed_date: ft.requires_completed_date ?? false,
+            options: ft.options ?? [],
             conditions: ft.conditions ? { ...ft.conditions, rules: [...ft.conditions.rules] } : null,
             is_active: ft.is_active,
         });
@@ -315,6 +318,40 @@ export default function EmployeeFileTypesIndex() {
                         <div className="flex items-center gap-3">
                             <Switch checked={form.requires_completed_date} onCheckedChange={(v) => setForm({ ...form, requires_completed_date: v })} />
                             <Label>Requires completed date</Label>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Options</Label>
+                            <p className="text-muted-foreground text-xs">Selectable options for this file type (e.g. Scissor Lift, Forklift). Leave empty if not applicable.</p>
+                            <Input
+                                placeholder="Type an option and press Enter"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const val = e.currentTarget.value.trim();
+                                        if (val && !form.options.includes(val)) {
+                                            setForm({ ...form, options: [...form.options, val] });
+                                        }
+                                        e.currentTarget.value = '';
+                                    }
+                                }}
+                            />
+                            {form.options.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                    {form.options.map((opt) => (
+                                        <Badge key={opt} variant="secondary" className="gap-1">
+                                            {opt}
+                                            <button
+                                                type="button"
+                                                className="hover:text-foreground ml-0.5"
+                                                onClick={() => setForm({ ...form, options: form.options.filter((o) => o !== opt) })}
+                                            >
+                                                <X size={10} />
+                                            </button>
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3">

@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Maximize2 } from 'lucide-react';
-import { useState } from 'react';
+import { Maximize2, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 export interface LeaveBalanceRow {
     employee_id: string;
@@ -62,6 +62,13 @@ interface LeaveBalanceTableProps {
 
 export default function LeaveBalanceTable({ data }: LeaveBalanceTableProps) {
     const [fullscreen, setFullscreen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    const filtered = useMemo(() => {
+        if (!search) return data;
+        const q = search.toLowerCase();
+        return data.filter((r) => r.name?.toLowerCase().includes(q) || r.external_id?.toLowerCase().includes(q));
+    }, [data, search]);
 
     if (data.length === 0) return null;
 
@@ -92,7 +99,7 @@ export default function LeaveBalanceTable({ data }: LeaveBalanceTableProps) {
                 </CardContent>
             </Card>
 
-            <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+            <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSearch(''); }}>
                 <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Annual Leave Balance</DialogTitle>
@@ -100,8 +107,17 @@ export default function LeaveBalanceTable({ data }: LeaveBalanceTableProps) {
                             {data.length} employees — {fmt(totalHours)}h / {fmtCurrency(totalLiability)}
                         </p>
                     </DialogHeader>
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <input
+                            placeholder="Search employees..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="h-8 w-full rounded-lg border border-input bg-transparent pl-8 pr-2.5 py-1 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        />
+                    </div>
                     <div className="flex-1 overflow-auto space-y-0.5">
-                        {data.map((row, i) => (
+                        {filtered.map((row, i) => (
                             <EmployeeRow key={row.employee_id} row={row} rank={i + 1} />
                         ))}
                     </div>

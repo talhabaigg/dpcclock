@@ -16,6 +16,7 @@ class EmployeeFileType extends Model
         'has_back_side',
         'expiry_requirement',
         'requires_completed_date',
+        'options',
         'conditions',
         'is_active',
         'sort_order',
@@ -27,6 +28,7 @@ class EmployeeFileType extends Model
         'is_active' => 'boolean',
         'conditions' => 'array',
         'category' => 'array',
+        'options' => 'array',
     ];
 
     protected static function booted(): void

@@ -26,6 +26,7 @@ class EmployeeFileController extends Controller
                 'notes' => $file->notes,
                 'uploaded_by' => $file->uploadedBy?->name,
                 'created_at' => $file->created_at->toDateString(),
+                'selected_options' => $file->selected_options,
                 'file_type' => [
                     'id' => $file->fileType->id,
                     'name' => $file->fileType->name,
@@ -33,6 +34,7 @@ class EmployeeFileController extends Controller
                     'has_back_side' => $file->fileType->has_back_side,
                     'expiry_requirement' => $file->fileType->expiry_requirement,
                     'requires_completed_date' => $file->fileType->requires_completed_date,
+                    'options' => $file->fileType->options,
                 ],
                 'front_url' => $file->getFrontUrl(),
                 'back_url' => $file->getBackUrl(),
@@ -43,7 +45,7 @@ class EmployeeFileController extends Controller
         $allFileTypes = EmployeeFileType::active()
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date']);
+            ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date', 'options']);
 
         return response()->json([
             'files' => $files,
@@ -58,6 +60,8 @@ class EmployeeFileController extends Controller
             'document_number' => 'nullable|string|max:255',
             'expires_at' => 'nullable|date',
             'completed_at' => 'nullable|date',
+            'selected_options' => 'nullable|array',
+            'selected_options.*' => 'string|max:255',
             'notes' => 'nullable|string',
             'file_front' => 'required|file|max:10240',
             'file_back' => 'nullable|file|max:10240',
@@ -70,6 +74,7 @@ class EmployeeFileController extends Controller
             'document_number' => $validated['document_number'] ?? null,
             'expires_at' => $validated['expires_at'] ?? null,
             'completed_at' => $validated['completed_at'] ?? null,
+            'selected_options' => $validated['selected_options'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'uploaded_by' => auth()->id(),
         ]);

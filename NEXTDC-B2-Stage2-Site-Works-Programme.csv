@@ -1,0 +1,686 @@
+WBS,Task Name,Start Date,End Date,Predecessors
+1,NEXTDC - B2 Stage 2,,,
+1.1,Early Works Programme,,,
+1.1.1,Project Milestones - Early Works,2025-04-17,2025-05-02,
+1.1.2,CONSTRUCTION EARLY WORKS,2025-05-28,2025-10-20,
+1.2,NOD/ EOT - Delay Tracking,2025-10-20,2026-03-27,
+1.3,Main Works Programme,,,
+1.3.1,OFFSITE WORKS,2025-04-28,2026-10-07,
+1.3.2,CONSTRUCTION (MAIN WORKS),,,
+1.3.2.1,Materials Handling,,,
+1.3.2.1.1,Tower Crane,2025-09-13,2026-09-04,
+1.3.2.1.2,Hoist 1 & Hoist 2,2026-02-03,2026-10-29,
+1.3.2.2,Substructure,,,
+1.3.2.2.1,In-Ground Structure,,,
+1.3.2.2.1.1,Area 1 - Grids 1 /2 & A/E - Core Zone,2025-07-16,2025-10-13,
+1.3.2.2.1.2,Area 2 - Grids 3/7 & D/E - Tank Zone,2025-09-09,2026-01-28,
+1.3.2.2.1.3,Area 3- Grids 2/7 & C/D - Mid Zone,2025-11-28,2026-02-03,
+1.3.2.2.1.4,Area 4- Grids 2/6 & A/C - North Zone,2025-10-21,2026-02-03,
+1.3.2.2.1.5,Area 5 Grids 6.5/8 & A/C - Loading Dock Area,2025-10-21,2026-02-04,
+1.3.2.3,Structure,,,
+1.3.2.3.1,Slabs,,,
+1.3.2.3.1.1,Structure | Level 1 | Office,2026-01-28,2026-02-19,
+1.3.2.3.1.2,Structure | Level 2 | NEXTDC Head Office,2026-02-11,2026-03-03,
+1.3.2.3.1.3,Structure | Level 3 | Mission Critical Office,,,
+1.3.2.3.1.3.1,Pour 1 - North,,,
+1.3.2.3.1.3.1.1,Formwork,2026-03-11,2026-03-17,
+1.3.2.3.1.3.1.2,Install Precast Walls / Columns,2026-03-17,2026-03-17,1.3.2.3.1.3.1.1:FS
+1.3.2.3.1.3.1.3,Reo / PT / Services RI / Blow Out Deck,2026-03-19,2026-03-23,1.3.2.3.1.3.1.2:FS+1
+1.3.2.3.1.3.1.4,Pour,2026-03-24,2026-03-24,1.3.2.3.1.3.1.3:FS
+1.3.2.3.1.3.2,Pour 2 - Mid,,,
+1.3.2.3.1.3.2.1,Formwork,2026-03-18,2026-03-23,
+1.3.2.3.1.3.2.2,Install Precast Walls / Columns,2026-03-24,2026-03-24,1.3.2.3.1.3.2.1:FS
+1.3.2.3.1.3.2.3,Reo / PT / Services RI / Blow Out Deck,2026-03-25,2026-03-26,1.3.2.3.1.3.2.2:FS
+1.3.2.3.1.3.2.4,Pour,2026-03-27,2026-03-27,1.3.2.3.1.3.2.3:FS
+1.3.2.3.1.3.3,Pour 3 - South,,,
+1.3.2.3.1.3.3.1,Formwork,2026-03-20,2026-03-25,
+1.3.2.3.1.3.3.2,Install Precast Walls / Columns,2026-03-26,2026-03-26,1.3.2.3.1.3.3.1:FS
+1.3.2.3.1.3.3.3,Reo / PT / Services RI / Blow Out Deck,2026-03-27,2026-03-30,1.3.2.3.1.3.3.2:FS
+1.3.2.3.1.3.3.4,Pour,2026-03-31,2026-03-31,1.3.2.3.1.3.3.3:FS
+1.3.2.3.1.4,Structure | Level 4 | Plant & Storerooms,,,
+1.3.2.3.1.4.1,Pour 1 - North,,,
+1.3.2.3.1.4.1.1,Formwork,2026-03-26,2026-03-30,
+1.3.2.3.1.4.1.2,Install Precast Walls / Columns,2026-03-31,2026-03-31,1.3.2.3.1.4.1.1:FS
+1.3.2.3.1.4.1.3,Reo / PT / Services RI / Blow Out Deck,2026-04-01,2026-04-02,1.3.2.3.1.4.1.2:FS
+1.3.2.3.1.4.1.4,Pour,2026-04-13,2026-04-13,
+1.3.2.3.1.4.2,Pour 2 - Mid,,,
+1.3.2.3.1.4.2.1,Formwork,2026-03-31,2026-04-02,
+1.3.2.3.1.4.2.2,Install Precast Walls / Columns,2026-04-13,2026-04-13,
+1.3.2.3.1.4.2.3,Reo / PT / Services RI / Blow Out Deck,2026-04-14,2026-04-15,1.3.2.3.1.4.2.2:FS
+1.3.2.3.1.4.2.4,Pour,2026-04-16,2026-04-16,1.3.2.3.1.4.2.3:FS
+1.3.2.3.1.4.3,Pour 3 - South,,,
+1.3.2.3.1.4.3.1,Formwork,2026-04-13,2026-04-15,
+1.3.2.3.1.4.3.2,Install Precast Walls / Columns,2026-04-16,2026-04-16,1.3.2.3.1.4.3.1:FS
+1.3.2.3.1.4.3.3,Reo / PT / Services RI / Blow Out Deck,2026-04-17,2026-04-20,1.3.2.3.1.4.3.2:FS
+1.3.2.3.1.4.3.4,Pour,2026-04-21,2026-04-21,1.3.2.3.1.4.3.3:FS
+1.3.2.3.1.5,Structure | Level 5 | Data Hall 4,,,
+1.3.2.3.1.5.1,Pour 1,,,
+1.3.2.3.1.5.1.1,Formwork,2026-04-16,2026-04-20,
+1.3.2.3.1.5.1.2,Install Precast Walls / Columns,2026-04-21,2026-04-21,1.3.2.3.1.5.1.1:FS
+1.3.2.3.1.5.1.3,Reo / PT / Services RI / Blow Out Deck,2026-04-22,2026-04-23,1.3.2.3.1.5.1.2:FS
+1.3.2.3.1.5.1.4,Pour,2026-04-24,2026-04-24,1.3.2.3.1.5.1.3:FS
+1.3.2.3.1.5.2,Pour 2,,,
+1.3.2.3.1.5.2.1,Formwork,2026-04-21,2026-04-23,
+1.3.2.3.1.5.2.2,Install Precast Walls / Columns,2026-04-24,2026-04-24,1.3.2.3.1.5.2.1:FS
+1.3.2.3.1.5.2.3,Reo / PT / Services RI / Blow Out Deck,2026-04-27,2026-04-28,1.3.2.3.1.5.2.2:FS+2
+1.3.2.3.1.5.2.4,Pour,2026-04-29,2026-04-29,1.3.2.3.1.5.2.3:FS
+1.3.2.3.1.5.3,Pour 3,,,
+1.3.2.3.1.5.3.1,Formwork,2026-04-24,2026-04-28,
+1.3.2.3.1.5.3.2,Install Precast Walls / Columns,2026-04-29,2026-04-29,1.3.2.3.1.5.3.1:FS
+1.3.2.3.1.5.3.3,Reo / PT / Services RI / Blow Out Deck,2026-04-30,2026-05-01,1.3.2.3.1.5.3.2:FS
+1.3.2.3.1.5.3.4,Pour,2026-05-05,2026-05-05,1.3.2.3.1.5.3.3:FS+3
+1.3.2.3.1.6,Structure | Level 6 | Data Hall 5,,,
+1.3.2.3.1.6.1,Pour 1,,,
+1.3.2.3.1.6.1.1,Formwork,2026-04-29,2026-05-01,
+1.3.2.3.1.6.1.2,Install Precast Walls / Columns,2026-05-05,2026-05-05,1.3.2.3.1.6.1.1:FS+3
+1.3.2.3.1.6.1.3,Reo / PT / Services RI / Blow Out Deck,2026-05-06,2026-05-07,1.3.2.3.1.6.1.2:FS
+1.3.2.3.1.6.1.4,Pour,2026-05-08,2026-05-08,1.3.2.3.1.6.1.3:FS
+1.3.2.3.1.6.2,Pour 2,,,
+1.3.2.3.1.6.2.1,Formwork,2026-05-05,2026-05-07,
+1.3.2.3.1.6.2.2,Install Precast Walls / Columns,2026-05-08,2026-05-08,1.3.2.3.1.6.2.1:FS
+1.3.2.3.1.6.2.3,Reo / PT / Services RI / Blow Out Deck,2026-05-12,2026-05-13,1.3.2.3.1.6.2.2:FS+3
+1.3.2.3.1.6.2.4,Pour,2026-05-14,2026-05-14,1.3.2.3.1.6.2.3:FS
+1.3.2.3.1.6.3,Pour 3,,,
+1.3.2.3.1.6.3.1,Formwork,2026-05-08,2026-05-13,
+1.3.2.3.1.6.3.2,Install Precast Walls / Columns,2026-05-14,2026-05-14,1.3.2.3.1.6.3.1:FS
+1.3.2.3.1.6.3.3,Reo / PT / Services RI / Blow Out Deck,2026-05-15,2026-05-18,1.3.2.3.1.6.3.2:FS
+1.3.2.3.1.6.3.4,Pour,2026-05-19,2026-05-19,1.3.2.3.1.6.3.3:FS
+1.3.2.3.1.7,Structure | Level 7 | Data Hall 6,,,
+1.3.2.3.1.7.1,Pour 1,,,
+1.3.2.3.1.7.1.1,Formwork,2026-05-14,2026-05-18,
+1.3.2.3.1.7.1.2,Install Precast Walls / Columns,2026-05-19,2026-05-19,1.3.2.3.1.7.1.1:FS
+1.3.2.3.1.7.1.3,Reo / PT / Services RI / Blow Out Deck,2026-05-20,2026-05-21,1.3.2.3.1.7.1.2:FS
+1.3.2.3.1.7.1.4,Pour,2026-05-22,2026-05-22,1.3.2.3.1.7.1.3:FS
+1.3.2.3.1.7.2,Pour 2,,,
+1.3.2.3.1.7.2.1,Formwork,2026-05-19,2026-05-21,
+1.3.2.3.1.7.2.2,Install Precast Walls / Columns,2026-05-22,2026-05-22,1.3.2.3.1.7.2.1:FS
+1.3.2.3.1.7.2.3,Reo / PT / Services RI / Blow Out Deck,2026-05-25,2026-05-26,1.3.2.3.1.7.2.2:FS+2
+1.3.2.3.1.7.2.4,Pour,2026-05-27,2026-05-27,1.3.2.3.1.7.2.3:FS
+1.3.2.3.1.7.3,Pour 3,,,
+1.3.2.3.1.7.3.1,Formwork,2026-05-22,2026-05-26,
+1.3.2.3.1.7.3.2,Install Precast Walls / Columns,2026-05-27,2026-05-27,1.3.2.3.1.7.3.1:FS
+1.3.2.3.1.7.3.3,Reo / PT / Services RI / Blow Out Deck,2026-05-28,2026-05-29,1.3.2.3.1.7.3.2:FS
+1.3.2.3.1.7.3.4,Pour,2026-06-01,2026-06-01,1.3.2.3.1.7.3.3:FS+2
+1.3.2.3.1.8,Structure | Level 8 | Roof Plant,,,
+1.3.2.3.1.8.1,Pour 1,,,
+1.3.2.3.1.8.1.1,Formwork,2026-05-27,2026-05-29,
+1.3.2.3.1.8.1.2,Install Precast Walls / Columns,2026-06-01,2026-06-01,1.3.2.3.1.8.1.1:FS+2
+1.3.2.3.1.8.1.3,Reo / PT / Services RI / Blow Out Deck,2026-06-02,2026-06-03,1.3.2.3.1.8.1.2:FS
+1.3.2.3.1.8.1.4,Pour,2026-06-04,2026-06-04,1.3.2.3.1.8.1.3:FS
+1.3.2.3.1.8.2,Pour 2,,,
+1.3.2.3.1.8.2.1,Formwork,2026-06-01,2026-06-03,
+1.3.2.3.1.8.2.2,Install Precast Walls / Columns,2026-06-04,2026-06-04,1.3.2.3.1.8.2.1:FS
+1.3.2.3.1.8.2.3,Reo / PT / Services RI / Blow Out Deck,2026-06-05,2026-06-09,1.3.2.3.1.8.2.2:FS
+1.3.2.3.1.8.2.4,Pour,2026-06-10,2026-06-10,1.3.2.3.1.8.2.3:FS
+1.3.2.3.1.8.3,Pour 3,,,
+1.3.2.3.1.8.3.1,Formwork,2026-06-04,2026-06-09,
+1.3.2.3.1.8.3.2,Install Precast Walls / Columns,2026-06-10,2026-06-10,1.3.2.3.1.8.3.1:FS
+1.3.2.3.1.8.3.3,Reo / PT / Services RI / Blow Out Deck,2026-06-11,2026-06-12,1.3.2.3.1.8.3.2:FS
+1.3.2.3.1.8.3.4,Pour,2026-06-15,2026-06-15,1.3.2.3.1.8.3.3:FS+2
+1.3.2.3.2,Goods Lifts Core (Jump Form),,,
+1.3.2.3.2.1,Jump Form Establishment,2025-10-13,2025-11-13,
+1.3.2.3.2.2,Jump 1 - RL 9.5 - 14.9,2025-11-17,2025-11-25,1.3.2.3.2.1:FS+3
+1.3.2.3.2.3,Jump 2 - RL 13.4 - 18.8,2025-11-26,2025-12-11,1.3.2.3.2.2:FS
+1.3.2.3.2.4,Jump 3 - RL 17.3 - 22.7 (Drive L1 Formwork),2025-12-12,2026-01-09,1.3.2.3.2.3:FS
+1.3.2.3.2.5,Jump 4 - RL 21.2 - 26.6,2026-02-03,2026-02-17,
+1.3.2.3.2.6,Jump 5 - RL 25.1 - 30.5,2026-02-23,2026-03-04,
+1.3.2.3.2.7,Jump 6 - RL 29 - 34.4,,,
+1.3.2.3.2.7.1,Crack & Climb,2026-03-04,2026-03-04,
+1.3.2.3.2.7.2,Set Shutters,2026-03-04,2026-03-05,1.3.2.3.2.7.1:FS
+1.3.2.3.2.7.3,Reo Fix,2026-03-06,2026-03-10,1.3.2.3.2.7.2:FS
+1.3.2.3.2.7.4,Close Shutters,2026-03-11,2026-03-13,1.3.2.3.2.7.3:FS
+1.3.2.3.2.7.5,Pour,2026-03-17,2026-03-17,1.3.2.3.2.7.4:FS+3
+1.3.2.3.2.8,Jump 7 - RL 32.9 - 38.3,,,
+1.3.2.3.2.8.1,Crack & Climb,2026-03-23,2026-03-23,
+1.3.2.3.2.8.2,Set Shutters,2026-03-24,2026-03-25,1.3.2.3.2.8.1:FS
+1.3.2.3.2.8.3,Reo Fix,2026-03-26,2026-03-27,1.3.2.3.2.8.2:FS
+1.3.2.3.2.8.4,Close Shutters,2026-03-30,2026-03-31,1.3.2.3.2.8.3:FS+2
+1.3.2.3.2.8.5,Pour,2026-04-02,2026-04-02,1.3.2.3.2.8.4:FS+1
+1.3.2.3.2.9,Jump 8 - RL 36.8 - 42.2,,,
+1.3.2.3.2.9.1,Crack & Climb,2026-04-15,2026-04-15,
+1.3.2.3.2.9.2,Set Shutters,2026-04-16,2026-04-17,1.3.2.3.2.9.1:FS
+1.3.2.3.2.9.3,Reo Fix,2026-04-20,2026-04-21,1.3.2.3.2.9.2:FS+2
+1.3.2.3.2.9.4,Close Shutters,2026-04-22,2026-04-23,1.3.2.3.2.9.3:FS
+1.3.2.3.2.9.5,Pour,2026-04-24,2026-04-24,1.3.2.3.2.9.4:FS
+1.3.2.3.2.10,Jump 9 - RL 40.7 - 46.1,,,
+1.3.2.3.2.10.1,Crack & Climb,2026-04-27,2026-04-27,
+1.3.2.3.2.10.2,Set Shutters,2026-04-28,2026-04-29,1.3.2.3.2.10.1:FS
+1.3.2.3.2.10.3,Reo Fix,2026-04-30,2026-05-01,1.3.2.3.2.10.2:FS
+1.3.2.3.2.10.4,Close Shutters,2026-05-05,2026-05-06,1.3.2.3.2.10.3:FS+3
+1.3.2.3.2.10.5,Pour,2026-05-07,2026-05-07,1.3.2.3.2.10.4:FS
+1.3.2.3.2.11,Jump 10 - RL 44.6 - 50.0,,,
+1.3.2.3.2.11.1,Crack & Climb,2026-05-14,2026-05-14,
+1.3.2.3.2.11.2,Set Shutters,2026-05-15,2026-05-18,1.3.2.3.2.11.1:FS
+1.3.2.3.2.11.3,Reo Fix,2026-05-19,2026-05-20,1.3.2.3.2.11.2:FS
+1.3.2.3.2.11.4,Close Shutters,2026-05-21,2026-05-22,1.3.2.3.2.11.3:FS
+1.3.2.3.2.11.5,Pour,2026-05-25,2026-05-25,1.3.2.3.2.11.4:FS+2
+1.3.2.3.2.12,Jump 11 - RL 48.5 - 53.9,,,
+1.3.2.3.2.12.1,Crack & Climb,2026-05-27,2026-05-27,
+1.3.2.3.2.12.2,Set Shutters,2026-05-28,2026-05-29,1.3.2.3.2.12.1:FS
+1.3.2.3.2.12.3,Reo Fix,2026-06-01,2026-06-02,1.3.2.3.2.12.2:FS+2
+1.3.2.3.2.12.4,Close Shutters,2026-06-03,2026-06-04,1.3.2.3.2.12.3:FS
+1.3.2.3.2.12.5,Pour,2026-06-05,2026-06-05,1.3.2.3.2.12.4:FS
+1.3.2.3.2.13,Jump 12 - RL 53.4 - 58.8,,,
+1.3.2.3.2.13.1,Crack & Climb,2026-06-10,2026-06-10,
+1.3.2.3.2.13.2,Set Shutters,2026-06-11,2026-06-12,1.3.2.3.2.13.1:FS
+1.3.2.3.2.13.3,Reo Fix,2026-06-15,2026-06-16,1.3.2.3.2.13.2:FS+2
+1.3.2.3.2.13.4,Close Shutters,2026-06-17,2026-06-17,1.3.2.3.2.13.3:FS
+1.3.2.3.2.13.5,Pour,2026-06-18,2026-06-18,1.3.2.3.2.13.4:FS
+1.3.2.3.2.13.6,Crack,2026-06-19,2026-06-19,1.3.2.3.2.13.5:FS
+1.3.2.3.2.14,Jump Form Dismantle,,,
+1.3.2.3.2.14.1,Dismantle Jump Form,2026-06-22,2026-07-13,
+1.3.2.3.3,Rooftop Structural Steelwork,,,
+1.3.2.3.3.1,Install Primary Steelwork L8,2026-06-23,2026-07-21,
+1.3.2.3.3.2,Structure Complete,2026-07-21,2026-07-21,1.3.2.3.3.1:FS
+1.3.2.3.4,Passenger Lifts Core (Precast Walls with Structure),,,
+1.3.2.3.4.1,Install PC Walls GF - L1,2026-02-09,2026-02-09,
+1.3.2.3.4.2,Install PC Walls L1 - L2,2026-02-17,2026-02-17,
+1.3.2.3.4.3,Install PC Walls L2 - L3,2026-03-04,2026-03-04,
+1.3.2.3.4.4,Install PC Walls L3 to L4 (Including Lid),2026-03-30,2026-03-30,
+1.3.2.3.5,Final Stripping / Prop Removal,,,
+1.3.2.3.5.1,Ground Floor Final Backprop Strip (Level 3 Poured),2026-03-25,2026-04-13,
+1.3.2.3.5.2,Level 1 Final Backprop Strip (Level 4 Poured),2026-04-17,2026-04-24,1.3.2.3.5.1:FS+3
+1.3.2.3.5.3,Level 2 Final Backprop Strip (Level 5 Poured),2026-04-30,2026-05-08,
+1.3.2.3.5.4,Level 3 Final Backprop Strip (Level 6 Poured),2026-05-15,2026-05-22,
+1.3.2.3.5.5,Level 4 Final Backprop Strip (Level 6 Poured),2026-05-25,2026-05-28,1.3.2.3.5.4:FS+2
+1.3.2.3.5.6,Level 5 Final Backprop Strip (Level 7 Poured),2026-06-01,2026-06-04,1.3.2.3.5.5:FS+3
+1.3.2.3.5.7,Level 6 Final Backprop Strip,2026-06-05,2026-06-11,1.3.2.3.5.6:FS
+1.3.2.3.5.8,Level 7 Final Backprop Strip,2026-06-12,2026-06-17,1.3.2.3.5.7:FS
+1.3.2.4,Facade / Envelope / External Works,,,
+1.3.2.4.1,N o r t h Elevation (Constance Street) Level 1 / Level 2 / Level 3- Facade,2026-05-15,2026-07-03,
+1.3.2.4.2,S o u t h Elevation (Misterton Street) Level 1 / Level 2 / Level 3- Facade,2026-05-15,2026-07-03,
+1.3.2.4.3,Level 4 to Level 5 - Facade Works,,,
+1.3.2.4.3.1,Constance Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.3.1.1,Level 4 - Back Props Removed - Floor Cleaned,2026-05-28,2026-05-28,
+1.3.2.4.3.1.2,Blockwork / FRP Lids Complete - UPS / SWR,2026-06-15,2026-06-15,
+1.3.2.4.3.1.3,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-15,2026-06-17,1.3.2.4.3.1.2:FS
+1.3.2.4.3.1.4,WMP Curing Period,2026-06-17,2026-06-19,1.3.2.4.3.1.3:FS
+1.3.2.4.3.1.5,Installation of Frametek Wall System,2026-06-22,2026-06-25,1.3.2.4.3.1.4:FS+2
+1.3.2.4.3.1.6,Installation of Air Seal Sheeting,2026-06-26,2026-07-02,1.3.2.4.3.1.5:FS
+1.3.2.4.3.1.7,Installation of Uni-Strut - Horizontal Services Support,2026-07-03,2026-07-07,1.3.2.4.3.1.6:FS
+1.3.2.4.3.1.8,Installation of Horizontal Services & Connect / Lag / Test,2026-07-03,2026-07-15,
+1.3.2.4.3.1.9,Construct External Stud Framing,2026-07-13,2026-07-20,1.3.2.4.3.1.8:FS-3
+1.3.2.4.3.1.10,LCI - Security Inspection Final Framing Inspection,2026-06-25,2026-06-25,
+1.3.2.4.3.1.11,LCI - Security Inspection Final Sheeting Inspection,2026-07-02,2026-07-02,
+1.3.2.4.3.1.12,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-21,2026-07-24,
+1.3.2.4.3.1.13,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-07-23,2026-07-24,1.3.2.4.3.1.12:FS-2
+1.3.2.4.3.1.14,Installation of External Metal Cladding (CD02/ CD03) Rib Line,2026-07-24,2026-07-30,1.3.2.4.3.1.13:FS
+1.3.2.4.3.1.15,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-07-30,2026-07-30,1.3.2.4.3.1.14:FS
+1.3.2.4.3.1.16,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-07-28,2026-07-29,1.3.2.4.3.1.15:FS-3
+1.3.2.4.3.1.17,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-07-28,2026-07-30,1.3.2.4.3.1.16:FS-2
+1.3.2.4.3.1.18,Installation of Metal Profile / LED Feature Facade Lighting,2026-07-28,2026-07-31,1.3.2.4.3.1.17:FS-3
+1.3.2.4.3.2,Misterton Street - South Elevation - Grids - 2 to 8,,,
+1.3.2.4.3.2.1,Level 4 - Back Props Removed - Floor Cleaned,2026-05-28,2026-05-28,
+1.3.2.4.3.2.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-18,2026-06-22,
+1.3.2.4.3.2.3,WMP Curing Period,2026-06-19,2026-06-23,1.3.2.4.3.2.2:FS-4
+1.3.2.4.3.2.4,Installation of Frametek Wall System,2026-06-26,2026-07-01,1.3.2.4.3.2.3:FS+2
+1.3.2.4.3.2.5,Installation of I Air Seal Sheeting,2026-07-03,2026-07-10,1.3.2.4.3.2.4:FS+1
+1.3.2.4.3.2.6,Installation of Uni-Strut - Horizontal Services Support,2026-07-13,2026-07-14,1.3.2.4.3.2.5:FS+2
+1.3.2.4.3.2.7,Installation of Horizontal Services & Connect / Lag / Test,2026-07-13,2026-07-22,1.3.2.4.3.2.6:FS-2
+1.3.2.4.3.2.8,Construct External Stud Framing,2026-07-16,2026-07-23,
+1.3.2.4.3.2.9,LCI - Security Inspection Final Framing Inspection,2026-07-01,2026-07-01,
+1.3.2.4.3.2.10,LCI - Security Inspection Final Sheeting Inspection,2026-07-10,2026-07-10,
+1.3.2.4.3.2.11,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-24,2026-07-29,
+1.3.2.4.3.2.12,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-07-28,2026-07-29,1.3.2.4.3.2.11:FS-2
+1.3.2.4.3.2.13,Installation of External Metal Cladding (CD02/ CD03),2026-07-29,2026-08-05,1.3.2.4.3.2.12:FS
+1.3.2.4.3.2.14,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-05,2026-08-05,1.3.2.4.3.2.13:FS
+1.3.2.4.3.2.15,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-07-31,2026-08-03,
+1.3.2.4.3.2.16,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-07-31,2026-08-04,1.3.2.4.3.2.15:FS-4
+1.3.2.4.3.2.17,Installation of Metal Profile / LED Feature Facade Lighting,2026-07-31,2026-08-05,
+1.3.2.4.4,Level 5 to Level 6 - Facade Works,,,
+1.3.2.4.4.1,Constance Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.4.1.1,Level 5 - Back Props Removed - Floor Cleaned,2026-06-04,2026-06-04,
+1.3.2.4.4.1.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-05,2026-06-09,1.3.2.4.4.1.1:FS
+1.3.2.4.4.1.3,WMP Curing Period,2026-06-09,2026-06-11,1.3.2.4.4.1.2:FS
+1.3.2.4.4.1.4,Installation of Frametek Wall System,2026-06-26,2026-06-29,
+1.3.2.4.4.1.5,LCI - Security Inspection Final Framing Inspection,2026-06-29,2026-06-29,1.3.2.4.4.1.4:FS
+1.3.2.4.4.1.6,Installation of Air Seal Sheeting,2026-06-30,2026-07-03,1.3.2.4.4.1.5:FS
+1.3.2.4.4.1.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-03,2026-07-03,1.3.2.4.4.1.6:FS
+1.3.2.4.4.1.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-22,2026-07-27,
+1.3.2.4.4.1.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-07-27,2026-07-27,1.3.2.4.4.1.8:FS
+1.3.2.4.4.1.10,Installation of External Metal Cladding (CD02/ CD03),2026-07-28,2026-08-03,1.3.2.4.4.1.9:FS
+1.3.2.4.4.1.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-03,2026-08-03,1.3.2.4.4.1.10:FS
+1.3.2.4.4.1.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-07-30,2026-07-30,
+1.3.2.4.4.1.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-07-31,2026-08-04,1.3.2.4.4.1.12:FS
+1.3.2.4.4.1.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-03,2026-08-06,1.3.2.4.4.1.13:FS-2
+1.3.2.4.4.2,Misterton Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.4.2.1,Level 5 - Back Props Removed - Floor Cleaned,2026-06-04,2026-06-04,
+1.3.2.4.4.2.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-05,2026-06-09,1.3.2.4.4.2.1:FS
+1.3.2.4.4.2.3,WMP Curing Period,2026-06-09,2026-06-11,1.3.2.4.4.2.2:FS
+1.3.2.4.4.2.4,Installation of Frametek Wall System,2026-07-02,2026-07-03,
+1.3.2.4.4.2.5,LCI - Security Inspection Final Framing Inspection,2026-07-03,2026-07-03,1.3.2.4.4.2.4:FS
+1.3.2.4.4.2.6,Installation of Air Seal Sheeting,2026-07-07,2026-07-10,1.3.2.4.4.2.5:FS+3
+1.3.2.4.4.2.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-10,2026-07-10,1.3.2.4.4.2.6:FS
+1.3.2.4.4.2.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-27,2026-07-30,
+1.3.2.4.4.2.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-07-30,2026-07-30,1.3.2.4.4.2.8:FS
+1.3.2.4.4.2.10,Installation of External Metal Cladding (CD02/ CD03),2026-08-04,2026-08-07,1.3.2.4.4.2.9:FS+4
+1.3.2.4.4.2.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-07,2026-08-07,1.3.2.4.4.2.10:FS
+1.3.2.4.4.2.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-08-06,2026-08-06,1.3.2.4.4.2.11:FS-2
+1.3.2.4.4.2.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-08-06,2026-08-07,1.3.2.4.4.2.12:FS
+1.3.2.4.4.2.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-06,2026-08-13,1.3.2.4.4.2.13:FS-2
+1.3.2.4.5,Level 6 to Level 7 - Facade Works,,,
+1.3.2.4.5.1,Constance Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.5.1.1,Level 6 - Back Props Removed - Floor Cleaned,2026-06-11,2026-06-11,
+1.3.2.4.5.1.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-12,2026-06-15,1.3.2.4.5.1.1:FS
+1.3.2.4.5.1.3,WMP Curing Period,2026-06-15,2026-06-17,1.3.2.4.5.1.2:FS
+1.3.2.4.5.1.4,Installation of Frametek Wall System,2026-06-30,2026-07-01,
+1.3.2.4.5.1.5,LCI - Security Inspection Final Framing Inspection,2026-07-01,2026-07-01,1.3.2.4.5.1.4:FS
+1.3.2.4.5.1.6,Installation ofl Air Seal Sheeting,2026-07-02,2026-07-08,1.3.2.4.5.1.5:FS
+1.3.2.4.5.1.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-08,2026-07-08,1.3.2.4.5.1.6:FS
+1.3.2.4.5.1.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-28,2026-07-31,
+1.3.2.4.5.1.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-07-31,2026-07-31,1.3.2.4.5.1.8:FS
+1.3.2.4.5.1.10,Installation of External Metal Cladding (CD02/ CD03),2026-08-04,2026-08-13,1.3.2.4.5.1.9:FS+3
+1.3.2.4.5.1.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-13,2026-08-13,1.3.2.4.5.1.10:FS
+1.3.2.4.5.1.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-08-06,2026-08-06,
+1.3.2.4.5.1.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-08-06,2026-08-13,1.3.2.4.5.1.12:FS
+1.3.2.4.5.1.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-07,2026-08-17,
+1.3.2.4.5.2,Misterton Street - South Elevation - Grids - 2 to 8,,,
+1.3.2.4.5.2.1,Level 6 - Back Props Removed - Floor Cleaned,2026-06-11,2026-06-11,
+1.3.2.4.5.2.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-12,2026-06-15,1.3.2.4.5.2.1:FS
+1.3.2.4.5.2.3,WMP Curing Period,2026-06-15,2026-06-17,1.3.2.4.5.2.2:FS
+1.3.2.4.5.2.4,Installation of Frametek Wall System,2026-07-07,2026-07-08,
+1.3.2.4.5.2.5,LCI - Security Inspection Final Framing Inspection,2026-07-08,2026-07-08,1.3.2.4.5.2.4:FS
+1.3.2.4.5.2.6,Installation of l Air Seal Sheeting,2026-07-09,2026-07-14,1.3.2.4.5.2.5:FS
+1.3.2.4.5.2.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-14,2026-07-14,1.3.2.4.5.2.6:FS
+1.3.2.4.5.2.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-07-31,2026-08-05,
+1.3.2.4.5.2.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-08-05,2026-08-05,1.3.2.4.5.2.8:FS
+1.3.2.4.5.2.10,Installation of External Metal Cladding (CD02/ CD03),2026-08-14,2026-08-20,
+1.3.2.4.5.2.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-20,2026-08-20,1.3.2.4.5.2.10:FS
+1.3.2.4.5.2.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-08-18,2026-08-18,1.3.2.4.5.2.11:FS-3
+1.3.2.4.5.2.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-08-18,2026-08-20,1.3.2.4.5.2.12:FS
+1.3.2.4.5.2.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-18,2026-08-21,1.3.2.4.5.2.13:FS-3
+1.3.2.4.6,Level 7 to Level 8 - Facade Works,,,
+1.3.2.4.6.1,Constance Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.6.1.1,Level 7 - Back Props Removed - Floor Cleaned,2026-06-17,2026-06-17,
+1.3.2.4.6.1.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-18,2026-06-19,1.3.2.4.6.1.1:FS
+1.3.2.4.6.1.3,WMP Curing Period,2026-06-19,2026-06-23,1.3.2.4.6.1.2:FS
+1.3.2.4.6.1.4,Installation of Frametek Wall System,2026-07-09,2026-07-10,
+1.3.2.4.6.1.5,LCI - Security Inspection Final Framing Inspection,2026-07-10,2026-07-10,1.3.2.4.6.1.4:FS
+1.3.2.4.6.1.6,Installation of Air Seal Sheeting,2026-07-13,2026-07-16,1.3.2.4.6.1.5:FS+2
+1.3.2.4.6.1.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-16,2026-07-16,1.3.2.4.6.1.6:FS
+1.3.2.4.6.1.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-08-03,2026-08-06,
+1.3.2.4.6.1.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-08-06,2026-08-06,1.3.2.4.6.1.8:FS
+1.3.2.4.6.1.10,Installation of External Metal Cladding (CD02/ CD03),2026-08-14,2026-08-20,
+1.3.2.4.6.1.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-20,2026-08-20,1.3.2.4.6.1.10:FS
+1.3.2.4.6.1.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-08-18,2026-08-18,1.3.2.4.6.1.11:FS-3
+1.3.2.4.6.1.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-08-18,2026-08-20,1.3.2.4.6.1.12:FS
+1.3.2.4.6.1.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-18,2026-08-21,1.3.2.4.6.1.13:FS-3
+1.3.2.4.6.2,Misterton Street - South Elevation - Grids - 2 to 8,,,
+1.3.2.4.6.2.1,Level 7 - Back Props Removed - Floor Cleaned,2026-06-17,2026-06-17,
+1.3.2.4.6.2.2,Prep Slab Edge / Prime & Apply Water Membrane (2 Coats),2026-06-18,2026-06-19,1.3.2.4.6.2.1:FS
+1.3.2.4.6.2.3,WMP Curing Period,2026-06-19,2026-06-23,1.3.2.4.6.2.2:FS
+1.3.2.4.6.2.4,Installation of Frametek Wall System,2026-07-13,2026-07-14,
+1.3.2.4.6.2.5,LCI - Security Inspection Final Framing Inspection,2026-07-14,2026-07-14,1.3.2.4.6.2.4:FS
+1.3.2.4.6.2.6,Installation of Air Seal Sheeting,2026-07-17,2026-07-22,1.3.2.4.6.2.5:FS+2
+1.3.2.4.6.2.7,LCI - Security Inspection Final Sheeting Inspection,2026-07-22,2026-07-22,1.3.2.4.6.2.6:FS
+1.3.2.4.6.2.8,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-08-06,2026-08-14,
+1.3.2.4.6.2.9,Installation of Angle Flashings & Sub Sill / Head & Stiles - Intake Louvres,2026-08-14,2026-08-14,1.3.2.4.6.2.8:FS
+1.3.2.4.6.2.10,Installation of External Metal Cladding (CD02/ CD03),2026-08-21,2026-08-27,
+1.3.2.4.6.2.11,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-08-27,2026-08-27,1.3.2.4.6.2.10:FS
+1.3.2.4.6.2.12,Installation of Facade Intake Louvres & Cover Trims (LV02),2026-08-25,2026-08-25,1.3.2.4.6.2.11:FS-3
+1.3.2.4.6.2.13,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-08-25,2026-08-27,1.3.2.4.6.2.12:FS
+1.3.2.4.6.2.14,Installation of Metal Profile / LED Feature Facade Lighting,2026-08-25,2026-08-28,1.3.2.4.6.2.13:FS-3
+1.3.2.4.7,Level 8 to Level 9 - Facade Works,,,
+1.3.2.4.7.1,Constance Street - North Elevation - Grids - 2 to 8,,,
+1.3.2.4.7.1.1,Roof Steel Installed,2026-07-21,2026-07-21,
+1.3.2.4.7.1.2,Installation of Frametek Wall System,2026-07-22,2026-07-30,1.3.2.4.7.1.1:FS
+1.3.2.4.7.1.3,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-08-07,2026-08-17,
+1.3.2.4.7.1.4,Installation of Angle Flashings & Sub Sill / Head & Stiles - Plant Louvres,2026-08-13,2026-08-17,
+1.3.2.4.7.1.5,Installation of External Metal Cladding (CD02/ CD03),2026-08-21,2026-08-27,1.3.2.4.7.1.4:FS+3
+1.3.2.4.7.1.6,Installation of Facade Intake Louvres & Cover Trims (LV03),2026-08-28,2026-09-02,1.3.2.4.7.1.5:FS
+1.3.2.4.7.1.7,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-09-01,2026-09-03,1.3.2.4.7.1.6:FS-2
+1.3.2.4.7.1.8,Installation of Metal Profile / LED Feature Facade Lighting,2026-09-02,2026-09-07,1.3.2.4.7.1.7:FS-2
+1.3.2.4.7.1.9,Installation of Branding / Signage,2026-09-04,2026-09-09,1.3.2.4.7.1.8:FS-4
+1.3.2.4.7.2,Misterton Street - South Elevation - Grids - 2 to 8,,,
+1.3.2.4.7.2.1,Roof Steel Installed,2026-07-21,2026-07-21,
+1.3.2.4.7.2.2,Installation of Frametek Wall System,2026-07-31,2026-08-13,
+1.3.2.4.7.2.3,Setout & Installation of Aluminium Top Hat Sections / Sheeting Clips,2026-08-18,2026-08-21,1.3.2.4.7.2.2:FS+4
+1.3.2.4.7.2.4,Installation of Angle Flashings & Sub Sill / Head & Stiles - Plant Louvres,2026-08-20,2026-08-24,1.3.2.4.7.2.3:FS-2
+1.3.2.4.7.2.5,Installation of External Metal Cladding (CD02/ CD03),2026-08-28,2026-09-03,1.3.2.4.7.2.4:FS+3
+1.3.2.4.7.2.6,Installation of Facade Intake Louvres & Cover Trims (LV03),2026-09-04,2026-09-09,1.3.2.4.7.2.5:FS
+1.3.2.4.7.2.7,Installation of External Vertical Fins to Cleat Extensions (FTF01),2026-09-08,2026-09-10,1.3.2.4.7.2.6:FS-2
+1.3.2.4.7.2.8,Installation of Metal Profile / LED Feature Facade Lighting,2026-09-10,2026-09-15,1.3.2.4.7.2.7:FS
+1.3.2.4.8,External Service Risers,,,
+1.3.2.4.8.1,Level 4 to Level 6,,,
+1.3.2.4.8.1.1,Pour Level 6 + Offset,2026-06-04,2026-06-04,
+1.3.2.4.8.1.2,Level 4 to 6 - North,2026-06-04,2026-06-05,1.3.2.4.8.1.1:FS
+1.3.2.4.8.1.3,Level 4 to 6 - South,2026-06-09,2026-06-10,1.3.2.4.8.1.2:FS+3
+1.3.2.4.8.2,Level 6 to Level 8,,,
+1.3.2.4.8.2.1,Install Roof Steel,2026-07-22,2026-07-22,
+1.3.2.4.8.2.2,Level 6 to 8 - North,2026-07-22,2026-07-23,1.3.2.4.8.2.1:FS
+1.3.2.4.8.2.3,Level 6 to 8 - South,2026-07-24,2026-07-27,1.3.2.4.8.2.2:FS
+1.3.2.5,Fitout,,,
+1.3.2.5.1,Fitout | Ground Level | Entry,,,
+1.3.2.5.1.1,Corridors Plant & BOH Rooms,,,
+1.3.2.5.1.1.1,Hydrant Install,2026-03-13,2026-04-01,
+1.3.2.5.1.1.2,"Patching Lift Core, Rebates, Wet Areas, Soffits, Tanks",2026-03-18,2026-04-21,
+1.3.2.5.1.1.3,Setout Plinth & Drill Starters (Pump Rooms),2026-03-27,2026-04-02,
+1.3.2.5.1.1.4,Waterproofing to Base of Plinths,2026-04-13,2026-04-14,
+1.3.2.5.1.1.5,"Form, Reo & Pour Pump Room Plinths",2026-04-15,2026-04-17,1.3.2.5.1.1.4:FS
+1.3.2.5.1.1.6,Blockwork Setout,2026-03-31,2026-04-02,
+1.3.2.5.1.1.7,FRP Bondek Slab & Stairs to Corridor,2026-04-13,2026-04-21,
+1.3.2.5.1.1.8,Blockwork Install (Incl. Door Frames),2026-04-14,2026-05-05,
+1.3.2.5.1.1.9,Epoxy Paint Below TX & Move Into Position,2026-04-21,2026-04-23,
+1.3.2.5.1.1.10,Small Power Rough In (Cleaners Sockets),2026-04-23,2026-04-24,1.3.2.5.1.1.9:FS
+1.3.2.5.1.1.11,Gypliner to Blockwork / Diesel Tank Divider SX/FR Wall,2026-04-28,2026-05-13,1.3.2.5.1.1.10:FS+3
+1.3.2.5.1.1.12,Riser Speed Panel install,2026-05-06,2026-05-08,
+1.3.2.5.1.1.13,Install Services Drop rods (Insulated Rooms only),2026-05-06,2026-05-15,1.3.2.5.1.1.12:FS-3
+1.3.2.5.1.1.14,Painting Soffits / High-level Wall (PT03A),2026-05-14,2026-05-21,1.3.2.5.1.1.13:FS-2
+1.3.2.5.1.1.15,Install Insulation,2026-05-14,2026-05-20,
+1.3.2.5.1.1.16,High Level Services Install + Risers,2026-05-22,2026-06-19,1.3.2.5.1.1.15:FS+1
+1.3.2.5.1.1.17,Paint Walls / Epoxy to Floors,2026-06-22,2026-06-26,1.3.2.5.1.1.16:FS+2
+1.3.2.5.1.1.18,Install Ladders / Grated Walkways,2026-06-29,2026-07-02,1.3.2.5.1.1.17:FS+2
+1.3.2.5.1.1.19,H/O Plantrooms to Services Trades for Fitout.,2026-07-03,2026-07-03,1.3.2.5.1.1.18:FS
+1.3.2.5.1.2,Water & Fire Tanks,,,
+1.3.2.5.1.2.1,Strip Form Support,2026-04-14,2026-04-20,
+1.3.2.5.1.2.2,Waterproof Tanks,2026-04-21,2026-04-29,1.3.2.5.1.2.1:FS
+1.3.2.5.1.2.3,Services Fitout,2026-04-30,2026-05-13,1.3.2.5.1.2.2:FS
+1.3.2.5.1.2.4,Install Access Ladder / Gantry / Hatch,2026-05-14,2026-05-20,1.3.2.5.1.2.3:FS
+1.3.2.5.1.2.5,FRP Infill Temp Opening,2026-05-21,2026-05-28,1.3.2.5.1.2.4:FS
+1.3.2.5.1.2.6,Concrete Cure + Birdmouth Removal / Patching,2026-05-25,2026-06-05,1.3.2.5.1.2.5:FS-4
+1.3.2.5.1.2.7,Waterproof Infill,2026-06-09,2026-06-12,1.3.2.5.1.2.6:FS+3
+1.3.2.5.1.3,Fire Pump Room,,,
+1.3.2.5.1.3.1,Services Drop Rods,2026-04-23,2026-04-27,
+1.3.2.5.1.3.2,Install Insulation,2026-04-28,2026-04-30,1.3.2.5.1.3.1:FS
+1.3.2.5.1.3.3,High Level Services Install,2026-05-01,2026-05-14,1.3.2.5.1.3.2:FS
+1.3.2.5.1.3.4,Floor Finishes,2026-05-15,2026-05-20,1.3.2.5.1.3.3:FS
+1.3.2.5.1.3.5,Pump Install + Low Level Fit Off,2026-05-21,2026-06-05,1.3.2.5.1.3.4:FS
+1.3.2.5.1.4,Utility & Main Switch room,,,
+1.3.2.5.1.4.1,B&B Room Survey,2026-05-06,2026-05-06,
+1.3.2.5.1.4.2,Install Services Drop Rods,2026-05-07,2026-05-12,1.3.2.5.1.4.1:FS
+1.3.2.5.1.4.3,Install Insulation,2026-05-13,2026-05-15,1.3.2.5.1.4.2:FS
+1.3.2.5.1.4.4,"Install Ladders, Webforge",2026-05-18,2026-05-25,1.3.2.5.1.4.3:FS+2
+1.3.2.5.1.4.5,Epoxy Floor Finish,2026-05-26,2026-05-28,1.3.2.5.1.4.4:FS
+1.3.2.5.1.4.6,Switch room Fitout,2026-06-24,2026-08-05,
+1.3.2.5.1.4.7,Access to Switch room Available to NEXTDC,2026-08-06,2026-08-06,1.3.2.5.1.4.6:FS
+1.3.2.5.1.4.8,Install HV Containment & Cabling from Stage 1,2026-08-06,2026-08-31,1.3.2.5.1.4.7:FS
+1.3.2.5.1.4.9,Terminations Stage 1 HV Supply,2026-09-01,2026-09-14,1.3.2.5.1.4.8:FS
+1.3.2.5.1.4.10,Room Ready to Accept HV from Stage 1( Supply by NEXTDC),2026-09-15,2026-09-15,1.3.2.5.1.4.9:FS
+1.3.2.5.1.4.11,HV Supply From Stage 1 - Energised for Stage 2,2026-09-15,2026-09-15,1.3.2.5.1.4.10:FS
+1.3.2.5.1.5,Interconnect Room,,,
+1.3.2.5.1.5.1,Wall Framing,2026-05-06,2026-05-07,
+1.3.2.5.1.5.2,Security Inspection #1,2026-05-08,2026-05-08,1.3.2.5.1.5.1:FS
+1.3.2.5.1.5.3,Wall Security Sheet,2026-05-08,2026-05-12,1.3.2.5.1.5.2:FS
+1.3.2.5.1.5.4,Security Inspection #2,2026-05-13,2026-05-13,1.3.2.5.1.5.3:FS
+1.3.2.5.1.5.5,Services Wall Rough In,2026-05-13,2026-05-15,1.3.2.5.1.5.4:FS
+1.3.2.5.1.5.6,Wall Sheeting/Set/Sand,2026-05-18,2026-05-22,1.3.2.5.1.5.5:FS+2
+1.3.2.5.1.5.7,Glazing Install (GP157a45),2026-05-25,2026-05-27,1.3.2.5.1.5.6:FS+2
+1.3.2.5.1.5.8,High Level Services Install,2026-05-28,2026-06-02,1.3.2.5.1.5.7:FS
+1.3.2.5.1.5.9,Security Grille Inspection,2026-06-03,2026-06-03,1.3.2.5.1.5.8:FS
+1.3.2.5.1.5.10,Bulkhead Framing & Sheet (EA Scope),2026-06-03,2026-06-11,1.3.2.5.1.5.9:FS
+1.3.2.5.1.5.11,Door Install,2026-06-12,2026-06-15,1.3.2.5.1.5.10:FS
+1.3.2.5.1.5.12,1st Coat Paint Walls & Ceilings,2026-06-16,2026-06-17,1.3.2.5.1.5.11:FS
+1.3.2.5.1.5.13,Pre-Paint Walls & Ceilings,2026-06-18,2026-06-19,1.3.2.5.1.5.12:FS
+1.3.2.5.1.5.14,Final Coat Paint Ceilings,2026-06-22,2026-06-22,1.3.2.5.1.5.13:FS+2
+1.3.2.5.1.5.15,Fit off Services Ceilings,2026-06-23,2026-06-29,1.3.2.5.1.5.14:FS
+1.3.2.5.1.5.16,Carpentry: Skirting,2026-06-30,2026-06-30,1.3.2.5.1.5.15:FS
+1.3.2.5.1.5.17,Final Coat Paint Walls,2026-07-01,2026-07-01,1.3.2.5.1.5.16:FS
+1.3.2.5.1.5.18,Security Inspection #3,2026-07-02,2026-07-02,1.3.2.5.1.5.17:FS
+1.3.2.5.1.5.19,Builders Clean,2026-07-02,2026-07-03,1.3.2.5.1.5.18:FS
+1.3.2.5.1.5.20,Data Rack Install,2026-07-07,2026-07-27,1.3.2.5.1.5.19:FS+3
+1.3.2.5.1.5.21,Communication Room Available - NEXTDC (Nett Date),2026-07-27,2026-07-27,1.3.2.5.1.5.20:FS
+1.3.2.5.1.6,EOT Facilities,,,
+1.3.2.5.1.6.1,Hoist Removal,2026-10-23,2026-10-23,
+1.3.2.5.1.6.2,High Level Fitoff,2026-06-15,2026-06-19,
+1.3.2.5.1.6.3,Wall Framing / SX Install,2026-06-22,2026-06-24,1.3.2.5.1.6.2:FS+2
+1.3.2.5.1.6.4,Security Inspection #1,2026-06-25,2026-06-25,1.3.2.5.1.6.3:FS
+1.3.2.5.1.6.5,Wall Security Sheet,2026-06-25,2026-06-26,1.3.2.5.1.6.4:FS
+1.3.2.5.1.6.6,Security Inspection #2,2026-06-29,2026-06-29,1.3.2.5.1.6.5:FS+2
+1.3.2.5.1.6.7,Services Wall Rough In,2026-06-29,2026-07-02,1.3.2.5.1.6.6:FS
+1.3.2.5.1.6.8,Wall Sheeting/Set/Sand,2026-07-03,2026-07-10,1.3.2.5.1.6.7:FS
+1.3.2.5.1.6.9,Security Grille Inspection,2026-07-13,2026-07-13,1.3.2.5.1.6.8:FS+2
+1.3.2.5.1.6.10,Ceiling Framing & Sheet,2026-07-13,2026-07-20,1.3.2.5.1.6.9:FS
+1.3.2.5.1.6.11,1st Coat Paint Walls & Ceilings,2026-07-21,2026-07-22,1.3.2.5.1.6.10:FS
+1.3.2.5.1.6.12,Pre-Paint Walls & Ceilings,2026-07-23,2026-07-24,1.3.2.5.1.6.11:FS
+1.3.2.5.1.6.13,Final Coat Paint Ceilings,2026-07-27,2026-07-28,1.3.2.5.1.6.12:FS+2
+1.3.2.5.1.6.14,Waterproof 1st Coat,2026-07-29,2026-07-30,1.3.2.5.1.6.13:FS
+1.3.2.5.1.6.15,Screed,2026-07-31,2026-08-03,1.3.2.5.1.6.14:FS
+1.3.2.5.1.6.16,Screed Cure,2026-08-04,2026-08-05,1.3.2.5.1.6.15:FS
+1.3.2.5.1.6.17,Waterproof 2nd Coat,2026-08-06,2026-08-07,1.3.2.5.1.6.16:FS
+1.3.2.5.1.6.18,Tiling Floors / Walls,2026-08-13,2026-08-19,
+1.3.2.5.1.6.19,"Joinery 1st Fix (Mirror carcass, bulkheads, WC Partitions, Vanities)",2026-08-20,2026-08-25,1.3.2.5.1.6.18:FS
+1.3.2.5.1.6.20,Stone Benchtops,2026-08-26,2026-08-27,1.3.2.5.1.6.19:FS
+1.3.2.5.1.6.21,Services Final Fit Off,2026-08-28,2026-08-31,1.3.2.5.1.6.20:FS
+1.3.2.5.1.6.22,Shower Screens,2026-09-01,2026-09-01,1.3.2.5.1.6.21:FS
+1.3.2.5.1.6.23,"Joinery 2nd Fix (Handles, Cushions, Mirror etc.)",2026-09-02,2026-09-02,1.3.2.5.1.6.22:FS
+1.3.2.5.1.6.24,"Carpentry (Doors, Sundry Hardware)",2026-09-03,2026-09-03,1.3.2.5.1.6.23:FS
+1.3.2.5.1.6.25,Pre Paint Walls,2026-09-04,2026-09-04,1.3.2.5.1.6.24:FS
+1.3.2.5.1.6.26,Final Coat Walls,2026-09-07,2026-09-07,1.3.2.5.1.6.25:FS+2
+1.3.2.5.1.6.27,Security Inspection #3,2026-09-08,2026-09-08,1.3.2.5.1.6.26:FS
+1.3.2.5.1.6.28,Signage Install,2026-09-08,2026-09-08,1.3.2.5.1.6.27:FS
+1.3.2.5.1.6.29,Loose Furniture (Lockers),2026-09-09,2026-09-11,1.3.2.5.1.6.28:FS
+1.3.2.5.1.6.30,Low Level Fitoff,2026-07-28,2026-08-20,
+1.3.2.5.1.6.31,Paint TU & Clean,2026-09-14,2026-09-15,
+1.3.2.5.1.7,Constance Street Loading Dock | Ground Level,,,
+1.3.2.5.1.7.1,Install Services Drop Rods,2026-04-01,2026-04-13,
+1.3.2.5.1.7.2,Install Soffit Insulation,2026-04-14,2026-04-20,1.3.2.5.1.7.1:FS
+1.3.2.5.1.7.3,High Level Services Installation,2026-04-21,2026-04-29,1.3.2.5.1.7.2:FS
+1.3.2.5.1.7.4,Fitout | Ground Level | Loading Dock,2026-05-06,2026-09-16,
+1.3.2.5.1.8,M is te rt o n S treet Loading Dock | Ground Level - Convert from Temp to,,,
+1.3.2.5.1.8.1,Install Structural Steel (TBC),2026-09-17,2026-09-29,
+1.3.2.5.1.8.2,Services isolations (incl MOPs) to Temp Loading,2026-09-30,2026-10-07,1.3.2.5.1.8.1:FS
+1.3.2.5.1.8.3,Remove existing dock lifter & storage - storage location TBA,2026-10-08,2026-10-14,1.3.2.5.1.8.2:FS
+1.3.2.5.1.8.4,"Demolish existing fixtures & fittings, bollards, handrails etc",2026-10-15,2026-10-21,1.3.2.5.1.8.3:FS
+1.3.2.5.1.8.5,Demolish Walls (MC- Option 2),2026-10-22,2026-11-16,1.3.2.5.1.8.4:FS
+1.3.2.5.1.8.6,Detailed excavation/removal to final finished grade (MC- Option 2),2026-11-17,2026-11-30,1.3.2.5.1.8.5:FS
+1.3.2.5.1.8.7,FRP Loading Dock slab,2026-12-01,2026-12-15,1.3.2.5.1.8.6:FS
+1.3.2.5.1.8.8,Install temporary fencing between ‘loading docks’,2026-12-16,2026-12-16,1.3.2.5.1.8.7:FS
+1.3.2.5.1.8.9,Infill slabs and thresholds once precast removed,2026-12-17,2027-01-08,1.3.2.5.1.8.8:FS
+1.3.2.5.1.8.10,"Fixtures, fittings, metalwork, and final services installations",2027-01-11,2027-01-28,1.3.2.5.1.8.9:FS+2
+1.3.2.5.1.8.11,Pre Commissioning,2027-01-29,2027-02-04,1.3.2.5.1.8.10:FS
+1.3.2.5.2,Fitout | Level 1 | Office,,,
+1.3.2.5.2.1,Patching,2026-04-22,2026-04-28,
+1.3.2.5.2.2,Waterproofng,2026-04-29,2026-05-01,1.3.2.5.2.1:FS
+1.3.2.5.2.3,Core Risers: Services Install,2026-04-29,2026-04-30,1.3.2.5.2.2:FS-3
+1.3.2.5.2.4,Core Risers: Wall Build,2026-05-01,2026-05-06,1.3.2.5.2.3:FS
+1.3.2.5.2.5,C&P Setout + Top Track,2026-05-07,2026-05-14,1.3.2.5.2.4:FS
+1.3.2.5.2.6,Spray Soffits,2026-05-15,2026-05-19,1.3.2.5.2.5:FS
+1.3.2.5.2.7,High Level Services: Premier + Cookes,2026-05-20,2026-05-27,1.3.2.5.2.6:FS
+1.3.2.5.2.8,Hydraulic/Diesel Rough In Facade Risers,2026-05-12,2026-05-14,
+1.3.2.5.2.9,Window Wall Install,2026-05-07,2026-05-21,
+1.3.2.5.2.10,Wall Framing,2026-05-22,2026-06-04,1.3.2.5.2.9:FS
+1.3.2.5.2.11,Services Rough In,2026-05-29,2026-06-09,
+1.3.2.5.2.12,Corridor Wall Sheeting (High Level),2026-06-03,2026-06-11,
+1.3.2.5.2.13,Wall Sheeting (Low Level),2026-06-12,2026-06-23,1.3.2.5.2.12:FS
+1.3.2.5.2.14,Painting Soffits / High-level Wall,2026-06-09,2026-06-15,
+1.3.2.5.2.15,High Level Fitoff,2026-06-16,2026-07-07,1.3.2.5.2.14:FS
+1.3.2.5.2.16,Security Grille Inspection,2026-06-23,2026-06-23,
+1.3.2.5.2.17,Ceiling Framing & Sheeting,2026-06-26,2026-07-13,1.3.2.5.2.16:FS+2
+1.3.2.5.2.18,Glazed Partition Install,2026-07-14,2026-07-16,1.3.2.5.2.17:FS
+1.3.2.5.2.19,1st Coat Paint,2026-07-14,2026-07-20,1.3.2.5.2.18:FS-3
+1.3.2.5.2.20,Waterproofing & Screed Wet Areas,2026-07-21,2026-07-27,1.3.2.5.2.19:FS
+1.3.2.5.2.21,Tiling to Wet Areas,2026-07-28,2026-08-03,1.3.2.5.2.20:FS
+1.3.2.5.2.22,Amenities Finishes & Fitout,2026-08-04,2026-08-27,1.3.2.5.2.21:FS
+1.3.2.5.2.23,High Level Fit Off,2026-07-21,2026-07-28,
+1.3.2.5.2.24,Install Doors & Hardware,2026-07-29,2026-08-05,1.3.2.5.2.23:FS
+1.3.2.5.2.25,Low Level Fitoff,2026-07-29,2026-08-07,
+1.3.2.5.2.26,Lift Lobby & Circulation Fit Off,2026-08-13,2026-08-26,
+1.3.2.5.2.27,Floor Finishes,2026-08-20,2026-08-26,
+1.3.2.5.2.28,Final Paint,2026-08-27,2026-09-01,1.3.2.5.2.27:FS
+1.3.2.5.2.29,FF&E,2026-09-02,2026-09-08,1.3.2.5.2.28:FS
+1.3.2.5.2.30,Final Paint & Clean,2026-09-09,2026-09-10,1.3.2.5.2.29:FS
+1.3.2.5.3,Fitout | Level 2 | Office,,,
+1.3.2.5.3.1,Patching,2026-05-06,2026-05-13,
+1.3.2.5.3.2,Waterproofng,2026-05-14,2026-05-15,1.3.2.5.3.1:FS
+1.3.2.5.3.3,Core Risers: Services Install,2026-05-14,2026-05-15,1.3.2.5.3.2:FS-2
+1.3.2.5.3.4,Core Risers: Wall Build,2026-05-18,2026-05-20,1.3.2.5.3.3:FS+2
+1.3.2.5.3.5,C&P Setout + Top Track,2026-05-21,2026-05-27,1.3.2.5.3.4:FS
+1.3.2.5.3.6,Hydraulic/Diesel Rough In Facade Risers,2026-05-12,2026-05-15,
+1.3.2.5.3.7,Window Wall Install,2026-05-18,2026-05-29,1.3.2.5.3.6:FS+2
+1.3.2.5.3.8,Wall Framing,2026-06-01,2026-06-15,1.3.2.5.3.7:FS+2
+1.3.2.5.3.9,Security Inspection #1,2026-06-02,2026-06-02,
+1.3.2.5.3.10,Wall Security Sheet,2026-06-02,2026-06-02,1.3.2.5.3.9:FS
+1.3.2.5.3.11,Security Inspection #2,2026-06-03,2026-06-03,1.3.2.5.3.10:FS
+1.3.2.5.3.12,Services Rough In,2026-06-04,2026-06-17,1.3.2.5.3.11:FS
+1.3.2.5.3.13,Wall Sheeting (High Level),2026-06-11,2026-06-18,
+1.3.2.5.3.14,Wall Sheeting (Low Level),2026-06-19,2026-07-01,1.3.2.5.3.13:FS
+1.3.2.5.3.15,Install Services Drop Rods,2026-06-16,2026-06-23,
+1.3.2.5.3.16,Install Insulation,2026-06-19,2026-06-26,
+1.3.2.5.3.17,Paint Walls High Level,2026-06-23,2026-06-29,1.3.2.5.3.16:FS-4
+1.3.2.5.3.18,High Level Fitoff,2026-06-30,2026-07-21,1.3.2.5.3.17:FS
+1.3.2.5.3.19,Security Grille Inspection,2026-07-08,2026-07-08,
+1.3.2.5.3.20,Ceiling Framing & Sheeting,2026-07-13,2026-07-24,1.3.2.5.3.19:FS+4
+1.3.2.5.3.21,Glazed Partition Install,2026-07-27,2026-07-31,1.3.2.5.3.20:FS+2
+1.3.2.5.3.22,1st Coat Paint,2026-07-27,2026-07-31,
+1.3.2.5.3.23,Waterproofing & Screed Wet Areas,2026-08-03,2026-08-07,1.3.2.5.3.22:FS+2
+1.3.2.5.3.24,Tiling to Wet Areas,2026-08-13,2026-08-19,
+1.3.2.5.3.25,Amenities Finishes & Fitout,2026-08-20,2026-09-09,1.3.2.5.3.24:FS
+1.3.2.5.3.26,High Level Fit Off,2026-08-03,2026-08-13,
+1.3.2.5.3.27,Install Doors & Hardware,2026-08-14,2026-08-21,1.3.2.5.3.26:FS
+1.3.2.5.3.28,Low Level Fitoff,2026-08-14,2026-08-25,
+1.3.2.5.3.29,Lift Lobby & Circulation Fit Off,2026-08-26,2026-09-08,1.3.2.5.3.28:FS
+1.3.2.5.3.30,Floor Finishes,2026-09-02,2026-09-09,
+1.3.2.5.3.31,Final Paint,2026-09-10,2026-09-15,1.3.2.5.3.30:FS
+1.3.2.5.3.32,Security Inspection #3,2026-09-16,2026-09-16,1.3.2.5.3.31:FS
+1.3.2.5.3.33,FF&E,2026-09-16,2026-09-23,1.3.2.5.3.32:FS
+1.3.2.5.3.34,Final Clean,2026-09-24,2026-09-25,1.3.2.5.3.33:FS
+1.3.2.5.4,Fitout | Level 3 | Mission Critical Office (Cold Shell Base Build),,,
+1.3.2.5.4.1,Level 3 - Weather Proof,2026-06-15,2026-06-15,
+1.3.2.5.4.2,Waterproofng,2026-05-21,2026-05-22,
+1.3.2.5.4.3,Hydraulic/Diesel Rough In Facade Risers,2026-05-25,2026-05-27,1.3.2.5.4.2:FS+2
+1.3.2.5.4.4,Window Wall Install,2026-05-28,2026-06-11,1.3.2.5.4.3:FS
+1.3.2.5.4.5,Wall Framing + SX Services Risers (ALL),2026-06-12,2026-06-17,1.3.2.5.4.4:FS
+1.3.2.5.4.6,Security Inspection #1,2026-06-18,2026-06-18,1.3.2.5.4.5:FS
+1.3.2.5.4.7,Wall Security Sheet,2026-06-18,2026-06-19,1.3.2.5.4.6:FS
+1.3.2.5.4.8,Security Inspection #2,2026-06-22,2026-06-22,1.3.2.5.4.7:FS+2
+1.3.2.5.4.9,Services Rough In,2026-06-22,2026-06-25,1.3.2.5.4.8:FS
+1.3.2.5.4.10,Wall Sheet/Set/Sand - High Level,2026-06-26,2026-07-03,1.3.2.5.4.9:FS
+1.3.2.5.4.11,Painting Soffits / High-level Wall,2026-07-07,2026-07-09,1.3.2.5.4.10:FS+3
+1.3.2.5.4.12,Install Services Drop Rods (insulated Rooms only),2026-07-07,2026-07-08,1.3.2.5.4.11:FS-3
+1.3.2.5.4.13,Install Insulation,2026-07-09,2026-07-10,1.3.2.5.4.12:FS
+1.3.2.5.4.14,High Level Fitoff,2026-07-13,2026-07-23,1.3.2.5.4.13:FS+2
+1.3.2.5.4.15,Waterproof Plantroom,2026-07-24,2026-07-27,1.3.2.5.4.14:FS
+1.3.2.5.4.16,Install Doors & Hardware,2026-07-28,2026-07-29,1.3.2.5.4.15:FS
+1.3.2.5.4.17,Low Level Fitoff,2026-07-24,2026-07-30,
+1.3.2.5.4.18,Lift Lobby Fit Off,2026-07-31,2026-08-06,1.3.2.5.4.17:FS
+1.3.2.5.4.19,Floor Finishes,2026-08-07,2026-08-13,1.3.2.5.4.18:FS
+1.3.2.5.4.20,Final Paint,2026-08-14,2026-08-17,1.3.2.5.4.19:FS
+1.3.2.5.4.21,Security Inspection #3,2026-08-18,2026-08-18,1.3.2.5.4.20:FS
+1.3.2.5.4.22,Final Paint & Clean,2026-08-18,2026-08-19,1.3.2.5.4.21:FS
+1.3.2.5.5,Fitout | Level 4 | Plant & Storerooms,,,
+1.3.2.5.5.1,Builder's Works,,,
+1.3.2.5.5.1.1,Level 5 - Weather Proof - Air Seal Complete,2026-07-13,2026-07-13,
+1.3.2.5.5.1.2,Construct Blockwork Walls to Switch rooms / Battery Store Rooms - North Elevation,2026-05-29,2026-06-12,
+1.3.2.5.5.1.3,FRP Insitu Lids to Battery Rooms,2026-06-04,2026-06-16,
+1.3.2.5.5.1.4,Construct Blockwork Walls to TX Rooms - South Elevation,2026-06-15,2026-06-24,1.3.2.5.5.1.3:FS-2
+1.3.2.5.5.1.5,FRP Plinths / Upstands,2026-06-25,2026-07-09,1.3.2.5.5.1.4:FS
+1.3.2.5.5.1.6,Sealant & Paint to Electrical Areas,2026-07-13,2026-07-17,1.3.2.5.5.1.5:FS+3
+1.3.2.5.5.1.7,Lift Switchboards / UPS / Battery Stores / Mech Ductwork & Plant,2026-08-19,2026-08-25,
+1.3.2.5.5.2,Services Fit Off & Finishes,,,
+1.3.2.5.5.2.1,Electrical Switch Rooms,,,
+1.3.2.5.5.2.1.1,Install Ductwork & CRAC Units.,2026-08-26,2026-09-01,
+1.3.2.5.5.2.1.2,Install Electrical / CSMS / HV Containment Tray (Incl Install FIE),2026-09-02,2026-09-08,1.3.2.5.5.2.1.1:FS
+1.3.2.5.5.2.1.3,Install Busduct & Connect,2026-09-09,2026-09-15,1.3.2.5.5.2.1.2:FS
+1.3.2.5.5.2.1.4,Pull LV Cables,2026-09-16,2026-09-28,1.3.2.5.5.2.1.3:FS
+1.3.2.5.5.2.1.5,Pull HV Cables,2026-09-16,2026-09-28,
+1.3.2.5.5.2.1.6,Pull CSMS Cables,2026-09-16,2026-09-28,
+1.3.2.5.5.2.1.7,Installation of FR Bulkhead - HV Cable Carriage - TX,2026-09-29,2026-10-14,1.3.2.5.5.2.1.6:FS
+1.3.2.5.5.2.1.8,Fit Off Switchboards & Terminate (incl UPS) - TX,2026-09-29,2026-10-14,
+1.3.2.5.5.2.1.9,Communication Room Available - NEXTDC (Nett Date),2026-10-15,2026-10-15,1.3.2.5.5.2.1.8:FS
+1.3.2.5.6,Fitout | Level 5 | Data Hall 4,,,
+1.3.2.5.6.1,Base Build,,,
+1.3.2.5.6.1.1,Level 5- Weather Proof - Air Seal Complete,2026-07-13,2026-07-13,
+1.3.2.5.6.1.2,Level 6 - Weather Proof,2026-03-23,2026-03-23,
+1.3.2.5.6.1.3,Wall Framing + SX Services Risers (Excl. SX107f Risers - elec containment),2026-07-10,2026-07-16,
+1.3.2.5.6.1.4,LCI - Security Inspection Final Framing Inspection,2026-07-16,2026-07-16,1.3.2.5.6.1.3:FS
+1.3.2.5.6.1.5,Wall Security Sheet,2026-07-16,2026-07-20,1.3.2.5.6.1.4:FS
+1.3.2.5.6.1.6,LCI - Security Inspection - Security Sheet Complete,2026-07-20,2026-07-20,1.3.2.5.6.1.5:FS
+1.3.2.5.6.1.7,Services Rough In (Incl. SX107f risers),2026-07-20,2026-07-23,1.3.2.5.6.1.6:FS
+1.3.2.5.6.1.8,Wall sheet /Set/ Sand,2026-07-23,2026-07-30,1.3.2.5.6.1.7:FS
+1.3.2.5.6.1.9,Install Remaining SX Risers,2026-07-27,2026-07-29,1.3.2.5.6.1.8:FS-4
+1.3.2.5.6.1.10,WC Fitout,2026-07-30,2026-08-13,1.3.2.5.6.1.9:FS
+1.3.2.5.6.1.11,Painting Soffits / High-level Wall,2026-07-30,2026-08-04,
+1.3.2.5.6.1.12,Install Secure Cages,2026-07-23,2026-07-30,
+1.3.2.5.6.1.13,Services Rough-in - Riser & Spine Busduct,2026-08-04,2026-08-21,1.3.2.5.6.1.12:FS+4
+1.3.2.5.6.1.14,Services Rough-in - Gas Suppression System,2026-08-21,2026-09-04,1.3.2.5.6.1.13:FS
+1.3.2.5.6.1.15,Services Rough-in - Pressurisation System,2026-08-28,2026-09-11,
+1.3.2.5.6.1.16,LCI Security Grill Inspection ( Prior to Ceiling Sheeting Commencement),2026-09-04,2026-09-04,
+1.3.2.5.6.1.17,Services Rough-in & Hangers/Rods,2026-09-11,2026-10-07,
+1.3.2.5.6.1.18,Base Build Complete,2026-10-07,2026-10-07,1.3.2.5.6.1.17:FS
+1.3.2.5.6.2,Whitespace,,,
+1.3.2.5.6.2.1,Install Ceiling Grids,2026-09-04,2026-09-18,
+1.3.2.5.6.2.2,Waterproof Slab @ CRAC Locations + Plantroom,2026-09-08,2026-09-11,
+1.3.2.5.6.2.3,Install CRAC Units,2026-09-11,2026-09-18,1.3.2.5.6.2.2:FS
+1.3.2.5.6.2.4,Close Ceiling,2026-09-18,2026-09-28,1.3.2.5.6.2.3:FS
+1.3.2.5.6.2.5,Install Hot Aisle Containment,2026-09-28,2026-10-07,1.3.2.5.6.2.4:FS
+1.3.2.5.6.2.6,Cut BWIC Openings to Polycarbonate,2026-10-07,2026-10-09,1.3.2.5.6.2.5:FS
+1.3.2.5.6.2.7,Plasterboard Infill to Vertical Face at Ceiling Step,2026-09-28,2026-10-07,
+1.3.2.5.6.2.8,"Services Fitout (busduct, lighting, comms, gas suppression mech grills)",2026-10-07,2026-10-28,1.3.2.5.6.2.7:FS
+1.3.2.5.6.2.9,Communication Room Available - NEXTDC (Nett Date),2026-10-28,2026-10-28,1.3.2.5.6.2.8:FS
+1.3.2.5.6.2.10,Floor Finishes,2026-10-15,2026-10-29,
+1.3.2.5.6.2.11,Install FIE Racks,2026-10-29,2026-11-05,1.3.2.5.6.2.10:FS
+1.3.2.5.6.2.12,Low Level Rack Fit Off,2026-11-05,2026-11-19,1.3.2.5.6.2.11:FS
+1.3.2.5.6.2.13,Final Painting,2026-11-19,2026-11-26,1.3.2.5.6.2.12:FS
+1.3.2.5.6.2.14,LCI - Security Inspection - Final ( Tamper Evident Finish),2026-11-26,2026-11-26,1.3.2.5.6.2.13:FS
+1.3.2.5.6.2.15,Builders Clean,2026-11-26,2026-12-01,1.3.2.5.6.2.14:FS
+1.3.2.5.6.2.16,Air Leakage Testing,2026-12-01,2026-12-04,1.3.2.5.6.2.15:FS
+1.3.2.5.6.2.17,Defects & Rectification,2026-12-04,2026-12-14,1.3.2.5.6.2.16:FS
+1.3.2.5.6.2.18,Final Clean,2026-12-14,2027-01-06,1.3.2.5.6.2.17:FS
+1.3.2.5.7,Fitout | Level 6 | Data Hall 5,,,
+1.3.2.5.7.1,Base Build,2026-07-13,2026-09-24,
+1.3.2.5.7.2,Communication Room Available - NEXTDC (Nett Date),2026-09-07,2026-09-07,
+1.3.2.5.7.3,Wall Framing + SX Services Risers (Excl. SX107f Risers - elec containment),2026-07-13,2026-07-16,
+1.3.2.5.7.4,Security Inspection #1,2026-07-17,2026-07-17,1.3.2.5.7.3:FS
+1.3.2.5.7.5,Wall Security Sheet,2026-07-17,2026-07-20,1.3.2.5.7.4:FS
+1.3.2.5.7.6,Security Inspection #2,2026-07-21,2026-07-21,1.3.2.5.7.5:FS
+1.3.2.5.7.7,Services Rough In (Incl. SX107f risers),2026-07-21,2026-07-23,1.3.2.5.7.6:FS
+1.3.2.5.7.8,Wall Sheet/Set/Sand,2026-07-24,2026-07-30,1.3.2.5.7.7:FS
+1.3.2.5.7.9,Install Remaining SX Risers,2026-07-24,2026-07-28,
+1.3.2.5.7.10,WC Fitout,2026-07-29,2026-08-06,1.3.2.5.7.9:FS
+1.3.2.5.7.11,Painting Soffits / High-level Wall,2026-07-31,2026-08-04,
+1.3.2.5.7.12,High Level Services Install + Risers,2026-08-05,2026-08-21,1.3.2.5.7.11:FS
+1.3.2.5.7.13,Waterproof Plantroom,2026-08-24,2026-08-24,1.3.2.5.7.12:FS+2
+1.3.2.5.7.14,Install Doors & Hardware,2026-08-25,2026-08-26,1.3.2.5.7.13:FS
+1.3.2.5.7.15,Low Level Fit Off,2026-08-24,2026-08-28,1.3.2.5.7.14:FS-3
+1.3.2.5.7.16,Lift Lobby Fit Off,2026-08-31,2026-09-04,1.3.2.5.7.15:FS+2
+1.3.2.5.7.17,Floor Finishes,2026-09-07,2026-09-08,1.3.2.5.7.16:FS+2
+1.3.2.5.7.18,Final Paint,2026-09-09,2026-09-15,1.3.2.5.7.17:FS
+1.3.2.5.7.19,Security Inspection #3,2026-09-16,2026-09-16,1.3.2.5.7.18:FS
+1.3.2.5.7.20,Air Leakage Testing,2026-09-16,2026-09-18,1.3.2.5.7.19:FS
+1.3.2.5.7.21,Defects & Rectification,2026-09-22,2026-09-28,1.3.2.5.7.20:FS+3
+1.3.2.5.7.22,Final Clean,2026-09-29,2026-09-30,1.3.2.5.7.21:FS
+1.3.2.5.8,Fitout | Level 7 | Data Hall 6,,,
+1.3.2.5.8.1,Base Build,2026-08-03,2026-10-19,
+1.3.2.5.8.2,Busduct Riser Installation,2026-08-27,2026-08-27,
+1.3.2.5.8.3,Communication Room Available - NEXTDC (Nett Date),2026-09-29,2026-09-29,
+1.3.2.5.8.4,Wall Framing + SX Services Risers (Excl. SX107f Risers - elec containment),2026-08-03,2026-08-06,
+1.3.2.5.8.5,Security Inspection #1,2026-08-07,2026-08-07,1.3.2.5.8.4:FS
+1.3.2.5.8.6,Wall Security Sheet,2026-08-07,2026-08-13,1.3.2.5.8.5:FS
+1.3.2.5.8.7,Security Inspection #2,2026-08-14,2026-08-14,1.3.2.5.8.6:FS
+1.3.2.5.8.8,Services Rough In (Incl. SX107f risers),2026-08-14,2026-08-18,1.3.2.5.8.7:FS
+1.3.2.5.8.9,Wall Sheet/Set/Sand,2026-08-19,2026-08-25,1.3.2.5.8.8:FS
+1.3.2.5.8.10,Install Remaining SX Risers,2026-08-19,2026-08-21,
+1.3.2.5.8.11,WC Fitout,2026-08-24,2026-09-01,1.3.2.5.8.10:FS+2
+1.3.2.5.8.12,Painting Soffits / High-level Wall,2026-08-26,2026-08-28,
+1.3.2.5.8.13,High Level Services Install + Risers,2026-08-31,2026-09-11,1.3.2.5.8.12:FS+2
+1.3.2.5.8.14,Waterproof Plantroom,2026-09-14,2026-09-14,1.3.2.5.8.13:FS+2
+1.3.2.5.8.15,Install Doors & Hardware,2026-09-15,2026-09-16,1.3.2.5.8.14:FS
+1.3.2.5.8.16,Low Level Fit Off,2026-09-14,2026-09-18,1.3.2.5.8.15:FS-3
+1.3.2.5.8.17,Lift Lobby Fit Off,2026-09-22,2026-09-28,1.3.2.5.8.16:FS+3
+1.3.2.5.8.18,Floor Finishes,2026-09-29,2026-09-30,1.3.2.5.8.17:FS
+1.3.2.5.8.19,Final Paint,2026-10-01,2026-10-09,1.3.2.5.8.18:FS
+1.3.2.5.8.20,Security Inspection #3,2026-10-12,2026-10-12,1.3.2.5.8.19:FS+2
+1.3.2.5.8.21,Air Leakage Testing,2026-10-12,2026-10-14,1.3.2.5.8.20:FS
+1.3.2.5.8.22,Defects & Rectification,2026-10-15,2026-10-21,1.3.2.5.8.21:FS
+1.3.2.5.8.23,Final Clean,2026-10-22,2026-10-23,1.3.2.5.8.22:FS
+1.3.2.5.9,Fitout | Level 8 | Roof Plant,2026-07-22,2026-11-30,
+1.3.2.5.10,Fitout | Stair Cores,2026-07-22,2026-11-09,
+1.3.2.6,Facade Infill & SCAR Works,2026-09-09,2027-01-22,
+1.3.2.7,Vertical Transport,,,
+1.3.2.7.1,Passenger Lifts (x2),,,
+1.3.2.7.1.1,Lift Shaft Capped,2026-03-31,2026-03-31,
+1.3.2.7.1.2,Lift Shaft Waterproofing,2026-03-31,2026-04-14,1.3.2.7.1.1:FS
+1.3.2.7.1.3,Ground Floor Backprops Removed / Access Available for Lift Installation,2026-04-14,2026-04-14,1.3.2.7.1.2:FS
+1.3.2.7.1.4,Lift Procured,2026-05-25,2026-05-25,
+1.3.2.7.1.5,Install Passenger Lifts 1 (GF - L3),2026-05-25,2026-07-07,1.3.2.7.1.4:FS
+1.3.2.7.1.6,Install Passenger Lifts 2 (GF - L3),2026-05-25,2026-07-07,
+1.3.2.7.1.7,Lift Finishes & Commission,2026-06-30,2026-07-21,
+1.3.2.7.2,Good Lifts (x2),,,
+1.3.2.7.2.1,J u m p R e m oved / L08 Slab Pour 3 Complete for Scaff. Access Lift Shaft Capped / Shaft,2026-07-14,2026-07-14,
+1.3.2.7.2.2,Cap Lift Cores (Precast & Waterproof),2026-07-14,2026-07-22,1.3.2.7.2.1:FS
+1.3.2.7.2.3,Install Goods Lifts & Commission to Builders Use,2026-07-23,2026-10-08,1.3.2.7.2.2:FS
+1.3.2.7.3,Hoist 1 (Constance Street),2026-10-09,2026-10-22,
+1.3.2.7.4,Hoist 2 (Core Side),2026-10-23,2026-10-29,1.3.2.7.3:FS
+1.3.2.8,Landscaping Works,2027-01-21,2027-03-03,1.3.2.6:FS-2
+1.3.2.9,Commissioning - 5 Stages & Handover,2026-06-15,2027-04-05,
+1.3.2.10,TOTC,2026-06-15,2027-03-10,

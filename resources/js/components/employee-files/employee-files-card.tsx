@@ -14,6 +14,7 @@ interface FileType {
     has_back_side: boolean;
     expiry_requirement: 'required' | 'optional' | 'none';
     requires_completed_date: boolean;
+    options: string[] | null;
 }
 
 interface EmployeeFileRecord {
@@ -21,6 +22,7 @@ interface EmployeeFileRecord {
     document_number: string | null;
     expires_at: string | null;
     completed_at: string | null;
+    selected_options: string[] | null;
     status: 'valid' | 'expired' | 'expiring_soon';
     notes: string | null;
     uploaded_by: string | null;
@@ -155,7 +157,14 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                     {filesByCategory[cat].map((f) => (
                                         <div key={f.id} className="hover:bg-muted/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
                                             <StatusIcon status={f.status} />
-                                            <span className="min-w-0 flex-1 truncate font-medium">{f.file_type.name}</span>
+                                            <span className="min-w-0 flex-1 truncate font-medium">
+                                                {f.file_type.name}
+                                                {f.selected_options && f.selected_options.length > 0 && (
+                                                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                                                        ({f.selected_options.join(', ')})
+                                                    </span>
+                                                )}
+                                            </span>
                                             {f.completed_at && (
                                                 <span className="text-muted-foreground shrink-0 text-xs">Completed: {formatDate(f.completed_at)}</span>
                                             )}

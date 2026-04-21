@@ -18,6 +18,7 @@ class EmployeeFile extends Model implements HasMedia
         'document_number',
         'expires_at',
         'completed_at',
+        'selected_options',
         'uploaded_by',
         'notes',
     ];
@@ -25,6 +26,7 @@ class EmployeeFile extends Model implements HasMedia
     protected $casts = [
         'expires_at' => 'date',
         'completed_at' => 'date',
+        'selected_options' => 'array',
     ];
 
     public function registerMediaCollections(): void

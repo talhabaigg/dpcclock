@@ -277,16 +277,27 @@ class LabourDashboardController extends Controller
             ->pluck('eh_worktype_id')
             ->toArray();
 
-        // Fetch sick leave clocks
+        // Fetch sick leave clocks (location-scoped for trends)
         $clocks = Clock::whereIn('eh_location_id', $allEhLocationIds)
             ->where('clock_in', '>=', $dateFrom)
             ->where('clock_in', '<=', $dateTo)
-            ->whereIn('status', ['Processed', 'Approved'])
+            ->where('status', 'Processed')
             ->whereIn('eh_worktype_id', $sickLeaveWorkTypeIds)
             ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
             ->whereNotNull('hours_worked')
             ->where('hours_worked', '>', 0)
             ->select('eh_location_id', 'eh_employee_id', 'hours_worked', 'clock_in')
+            ->get();
+
+        // Fetch ALL sick leave clocks across all locations for employee summary
+        $allSickLeaveClocks = Clock::where('clock_in', '>=', $dateFrom)
+            ->where('clock_in', '<=', $dateTo)
+            ->where('status', 'Processed')
+            ->whereIn('eh_worktype_id', $sickLeaveWorkTypeIds)
+            ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
+            ->whereNotNull('hours_worked')
+            ->where('hours_worked', '>', 0)
+            ->select('eh_employee_id', 'hours_worked')
             ->get();
 
         // Build eh_location_id -> parent location index
@@ -357,12 +368,9 @@ class LabourDashboardController extends Controller
             $lastMonth = $month;
         }
 
-        // Aggregate sick leave by employee
+        // Aggregate sick leave by employee (all locations, not just selected)
         $byEmployee = [];
-        foreach ($clocks as $clock) {
-            $parentIdx = $ehToParentIdx[$clock->eh_location_id] ?? null;
-            if ($parentIdx === null) continue;
-
+        foreach ($allSickLeaveClocks as $clock) {
             $employeeId = $clock->eh_employee_id;
             if (!isset($byEmployee[$employeeId])) {
                 $byEmployee[$employeeId] = 0;
@@ -546,20 +554,25 @@ class LabourDashboardController extends Controller
             ->filter(function ($row) use ($activeEmployeeIds) {
                 return in_array((int) $row['employeeId'], $activeEmployeeIds);
             })
-            ->map(function ($row) use ($employees, $asAtDate) {
+            ->groupBy('employeeId')
+            ->map(function ($rows) use ($employees, $asAtDate) {
+                $row = $rows->first();
                 $employee = $employees->get($row['employeeId']);
                 $tenure = null;
                 if ($employee?->start_date) {
                     $tenure = round(Carbon::parse($employee->start_date)->diffInMonths(Carbon::parse($asAtDate)) / 12, 1);
                 }
 
+                $totalHours = $rows->sum(fn ($r) => (float) ($r['accruedAmountInHours'] ?? 0));
+                $totalLiability = $rows->sum(fn ($r) => (float) ($r['leavePlusLoading'] ?? $r['leaveValue'] ?? 0));
+
                 return [
                     'employee_id' => $row['employeeId'],
                     'external_id' => $row['externalId'] ?? $employee?->external_id,
                     'name' => $employee?->display_name ?? trim($row['firstName'].' '.$row['surname']),
-                    'balance_hours' => round((float) ($row['accruedAmountInHours'] ?? 0), 2),
-                    'balance_days' => round((float) ($row['accruedAmountInHours'] ?? 0) / 8, 2),
-                    'liability' => round((float) ($row['leavePlusLoading'] ?? $row['leaveValue'] ?? 0), 2),
+                    'balance_hours' => round($totalHours, 2),
+                    'balance_days' => round($totalHours / 8, 2),
+                    'liability' => round($totalLiability, 2),
                     'tenure_years' => $tenure,
                     'archived' => $employee?->trashed() ?? false,
                     'location' => $row['location'] ?? null,
@@ -690,11 +703,10 @@ class LabourDashboardController extends Controller
         $publicHolidayWorkTypeIds = Worktype::where('name', 'like', '%Public Holiday%')
             ->pluck('eh_worktype_id')->toArray();
 
-        // Fetch all relevant clocks
-        $clocks = Clock::whereIn('eh_location_id', $allEhLocationIds)
-            ->where('clock_in', '>=', $dateFrom)
+        // Fetch all sick leave clocks across all locations (not just selected)
+        $clocks = Clock::where('clock_in', '>=', $dateFrom)
             ->where('clock_in', '<=', $dateTo)
-            ->whereIn('status', ['Processed', 'Approved'])
+            ->where('status', 'Processed')
             ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
             ->whereNotNull('hours_worked')
             ->where('hours_worked', '>', 0)

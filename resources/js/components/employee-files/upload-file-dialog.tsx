@@ -16,6 +16,7 @@ interface FileType {
     has_back_side: boolean;
     expiry_requirement: 'required' | 'optional' | 'none';
     requires_completed_date: boolean;
+    options: string[] | null;
 }
 
 interface Props {
@@ -30,6 +31,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
     const [typeId, setTypeId] = useState('');
     const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
     const [completedAt, setCompletedAt] = useState<Date | undefined>(undefined);
+    const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
     const [fileFront, setFileFront] = useState<File | null>(null);
     const [fileBack, setFileBack] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -51,6 +53,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
         setTypeId('');
         setExpiresAt(undefined);
         setCompletedAt(undefined);
+        setSelectedOptions([]);
         setFileFront(null);
         setFileBack(null);
     };
@@ -59,12 +62,13 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
         if (!typeId || !fileFront) return;
         setSubmitting(true);
 
-        const data: Record<string, string | File> = {
+        const data: Record<string, string | File | string[]> = {
             employee_file_type_id: typeId,
             file_front: fileFront,
         };
         if (expiresAt) data.expires_at = format(expiresAt, 'yyyy-MM-dd');
         if (completedAt) data.completed_at = format(completedAt, 'yyyy-MM-dd');
+        if (selectedOptions.length > 0) data.selected_options = selectedOptions;
         if (fileBack) data.file_back = fileBack;
 
         router.post(`/employees/${employeeId}/files`, data, {
@@ -133,6 +137,31 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
 
                     {typeId && (
                         <>
+                            {selectedType?.options && selectedType.options.length > 0 && (
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>Options</Label>
+                                    <div className="flex flex-col gap-1.5 rounded-md border p-2">
+                                        {selectedType.options.map((opt) => (
+                                            <label key={opt} className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rounded border-gray-300"
+                                                    checked={selectedOptions.includes(opt)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedOptions([...selectedOptions, opt]);
+                                                        } else {
+                                                            setSelectedOptions(selectedOptions.filter((o) => o !== opt));
+                                                        }
+                                                    }}
+                                                />
+                                                {opt}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {selectedType?.requires_completed_date && (
                                 <div className="flex flex-col gap-1.5">
                                     <Label>Completed Date</Label>

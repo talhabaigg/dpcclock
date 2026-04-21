@@ -3,9 +3,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Maximize2 } from 'lucide-react';
-import { useState } from 'react';
+import { Maximize2, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 export interface SickLeaveEmployee {
     employee_id: string;
@@ -55,6 +56,13 @@ function EmployeeCard({ emp, rank }: { emp: SickLeaveEmployee; rank: number }) {
 
 export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
     const [fullscreen, setFullscreen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    const filtered = useMemo(() => {
+        if (!search) return data;
+        const q = search.toLowerCase();
+        return data.filter((e) => e.name.toLowerCase().includes(q) || e.external_id?.toLowerCase().includes(q));
+    }, [data, search]);
 
     if (data.length === 0) return null;
 
@@ -84,7 +92,7 @@ export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
                 </CardContent>
             </Card>
 
-            <Dialog open={fullscreen} onOpenChange={setFullscreen}>
+            <Dialog open={fullscreen} onOpenChange={(open) => { setFullscreen(open); if (!open) setSearch(''); }}>
                 <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Sick Leave — By Employee</DialogTitle>
@@ -92,8 +100,17 @@ export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
                             {data.length} employees — {formatHours(totalHours)} total hours
                         </p>
                     </DialogHeader>
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                            placeholder="Search employees..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-8 h-8 text-xs"
+                        />
+                    </div>
                     <div className="flex-1 overflow-auto space-y-0.5">
-                        {data.map((emp, i) => (
+                        {filtered.map((emp, i) => (
                             <EmployeeCard key={emp.employee_id} emp={emp} rank={i + 1} />
                         ))}
                     </div>

@@ -35,6 +35,8 @@ class EmployeeFileTypeController extends Controller
             'has_back_side' => 'boolean',
             'expiry_requirement' => 'in:required,optional,none',
             'requires_completed_date' => 'boolean',
+            'options' => 'nullable|array',
+            'options.*' => 'string|max:255',
             'conditions' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
@@ -56,6 +58,8 @@ class EmployeeFileTypeController extends Controller
             'has_back_side' => 'boolean',
             'expiry_requirement' => 'in:required,optional,none',
             'requires_completed_date' => 'boolean',
+            'options' => 'nullable|array',
+            'options.*' => 'string|max:255',
             'conditions' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
