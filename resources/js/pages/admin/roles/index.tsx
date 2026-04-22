@@ -142,7 +142,7 @@ function PermissionSelector({
                     </div>
                 </div>
                 <Separator />
-                <ScrollArea className="flex-1">
+                <ScrollArea className="min-h-0 flex-1 overflow-hidden">
                     <nav className="flex flex-col gap-0.5 p-2">
                         {visibleCategories.length === 0 ? (
                             <p className="text-muted-foreground px-3 py-6 text-center text-xs">No matches.</p>
@@ -208,7 +208,7 @@ function PermissionSelector({
                         </div>
 
                         {/* Permission Rows */}
-                        <ScrollArea className="flex-1">
+                        <ScrollArea className="min-h-0 flex-1 overflow-hidden">
                             <div className="divide-y">
                                 {activePerms.map((perm, index) => {
                                     const isChecked = selectedPermissions.includes(perm.name);
