@@ -131,6 +131,8 @@ class EmployeeFileController extends Controller
     /**
      * API endpoint for bulk importing employee files.
      * Accepts multipart/form-data with employee_id, file type, metadata, and file.
+     *
+     * Pass replace=1 to update an existing record instead of skipping.
      */
     public function apiImportFile(Request $request)
     {
@@ -142,11 +144,13 @@ class EmployeeFileController extends Controller
             'completed_at' => 'nullable|date',
             'selected_options' => 'nullable|string', // JSON string from multipart
             'notes' => 'nullable|string',
+            'replace' => 'nullable|boolean',
             'file_front' => 'required|file|max:20480',
             'file_back' => 'nullable|file|max:20480',
         ]);
 
         $employee = Employee::findOrFail($validated['employee_id']);
+        $replace = (bool) ($validated['replace'] ?? false);
 
         $selectedOptions = null;
         if (!empty($validated['selected_options'])) {
@@ -154,6 +158,47 @@ class EmployeeFileController extends Controller
             if (!is_array($selectedOptions)) {
                 $selectedOptions = null;
             }
+        }
+
+        // Check for existing record with same employee + file type
+        $existing = $employee->employeeFiles()
+            ->where('employee_file_type_id', $validated['employee_file_type_id'])
+            ->first();
+
+        if ($existing && !$replace) {
+            return response()->json([
+                'status' => 'skipped',
+                'reason' => 'already_exists',
+                'employee_file_id' => $existing->id,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'file_type_id' => $validated['employee_file_type_id'],
+            ], 200);
+        }
+
+        if ($existing && $replace) {
+            $existing->update([
+                'document_number' => $validated['document_number'] ?? null,
+                'expires_at' => $validated['expires_at'] ?? null,
+                'completed_at' => $validated['completed_at'] ?? null,
+                'selected_options' => $selectedOptions,
+                'notes' => $validated['notes'] ?? null,
+                'uploaded_by' => auth()->id(),
+            ]);
+
+            $existing->addMedia($request->file('file_front'))->toMediaCollection('file_front');
+
+            if ($request->hasFile('file_back')) {
+                $existing->addMedia($request->file('file_back'))->toMediaCollection('file_back');
+            }
+
+            return response()->json([
+                'status' => 'replaced',
+                'employee_file_id' => $existing->id,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'file_type_id' => $validated['employee_file_type_id'],
+            ], 200);
         }
 
         $employeeFile = $employee->employeeFiles()->create([
@@ -173,7 +218,7 @@ class EmployeeFileController extends Controller
         }
 
         return response()->json([
-            'status' => 'ok',
+            'status' => 'created',
             'employee_file_id' => $employeeFile->id,
             'employee_id' => $employee->id,
             'employee_name' => $employee->name,
