@@ -91,7 +91,7 @@ class EmployeeFile extends Model implements HasMedia
             return null;
         }
 
-        if (app()->environment('production')) {
+        if ($media->disk === 's3') {
             return $media->getTemporaryUrl(now()->addMinutes(30));
         }
 

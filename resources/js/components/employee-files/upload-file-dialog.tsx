@@ -140,12 +140,12 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
                             {selectedType?.options && selectedType.options.length > 0 && (
                                 <div className="flex flex-col gap-1.5">
                                     <Label>Options</Label>
-                                    <div className="flex flex-col gap-1.5 rounded-md border p-2">
+                                    <div className="flex flex-col gap-1.5 rounded-md border border-input p-2">
                                         {selectedType.options.map((opt) => (
                                             <label key={opt} className="flex items-center gap-2 text-sm">
                                                 <input
                                                     type="checkbox"
-                                                    className="rounded border-gray-300"
+                                                    className="rounded border-input"
                                                     checked={selectedOptions.includes(opt)}
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
