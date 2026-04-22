@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\EmployeeFile;
 use App\Models\EmployeeFileType;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class EmployeeFileController extends Controller
 {
@@ -160,6 +161,8 @@ class EmployeeFileController extends Controller
                 ->where('employee_file_type_id', $file->employee_file_type_id)
                 ->count()
             : 1;
+        $frontMedia = $file->getFirstMedia('file_front');
+        $backMedia = $file->getFirstMedia('file_back');
 
         return [
             'id' => $file->id,
@@ -182,10 +185,14 @@ class EmployeeFileController extends Controller
                 'has_versions' => $hasVersions,
             ],
             'version_count' => $versionCount,
-            'front_url' => $file->getFrontUrl(),
-            'back_url' => $file->getBackUrl(),
-            'front_filename' => $file->getFirstMedia('file_front')?->file_name,
-            'back_filename' => $file->getFirstMedia('file_back')?->file_name,
+            'front_url' => $frontMedia ? route('employees.files.download', [$file->employee_id, $file->id, 'file_front']) : null,
+            'back_url' => $backMedia ? route('employees.files.download', [$file->employee_id, $file->id, 'file_back']) : null,
+            'front_preview_url' => $frontMedia ? route('employees.files.download', [$file->employee_id, $file->id, 'file_front'], false) . '?inline=1' : null,
+            'back_preview_url' => $backMedia ? route('employees.files.download', [$file->employee_id, $file->id, 'file_back'], false) . '?inline=1' : null,
+            'front_filename' => $frontMedia?->file_name,
+            'back_filename' => $backMedia?->file_name,
+            'front_mime_type' => $frontMedia?->mime_type,
+            'back_mime_type' => $backMedia?->mime_type,
         ];
     }
 
@@ -331,10 +338,42 @@ class EmployeeFileController extends Controller
         $media = $employeeFile->getFirstMedia($collection);
         abort_unless($media, 404);
 
-        if (app()->environment('production')) {
-            return redirect($media->getTemporaryUrl(now()->addMinutes(30)));
+        $filename = $media->file_name;
+        $mimeType = $media->mime_type ?: 'application/octet-stream';
+        $disposition = request()->boolean('inline') ? 'inline' : 'attachment';
+
+        if ($media->disk === 's3' && $disposition === 'inline' && $mimeType === 'application/pdf') {
+            $stream = Storage::disk('s3')->readStream($media->getPathRelativeToRoot());
+            abort_unless($stream, 404);
+
+            return response()->stream(function () use ($stream) {
+                fpassthru($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }, 200, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="'.addslashes($filename).'"',
+                'Cache-Control' => 'private, max-age=300',
+            ]);
         }
 
-        return $media;
+        if ($media->disk === 's3') {
+            return redirect($media->getTemporaryUrl(now()->addMinutes(30), '', [
+                'ResponseContentDisposition' => $disposition.'; filename="'.addslashes($filename).'"',
+                'ResponseContentType' => $mimeType,
+            ]));
+        }
+
+        if ($disposition === 'inline') {
+            return response()->file($media->getPath(), [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="'.addslashes($filename).'"',
+            ]);
+        }
+
+        return response()->download($media->getPath(), $filename, [
+            'Content-Type' => $mimeType,
+        ]);
     }
 }

@@ -7,9 +7,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Separator } from '@/components/ui/separator';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { router } from '@inertiajs/react';
-import { AlertTriangle, Download, Eye, FileText, History, Loader2, MoreHorizontal, Plus, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, Eye, ExternalLink, FileText, FileType2, History, Loader2, MoreHorizontal, Plus, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import UploadFileDialog from './upload-file-dialog';
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface FileType {
     id: number;
@@ -35,8 +39,12 @@ interface EmployeeFileRecord {
     file_type: FileType;
     front_url: string | null;
     back_url: string | null;
+    front_preview_url: string | null;
+    back_preview_url: string | null;
     front_filename: string | null;
     back_filename: string | null;
+    front_mime_type: string | null;
+    back_mime_type: string | null;
     version_count?: number;
 }
 
@@ -45,28 +53,182 @@ function formatDate(dateStr: string | null): string {
     return new Date(dateStr).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function isImageUrl(url: string | null): boolean {
-    if (!url) return false;
-    return /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url);
+function isImageFile(file: { url?: string | null; filename?: string | null; mimeType?: string | null }): boolean {
+    if (file.mimeType?.startsWith('image/')) return true;
+    if (file.filename) return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(file.filename);
+    if (file.url) return /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(file.url);
+    return false;
 }
 
-function isPreviewable(url: string | null): boolean {
-    if (!url) return false;
-    return /\.(jpe?g|png|gif|webp|pdf)(\?|$)/i.test(url);
+function isPdfFile(file: { url?: string | null; filename?: string | null; mimeType?: string | null }): boolean {
+    if (file.mimeType === 'application/pdf') return true;
+    if (file.filename) return /\.pdf$/i.test(file.filename);
+    if (file.url) return /\.pdf(\?|$)/i.test(file.url);
+    return false;
+}
+
+function isPreviewable(file: { url?: string | null; filename?: string | null; mimeType?: string | null }): boolean {
+    if (!file.url) return false;
+    return isImageFile(file) || isPdfFile(file);
+}
+
+function PdfPreview({ url, filename }: { url: string; filename: string | null }) {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [documentProxy, setDocumentProxy] = useState<PDFDocumentProxy | null>(null);
+    const [pageNumber, setPageNumber] = useState(1);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const task = getDocument(url);
+
+        setLoading(true);
+        setError(null);
+        setDocumentProxy(null);
+        setPageNumber(1);
+
+        task.promise
+            .then((pdf) => {
+                if (cancelled) return;
+                setDocumentProxy(pdf);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setError('PDF preview could not be loaded in the dialog.');
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+            task.destroy();
+        };
+    }, [url]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!documentProxy || !canvasRef.current) return;
+
+        const renderPage = async () => {
+            const page = await documentProxy.getPage(pageNumber);
+            if (cancelled || !canvasRef.current) return;
+
+            const viewport = page.getViewport({ scale: 1.4 });
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+            if (!context) return;
+
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            await page.render({ canvas, canvasContext: context, viewport }).promise;
+        };
+
+        renderPage().catch(() => {
+            if (!cancelled) {
+                setError('PDF preview could not be rendered.');
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [documentProxy, pageNumber]);
+
+    if (loading) {
+        return (
+            <div className="flex h-[80vh] items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    if (error || !documentProxy) {
+        return (
+            <div className="flex h-[80vh] flex-col items-center justify-center gap-3 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground" />
+                <p className="max-w-sm text-sm text-muted-foreground">{error ?? 'PDF preview is unavailable.'}</p>
+                <Button variant="outline" size="sm" asChild>
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Open PDF
+                    </a>
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex max-h-[80vh] flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                    {filename && <p className="truncate text-sm text-muted-foreground">{filename}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPageNumber((page) => Math.max(1, page - 1))} disabled={pageNumber <= 1}>
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="w-20 text-center text-xs text-muted-foreground">
+                        {pageNumber} / {documentProxy.numPages}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPageNumber((page) => Math.min(documentProxy.numPages, page + 1))}
+                        disabled={pageNumber >= documentProxy.numPages}
+                    >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            Open
+                        </a>
+                    </Button>
+                </div>
+            </div>
+            <div className="overflow-auto rounded-md border bg-muted/20 p-2">
+                <canvas ref={canvasRef} className="mx-auto h-auto max-w-full rounded-sm bg-white shadow-sm" />
+            </div>
+        </div>
+    );
 }
 
 /* ── Thumbnail with status dot ── */
-function FileThumbnail({ url, status, onClick }: { url: string | null; status: string; onClick?: () => void }) {
+function FileThumbnail({
+    url,
+    filename,
+    mimeType,
+    status,
+    onClick,
+}: {
+    url: string | null;
+    filename: string | null;
+    mimeType: string | null;
+    status: string;
+    onClick?: () => void;
+}) {
     const dotColor = status === 'expired'
         ? 'bg-red-500'
         : status === 'expiring_soon'
             ? 'bg-amber-500'
             : 'bg-emerald-500';
 
-    const hasImage = url && isImageUrl(url);
+    const hasImage = url && isImageFile({ url, filename, mimeType });
+    const isPdf = isPdfFile({ url, filename, mimeType });
 
     const content = hasImage ? (
         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+    ) : isPdf ? (
+        <div className="flex h-full w-full flex-col items-center justify-center bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            <FileType2 className="h-5 w-5" />
+            <span className="mt-1 text-[9px] font-semibold tracking-wide">PDF</span>
+        </div>
     ) : (
         <FileText className="h-5 w-5 text-muted-foreground" />
     );
@@ -100,7 +262,7 @@ function FileRow({
 }: {
     file: EmployeeFileRecord;
     onDelete: (id: number) => void;
-    onPreview: (url: string) => void;
+    onPreview: (url: string, mimeType: string | null, filename: string | null) => void;
 }) {
     const isExpired = file.status === 'expired';
     const isExpiring = file.status === 'expiring_soon';
@@ -108,9 +270,13 @@ function FileRow({
     return (
         <div className="group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50">
             <FileThumbnail
-                url={file.front_url}
+                url={file.front_preview_url}
+                filename={file.front_filename}
+                mimeType={file.front_mime_type}
                 status={file.status}
-                onClick={file.front_url && isPreviewable(file.front_url) ? () => onPreview(file.front_url!) : undefined}
+                onClick={file.front_preview_url && isPreviewable({ url: file.front_preview_url, filename: file.front_filename, mimeType: file.front_mime_type })
+                    ? () => onPreview(file.front_preview_url!, file.front_mime_type, file.front_filename)
+                    : undefined}
             />
 
             <div className="min-w-0 flex-1">
@@ -161,8 +327,8 @@ function FileRow({
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                    {file.front_url && isPreviewable(file.front_url) && (
-                        <DropdownMenuItem onClick={() => onPreview(file.front_url!)}>
+                    {file.front_preview_url && isPreviewable({ url: file.front_preview_url, filename: file.front_filename, mimeType: file.front_mime_type }) && (
+                        <DropdownMenuItem onClick={() => onPreview(file.front_preview_url!, file.front_mime_type, file.front_filename)}>
                             <Eye className="mr-2 h-3.5 w-3.5" />
                             Preview
                         </DropdownMenuItem>
@@ -195,18 +361,26 @@ function FileRow({
 }
 
 /* ── Preview dialog ── */
-function PreviewDialog({ url, open, onOpenChange }: { url: string | null; open: boolean; onOpenChange: (v: boolean) => void }) {
-    if (!url) return null;
-    const isPdf = /\.pdf(\?|$)/i.test(url);
+function PreviewDialog({
+    file,
+    open,
+    onOpenChange,
+}: {
+    file: { url: string; mimeType: string | null; filename: string | null } | null;
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+}) {
+    if (!file) return null;
+    const isPdf = isPdfFile(file);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] max-w-3xl overflow-auto p-4">
+            <DialogContent className="max-h-[90vh] overflow-auto p-4 sm:w-3xl sm:max-w-3xl">
                 <VisuallyHidden><DialogTitle>File preview</DialogTitle></VisuallyHidden>
                 {isPdf ? (
-                    <iframe src={url} className="h-[80vh] w-full rounded-md" title="PDF Preview" />
+                    <PdfPreview url={file.url} filename={file.filename} />
                 ) : (
-                    <img src={url} alt="File preview" className="h-auto max-h-[80vh] w-full rounded-md object-contain" />
+                    <img src={file.url} alt={file.filename ?? 'File preview'} className="h-auto max-h-[80vh] w-full rounded-md object-contain" />
                 )}
             </DialogContent>
         </Dialog>
@@ -242,7 +416,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; mimeType: string | null; filename: string | null } | null>(null);
     const [deleteFileId, setDeleteFileId] = useState<number | null>(null);
 
     const fetchData = useCallback(async () => {
@@ -370,7 +544,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                                 key={f.id}
                                                 file={f}
                                                 onDelete={(id) => setDeleteFileId(id)}
-                                                onPreview={(url) => setPreviewUrl(url)}
+                                                onPreview={(url, mimeType, filename) => setPreviewFile({ url, mimeType, filename })}
                                             />
                                         ))}
                                     </div>
@@ -382,7 +556,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
             </Card>
 
             <UploadFileDialog open={showUpload} onOpenChange={setShowUpload} employeeId={employeeId} fileTypes={fileTypes} />
-            <PreviewDialog url={previewUrl} open={!!previewUrl} onOpenChange={(v) => { if (!v) setPreviewUrl(null); }} />
+            <PreviewDialog file={previewFile} open={!!previewFile} onOpenChange={(v) => { if (!v) setPreviewFile(null); }} />
             <DeleteDialog open={deleteFileId !== null} onOpenChange={(v) => { if (!v) setDeleteFileId(null); }} onConfirm={handleDelete} />
         </>
     );

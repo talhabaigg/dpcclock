@@ -8,6 +8,7 @@ use App\Models\EmployeeFileType;
 use App\Models\Location;
 use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -17,39 +18,76 @@ use Inertia\Inertia;
 
 class EmployeeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
 
-        $query = Employee::with('worktypes')->fieldStaff();
+        $search = trim((string) $request->query('search', ''));
+        $employmentType = trim((string) $request->query('employment_type', ''));
+        $rawLicenceIds = $request->query('licence_ids', []);
+        $licenceIds = collect(is_array($rawLicenceIds) ? $rawLicenceIds : explode(',', (string) $rawLicenceIds))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $licenceMode = $request->query('licence_mode') === 'has_not' ? 'has_not' : 'has';
+        $sortBy = in_array($request->query('sort'), ['name', 'email', 'employment_type'], true)
+            ? $request->query('sort')
+            : 'name';
+        $sortDirection = $request->query('direction') === 'desc' ? 'desc' : 'asc';
+
+        $query = Employee::query()
+            ->fieldStaff()
+            ->with(['worktypes', 'employeeFiles.fileType']);
+
+        $accessibleEmployeeIds = null;
 
         if (! $user->can('employees.view-all')) {
-            $kioskEmployeeIds = $user->managedKiosks()
+            $accessibleEmployeeIds = $user->managedKiosks()
                 ->with('employees')
                 ->get()
                 ->flatMap(fn ($kiosk) => $kiosk->employees->pluck('eh_employee_id'))
                 ->unique();
 
-            $query->whereIn('eh_employee_id', $kioskEmployeeIds);
+            $query->whereIn('eh_employee_id', $accessibleEmployeeIds);
         }
 
-        $employees = $query->get();
+        if ($search !== '') {
+            $query->where(function (Builder $builder) use ($search) {
+                $builder->where('name', 'like', "%{$search}%")
+                    ->orWhere('preferred_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('external_id', 'like', "%{$search}%")
+                    ->orWhere('eh_employee_id', 'like', "%{$search}%");
+            });
+        }
 
-        // Load employee files with types for the documents column
-        $employees->load('employeeFiles.fileType');
+        if ($employmentType !== '') {
+            $query->where('employment_type', $employmentType);
+        }
 
-        // Build a lightweight list of uploaded file type names per employee
-        $allFileTypeNames = [];
-        $employeesData = $employees->map(function (Employee $emp) use (&$allFileTypeNames) {
+        if ($licenceIds !== []) {
+            foreach ($licenceIds as $licenceId) {
+                $query->{$licenceMode === 'has' ? 'whereHas' : 'whereDoesntHave'}('employeeFiles', function (Builder $builder) use ($licenceId) {
+                    $builder->where('employee_file_type_id', $licenceId);
+                });
+            }
+        }
+
+        $employees = $query
+            ->orderBy($sortBy, $sortDirection)
+            ->paginate(25)
+            ->withQueryString();
+
+        $employees->setCollection($employees->getCollection()->map(function (Employee $emp) {
             // Get unique file types this employee has uploaded (latest per type)
             $docs = $emp->employeeFiles
                 ->sortByDesc('created_at')
                 ->unique('employee_file_type_id')
-                ->map(function ($file) use (&$allFileTypeNames) {
+                ->map(function ($file) {
                     $ft = $file->fileType;
-                    if ($ft) {
-                        $allFileTypeNames[$ft->id] = $ft->name;
-                    }
+
                     return [
                         'file_type_id' => $ft?->id,
                         'name' => $ft?->name ?? 'Unknown',
@@ -63,7 +101,20 @@ class EmployeeController extends Controller
             return array_merge($emp->toArray(), [
                 'documents' => $docs,
             ]);
-        });
+        }));
+
+        $employmentTypesQuery = Employee::query()->fieldStaff();
+
+        if ($accessibleEmployeeIds !== null) {
+            $employmentTypesQuery->whereIn('eh_employee_id', $accessibleEmployeeIds);
+        }
+
+        $employmentTypes = $employmentTypesQuery
+            ->whereNotNull('employment_type')
+            ->distinct()
+            ->orderBy('employment_type')
+            ->pluck('employment_type')
+            ->values();
 
         // Build filter dropdown with category grouping
         $allFileTypes = EmployeeFileType::active()
@@ -77,8 +128,17 @@ class EmployeeController extends Controller
             ]);
 
         return Inertia::render('employees/index', [
-            'employees' => $employeesData,
+            'employees' => $employees,
             'fileTypes' => $allFileTypes,
+            'employmentTypes' => $employmentTypes,
+            'filters' => [
+                'search' => $search !== '' ? $search : null,
+                'employment_type' => $employmentType !== '' ? $employmentType : null,
+                'licence_ids' => $licenceIds,
+                'licence_mode' => $licenceMode,
+                'sort' => $sortBy,
+                'direction' => $sortDirection,
+            ],
         ]);
     }
 
