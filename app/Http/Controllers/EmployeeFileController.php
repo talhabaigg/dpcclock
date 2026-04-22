@@ -226,6 +226,42 @@ class EmployeeFileController extends Controller
         ], 201);
     }
 
+    /**
+     * API endpoint to attach a back-side file to an existing employee file.
+     * Looks up by employee_id + employee_file_type_id.
+     */
+    public function apiImportFileBack(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'employee_file_type_id' => 'required|integer|exists:employee_file_types,id',
+            'file_back' => 'required|file|max:20480',
+        ]);
+
+        $employee = Employee::findOrFail($validated['employee_id']);
+
+        $existing = $employee->employeeFiles()
+            ->where('employee_file_type_id', $validated['employee_file_type_id'])
+            ->first();
+
+        if (!$existing) {
+            return response()->json([
+                'status' => 'not_found',
+                'message' => 'No existing file record found for this employee + file type. Upload the front side first.',
+            ], 404);
+        }
+
+        $existing->addMedia($request->file('file_back'))->toMediaCollection('file_back');
+
+        return response()->json([
+            'status' => 'back_attached',
+            'employee_file_id' => $existing->id,
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'file_type_id' => $validated['employee_file_type_id'],
+        ], 200);
+    }
+
     public function download(Employee $employee, EmployeeFile $employeeFile, string $collection)
     {
         abort_unless($employeeFile->employee_id === $employee->id, 404);

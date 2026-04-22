@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Employee file import endpoint - upload licence/cert documents by employee_id
     Route::post('/employee-files/import', [\App\Http\Controllers\EmployeeFileController::class, 'apiImportFile']);
+    Route::post('/employee-files/import-back', [\App\Http\Controllers\EmployeeFileController::class, 'apiImportFileBack']);
 
     // Lightweight employee list for import scripts (returns id + email map)
     Route::get('/employees/lookup', function () {

@@ -95,7 +95,8 @@
       "Bash(git rm *)",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(awk 'NR==1{next} {print NR\": \"$0}' index.csv)"
     ]
   }
 }
