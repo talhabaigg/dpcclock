@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SyncKioskEmployees;
 use App\Models\Employee;
+use App\Models\EmployeeFileType;
 use App\Models\Location;
 use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
@@ -32,8 +33,52 @@ class EmployeeController extends Controller
             $query->whereIn('eh_employee_id', $kioskEmployeeIds);
         }
 
+        $employees = $query->get();
+
+        // Load employee files with types for the documents column
+        $employees->load('employeeFiles.fileType');
+
+        // Build a lightweight list of uploaded file type names per employee
+        $allFileTypeNames = [];
+        $employeesData = $employees->map(function (Employee $emp) use (&$allFileTypeNames) {
+            // Get unique file types this employee has uploaded (latest per type)
+            $docs = $emp->employeeFiles
+                ->sortByDesc('created_at')
+                ->unique('employee_file_type_id')
+                ->map(function ($file) use (&$allFileTypeNames) {
+                    $ft = $file->fileType;
+                    if ($ft) {
+                        $allFileTypeNames[$ft->id] = $ft->name;
+                    }
+                    return [
+                        'file_type_id' => $ft?->id,
+                        'name' => $ft?->name ?? 'Unknown',
+                        'status' => $file->getStatus(),
+                    ];
+                })
+                ->sortBy('name')
+                ->values()
+                ->all();
+
+            return array_merge($emp->toArray(), [
+                'documents' => $docs,
+            ]);
+        });
+
+        // Build filter dropdown with category grouping
+        $allFileTypes = EmployeeFileType::active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'category'])
+            ->map(fn ($ft) => [
+                'id' => $ft->id,
+                'name' => $ft->name,
+                'category' => $ft->category[0] ?? 'Other',
+            ]);
+
         return Inertia::render('employees/index', [
-            'employees' => $query->get(),
+            'employees' => $employeesData,
+            'fileTypes' => $allFileTypes,
         ]);
     }
 
