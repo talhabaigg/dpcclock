@@ -60,8 +60,8 @@ return [
             'key' => env('AZURE_OPENAI_API_KEY'),
             'url' => env('AZURE_OPENAI_URL'),
             'api_version' => env('AZURE_OPENAI_API_VERSION', '2024-10-21'),
-            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
-            'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
+            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4.1'),
+            'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-large'),
         ],
 
         'cohere' => [

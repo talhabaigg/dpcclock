@@ -79,6 +79,7 @@ use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\EmployeeFileTypeController;
 use App\Http\Controllers\EmployeeFileController;
 use App\Http\Controllers\FeatureFlagController;
+use App\Http\Controllers\ComplianceDashboardController;
 use App\Http\Controllers\FileComplianceDashboardController;
 use App\Http\Controllers\LocationSdsController;
 use App\Http\Controllers\SafetyDataSheetController;
@@ -445,6 +446,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::get('compliance/files', [FileComplianceDashboardController::class, 'index'])->name('compliance.files');
+
+    Route::get('compliance-dashboard', [ComplianceDashboardController::class, 'index'])->name('compliance-dashboard.index')
+        ->middleware('permission:employees.view');
 
     // ============================================
     // LOCATION MANAGEMENT

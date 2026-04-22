@@ -357,7 +357,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             // Step 6: Connect to OpenAI Realtime API
             const baseUrl = 'https://api.openai.com/v1/realtime';
-            const model = 'gpt-4o-mini-realtime-preview-2024-12-17';
+            const model = 'gpt-4o-mini-realtime';
 
             const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
                 method: 'POST',

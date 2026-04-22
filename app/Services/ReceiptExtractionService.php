@@ -11,7 +11,7 @@ class ReceiptExtractionService
 {
     private const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 
-    private const MODEL = 'gpt-4o-mini';
+    private const MODEL = 'gpt-4.1-mini';
 
     private const PROMPT = <<<'PROMPT'
 Analyze this receipt/invoice and extract ALL of the following 7 fields. You MUST include every field in your response. Return ONLY valid JSON with no markdown formatting or explanation.

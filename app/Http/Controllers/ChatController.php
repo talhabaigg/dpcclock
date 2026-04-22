@@ -168,7 +168,7 @@ INSTRUCTIONS;
             'message' => ['required', 'string', 'max:'.self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
             'force_tool' => ['nullable', 'string', 'max:50'],
-            'model' => ['nullable', 'string', 'in:gpt-5.4,gpt-5.4-mini,gpt-5.4-nano,gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o4-mini,gpt-4o,gpt-4o-mini,claude-sonnet-4-20250514,claude-3-5-haiku-20241022'],
+            'model' => ['nullable', 'string', 'in:gpt-5.4,gpt-5.4-mini,gpt-5.4-nano,gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o4-mini,claude-sonnet-4-20250514,claude-3-5-haiku-20241022'],
             'files' => ['nullable', 'array', 'max:5'],
             'files.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,csv,xlsx,xls,doc,docx,txt'],
         ]);

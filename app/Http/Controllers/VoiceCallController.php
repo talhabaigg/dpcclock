@@ -32,7 +32,7 @@ class VoiceCallController extends Controller
             $response = Http::withToken($apiKey)
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/realtime/sessions', [
-                    'model' => 'gpt-4o-mini-realtime-preview-2024-12-17',
+                    'model' => 'gpt-4o-mini-realtime',
                     'voice' => $voice,
                     'instructions' => $this->getVoiceInstructions(),
                     'tools' => $this->getRealtimeTools(),
@@ -72,7 +72,7 @@ class VoiceCallController extends Controller
                 'status' => 'active',
                 'metadata' => [
                     'voice' => $voice,
-                    'model' => 'gpt-4o-mini-realtime-preview-2024-12-17',
+                    'model' => 'gpt-4o-mini-realtime',
                 ],
             ]);
 

@@ -15,7 +15,7 @@ class POInsightsService
     public function __construct()
     {
         $this->apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: '';
-        $this->model = env('OPENAI_CHAT_MODEL', 'gpt-4o');
+        $this->model = env('OPENAI_CHAT_MODEL', 'gpt-4.1');
     }
 
     /**

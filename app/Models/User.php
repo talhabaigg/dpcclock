@@ -172,7 +172,7 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
         $inputTokens = (int) ($stats->input_tokens ?? 0);
         $outputTokens = (int) ($stats->output_tokens ?? 0);
 
-        // GPT-4o-mini pricing: $0.15/1M input, $0.60/1M output
+        // GPT-4.1-mini pricing: $0.15/1M input, $0.60/1M output
         // Use breakdown if available, otherwise estimate 30% input, 70% output
         if ($inputTokens > 0 || $outputTokens > 0) {
             $estimatedCost = ($inputTokens * 0.15 / 1_000_000) + ($outputTokens * 0.60 / 1_000_000);

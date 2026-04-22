@@ -228,6 +228,12 @@ const workforce = [
                 icon: UsersRound,
                 permission: 'employees.view',
             },
+            {
+                name: 'Compliance',
+                url: '/compliance-dashboard',
+                icon: ClipboardCheck,
+                permission: 'employees.view',
+            },
         ],
     },
 ];
