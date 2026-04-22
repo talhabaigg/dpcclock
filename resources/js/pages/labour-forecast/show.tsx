@@ -1027,6 +1027,7 @@ const LabourForecastShow = ({
 
                 <StatusBanners
                     savedForecast={savedForecast}
+                    selectedMonth={selectedMonth}
                     hasConfiguredTemplates={configuredTemplates.length > 0}
                     flash={flash}
                     settingsOpen={settingsOpen}

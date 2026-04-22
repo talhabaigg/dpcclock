@@ -66,7 +66,7 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
                                 </div>
                                 <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{displayMessage}</span>
                                 <Button
-                                    className="h-7 w-7 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                    className="h-7 w-7 flex-shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleDismiss(notification.id)}

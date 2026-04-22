@@ -11,73 +11,59 @@ interface JobForecastStatusNotificationProps {
 
 const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastStatusNotificationProps) => {
     const { type, action, title, body, job_number, forecast_month, location_id } = notification.data;
+    const isLabourForecast = type === 'LabourForecastStatus';
+    const hasDeepLink = Boolean(location_id && forecast_month);
 
-    // Configuration based on action type
     const config = {
         submitted: {
             Icon: Send,
-            iconBg: 'bg-blue-100 dark:bg-blue-900/50',
-            iconColor: 'text-blue-600 dark:text-blue-400',
-            borderColor: 'border-l-blue-500',
-            badgeColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-            badgeText: 'Pending Review',
+            iconBg: 'bg-slate-100 dark:bg-slate-800/80',
+            iconColor: 'text-slate-600 dark:text-slate-300',
         },
         finalized: {
             Icon: CheckCircle,
-            iconBg: 'bg-green-100 dark:bg-green-900/50',
-            iconColor: 'text-green-600 dark:text-green-400',
-            borderColor: 'border-l-green-500',
-            badgeColor: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-            badgeText: 'Approved',
+            iconBg: 'bg-slate-100 dark:bg-slate-800/80',
+            iconColor: 'text-slate-600 dark:text-slate-300',
         },
         approved: {
             Icon: CheckCircle,
-            iconBg: 'bg-green-100 dark:bg-green-900/50',
-            iconColor: 'text-green-600 dark:text-green-400',
-            borderColor: 'border-l-green-500',
-            badgeColor: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-            badgeText: 'Approved',
+            iconBg: 'bg-slate-100 dark:bg-slate-800/80',
+            iconColor: 'text-slate-600 dark:text-slate-300',
         },
         rejected: {
             Icon: XCircle,
-            iconBg: 'bg-red-100 dark:bg-red-900/50',
-            iconColor: 'text-red-600 dark:text-red-400',
-            borderColor: 'border-l-red-500',
-            badgeColor: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-            badgeText: 'Needs Revision',
+            iconBg: 'bg-slate-100 dark:bg-slate-800/80',
+            iconColor: 'text-slate-600 dark:text-slate-300',
         },
         default: {
             Icon: FileText,
-            iconBg: 'bg-gray-100 dark:bg-gray-800',
-            iconColor: 'text-gray-600 dark:text-gray-400',
-            borderColor: 'border-l-gray-400',
-            badgeColor: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-            badgeText: 'Updated',
+            iconBg: 'bg-slate-100 dark:bg-slate-800/80',
+            iconColor: 'text-slate-600 dark:text-slate-300',
         },
     };
 
     const currentConfig = config[action || 'default'] || config.default;
-    const { Icon, iconBg, iconColor, borderColor, badgeColor, badgeText } = currentConfig;
+    const { Icon, iconBg, iconColor } = currentConfig;
+    const displayTitle = action === 'submitted' ? 'Forecast submitted' : title || 'Forecast Update';
 
-    // Format the forecast month for display
     const formatMonth = (month?: string) => {
         if (!month) return null;
+
         try {
-            // Handle both Y-m and Y-m-d formats
             let dateStr = month;
             if (month.length === 7) {
-                // Y-m format (e.g., "2026-01")
                 dateStr = month + '-01';
             }
+
             const date = new Date(dateStr);
             if (isNaN(date.getTime())) return null;
+
             return date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
         } catch {
             return null;
         }
     };
 
-    // Format the notification time
     const formatTime = (dateString: string) => {
         try {
             const date = new Date(dateString);
@@ -91,24 +77,25 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
             if (diffMins < 60) return `${diffMins}m ago`;
             if (diffHours < 24) return `${diffHours}h ago`;
             if (diffDays < 7) return `${diffDays}d ago`;
+
             return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
         } catch {
             return '';
         }
     };
 
-    // Navigate to the forecast
     const handleViewForecast = useCallback(() => {
-        if (location_id && forecast_month) {
-            if (type === 'LabourForecastStatus') {
-                router.visit(`/location/${location_id}/labour-forecast/show?forecast_month=${forecast_month}`);
-            } else {
-                router.visit(`/location/${location_id}/job-forecast?forecast_month=${forecast_month}`);
-            }
-        }
-    }, [location_id, forecast_month, type]);
+        if (!hasDeepLink || !location_id || !forecast_month) return;
 
-    // Dismiss notification
+        const encodedMonth = encodeURIComponent(forecast_month);
+
+        if (isLabourForecast) {
+            router.visit(`/location/${location_id}/labour-forecast/show?month=${encodedMonth}`);
+        } else {
+            router.visit(`/location/${location_id}/job-forecast?forecast_month=${encodedMonth}`);
+        }
+    }, [forecast_month, hasDeepLink, isLabourForecast, location_id]);
+
     const handleDismiss = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
@@ -118,69 +105,56 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
     );
 
     return (
-        <div
-            className={`group relative mx-1 my-2 overflow-hidden rounded-lg border border-l-4 bg-white shadow-sm transition-all hover:shadow-md dark:bg-gray-900 ${borderColor}`}
-        >
+        <div className="group relative mx-1 my-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-50/60 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:border-slate-300 focus-within:bg-slate-50/40 focus-within:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:focus-within:border-slate-700 dark:focus-within:bg-slate-900/80">
             <div className="p-3">
-                {/* Header row with icon, title, time, and close */}
                 <div className="flex items-start gap-3">
-                    {/* Icon */}
-                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${iconBg}`}>
-                        <Icon className={`h-5 w-5 ${iconColor}`} />
+                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out group-hover:bg-slate-200/70 dark:group-hover:bg-slate-800 ${iconBg}`}>
+                        <Icon className={`h-5 w-5 transition-transform duration-150 ease-out motion-reduce:transform-none motion-safe:group-hover:scale-105 ${iconColor}`} />
                     </div>
 
-                    {/* Content */}
                     <div className="min-w-0 flex-1">
-                        {/* Title and badge */}
-                        <div className="flex items-center gap-2">
-                            <h4 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{title || 'Forecast Update'}</h4>
-                            <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
-                                {badgeText}
-                            </span>
-                        </div>
+                        <h4 className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{displayTitle}</h4>
+                        {body && <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{body}</p>}
 
-                        {/* Body text */}
-                        {body && <p className="mt-0.5 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{body}</p>}
-
-                        {/* Meta info row */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-500">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-500">
                             {job_number && (
                                 <span className="inline-flex items-center gap-1">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Job:</span>
-                                    <span className="font-mono">{job_number}</span>
+                                    <span className="text-slate-400 dark:text-slate-600">Job</span>
+                                    <span className="font-mono text-slate-600 dark:text-slate-300">{job_number}</span>
                                 </span>
                             )}
-                            {formatMonth(forecast_month) && (
-                                <span className="inline-flex items-center gap-1">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Period:</span>
-                                    <span>{formatMonth(forecast_month)}</span>
-                                </span>
-                            )}
+                            {job_number && formatMonth(forecast_month) && <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">/</span>}
+                            {formatMonth(forecast_month) && <span title={formatMonth(forecast_month) ?? undefined}>{formatMonth(forecast_month)}</span>}
+                            {(job_number || formatMonth(forecast_month)) && <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">/</span>}
                             <span className="inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 <span>{formatTime(notification.created_at)}</span>
                             </span>
                         </div>
 
-                        {/* Action button - show if we have location_id */}
-                        {location_id && (
+                        {hasDeepLink && (
                             <div className="mt-3">
-                                <Button variant="outline" size="sm" onClick={handleViewForecast} className="h-8 gap-1.5 text-xs font-medium">
-                                    View Forecast
-                                    <ChevronRight className="h-3.5 w-3.5" />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleViewForecast}
+                                    className="h-8 gap-1.5 border-slate-200 bg-transparent text-xs font-medium text-slate-700 shadow-none transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-100 active:scale-[0.98] motion-reduce:transform-none dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                                    aria-label={`${action === 'submitted' ? 'Review' : 'Open'} ${isLabourForecast ? 'labour' : 'job'} forecast`}
+                                >
+                                    {action === 'submitted' ? 'Review' : 'Open'}
+                                    <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 ease-out motion-reduce:transform-none motion-safe:group-hover:translate-x-0.5" />
                                 </Button>
                             </div>
                         )}
                     </div>
 
-                    {/* Close button */}
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={handleDismiss}
-                        className="h-7 w-7 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        className="h-7 w-7 flex-shrink-0 opacity-100 transition-[opacity,background-color,color,transform] duration-150 ease-out hover:bg-slate-100 active:scale-95 motion-reduce:transform-none sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 dark:hover:bg-slate-900"
                     >
-                        <X className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300" />
+                        <X className="h-4 w-4 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" />
                         <span className="sr-only">Dismiss notification</span>
                     </Button>
                 </div>

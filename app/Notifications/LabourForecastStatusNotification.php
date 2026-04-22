@@ -65,7 +65,10 @@ class LabourForecastStatusNotification extends Notification
     {
         $data = $this->toArray($notifiable);
 
-        $url = route('labour-forecast.show', ['location' => $this->forecast->location_id]);
+        $url = route('labour-forecast.show', [
+            'location' => $this->forecast->location_id,
+            'month' => $this->forecast->forecast_month->format('Y-m'),
+        ]);
 
         return (new WebPushMessage)
             ->title($data['title'])
@@ -89,14 +92,14 @@ class LabourForecastStatusNotification extends Notification
         $actorName = $this->actor?->name ?? 'System';
 
         $title = match ($this->action) {
-            'submitted' => 'Labour Forecast Submitted',
+            'submitted' => 'Forecast submitted',
             'approved' => 'Labour Forecast Approved',
             'rejected' => 'Labour Forecast Rejected',
             default => 'Labour Forecast Updated',
         };
 
         $body = match ($this->action) {
-            'submitted' => "{$actorName} submitted the labour forecast for {$locationName} ({$forecastMonth}) for approval.",
+            'submitted' => "{$actorName} submitted this labour forecast for approval.",
             'approved' => "The labour forecast for {$locationName} ({$forecastMonth}) has been approved by {$actorName}.",
             'rejected' => "The labour forecast for {$locationName} ({$forecastMonth}) was rejected by {$actorName}.",
             default => "The labour forecast for {$locationName} ({$forecastMonth}) was updated.",

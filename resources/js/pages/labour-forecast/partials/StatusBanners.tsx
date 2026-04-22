@@ -16,55 +16,63 @@
  */
 
 import type { SavedForecast } from '../types';
+import { formatMonthDisplay } from './utils';
 
 interface StatusBannersProps {
     savedForecast: SavedForecast | null;
+    selectedMonth: string;
     hasConfiguredTemplates: boolean;
     flash?: { success?: string; error?: string };
     settingsOpen: boolean;
 }
 
-export const StatusBanners = ({ savedForecast, hasConfiguredTemplates, flash, settingsOpen }: StatusBannersProps) => {
+export const StatusBanners = ({ savedForecast, selectedMonth, hasConfiguredTemplates, flash, settingsOpen }: StatusBannersProps) => {
+    const monthLabel = formatMonthDisplay(selectedMonth);
+    const bannerClass = 'mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300';
+
     return (
         <>
             {/* Rejection reason display */}
             {savedForecast?.status === 'rejected' && savedForecast.rejection_reason && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                    <h3 className="font-medium text-red-800 dark:text-red-200">Rejection Reason</h3>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-300">{savedForecast.rejection_reason}</p>
+                <div className={bannerClass}>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">Rejected.</span> {savedForecast.rejection_reason}
                 </div>
             )}
 
             {/* Approval info display */}
             {savedForecast?.status === 'approved' && (
-                <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                    <p className="text-sm text-green-700 dark:text-green-300">
-                        Approved by {savedForecast.approved_by} on {savedForecast.approved_at}
-                    </p>
+                <div className={bannerClass}>
+                    Approved by {savedForecast.approved_by} on {savedForecast.approved_at}.
                 </div>
             )}
 
             {/* Submitted info display */}
             {savedForecast?.status === 'submitted' && (
-                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Submitted by {savedForecast.submitted_by} on {savedForecast.submitted_at} - Awaiting approval
-                    </p>
+                <div className={bannerClass}>
+                    Submitted by {savedForecast.submitted_by} on {savedForecast.submitted_at}. Awaiting approval.
+                </div>
+            )}
+
+            {/* Helpful recovery state when the selected month has no saved forecast */}
+            {!savedForecast && hasConfiguredTemplates && (
+                <div className={bannerClass}>
+                    No saved forecast for {monthLabel}. Start entering headcount, then save to create a draft.
                 </div>
             )}
 
             {/* Flash messages outside dialog */}
             {flash?.success && !settingsOpen && (
-                <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
+                <div className={bannerClass}>{flash.success}</div>
+            )}
+
+            {flash?.error && !settingsOpen && (
+                <div className={bannerClass}>{flash.error}</div>
             )}
 
             {/* Empty state when no templates configured */}
             {!hasConfiguredTemplates && (
-                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
-                    <h3 className="font-medium text-amber-800 dark:text-amber-200">No Pay Rate Templates Configured</h3>
-                    <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                        Click "Configure Templates" above to add KeyPay Pay Rate Templates for labour forecasting.
-                    </p>
+                <div className={bannerClass}>
+                    No pay rate templates configured. Use Configure Templates to add them.
                 </div>
             )}
         </>

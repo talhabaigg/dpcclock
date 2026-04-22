@@ -38,11 +38,11 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                                 </span>
                             )}
                         </SheetTitle>
-                        <SheetDescription>All your notifications will appear here.</SheetDescription>
+                        <SheetDescription>Unread notifications that need attention appear here.</SheetDescription>
                     </SheetHeader>
 
                     {notifications.latest.length === 0 ? (
-                        <p className="text-muted-foreground py-4 text-center text-sm">No new notifications</p>
+                        <p className="text-muted-foreground py-4 text-center text-sm">You&apos;re caught up. New unread notifications will appear here.</p>
                     ) : (
                         <>
                             <div className="-my-6 flex items-center justify-start">
