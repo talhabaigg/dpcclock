@@ -4,7 +4,6 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -16,7 +15,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { cn } from '@/lib/utils';
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { Check, CheckCircle2, CircleAlert, Edit as EditIcon, KeyRound, Minus, Plus, Search, Shield, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Check, CheckCircle2, CircleAlert, KeyRound, Plus, Search, Shield, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -161,8 +160,8 @@ function PermissionSelector({
                                         className={cn(
                                             'group flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors',
                                             isActive
-                                                ? 'bg-primary/10 text-primary font-medium'
-                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                                ? 'bg-muted text-foreground font-medium'
+                                                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                                         )}
                                     >
                                         <span className="truncate">{formatCategoryLabel(category)}</span>
@@ -170,7 +169,7 @@ function PermissionSelector({
                                             variant={allSelected ? 'default' : hasSelections ? 'secondary' : 'outline'}
                                             className={cn(
                                                 'ml-2 shrink-0 font-mono text-[10px] tabular-nums',
-                                                isActive && !allSelected && !hasSelections && 'border-primary/30',
+                                                isActive && !allSelected && !hasSelections && 'border-foreground/15',
                                             )}
                                         >
                                             {counts.selected}/{counts.total}
@@ -210,17 +209,13 @@ function PermissionSelector({
                         {/* Permission Rows */}
                         <ScrollArea className="min-h-0 flex-1 overflow-hidden">
                             <div className="divide-y">
-                                {activePerms.map((perm, index) => {
+                                {activePerms.map((perm) => {
                                     const isChecked = selectedPermissions.includes(perm.name);
                                     return (
                                         <label
                                             key={perm.id}
                                             htmlFor={`${idPrefix}-perm-${perm.id}`}
-                                            className={cn(
-                                                'flex cursor-pointer items-center gap-4 px-5 py-3 transition-colors',
-                                                index % 2 === 0 ? 'bg-transparent' : 'bg-muted/30',
-                                                'hover:bg-muted/60',
-                                            )}
+                                            className="flex cursor-pointer items-center gap-4 px-5 py-3 transition-colors hover:bg-muted/40"
                                         >
                                             <Switch
                                                 id={`${idPrefix}-perm-${perm.id}`}
@@ -228,12 +223,7 @@ function PermissionSelector({
                                                 onCheckedChange={() => onTogglePermission(perm.name)}
                                             />
                                             <div className="min-w-0 flex-1">
-                                                <div
-                                                    className={cn(
-                                                        'text-sm font-medium transition-colors',
-                                                        isChecked ? 'text-foreground' : 'text-muted-foreground',
-                                                    )}
-                                                >
+                                                <div className="text-sm font-medium">
                                                     {formatPermissionLabel(perm.name)}
                                                 </div>
                                                 {perm.description && (
@@ -436,7 +426,6 @@ export default function RolesIndex() {
             }
         };
 
-    const permPercent = (count: number) => Math.round((count / allPermissions.length) * 100);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -457,113 +446,75 @@ export default function RolesIndex() {
                     </div>
                 )}
 
-                {/* Header */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Roles & Permissions</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {roles.length} roles managing {allPermissions.length} permissions across {categories.length} categories
-                        </p>
-                    </div>
-                    <Button onClick={() => setIsCreateOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Role
-                    </Button>
-                </div>
-
                 <Tabs defaultValue="roles">
-                    <TabsList>
-                        <TabsTrigger value="roles">
-                            <Shield className="mr-1.5 h-3.5 w-3.5" />
-                            Roles
-                        </TabsTrigger>
-                        <TabsTrigger value="matrix">
-                            <KeyRound className="mr-1.5 h-3.5 w-3.5" />
-                            Permission Matrix
-                        </TabsTrigger>
-                    </TabsList>
+                    <div className="flex items-center justify-between">
+                        <TabsList>
+                            <TabsTrigger value="roles">
+                                <Shield className="mr-1.5 h-3.5 w-3.5" />
+                                Roles
+                            </TabsTrigger>
+                            <TabsTrigger value="matrix">
+                                <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                                Permission Matrix
+                            </TabsTrigger>
+                        </TabsList>
+                        <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                            Create Role
+                        </Button>
+                    </div>
 
                     {/* ===== Roles Tab ===== */}
                     <TabsContent value="roles" className="mt-4">
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            {roles.map((role) => {
-                                const pct = permPercent(role.permissions.length);
-                                const activeCats = categories.filter((cat) =>
-                                    permissions[cat]?.some((p) => role.permissions.includes(p.name)),
-                                );
-                                return (
-                                    <Card key={role.id} className="group relative overflow-hidden transition-shadow hover:shadow-md">
+                            {roles.map((role) => (
+                                    <Card
+                                        key={role.id}
+                                        className="group relative cursor-pointer transition-[background-color,border-color] duration-150 hover:border-foreground/15 hover:bg-muted/30"
+                                        onClick={() => openEditSheet(role)}
+                                    >
                                         <div className="p-5">
                                             {/* Header row */}
                                             <div className="flex items-start justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded-lg">
-                                                        {role.is_system ? <ShieldCheck className="h-5 w-5" /> : <Shield className="h-5 w-5" />}
+                                                    <div className="text-muted-foreground/80">
+                                                        {role.is_system ? <ShieldCheck className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-sm font-semibold capitalize">{role.name}</h3>
-                                                        <span className="text-muted-foreground text-xs">
-                                                            {role.is_system ? 'System Role' : 'Custom Role'}
+                                                        <h3 className="text-sm font-medium capitalize">{role.name}</h3>
+                                                        <span className="text-muted-foreground/60 text-xs">
+                                                            {role.is_system ? 'System' : 'Custom'}
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditSheet(role)}>
-                                                        <EditIcon className="h-3.5 w-3.5" />
+                                                {!role.is_system && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-destructive/60 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(role); }}
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
                                                     </Button>
-                                                    {!role.is_system && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                            onClick={() => setDeleteConfirm(role)}
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
-                                                </div>
+                                                )}
                                             </div>
 
-                                            {/* Stats row */}
-                                            <div className="mt-4 flex items-center gap-3">
-                                                <div className="bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1">
-                                                    <Users className="text-muted-foreground h-3.5 w-3.5" />
-                                                    <span className="text-xs font-medium">{role.users_count} users</span>
+                                            {/* Stats */}
+                                            <div className="mt-3.5 flex items-center gap-4 text-muted-foreground">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Users className="h-3 w-3" />
+                                                    <span className="text-xs">{role.users_count} users</span>
                                                 </div>
-                                                <div className="bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1">
-                                                    <KeyRound className="text-muted-foreground h-3.5 w-3.5" />
-                                                    <span className="text-xs font-medium">
-                                                        {role.permissions.length} of {allPermissions.length}
+                                                <span className="text-border">|</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs tabular-nums">
+                                                        {role.permissions.length}/{allPermissions.length} permissions
                                                     </span>
                                                 </div>
                                             </div>
-
-                                            {/* Progress bar */}
-                                            <div className="mt-4">
-                                                <div className="mb-1.5 flex items-center justify-between">
-                                                    <span className="text-muted-foreground text-[11px]">Permission coverage</span>
-                                                    <span className="text-xs font-medium tabular-nums">{pct}%</span>
-                                                </div>
-                                                <Progress value={pct} className="h-1.5" />
-                                            </div>
-
-                                            {/* Category badges */}
-                                            <div className="mt-4 flex flex-wrap gap-1.5">
-                                                {activeCats.slice(0, 6).map((cat) => (
-                                                    <Badge key={cat} variant="secondary" className="text-[10px] font-normal">
-                                                        {formatCategoryLabel(cat)}
-                                                    </Badge>
-                                                ))}
-                                                {activeCats.length > 6 && (
-                                                    <Badge variant="outline" className="text-[10px] font-normal">
-                                                        +{activeCats.length - 6} more
-                                                    </Badge>
-                                                )}
-                                            </div>
                                         </div>
                                     </Card>
-                                );
-                            })}
+                            ))}
                         </div>
                     </TabsContent>
 
@@ -573,18 +524,13 @@ export default function RolesIndex() {
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                            <TableHead className="bg-muted/30 sticky left-0 z-10 min-w-[240px]">
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableHead className="bg-background sticky left-0 z-10 min-w-[220px] text-xs font-normal text-muted-foreground">
                                                 Permission
                                             </TableHead>
                                             {roles.map((role) => (
                                                 <TableHead key={role.id} className="text-center">
-                                                    <div className="flex flex-col items-center gap-0.5">
-                                                        <span className="text-xs font-semibold capitalize">{role.name}</span>
-                                                        <span className="text-muted-foreground text-[10px] font-normal tabular-nums">
-                                                            {role.permissions.length}/{allPermissions.length}
-                                                        </span>
-                                                    </div>
+                                                    <span className="text-xs font-medium capitalize">{role.name}</span>
                                                 </TableHead>
                                             ))}
                                         </TableRow>
@@ -592,46 +538,37 @@ export default function RolesIndex() {
                                     <TableBody>
                                         {categories.map((category) => (
                                             <>
-                                                <TableRow key={`cat-${category}`} className="hover:bg-muted/50">
+                                                <TableRow key={`cat-${category}`} className="hover:bg-transparent">
                                                     <TableCell
                                                         colSpan={roles.length + 1}
-                                                        className="bg-muted/40 sticky left-0 py-2"
+                                                        className="sticky left-0 py-1.5"
                                                     >
-                                                        <span className="text-xs font-semibold uppercase tracking-wider">
-                                                            {category}
+                                                        <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider">
+                                                            {formatCategoryLabel(category)}
                                                         </span>
                                                     </TableCell>
                                                 </TableRow>
                                                 {permissions[category]?.map((perm) => (
                                                     <TableRow key={perm.id} className="hover:bg-muted/20">
-                                                        <TableCell className="bg-background sticky left-0 z-10 py-2">
+                                                        <TableCell className="bg-background sticky left-0 z-10 py-1.5">
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger className="text-left">
-                                                                        <span className="text-sm">
+                                                                        <span className="text-muted-foreground text-xs">
                                                                             {formatPermissionLabel(perm.name)}
-                                                                        </span>
-                                                                        <span className="text-muted-foreground/50 ml-2 text-[10px] font-mono">
-                                                                            {perm.name}
                                                                         </span>
                                                                     </TooltipTrigger>
                                                                     <TooltipContent side="right">
-                                                                        <p className="max-w-[200px]">{perm.description}</p>
+                                                                        <p className="max-w-[200px] text-xs">{perm.description || perm.name}</p>
                                                                     </TooltipContent>
                                                                 </Tooltip>
                                                             </TooltipProvider>
                                                         </TableCell>
                                                         {roles.map((role) => (
-                                                            <TableCell key={role.id} className="py-2 text-center">
+                                                            <TableCell key={role.id} className="py-1.5 text-center">
                                                                 {role.permissions.includes(perm.name) ? (
-                                                                    <div className="bg-primary/10 mx-auto flex h-5 w-5 items-center justify-center rounded-full">
-                                                                        <Check className="text-primary h-3 w-3" />
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="bg-muted mx-auto flex h-5 w-5 items-center justify-center rounded-full">
-                                                                        <Minus className="text-muted-foreground/40 h-3 w-3" />
-                                                                    </div>
-                                                                )}
+                                                                    <Check className="text-foreground/50 mx-auto h-3 w-3" />
+                                                                ) : null}
                                                             </TableCell>
                                                         ))}
                                                     </TableRow>

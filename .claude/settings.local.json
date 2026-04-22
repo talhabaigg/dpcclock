@@ -97,7 +97,8 @@
       "Read(//tmp/**)",
       "Bash(node -e ' *)",
       "Bash(awk 'NR==1{next} {print NR\": \"$0}' index.csv)",
-      "Bash(npx tailwindcss *)"
+      "Bash(npx tailwindcss *)",
+      "Bash(npx -y acorn --ecma2020 --module --jsx resources/js/pages/admin/roles/index.tsx)"
     ]
   }
 }
