@@ -35,6 +35,7 @@ interface FileType {
     has_back_side: boolean;
     expiry_requirement: 'required' | 'optional' | 'none';
     requires_completed_date: boolean;
+    allow_multiple: boolean;
     options: string[] | null;
     conditions: Conditions | null;
     is_active: boolean;
@@ -55,6 +56,7 @@ const EMPTY_FORM = {
     has_back_side: false,
     expiry_requirement: 'optional' as 'required' | 'optional' | 'none',
     requires_completed_date: false,
+    allow_multiple: false,
     options: [] as string[],
     conditions: null as Conditions | null,
     is_active: true,
@@ -108,6 +110,7 @@ export default function EmployeeFileTypesIndex() {
             has_back_side: ft.has_back_side,
             expiry_requirement: ft.expiry_requirement ?? 'optional',
             requires_completed_date: ft.requires_completed_date ?? false,
+            allow_multiple: ft.allow_multiple ?? false,
             options: ft.options ?? [],
             conditions: ft.conditions ? { ...ft.conditions, rules: [...ft.conditions.rules] } : null,
             is_active: ft.is_active,
@@ -195,6 +198,7 @@ export default function EmployeeFileTypesIndex() {
                                 <TableHead>Expiry</TableHead>
                                 <TableHead>Completed Date</TableHead>
                                 <TableHead>Two-Sided</TableHead>
+                                <TableHead>Multiple</TableHead>
                                 <TableHead>Required For</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="w-24">Actions</TableHead>
@@ -203,7 +207,7 @@ export default function EmployeeFileTypesIndex() {
                         <TableBody>
                             {fileTypes.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
                                         No file types yet. Create one to get started.
                                     </TableCell>
                                 </TableRow>
@@ -222,6 +226,7 @@ export default function EmployeeFileTypesIndex() {
                                     <TableCell className="text-muted-foreground text-sm capitalize">{ft.expiry_requirement ?? 'optional'}</TableCell>
                                     <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
                                     <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
+                                    <TableCell>{ft.allow_multiple ? 'Yes' : 'No'}</TableCell>
                                     <TableCell className="max-w-[300px] text-sm">{conditionSummary(ft.conditions, worktypes, locations)}</TableCell>
                                     <TableCell>
                                         <Badge variant={ft.is_active ? 'default' : 'secondary'}>{ft.is_active ? 'Active' : 'Inactive'}</Badge>
@@ -318,6 +323,14 @@ export default function EmployeeFileTypesIndex() {
                         <div className="flex items-center gap-3">
                             <Switch checked={form.requires_completed_date} onCheckedChange={(v) => setForm({ ...form, requires_completed_date: v })} />
                             <Label>Requires completed date</Label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Switch checked={form.allow_multiple} onCheckedChange={(v) => setForm({ ...form, allow_multiple: v })} />
+                            <div>
+                                <Label>Allow multiple files</Label>
+                                <p className="text-muted-foreground text-xs">Allow uploading multiple files of this type per employee (e.g. catch-all document types)</p>
+                            </div>
                         </div>
 
                         <div className="flex flex-col gap-1.5">

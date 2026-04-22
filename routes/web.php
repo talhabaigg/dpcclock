@@ -438,6 +438,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('employees/{employee}/files')->group(function () {
         Route::get('/', [EmployeeFileController::class, 'index'])->name('employees.files.index');
         Route::post('/', [EmployeeFileController::class, 'store'])->name('employees.files.store');
+        Route::get('type/{fileType}/versions', [EmployeeFileController::class, 'versions'])->name('employees.files.versions');
         Route::put('{employeeFile}', [EmployeeFileController::class, 'update'])->name('employees.files.update');
         Route::delete('{employeeFile}', [EmployeeFileController::class, 'destroy'])->name('employees.files.destroy');
         Route::get('{employeeFile}/download/{collection}', [EmployeeFileController::class, 'download'])->name('employees.files.download');

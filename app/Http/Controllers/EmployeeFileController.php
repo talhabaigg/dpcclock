@@ -13,44 +13,55 @@ class EmployeeFileController extends Controller
     {
         $employee->loadMissing(['worktypes', 'kiosks']);
 
-        $files = $employee->employeeFiles()
+        $allFiles = $employee->employeeFiles()
             ->with(['fileType', 'uploadedBy', 'media'])
             ->orderByDesc('created_at')
-            ->get()
-            ->map(fn (EmployeeFile $file) => [
-                'id' => $file->id,
-                'document_number' => $file->document_number,
-                'expires_at' => $file->expires_at?->toDateString(),
-                'completed_at' => $file->completed_at?->toDateString(),
-                'status' => $file->getStatus(),
-                'notes' => $file->notes,
-                'uploaded_by' => $file->uploadedBy?->name,
-                'created_at' => $file->created_at->toDateString(),
-                'selected_options' => $file->selected_options,
-                'file_type' => [
-                    'id' => $file->fileType->id,
-                    'name' => $file->fileType->name,
-                    'category' => $file->fileType->category,
-                    'has_back_side' => $file->fileType->has_back_side,
-                    'expiry_requirement' => $file->fileType->expiry_requirement,
-                    'requires_completed_date' => $file->fileType->requires_completed_date,
-                    'options' => $file->fileType->options,
-                ],
-                'front_url' => $file->getFrontUrl(),
-                'back_url' => $file->getBackUrl(),
-                'front_filename' => $file->getFirstMedia('file_front')?->file_name,
-                'back_filename' => $file->getFirstMedia('file_back')?->file_name,
-            ]);
+            ->get();
+
+        // - Versioned types (has expiry): only show the latest per file type
+        // - allow_multiple types (catch-all): show all files
+        // - Non-versioned, non-multiple: only one exists anyway
+        $seen = [];
+        $files = $allFiles->filter(function (EmployeeFile $file) use (&$seen) {
+            $key = $file->employee_file_type_id;
+
+            // allow_multiple types always show all files
+            if ($file->fileType->allow_multiple) {
+                return true;
+            }
+
+            // Versioned types only show the latest (first seen, since ordered by created_at desc)
+            if ($file->fileType->hasVersions()) {
+                if (isset($seen[$key])) {
+                    return false;
+                }
+                $seen[$key] = true;
+            }
+
+            return true;
+        })->map(fn (EmployeeFile $file) => $this->formatFile($file))->values();
 
         $allFileTypes = EmployeeFileType::active()
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date', 'options']);
+            ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date', 'allow_multiple', 'options']);
 
         return response()->json([
             'files' => $files,
             'all_file_types' => $allFileTypes,
         ]);
+    }
+
+    public function versions(Employee $employee, EmployeeFileType $fileType)
+    {
+        $files = $employee->employeeFiles()
+            ->where('employee_file_type_id', $fileType->id)
+            ->with(['fileType', 'uploadedBy', 'media'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (EmployeeFile $file) => $this->formatFile($file));
+
+        return response()->json(['files' => $files]);
     }
 
     public function store(Request $request, Employee $employee)
@@ -68,6 +79,19 @@ class EmployeeFileController extends Controller
         ]);
 
         $fileType = EmployeeFileType::findOrFail($validated['employee_file_type_id']);
+
+        // Only versioned (has expiry) or allow_multiple types can have more than one file
+        if (!$fileType->hasVersions() && !$fileType->allow_multiple) {
+            $existing = $employee->employeeFiles()
+                ->where('employee_file_type_id', $fileType->id)
+                ->exists();
+
+            if ($existing) {
+                return redirect()->back()->withErrors([
+                    'employee_file_type_id' => 'This file type already exists for this employee. Delete the existing file first or choose a different type.',
+                ]);
+            }
+        }
 
         $employeeFile = $employee->employeeFiles()->create([
             'employee_file_type_id' => $validated['employee_file_type_id'],
@@ -126,6 +150,43 @@ class EmployeeFileController extends Controller
         $employeeFile->delete();
 
         return redirect()->back()->with('success', 'File deleted successfully.');
+    }
+
+    private function formatFile(EmployeeFile $file): array
+    {
+        $hasVersions = $file->fileType->hasVersions();
+        $versionCount = $hasVersions
+            ? EmployeeFile::where('employee_id', $file->employee_id)
+                ->where('employee_file_type_id', $file->employee_file_type_id)
+                ->count()
+            : 1;
+
+        return [
+            'id' => $file->id,
+            'document_number' => $file->document_number,
+            'expires_at' => $file->expires_at?->toDateString(),
+            'completed_at' => $file->completed_at?->toDateString(),
+            'status' => $file->getStatus(),
+            'notes' => $file->notes,
+            'uploaded_by' => $file->uploadedBy?->name,
+            'created_at' => $file->created_at->toDateString(),
+            'selected_options' => $file->selected_options,
+            'file_type' => [
+                'id' => $file->fileType->id,
+                'name' => $file->fileType->name,
+                'category' => $file->fileType->category,
+                'has_back_side' => $file->fileType->has_back_side,
+                'expiry_requirement' => $file->fileType->expiry_requirement,
+                'requires_completed_date' => $file->fileType->requires_completed_date,
+                'options' => $file->fileType->options,
+                'has_versions' => $hasVersions,
+            ],
+            'version_count' => $versionCount,
+            'front_url' => $file->getFrontUrl(),
+            'back_url' => $file->getBackUrl(),
+            'front_filename' => $file->getFirstMedia('file_front')?->file_name,
+            'back_filename' => $file->getFirstMedia('file_back')?->file_name,
+        ];
     }
 
     /**

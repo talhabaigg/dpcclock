@@ -16,6 +16,7 @@ class EmployeeFileType extends Model
         'has_back_side',
         'expiry_requirement',
         'requires_completed_date',
+        'allow_multiple',
         'options',
         'conditions',
         'is_active',
@@ -25,6 +26,7 @@ class EmployeeFileType extends Model
     protected $casts = [
         'has_back_side' => 'boolean',
         'requires_completed_date' => 'boolean',
+        'allow_multiple' => 'boolean',
         'is_active' => 'boolean',
         'conditions' => 'array',
         'category' => 'array',
@@ -43,6 +45,11 @@ class EmployeeFileType extends Model
     public function employeeFiles(): HasMany
     {
         return $this->hasMany(EmployeeFile::class);
+    }
+
+    public function hasVersions(): bool
+    {
+        return $this->expiry_requirement !== 'none';
     }
 
     public function scopeActive($query)
