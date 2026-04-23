@@ -45,7 +45,7 @@ import {
     ZoomOut,
 } from 'lucide-react';
 import mammoth from 'mammoth';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface Placeholder {
     key: string;
@@ -141,53 +141,50 @@ for (const group of PLACEHOLDER_GROUPS) {
 PLACEHOLDER_LABEL_MAP['signature_box'] = 'Recipient Signature';
 PLACEHOLDER_LABEL_MAP['sender_signature'] = 'Sender Signature';
 
-/**
- * Shared ref that the decoration plugin reads on every render pass.
- * Updated via a React effect so custom placeholders are always current.
- */
-let _customPlaceholderRef: Placeholder[] = [];
-
-const placeholderDecorationPlugin = new Plugin({
-    key: new PluginKey('placeholderDecoration'),
-    props: {
-        decorations(state) {
-            // Merge custom placeholders into the lookup on every pass
-            const labelMap = { ...PLACEHOLDER_LABEL_MAP };
-            for (const p of _customPlaceholderRef) {
-                if (p.key && !labelMap[p.key]) labelMap[p.key] = p.label || p.key;
-            }
-
-            const decorations: Decoration[] = [];
-            const regex = /\{\{([^}]+)\}\}/g;
-
-            state.doc.descendants((node, pos) => {
-                if (!node.isText || !node.text) return;
-                let match: RegExpExecArray | null;
-                regex.lastIndex = 0;
-                while ((match = regex.exec(node.text)) !== null) {
-                    const key = match[1];
-                    const from = pos + match.index;
-                    const to = from + match[0].length;
-                    const isSignature = key === 'signature_box' || key === 'sender_signature';
-                    const label = labelMap[key] || key;
-
-                    decorations.push(
-                        Decoration.inline(from, to, {
-                            class: isSignature ? 'placeholder-chip placeholder-chip--signature' : 'placeholder-chip',
-                            'data-label': label,
-                        }),
-                    );
-                }
-            });
-            return DecorationSet.create(state.doc, decorations);
-        },
-    },
-});
-
-const PlaceholderDecorationExtension = Extension.create({
+const PlaceholderDecorationExtension = Extension.create<unknown, { customPlaceholders: Placeholder[] }>({
     name: 'placeholderDecoration',
+    addStorage() {
+        return { customPlaceholders: [] };
+    },
     addProseMirrorPlugins() {
-        return [placeholderDecorationPlugin];
+        const storage = this.storage;
+        return [
+            new Plugin({
+                key: new PluginKey('placeholderDecoration'),
+                props: {
+                    decorations(state) {
+                        const labelMap = { ...PLACEHOLDER_LABEL_MAP };
+                        for (const p of storage.customPlaceholders) {
+                            if (p.key && !labelMap[p.key]) labelMap[p.key] = p.label || p.key;
+                        }
+
+                        const decorations: Decoration[] = [];
+                        const regex = /\{\{([^}]+)\}\}/g;
+
+                        state.doc.descendants((node, pos) => {
+                            if (!node.isText || !node.text) return;
+                            let match: RegExpExecArray | null;
+                            regex.lastIndex = 0;
+                            while ((match = regex.exec(node.text)) !== null) {
+                                const key = match[1];
+                                const from = pos + match.index;
+                                const to = from + match[0].length;
+                                const isSignature = key === 'signature_box' || key === 'sender_signature';
+                                const label = labelMap[key] || key;
+
+                                decorations.push(
+                                    Decoration.inline(from, to, {
+                                        class: isSignature ? 'placeholder-chip placeholder-chip--signature' : 'placeholder-chip',
+                                        'data-label': label,
+                                    }),
+                                );
+                            }
+                        });
+                        return DecorationSet.create(state.doc, decorations);
+                    },
+                },
+            }),
+        ];
     },
 });
 
@@ -199,7 +196,7 @@ const IndentExtension = Extension.create({
     addGlobalAttributes() {
         return [
             {
-                types: ['paragraph', 'heading', 'bulletList', 'orderedList'],
+                types: ['paragraph', 'heading', 'listItem'],
                 attributes: {
                     indent: {
                         default: 0,
@@ -220,35 +217,52 @@ const IndentExtension = Extension.create({
         return {
             increaseIndent: () => ({ tr, state, dispatch }) => {
                 const { from, to } = state.selection;
-                const indentableTypes = ['paragraph', 'heading', 'bulletList', 'orderedList'];
                 let changed = false;
+                // Collect listItems in the range first; if any, indent those and skip paragraphs/headings inside them.
+                const listItemsInRange: { pos: number; node: any }[] = [];
+                const topLevelBlocks: { pos: number; node: any }[] = [];
                 state.doc.nodesBetween(from, to, (node, pos) => {
-                    if (indentableTypes.includes(node.type.name)) {
-                        const current = node.attrs.indent || 0;
-                        if (current < MAX_INDENT) {
-                            tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current + 1 });
-                            changed = true;
-                        }
-                        return false; // don't descend into list children
+                    if (node.type.name === 'listItem') {
+                        listItemsInRange.push({ pos, node });
+                        return false; // don't descend — we won't indent the paragraph inside
+                    }
+                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                        topLevelBlocks.push({ pos, node });
                     }
                 });
+                const targets = [...listItemsInRange, ...topLevelBlocks];
+                for (const { pos, node } of targets) {
+                    const current = node.attrs.indent || 0;
+                    if (current < MAX_INDENT) {
+                        tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current + 1 });
+                        changed = true;
+                    }
+                }
                 if (changed && dispatch) dispatch(tr);
                 return changed;
             },
             decreaseIndent: () => ({ tr, state, dispatch }) => {
                 const { from, to } = state.selection;
-                const indentableTypes = ['paragraph', 'heading', 'bulletList', 'orderedList'];
                 let changed = false;
+                const listItemsInRange: { pos: number; node: any }[] = [];
+                const topLevelBlocks: { pos: number; node: any }[] = [];
                 state.doc.nodesBetween(from, to, (node, pos) => {
-                    if (indentableTypes.includes(node.type.name)) {
-                        const current = node.attrs.indent || 0;
-                        if (current > 0) {
-                            tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current - 1 });
-                            changed = true;
-                        }
-                        return false; // don't descend into list children
+                    if (node.type.name === 'listItem') {
+                        listItemsInRange.push({ pos, node });
+                        return false;
+                    }
+                    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+                        topLevelBlocks.push({ pos, node });
                     }
                 });
+                const targets = [...listItemsInRange, ...topLevelBlocks];
+                for (const { pos, node } of targets) {
+                    const current = node.attrs.indent || 0;
+                    if (current > 0) {
+                        tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: current - 1 });
+                        changed = true;
+                    }
+                }
                 if (changed && dispatch) dispatch(tr);
                 return changed;
             },
@@ -256,23 +270,38 @@ const IndentExtension = Extension.create({
     },
     addKeyboardShortcuts() {
         return {
+            // Always return true — we want to swallow Tab even if the command is a no-op,
+            // otherwise focus escapes the editor (browser default Tab behaviour).
             Tab: ({ editor }) => {
                 if (editor.isActive('listItem')) {
-                    // Try to nest the list item first
+                    // Prefer proper list nesting; if PM refuses (e.g. selection starts at the first item
+                    // of its parent list), fall back to a visual indent on the list item itself.
                     const sunk = editor.chain().sinkListItem('listItem').run();
-                    if (sunk) return true;
-                    // If can't nest (e.g. first item), indent the whole list
-                    return (editor.commands as any).increaseIndent();
+                    if (!sunk) (editor.commands as any).increaseIndent();
+                } else {
+                    (editor.commands as any).increaseIndent();
                 }
-                return (editor.commands as any).increaseIndent();
+                return true;
             },
             'Shift-Tab': ({ editor }) => {
                 if (editor.isActive('listItem')) {
-                    const lifted = editor.chain().liftListItem('listItem').run();
-                    if (lifted) return true;
-                    return (editor.commands as any).decreaseIndent();
+                    // If the listItem has its own visual indent, unwind that first; otherwise try to lift.
+                    const { $from } = editor.state.selection;
+                    let liDepth = -1;
+                    for (let d = $from.depth; d > 0; d--) {
+                        if ($from.node(d).type.name === 'listItem') { liDepth = d; break; }
+                    }
+                    const liIndent = liDepth >= 0 ? ($from.node(liDepth).attrs.indent || 0) : 0;
+                    if (liIndent > 0) {
+                        (editor.commands as any).decreaseIndent();
+                    } else {
+                        const lifted = editor.chain().liftListItem('listItem').run();
+                        if (!lifted) (editor.commands as any).decreaseIndent();
+                    }
+                } else {
+                    (editor.commands as any).decreaseIndent();
                 }
-                return (editor.commands as any).decreaseIndent();
+                return true;
             },
         };
     },
@@ -280,17 +309,53 @@ const IndentExtension = Extension.create({
 
 const CustomOrderedList = OrderedList.extend({
     addAttributes() {
+        const parent = this.parent?.() ?? {};
         return {
-            ...this.parent?.(),
+            ...parent,
             listStyle: {
                 default: null,
                 parseHTML: (element: HTMLElement) => element.getAttribute('data-list-style') || null,
                 renderHTML: (attributes: Record<string, unknown>) => {
-                    if (!attributes.listStyle) return {};
-                    return { 'data-list-style': attributes.listStyle };
+                    const out: Record<string, string> = {};
+                    if (attributes.listStyle) out['data-list-style'] = String(attributes.listStyle);
+                    // CSS counters for legal numbering ignore the HTML `start` attribute.
+                    // Emit an inline counter-reset so Continue Numbering visibly works on legal lists.
+                    const start = typeof attributes.start === 'number' ? attributes.start : 1;
+                    if (attributes.listStyle === 'legal' && start > 1) {
+                        out.style = `counter-reset: legal ${start - 1};`;
+                    }
+                    return out;
                 },
             },
         };
+    },
+    addProseMirrorPlugins() {
+        // Propagate listStyle from an outer orderedList to any nested orderedList whose listStyle is null.
+        const listStyleInheritance = new Plugin({
+            key: new PluginKey('orderedListStyleInheritance'),
+            appendTransaction: (_transactions, _oldState, newState) => {
+                const tr = newState.tr;
+                let changed = false;
+                newState.doc.descendants((node, pos) => {
+                    if (node.type.name !== 'orderedList') return;
+                    if (node.attrs.listStyle) return;
+                    const $pos = newState.doc.resolve(pos);
+                    for (let d = $pos.depth; d > 0; d--) {
+                        const ancestor = $pos.node(d);
+                        if (ancestor.type.name === 'orderedList' && ancestor.attrs.listStyle) {
+                            tr.setNodeMarkup(pos, undefined, {
+                                ...node.attrs,
+                                listStyle: ancestor.attrs.listStyle,
+                            });
+                            changed = true;
+                            break;
+                        }
+                    }
+                });
+                return changed ? tr : null;
+            },
+        });
+        return [listStyleInheritance];
     },
 });
 
@@ -315,17 +380,31 @@ const PageBreak = Node.create({
 });
 
 export default function TiptapEditor({ content, onChange, placeholders = [], contextGroup, customGroupLabel = 'Custom', onManagePlaceholders }: TiptapEditorProps) {
-    // Base groups: replace the first ("Applicant") if a contextGroup is provided; remove it if null.
-    const baseGroups = contextGroup === undefined
-        ? PLACEHOLDER_GROUPS
-        : contextGroup === null
-            ? PLACEHOLDER_GROUPS.slice(1)
-            : [contextGroup, ...PLACEHOLDER_GROUPS.slice(1)];
+    const baseGroups = useMemo(
+        () =>
+            contextGroup === undefined
+                ? PLACEHOLDER_GROUPS
+                : contextGroup === null
+                    ? PLACEHOLDER_GROUPS.slice(1)
+                    : [contextGroup, ...PLACEHOLDER_GROUPS.slice(1)],
+        [contextGroup],
+    );
 
-    // Merge any custom placeholders passed from the create/edit form
-    const allGroups = placeholders.length > 0
-        ? [...baseGroups, { label: customGroupLabel, fields: placeholders.filter((p) => !baseGroups.some((g) => g.fields.some((f) => 'key' in f && f.key === p.key))) as PlaceholderField[] }].filter((g) => g.fields.length > 0)
-        : baseGroups;
+    const allGroups = useMemo(
+        () =>
+            placeholders.length > 0
+                ? [
+                      ...baseGroups,
+                      {
+                          label: customGroupLabel,
+                          fields: placeholders.filter(
+                              (p) => !baseGroups.some((g) => g.fields.some((f) => 'key' in f && f.key === p.key)),
+                          ) as PlaceholderField[],
+                      },
+                  ].filter((g) => g.fields.length > 0)
+                : baseGroups,
+        [baseGroups, placeholders, customGroupLabel],
+    );
 
     const parseContent = (raw: string): unknown => {
         if (!raw) return undefined;
@@ -362,25 +441,28 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
         },
     });
 
-    // Keep the decoration plugin's placeholder ref in sync
+    // Keep the decoration plugin's placeholder storage in sync per-editor
     useEffect(() => {
-        _customPlaceholderRef = placeholders;
-        // Force ProseMirror to re-compute decorations
-        if (editor) {
-            editor.view.dispatch(editor.view.state.tr.setMeta('placeholderUpdate', true));
-        }
+        if (!editor) return;
+        (editor.storage as any).placeholderDecoration.customPlaceholders = placeholders;
+        editor.view.dispatch(editor.view.state.tr.setMeta('placeholderUpdate', true));
     }, [placeholders, editor]);
 
+    const initialContentRef = useRef(content);
     useEffect(() => {
-        if (editor && content && !editor.isFocused) {
-            const parsed = parseContent(content);
-            if (typeof parsed === 'string') {
-                if (editor.getHTML() !== parsed) {
-                    editor.commands.setContent(parsed);
-                }
-            } else if (parsed && JSON.stringify(editor.getJSON()) !== content) {
-                editor.commands.setContent(parsed as never);
+        if (!editor || !content || editor.isFocused) return;
+        // Skip the first run — useEditor already hydrated with the same content.
+        if (content === initialContentRef.current) {
+            initialContentRef.current = null as unknown as string;
+            return;
+        }
+        const parsed = parseContent(content);
+        if (typeof parsed === 'string') {
+            if (editor.getHTML() !== parsed) {
+                editor.commands.setContent(parsed);
             }
+        } else if (parsed && JSON.stringify(editor.getJSON()) !== content) {
+            editor.commands.setContent(parsed as never);
         }
     }, [content, editor]);
 
@@ -406,9 +488,21 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
         [editor],
     );
 
+    const exitListIfInside = useCallback(() => {
+        if (!editor) return;
+        // Lift out of any list so the inserted block lands as a sibling of the list, not inside it.
+        // Hard-bounded to MAX_INDENT+2 iterations in case lift silently no-ops.
+        for (let i = 0; i < MAX_INDENT + 2; i++) {
+            if (!editor.isActive('listItem')) break;
+            if (!editor.chain().focus().liftListItem('listItem').run()) break;
+        }
+    }, [editor]);
+
     const insertSignatureBox = useCallback(() => {
+        if (!editor) return;
+        exitListIfInside();
         editor
-            ?.chain()
+            .chain()
             .focus()
             .insertContent({
                 type: 'paragraph',
@@ -421,11 +515,13 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                 ],
             })
             .run();
-    }, [editor]);
+    }, [editor, exitListIfInside]);
 
     const insertSenderSignature = useCallback(() => {
+        if (!editor) return;
+        exitListIfInside();
         editor
-            ?.chain()
+            .chain()
             .focus()
             .insertContent({
                 type: 'paragraph',
@@ -438,7 +534,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                 ],
             })
             .run();
-    }, [editor]);
+    }, [editor, exitListIfInside]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [importing, setImporting] = useState(false);
@@ -550,23 +646,7 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                 <Toggle
                     size="sm"
                     pressed={editor.isActive('bulletList')}
-                    onPressedChange={() => {
-                        const { $from } = editor.state.selection;
-                        const parentNode = $from.parent;
-                        const indent = parentNode?.attrs?.indent || 0;
-                        editor.chain().focus().toggleBulletList().command(({ tr, state }) => {
-                            if (!indent) return true;
-                            const { $from: newFrom } = state.selection;
-                            for (let d = newFrom.depth; d > 0; d--) {
-                                const node = newFrom.node(d);
-                                if (node.type.name === 'bulletList') {
-                                    tr.setNodeMarkup(newFrom.before(d), undefined, { ...node.attrs, indent });
-                                    return true;
-                                }
-                            }
-                            return true;
-                        }).run();
-                    }}
+                    onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
                 >
                     <List className="h-4 w-4" />
                 </Toggle>
@@ -586,9 +666,10 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                                 <DropdownMenuItem
                                     key={key}
                                     onClick={() => {
-                                        if (editor.isActive('orderedList')) {
+                                        const applyStyleToOutermost = () => {
                                             const { $from } = editor.state.selection;
-                                            for (let d = $from.depth; d > 0; d--) {
+                                            // Walk shallowest-first so we hit the outermost orderedList.
+                                            for (let d = 1; d <= $from.depth; d++) {
                                                 const node = $from.node(d);
                                                 if (node.type.name === 'orderedList') {
                                                     const pos = $from.before(d);
@@ -596,23 +677,18 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                                                         tr.setNodeMarkup(pos, undefined, { ...node.attrs, listStyle: style });
                                                         return true;
                                                     }).run();
-                                                    return;
-                                                }
-                                            }
-                                        }
-                                        const { $from: curFrom } = editor.state.selection;
-                                        const curIndent = curFrom.parent?.attrs?.indent || 0;
-                                        editor.chain().focus().toggleOrderedList().command(({ tr, state }) => {
-                                            const { $from } = state.selection;
-                                            for (let d = $from.depth; d > 0; d--) {
-                                                const node = $from.node(d);
-                                                if (node.type.name === 'orderedList') {
-                                                    tr.setNodeMarkup($from.before(d), undefined, { ...node.attrs, listStyle: style, ...(curIndent ? { indent: curIndent } : {}) });
                                                     return true;
                                                 }
                                             }
-                                            return true;
-                                        }).run();
+                                            return false;
+                                        };
+
+                                        if (editor.isActive('orderedList')) {
+                                            applyStyleToOutermost();
+                                            return;
+                                        }
+                                        editor.chain().focus().toggleOrderedList().run();
+                                        applyStyleToOutermost();
                                     }}
                                 >
                                     <span className="mr-2 text-xs text-muted-foreground w-8">{previews[key]}</span>
@@ -620,6 +696,76 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                                 </DropdownMenuItem>
                             );
                         })}
+                        {editor.isActive('orderedList') && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        const { $from } = editor.state.selection;
+                                        // Find the outermost ordered list containing the cursor
+                                        let listDepth = -1;
+                                        for (let d = 1; d <= $from.depth; d++) {
+                                            if ($from.node(d).type.name === 'orderedList') {
+                                                listDepth = d;
+                                                break;
+                                            }
+                                        }
+                                        if (listDepth < 0) return;
+                                        const listNode = $from.node(listDepth);
+                                        const listPos = $from.before(listDepth);
+                                        // Find previous sibling that is also an orderedList
+                                        const $listPos = editor.state.doc.resolve(listPos);
+                                        const parent = $listPos.parent;
+                                        const idx = $listPos.index();
+                                        let prevCount = 0;
+                                        for (let i = idx - 1; i >= 0; i--) {
+                                            const sibling = parent.child(i);
+                                            if (sibling.type.name === 'orderedList') {
+                                                const prevStart = (sibling.attrs.start as number | undefined) ?? 1;
+                                                prevCount = prevStart + sibling.childCount - 1;
+                                                break;
+                                            }
+                                            // Skip empty paragraphs / page breaks to find the nearest ordered list
+                                            if (sibling.type.name !== 'paragraph' && sibling.type.name !== 'pageBreak') break;
+                                            if (sibling.type.name === 'paragraph' && sibling.textContent.trim() !== '') break;
+                                        }
+                                        if (prevCount <= 0) return;
+                                        editor.chain().focus().command(({ tr }) => {
+                                            tr.setNodeMarkup(listPos, undefined, {
+                                                ...listNode.attrs,
+                                                start: prevCount + 1,
+                                            });
+                                            return true;
+                                        }).run();
+                                    }}
+                                    className="text-xs"
+                                >
+                                    Continue previous numbering
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        const { $from } = editor.state.selection;
+                                        let listDepth = -1;
+                                        for (let d = 1; d <= $from.depth; d++) {
+                                            if ($from.node(d).type.name === 'orderedList') {
+                                                listDepth = d;
+                                                break;
+                                            }
+                                        }
+                                        if (listDepth < 0) return;
+                                        const listNode = $from.node(listDepth);
+                                        const listPos = $from.before(listDepth);
+                                        editor.chain().focus().command(({ tr }) => {
+                                            tr.setNodeMarkup(listPos, undefined, { ...listNode.attrs, start: 1 });
+                                            return true;
+                                        }).run();
+                                    }}
+                                    className="text-xs"
+                                >
+                                    Restart numbering at 1
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <Toggle
@@ -641,8 +787,18 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     pressed={false}
                     onPressedChange={() => {
                         if (editor.isActive('listItem')) {
-                            const lifted = editor.chain().focus().liftListItem('listItem').run();
-                            if (!lifted) (editor.commands as any).decreaseIndent();
+                            const { $from } = editor.state.selection;
+                            let liDepth = -1;
+                            for (let d = $from.depth; d > 0; d--) {
+                                if ($from.node(d).type.name === 'listItem') { liDepth = d; break; }
+                            }
+                            const liIndent = liDepth >= 0 ? ($from.node(liDepth).attrs.indent || 0) : 0;
+                            if (liIndent > 0) {
+                                (editor.commands as any).decreaseIndent();
+                            } else {
+                                const lifted = editor.chain().focus().liftListItem('listItem').run();
+                                if (!lifted) (editor.commands as any).decreaseIndent();
+                            }
                         } else {
                             (editor.commands as any).decreaseIndent();
                         }
@@ -869,7 +1025,10 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     size="sm"
                     className="h-8 gap-1 px-2 text-xs"
                     type="button"
-                    onClick={() => (editor.commands as any).setPageBreak()}
+                    onClick={() => {
+                        exitListIfInside();
+                        (editor.commands as any).setPageBreak();
+                    }}
                 >
                     <Minus className="h-4 w-4" />
                     Page Break
@@ -919,9 +1078,10 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                         maxWidth: '720px',
                         width: '100%',
                         background: 'white',
-                        transform: `scale(${zoom})`,
-                        transformOrigin: 'top center',
-                    }}
+                        // Use non-standard `zoom` so ProseMirror's click/selection math stays correct
+                        // (unlike `transform: scale()` which breaks hit-testing).
+                        zoom,
+                    } as React.CSSProperties}
                 >
                     <EditorContent editor={editor} />
                 </div>
@@ -978,38 +1138,33 @@ export default function TiptapEditor({ content, onChange, placeholders = [], con
                     list-style-type: decimal;
                     list-style-position: outside;
                 }
-                .ProseMirror ol[data-list-style="alpha"] {
+                .ProseMirror ol[data-list-style="alpha"],
+                .ProseMirror ol[data-list-style="alpha"] ol:not([data-list-style="legal"]) {
                     list-style-type: lower-alpha !important;
                 }
-                /* Legal numbering: 1. / 1.1. / 1.2. */
-                .ProseMirror ol[data-list-style="legal"] {
-                    padding-left: 0;
-                    list-style-type: none;
+                /* Legal numbering: 1. / 1.1. / 1.2. — cascades into any nested ol except alpha overrides. */
+                .ProseMirror ol[data-list-style="legal"],
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) {
+                    padding-left: 0 !important;
+                    list-style-type: none !important;
                     counter-reset: legal;
                 }
-                .ProseMirror ol[data-list-style="legal"] > li {
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) {
+                    margin: 4px 0;
+                }
+                .ProseMirror ol[data-list-style="legal"] > li,
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) > li {
                     counter-increment: legal;
                     position: relative;
                     padding-left: 36px;
                 }
                 .ProseMirror ol[data-list-style="legal"] > li::before {
-                    content: counters(legal, ".") ".";
+                    content: counter(legal) ".";
                     font-weight: 500;
                     position: absolute;
                     left: 0;
                 }
-                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) {
-                    padding-left: 0;
-                    margin: 4px 0;
-                    list-style-type: none;
-                    counter-reset: legal;
-                }
-                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) > li {
-                    counter-increment: legal;
-                    position: relative;
-                    padding-left: 36px;
-                }
-                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style]) > li::before {
+                .ProseMirror ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) > li::before {
                     content: counters(legal, ".") ".";
                     font-weight: 500;
                     position: absolute;
