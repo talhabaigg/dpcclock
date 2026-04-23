@@ -539,7 +539,7 @@ function RecommendationDialog({ transfer, role, label, open, onOpenChange }: {
     );
 }
 
-export default function Show({ transfer, injuries, employeeFiles, isReceivingForeman }: PageProps) {
+export default function Show({ transfer, injuries, isReceivingForeman }: PageProps) {
     const [recDialog, setRecDialog] = useState<{ role: string; label: string } | null>(null);
 
     const breadcrumbs: BreadcrumbItem[] = [

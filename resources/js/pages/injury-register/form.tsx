@@ -158,7 +158,6 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
 
     // Shared classes
     const inputClass = 'h-12 text-base';
-    const selectTriggerClass = 'h-12 text-base';
     const textareaClass = 'text-base';
     const labelClass = 'text-base';
 
