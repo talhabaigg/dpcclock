@@ -24,6 +24,7 @@ import {
     FileText,
     FlaskConical,
     FolderOpen,
+    GraduationCap,
     FolderTree,
     GitCompare,
     Hammer,
@@ -308,6 +309,12 @@ const safety = [
                 url: '/silica-register',
                 icon: Wind,
                 permission: 'silica-register.view',
+            },
+            {
+                name: 'Training Register',
+                url: '/training-register',
+                icon: GraduationCap,
+                permission: 'training-register.view',
             },
             {
                 name: 'Safety Dashboard',

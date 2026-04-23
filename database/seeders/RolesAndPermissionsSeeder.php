@@ -102,6 +102,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'trainings.create' => 'Create trainings',
             'trainings.edit' => 'Edit trainings',
             'trainings.delete' => 'Delete trainings',
+            'training-register.view' => 'View training register (scoped to managed kiosks)',
+            'training-register.view-all' => 'View training register across all kiosks',
+            'training-register.export' => 'Export training register',
         ],
 
         // ============================================

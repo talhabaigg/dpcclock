@@ -261,7 +261,7 @@ export default function EmployeeShow() {
     const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const httpGetLocations = useHttp({});
-    const httpSaveLocations = useHttp({});
+    const httpSaveLocations = useHttp({ locations: '' });
 
     const filteredLocations = useMemo(() => {
         if (!searchQuery) return ehLocations;
@@ -305,12 +305,14 @@ export default function EmployeeShow() {
         });
     }, []);
 
+    useEffect(() => {
+        httpSaveLocations.setData({ locations: Array.from(selectedLocationNames).join('|') });
+    }, [selectedLocationNames]);
+
     const saveLocations = useCallback(() => {
         setLocationError(null);
         setLocationSuccess(null);
 
-        const locationsString = Array.from(selectedLocationNames).join('|');
-        httpSaveLocations.setData({ locations: locationsString });
         httpSaveLocations.put(`/employees/${emp.id}/locations`, {
             onSuccess: () => {
                 setLocationSuccess('Locations updated successfully');

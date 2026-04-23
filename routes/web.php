@@ -85,6 +85,7 @@ use App\Http\Controllers\FileComplianceDashboardController;
 use App\Http\Controllers\LocationSdsController;
 use App\Http\Controllers\SafetyDataSheetController;
 use App\Http\Controllers\SilicaRegisterController;
+use App\Http\Controllers\TrainingRegisterController;
 use App\Models\Employee;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -1268,6 +1269,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:injury-register.view');
         Route::get('/injury-register/{injury}/files/{media}', [InjuryController::class, 'downloadFile'])->name('injury-register.download-file');
         Route::post('/injury-register/{injury}/test-notification', [InjuryController::class, 'testNotification'])->name('injury-register.test-notification');
+    });
+
+    // ============================================
+    // TRAINING REGISTER
+    // ============================================
+    Route::middleware('permission:training-register.view')->group(function () {
+        Route::get('/training-register', [TrainingRegisterController::class, 'index'])->name('training-register.index');
+        Route::get('/training-register/export', [TrainingRegisterController::class, 'export'])->name('training-register.export')
+            ->middleware('permission:training-register.export');
     });
 
     // ============================================

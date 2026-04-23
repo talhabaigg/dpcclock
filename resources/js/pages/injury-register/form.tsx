@@ -3,10 +3,11 @@ import BodyLocationCanvas from '@/components/injury-register/BodyLocationCanvas'
 import MultiCheckboxSection from '@/components/injury-register/MultiCheckboxSection';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { SearchSelect } from '@/components/search-select';
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFormOptions, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -41,6 +42,12 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         { title: isEdit ? `Edit ${injury.id_formal}` : 'Report Incident / Injury', href: '#' },
     ];
 
+    const nowLocal = (() => {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    })();
+
     const { data, setData, processing, errors } = useForm({
         incident: injury?.incident ?? '',
         incident_other: injury?.incident_other ?? '',
@@ -48,15 +55,17 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         employee_address: injury?.employee_address ?? '',
         location_id: injury?.location_id ? String(injury.location_id) : '',
         location_of_incident: injury?.location_of_incident ?? '',
-        occurred_at: injury?.occurred_at ? injury.occurred_at.slice(0, 16) : '',
+        occurred_at: injury?.occurred_at ? injury.occurred_at.slice(0, 16) : nowLocal,
         reported_by: injury?.reported_by ?? '',
-        reported_at: injury?.reported_at ? injury.reported_at.slice(0, 16) : '',
+        reported_at: injury?.reported_at ? injury.reported_at.slice(0, 16) : nowLocal,
         reported_to: injury?.reported_to ?? '',
         description: injury?.description ?? '',
         emergency_services: injury?.emergency_services ?? false,
         emergency_services_details: injury?.emergency_services_details ?? '',
+        treatment: injury?.treatment ?? true,
         treatment_type: injury?.treatment_type ?? '',
         treatment_details: injury?.treatment_details ?? '',
+        no_treatment_reason: injury?.no_treatment_reason ?? '',
         follow_up: injury?.follow_up ?? false,
         follow_up_notes: injury?.follow_up_notes ?? '',
         witnesses: injury?.witnesses ?? false,
@@ -194,16 +203,13 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             <h2 className="text-lg font-semibold">Type of Incident</h2>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Incident Type *</Label>
-                                <Select value={data.incident} onValueChange={(v) => setData('incident', v)}>
-                                    <SelectTrigger className={selectTriggerClass}>
-                                        <SelectValue placeholder="Select incident type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(options.incidents).map(([key, label]) => (
-                                            <SelectItem key={key} value={key} className="py-3 text-base">{label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <SearchSelect
+                                    options={Object.entries(options.incidents).map(([value, label]) => ({ value, label }))}
+                                    optionName="incident type"
+                                    selectedOption={data.incident}
+                                    onValueChange={(v) => setData('incident', v)}
+                                    className="h-12 text-base"
+                                />
                                 {fieldError('incident') && <p className="text-sm text-red-500">{fieldError('incident')}</p>}
                             </div>
                             {data.incident === 'other' && (
@@ -221,14 +227,13 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             <h2 className="text-lg font-semibold">Worker & Location</h2>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Worker *</Label>
-                                <Select value={data.employee_id} onValueChange={(v) => setData('employee_id', v)}>
-                                    <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select worker" /></SelectTrigger>
-                                    <SelectContent>
-                                        {employees.map((emp) => (
-                                            <SelectItem key={emp.id} value={String(emp.id)} className="py-3 text-base">{emp.preferred_name ?? emp.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <SearchSelect
+                                    options={employees.map((emp) => ({ value: String(emp.id), label: emp.preferred_name ?? emp.name }))}
+                                    optionName="worker"
+                                    selectedOption={data.employee_id}
+                                    onValueChange={(v) => setData('employee_id', v)}
+                                    className="h-12 text-base"
+                                />
                                 {fieldError('employee_id') && <p className="text-sm text-red-500">{fieldError('employee_id')}</p>}
                             </div>
                             <div className="space-y-2">
@@ -243,14 +248,13 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Project / Location *</Label>
-                                <Select value={data.location_id} onValueChange={(v) => setData('location_id', v)}>
-                                    <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select location" /></SelectTrigger>
-                                    <SelectContent>
-                                        {locations.map((loc) => (
-                                            <SelectItem key={loc.id} value={String(loc.id)} className="py-3 text-base">{loc.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <SearchSelect
+                                    options={locations.map((loc) => ({ value: String(loc.id), label: loc.name }))}
+                                    optionName="location"
+                                    selectedOption={data.location_id}
+                                    onValueChange={(v) => setData('location_id', v)}
+                                    className="h-12 text-base"
+                                />
                                 {fieldError('location_id') && <p className="text-sm text-red-500">{fieldError('location_id')}</p>}
                             </div>
                             <div className="space-y-2">
@@ -259,7 +263,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Date & Time of Occurrence *</Label>
-                                <Input className={inputClass} type="datetime-local" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
+                                <DateTimePicker value={data.occurred_at} onChange={(v) => setData('occurred_at', v)} />
                                 {fieldError('occurred_at') && <p className="text-sm text-red-500">{fieldError('occurred_at')}</p>}
                             </div>
                             <div className="space-y-2">
@@ -268,7 +272,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Date & Time Reported</Label>
-                                <Input className={inputClass} type="datetime-local" value={data.reported_at} onChange={(e) => setData('reported_at', e.target.value)} />
+                                <DateTimePicker value={data.reported_at} onChange={(v) => setData('reported_at', v)} />
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Reported To</Label>
@@ -366,41 +370,55 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
 
                             <div className="space-y-4">
-                                <h2 className="text-lg font-semibold">Type of treatment provided</h2>
-                                <div className="space-y-2">
-                                    <Label className={labelClass}>Type of treatment provided</Label>
-                                    <Select value={data.treatment_type} onValueChange={(v) => setData('treatment_type', v)}>
-                                        <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select treatment type..." /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="first_aid" className="py-3 text-base">First Aid only</SelectItem>
-                                            <SelectItem value="medical_centre" className="py-3 text-base">Medical Centre/GP</SelectItem>
-                                            <SelectItem value="hospital" className="py-3 text-base">Hospital</SelectItem>
-                                            <SelectItem value="other" className="py-3 text-base">Other</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                {data.treatment_type === 'first_aid' && (
-                                    <div className="space-y-2">
-                                        <Label className={labelClass}>Details of the person who provided First Aid</Label>
-                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and details of person who provided First Aid..." />
-                                    </div>
+                                <h2 className="text-lg font-semibold">Treatment</h2>
+                                <YesNoButtons label="Was treatment provided?" value={data.treatment ?? false} onChange={(v) => setData('treatment', v)} />
+                                {data.treatment === true && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>Type of treatment provided</Label>
+                                            <SearchSelect
+                                                options={[
+                                                    { value: 'first_aid', label: 'First Aid only' },
+                                                    { value: 'medical_centre', label: 'Medical Centre/GP' },
+                                                    { value: 'hospital', label: 'Hospital' },
+                                                    { value: 'other', label: 'Other' },
+                                                ]}
+                                                optionName="treatment type"
+                                                selectedOption={data.treatment_type}
+                                                onValueChange={(v) => setData('treatment_type', v)}
+                                                className="h-12 text-base"
+                                            />
+                                        </div>
+                                        {data.treatment_type === 'first_aid' && (
+                                            <div className="space-y-2">
+                                                <Label className={labelClass}>Details of the person who provided First Aid</Label>
+                                                <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and details of person who provided First Aid..." />
+                                            </div>
+                                        )}
+                                        {data.treatment_type === 'medical_centre' && (
+                                            <div className="space-y-2">
+                                                <Label className={labelClass}>Name & Address of the Medical Centre</Label>
+                                                <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Medical Centre..." />
+                                            </div>
+                                        )}
+                                        {data.treatment_type === 'hospital' && (
+                                            <div className="space-y-2">
+                                                <Label className={labelClass}>Name & Address of the Hospital</Label>
+                                                <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Hospital..." />
+                                            </div>
+                                        )}
+                                        {data.treatment_type === 'other' && (
+                                            <div className="space-y-2">
+                                                <Label className={labelClass}>Additional details</Label>
+                                                <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter additional details..." />
+                                            </div>
+                                        )}
+                                    </>
                                 )}
-                                {data.treatment_type === 'medical_centre' && (
+                                {data.treatment === false && (
                                     <div className="space-y-2">
-                                        <Label className={labelClass}>Name & Address of the Medical Centre</Label>
-                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Medical Centre..." />
-                                    </div>
-                                )}
-                                {data.treatment_type === 'hospital' && (
-                                    <div className="space-y-2">
-                                        <Label className={labelClass}>Name & Address of the Hospital</Label>
-                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter name and address of Hospital..." />
-                                    </div>
-                                )}
-                                {data.treatment_type === 'other' && (
-                                    <div className="space-y-2">
-                                        <Label className={labelClass}>Additional details</Label>
-                                        <Input className={inputClass} value={data.treatment_details} onChange={(e) => setData('treatment_details', e.target.value)} placeholder="Enter additional details..." />
+                                        <Label className={labelClass}>If no treatment provided, please provide details why</Label>
+                                        <Textarea className={textareaClass} value={data.no_treatment_reason} onChange={(e) => setData('no_treatment_reason', e.target.value)} rows={3} placeholder="Explain why no treatment was provided..." />
                                     </div>
                                 )}
                             </div>
@@ -464,14 +482,13 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                 <h2 className="text-lg font-semibold">SWC Representative Sign-off</h2>
                                 <div className="space-y-2">
                                     <Label className={labelClass}>Representative</Label>
-                                    <Select value={data.representative_id} onValueChange={(v) => setData('representative_id', v)}>
-                                        <SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Select representative" /></SelectTrigger>
-                                        <SelectContent>
-                                            {employees.map((emp) => (
-                                                <SelectItem key={emp.id} value={String(emp.id)} className="py-3 text-base">{emp.preferred_name ?? emp.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchSelect
+                                        options={employees.map((emp) => ({ value: String(emp.id), label: emp.preferred_name ?? emp.name }))}
+                                        optionName="representative"
+                                        selectedOption={data.representative_id}
+                                        onValueChange={(v) => setData('representative_id', v)}
+                                        className="h-12 text-base"
+                                    />
                                 </div>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">

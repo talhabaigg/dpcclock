@@ -102,7 +102,8 @@
       "Bash(wc -l /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/components/ui/*.tsx)",
       "Bash(open http://localhost:8000/compliance-dashboard)",
       "Bash(xargs -I {} basename {} .php)",
-      "WebFetch(domain:127.0.0.1)"
+      "WebFetch(domain:127.0.0.1)",
+      "WebFetch(domain:superior-group-company.monday.com)"
     ]
   }
 }

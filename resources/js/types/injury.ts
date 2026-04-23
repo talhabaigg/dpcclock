@@ -27,8 +27,10 @@ export interface Injury {
     suitable_duties_to: string | null;
     computed_suitable_duties_days: number;
     medical_expenses: number;
+    treatment: boolean | null;
     treatment_type: string | null;
     treatment_details: string | null;
+    no_treatment_reason: string | null;
     follow_up: boolean | null;
     follow_up_notes: string | null;
     work_days_missed: number;
