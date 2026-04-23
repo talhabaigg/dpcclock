@@ -5,6 +5,8 @@ namespace App\Traits;
 use App\Models\JobSummary;
 use App\Models\Location;
 use App\Models\MaterialItem;
+use App\Models\ProductionUpload;
+use App\Models\ProductionUploadLine;
 use App\Models\Requisition;
 use App\Models\RequisitionLineItem;
 use App\Models\Supplier;
@@ -42,6 +44,9 @@ trait ExecutesAiTools
                 'delete_requisition' => $this->toolDeleteRequisition($arguments),
                 // Visualization tools
                 'get_job_summary' => $this->toolGetJobSummary($arguments),
+                // DPC tools
+                'get_dpc_summary' => $this->executeAndLogDpc('get_dpc_summary', $arguments),
+                'get_dpc_trend' => $this->executeAndLogDpc('get_dpc_trend', $arguments),
                 // Image generation tools
                 'generate_image' => $this->toolGenerateImage($arguments),
                 // Legacy
@@ -49,7 +54,7 @@ trait ExecutesAiTools
                 default => json_encode(['error' => "Unknown tool: {$name}"]),
             };
         } catch (Throwable $e) {
-            Log::error('Tool execution error', ['tool' => $name, 'error' => $e->getMessage()]);
+            Log::error('Tool execution error', ['tool' => $name, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
             return json_encode(['error' => "Failed to execute {$name}: ".$e->getMessage()]);
         }
@@ -784,6 +789,367 @@ trait ExecutesAiTools
         }
 
         return json_encode($response, JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * Execute a DPC tool and log the full result for debugging.
+     */
+    private function executeAndLogDpc(string $toolName, array $arguments): string
+    {
+        $result = $toolName === 'get_dpc_summary'
+            ? $this->toolGetDpcSummary($arguments)
+            : $this->toolGetDpcTrend($arguments);
+
+        Log::info('DPC tool result', [
+            'tool' => $toolName,
+            'arguments' => $arguments,
+            'result_preview' => mb_substr($result, 0, 500),
+        ]);
+
+        return $result;
+    }
+
+    /**
+     * Resolve a location from search text or location_id.
+     * Returns the Location model or null.
+     */
+    private function resolveDpcLocation(array $arguments): ?Location
+    {
+        // Scope to SWCP projects only
+        $swcpScope = fn ($query) => $query->whereHas('jobSummary', fn ($q) => $q->where('company_code', 'SWCP'));
+
+        if (! empty($arguments['location_id'])) {
+            return Location::where('id', (int) $arguments['location_id'])
+                ->where($swcpScope)
+                ->first();
+        }
+
+        if (! empty($arguments['search'])) {
+            $search = $arguments['search'];
+
+            return Location::where($swcpScope)
+                ->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('fully_qualified_name', 'like', "%{$search}%")
+                      ->orWhere('external_id', 'like', "%{$search}%");
+                })
+                ->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Find the latest production upload for a location, or one matching a specific report_date.
+     */
+    private function resolveDpcUpload(int $locationId, ?string $reportDate = null): ?ProductionUpload
+    {
+        $query = ProductionUpload::where('location_id', $locationId);
+
+        if ($reportDate) {
+            $query->whereDate('report_date', $reportDate);
+        }
+
+        return $query->orderByDesc('report_date')->orderByDesc('created_at')->first();
+    }
+
+    /**
+     * Apply fuzzy area/task filters to a production upload lines query.
+     */
+    private function applyDpcFilters($query, array $arguments): void
+    {
+        if (! empty($arguments['area'])) {
+            $area = $arguments['area'];
+            $query->where('area', 'like', "%{$area}%");
+        }
+
+        if (! empty($arguments['task'])) {
+            $task = trim($arguments['task']);
+
+            // Strip area prefixes the AI sometimes prepends (e.g. "LEVEL 06 Carpentry Noggings")
+            // Try exact match first, then strip known area patterns
+            $query->where(function ($q) use ($task) {
+                $q->where('cost_code', 'like', "%{$task}%")
+                  ->orWhere('code_description', 'like', "%{$task}%");
+
+                // Also try without area-like prefix (LEVEL XX, GROUND, BASEMENT, PRELIM, etc.)
+                $stripped = preg_replace('/^(LEVEL\s*\d+\s*(\(.*?\))?\s*[-—–]?\s*|GROUND\s*(\(.*?\))?\s*[-—–]?\s*|BASEMENT\s*(\(.*?\))?\s*[-—–]?\s*|PRELIM\s*[-—–]?\s*|MEZZANINE\s*(\(.*?\))?\s*[-—–]?\s*|ROOF\s*(\(.*?\))?\s*[-—–]?\s*)/i', '', $task);
+                $stripped = trim($stripped, ' -—–');
+                if ($stripped !== '' && $stripped !== $task) {
+                    $q->orWhere('cost_code', 'like', "%{$stripped}%")
+                      ->orWhere('code_description', 'like', "%{$stripped}%");
+                }
+            });
+        }
+
+        // Only apply percent filters when explicitly set to a meaningful value
+        // The AI sometimes sends 0 or empty string for all optional params — ignore those
+        if (isset($arguments['min_percent_complete']) && $arguments['min_percent_complete'] !== '' && $arguments['min_percent_complete'] !== null && (float) $arguments['min_percent_complete'] > 0) {
+            $query->where('percent_complete', '>=', (float) $arguments['min_percent_complete']);
+        }
+
+        if (isset($arguments['max_percent_complete']) && $arguments['max_percent_complete'] !== '' && $arguments['max_percent_complete'] !== null && (float) $arguments['max_percent_complete'] > 0) {
+            $query->where('percent_complete', '<=', (float) $arguments['max_percent_complete']);
+        }
+    }
+
+    private function toolGetDpcSummary(array $arguments): string
+    {
+        // Sanitize: the AI often sends all optional params with empty/zero defaults — strip them
+        foreach (['area', 'task', 'search', 'report_date', 'sort_by', 'sort_dir'] as $key) {
+            if (isset($arguments[$key]) && ($arguments[$key] === '' || $arguments[$key] === null)) {
+                unset($arguments[$key]);
+            }
+        }
+        foreach (['location_id', 'limit'] as $key) {
+            if (isset($arguments[$key]) && (int) $arguments[$key] === 0) {
+                unset($arguments[$key]);
+            }
+        }
+
+        // 1. Resolve location — always required, never mix projects
+        $location = $this->resolveDpcLocation($arguments);
+
+        if (! $location) {
+            return json_encode(['error' => 'Could not find a matching project/location. Please specify a project name or location ID.']);
+        }
+
+        // 2. Resolve the upload (latest or specific date)
+        $reportDate = $arguments['report_date'] ?? null;
+        $upload = $this->resolveDpcUpload($location->id, $reportDate);
+
+        if (! $upload) {
+            $msg = $reportDate
+                ? "No DPC data was uploaded for '{$location->name}' on {$reportDate}."
+                : "No DPC data has been uploaded for '{$location->name}'. Data is not present for this project.";
+
+            return json_encode(['error' => $msg]);
+        }
+
+        // 3. Build filtered query on the single upload
+        $query = ProductionUploadLine::where('production_upload_id', $upload->id);
+        $this->applyDpcFilters($query, $arguments);
+
+        // 4. Sorting
+        $sortBy = $arguments['sort_by'] ?? 'actual_variance';
+        $sortDir = $arguments['sort_dir'] ?? 'asc';
+        $validSorts = ['actual_variance', 'used_hours', 'earned_hours', 'est_hours', 'projected_variance', 'projected_hours', 'percent_complete'];
+        if (! in_array($sortBy, $validSorts)) {
+            $sortBy = 'actual_variance';
+        }
+        $query->orderBy($sortBy, $sortDir);
+
+        // 5. Limit
+        $limit = min((int) ($arguments['limit'] ?? 20), 50);
+
+        // Get total count before limiting (for summary)
+        $totalQuery = ProductionUploadLine::where('production_upload_id', $upload->id);
+        $this->applyDpcFilters($totalQuery, $arguments);
+        $totalMatchingLines = $totalQuery->count();
+
+        // Aggregate summary across ALL matching lines (not just the limited set)
+        $aggregates = (clone $totalQuery)->selectRaw('
+            SUM(est_hours) as total_est_hours,
+            SUM(earned_hours) as total_earned_hours,
+            SUM(used_hours) as total_used_hours,
+            SUM(actual_variance) as total_actual_variance,
+            SUM(remaining_hours) as total_remaining_hours,
+            SUM(projected_hours) as total_projected_hours,
+            SUM(projected_variance) as total_projected_variance
+        ')->first();
+
+        $totalEstHours = (float) ($aggregates->total_est_hours ?? 0);
+        $totalEarnedHours = (float) ($aggregates->total_earned_hours ?? 0);
+
+        // 6. Fetch limited rows
+        $lines = $query->limit($limit)->get();
+
+        $items = $lines->map(fn ($line) => [
+            'area' => $line->area,
+            'code_description' => $line->code_description,
+            'cost_code' => $line->cost_code,
+            'est_hours' => round($line->est_hours, 2),
+            'percent_complete' => round($line->percent_complete, 1),
+            'earned_hours' => round($line->earned_hours, 2),
+            'used_hours' => round($line->used_hours, 2),
+            'actual_variance' => round($line->actual_variance, 2),
+            'variance_pct' => $line->est_hours > 0
+                ? round(($line->actual_variance / $line->est_hours) * 100, 1)
+                : 0,
+            'remaining_hours' => round($line->remaining_hours, 2),
+            'projected_hours' => round($line->projected_hours, 2),
+            'projected_variance' => round($line->projected_variance, 2),
+        ])->all();
+
+        // When sorted by variance, also include the opposite extreme so the AI can answer
+        // "most negative AND most positive" in a single call
+        if (($arguments['sort_by'] ?? '') === 'actual_variance') {
+            $oppositeDir = $sortDir === 'asc' ? 'desc' : 'asc';
+            $oppositeQuery = ProductionUploadLine::where('production_upload_id', $upload->id);
+            $this->applyDpcFilters($oppositeQuery, $arguments);
+            $oppositeLines = $oppositeQuery->orderBy('actual_variance', $oppositeDir)->limit($limit)->get();
+
+            $oppositeItems = $oppositeLines->map(fn ($line) => [
+                'area' => $line->area,
+                'code_description' => $line->code_description,
+                'cost_code' => $line->cost_code,
+                'est_hours' => round($line->est_hours, 2),
+                'percent_complete' => round($line->percent_complete, 1),
+                'earned_hours' => round($line->earned_hours, 2),
+                'used_hours' => round($line->used_hours, 2),
+                'actual_variance' => round($line->actual_variance, 2),
+                'variance_pct' => $line->est_hours > 0
+                    ? round(($line->actual_variance / $line->est_hours) * 100, 1)
+                    : 0,
+                'remaining_hours' => round($line->remaining_hours, 2),
+                'projected_hours' => round($line->projected_hours, 2),
+                'projected_variance' => round($line->projected_variance, 2),
+            ])->all();
+        }
+
+        $hasFilters = ! empty($arguments['area']) || ! empty($arguments['task'])
+            || isset($arguments['min_percent_complete']) || isset($arguments['max_percent_complete']);
+
+        $response = [
+            'IMPORTANT' => 'Use ONLY the summary totals below when reporting to the user. Do NOT sum or re-calculate from the items list — items are a limited subset.',
+            'project' => $location->name,
+            'location_id' => $location->id,
+            'report_date' => $upload->report_date->toDateString(),
+            'uploaded_at' => $upload->created_at->toDateTimeString(),
+            'filters_applied' => array_filter([
+                'area' => $arguments['area'] ?? null,
+                'task' => $arguments['task'] ?? null,
+                'min_percent_complete' => $arguments['min_percent_complete'] ?? null,
+                'max_percent_complete' => $arguments['max_percent_complete'] ?? null,
+            ]),
+            'summary' => [
+                'total_matching_items' => $totalMatchingLines,
+                'showing' => $hasFilters ? count($items) : $totalMatchingLines,
+                'total_est_hours' => round($totalEstHours, 2),
+                'total_earned_hours' => round($totalEarnedHours, 2),
+                'total_used_hours' => round((float) ($aggregates->total_used_hours ?? 0), 2),
+                'overall_percent_complete' => $totalEstHours > 0
+                    ? round(($totalEarnedHours / $totalEstHours) * 100, 1)
+                    : 0,
+                'total_actual_variance' => round((float) ($aggregates->total_actual_variance ?? 0), 2),
+                'total_remaining_hours' => round((float) ($aggregates->total_remaining_hours ?? 0), 2),
+                'total_projected_hours' => round((float) ($aggregates->total_projected_hours ?? 0), 2),
+                'total_projected_variance' => round((float) ($aggregates->total_projected_variance ?? 0), 2),
+                'status' => ((float) ($aggregates->total_actual_variance ?? 0)) >= 0 ? 'UNDER budget (favorable)' : 'OVER budget (unfavorable)',
+            ],
+        ];
+
+        // Only include individual items when filters are applied or explicitly sorted/limited
+        // This prevents the AI from ignoring the summary and re-calculating from the limited items list
+        if ($hasFilters || isset($arguments['sort_by']) || isset($arguments['limit'])) {
+            $label = $sortDir === 'asc' ? 'worst_variance_items' : 'best_variance_items';
+            $response[$label] = $items;
+
+            // Include opposite extreme when sorting by variance
+            if (isset($oppositeItems) && ! empty($oppositeItems)) {
+                $oppositeLabel = $sortDir === 'asc' ? 'best_variance_items' : 'worst_variance_items';
+                $response[$oppositeLabel] = $oppositeItems;
+            }
+        }
+
+        return json_encode($response, JSON_PRETTY_PRINT);
+    }
+
+    private function toolGetDpcTrend(array $arguments): string
+    {
+        // Sanitize empty defaults sent by AI
+        foreach (['area', 'task', 'search'] as $key) {
+            if (isset($arguments[$key]) && ($arguments[$key] === '' || $arguments[$key] === null)) {
+                unset($arguments[$key]);
+            }
+        }
+        foreach (['location_id', 'limit_reports'] as $key) {
+            if (isset($arguments[$key]) && (int) $arguments[$key] === 0) {
+                unset($arguments[$key]);
+            }
+        }
+        // 1. Resolve location — always required, never mix projects
+        $location = $this->resolveDpcLocation($arguments);
+
+        if (! $location) {
+            return json_encode(['error' => 'Could not find a matching project/location. Please specify a project name or location ID.']);
+        }
+
+        // 2. Get recent uploads for this location
+        $limitReports = min((int) ($arguments['limit_reports'] ?? 5), 10);
+
+        $uploads = ProductionUpload::where('location_id', $location->id)
+            ->orderByDesc('report_date')
+            ->limit($limitReports)
+            ->get();
+
+        if ($uploads->isEmpty()) {
+            return json_encode(['error' => "No DPC data has been uploaded for '{$location->name}'. Data is not present for this project."]);
+        }
+
+        if ($uploads->count() < 2) {
+            return json_encode(['error' => "Only one DPC report exists for '{$location->name}' (dated {$uploads->first()->report_date->toDateString()}). Trending requires at least 2 reports to compare."]);
+        }
+
+        // 3. For each upload, get matching lines and aggregate
+        $trend = [];
+
+        foreach ($uploads->reverse() as $upload) {
+            $query = ProductionUploadLine::where('production_upload_id', $upload->id);
+            $this->applyDpcFilters($query, $arguments);
+
+            $aggregates = (clone $query)->selectRaw('
+                COUNT(*) as item_count,
+                SUM(est_hours) as total_est_hours,
+                SUM(earned_hours) as total_earned_hours,
+                SUM(used_hours) as total_used_hours,
+                SUM(actual_variance) as total_actual_variance,
+                SUM(projected_hours) as total_projected_hours,
+                SUM(projected_variance) as total_projected_variance
+            ')->first();
+
+            $totalEstHours = (float) ($aggregates->total_est_hours ?? 0);
+            $totalEarnedHours = (float) ($aggregates->total_earned_hours ?? 0);
+
+            $trend[] = [
+                'report_date' => $upload->report_date->toDateString(),
+                'items_matched' => (int) ($aggregates->item_count ?? 0),
+                'est_hours' => round($totalEstHours, 2),
+                'earned_hours' => round($totalEarnedHours, 2),
+                'used_hours' => round((float) ($aggregates->total_used_hours ?? 0), 2),
+                'percent_complete' => $totalEstHours > 0
+                    ? round(($totalEarnedHours / $totalEstHours) * 100, 1)
+                    : 0,
+                'actual_variance' => round((float) ($aggregates->total_actual_variance ?? 0), 2),
+                'projected_hours' => round((float) ($aggregates->total_projected_hours ?? 0), 2),
+                'projected_variance' => round((float) ($aggregates->total_projected_variance ?? 0), 2),
+            ];
+        }
+
+        // 4. Compute deltas between first and last
+        $first = $trend[0];
+        $last = $trend[count($trend) - 1];
+
+        $movement = [
+            'period' => "{$first['report_date']} to {$last['report_date']}",
+            'earned_hours_change' => round($last['earned_hours'] - $first['earned_hours'], 2),
+            'used_hours_change' => round($last['used_hours'] - $first['used_hours'], 2),
+            'variance_change' => round($last['actual_variance'] - $first['actual_variance'], 2),
+            'percent_complete_change' => round($last['percent_complete'] - $first['percent_complete'], 1),
+            'variance_direction' => ($last['actual_variance'] - $first['actual_variance']) >= 0 ? 'improving' : 'worsening',
+        ];
+
+        return json_encode([
+            'project' => $location->name,
+            'location_id' => $location->id,
+            'filters_applied' => array_filter([
+                'area' => $arguments['area'] ?? null,
+                'task' => $arguments['task'] ?? null,
+            ]),
+            'reports_compared' => count($trend),
+            'trend' => $trend,
+            'movement' => $movement,
+        ], JSON_PRETTY_PRINT);
     }
 
     private function toolGenerateImage(array $arguments): string

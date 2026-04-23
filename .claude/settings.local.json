@@ -100,7 +100,8 @@
       "Bash(npx tailwindcss *)",
       "Bash(npx -y acorn --ecma2020 --module --jsx resources/js/pages/admin/roles/index.tsx)",
       "Bash(wc -l /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/components/ui/*.tsx)",
-      "Bash(open http://localhost:8000/compliance-dashboard)"
+      "Bash(open http://localhost:8000/compliance-dashboard)",
+      "Bash(xargs -I {} basename {} .php)"
     ]
   }
 }

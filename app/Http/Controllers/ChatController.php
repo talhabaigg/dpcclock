@@ -88,6 +88,7 @@ IMPORTANT: You have access to database tools that can query live data. Use these
 - Locations or projects (use list_locations)
 - Suppliers or vendors (use list_suppliers)
 - Jobs, job summaries, project financials, costs, revenue, end dates (use get_job_summary)
+- DPC, production data, hours, framing, setting, prelim, cost codes, earned/used/projected hours, variance, task progress (use get_dpc_summary or get_dpc_trend)
 
 When a user asks about specific data like "which items are in PO PO400015" or "how many orders today", ALWAYS use the database tools - do NOT use file_search for these queries.
 
@@ -97,6 +98,37 @@ ALWAYS use get_job_summary when the user asks about:
 - Job costs, job revenue, cost vs revenue
 - Project financials or job financials
 - Over/under billing
+
+## DPC (Direct Project Cost) Data
+ALWAYS use get_dpc_summary or get_dpc_trend for ANY question about DPC, production data, hours tracking, task progress, variance, earned hours, used hours, or projected hours.
+
+CRITICAL DPC RULES:
+1. ALWAYS scope DPC data to a single project/location. NEVER mix or combine data from multiple projects.
+2. If no DPC data has been uploaded for a project or time period, say "DPC data has not been uploaded for this project/period." NEVER make up or estimate numbers.
+3. ALWAYS read the LATEST upload unless the user specifically asks to "compare", "trend", or "see history" — only then use get_dpc_trend.
+4. If the user does NOT specify a task or cost code, return the project-level totals from the latest upload (do not filter by task).
+5. The tool performs fuzzy matching — "framing" matches "INT_FRAM" or "Internal Framing", "level 10" matches "Level 10", "prelim" matches "PRELIM" or "Preliminary", etc. Pass the user's words directly as the area/task filter.
+
+Example queries and how to handle them:
+- "How is framing going on level 10 at Coast" → get_dpc_summary(search="Coast", area="level 10", task="framing")
+- "Top 5 variances for Coast" → get_dpc_summary(search="Coast", sort_by="actual_variance", sort_dir="asc", limit=5)
+- "Which tasks are 100% complete" → get_dpc_summary(search="...", min_percent_complete=100)
+- "Summarise prelim items" → get_dpc_summary(search="...", task="prelim")
+- "How is Coast going" → get_dpc_summary(search="Coast") — no task filter, returns project totals
+
+## get_dpc_trend — Per-Item and Per-Area Trending
+get_dpc_trend supports BOTH project-level AND per-item/per-area trending. It accepts the same "task" and "area" filters as get_dpc_summary, and compares the SAME filter across multiple uploads over time.
+
+IMPORTANT: get_dpc_trend CAN trend individual items. When a user asks for a trend on a specific item, pass the task and/or area parameters. The tool will return per-upload aggregates for that specific filter.
+
+Trend examples:
+- "How is leading hand trending" → get_dpc_trend(search="...", task="leading hand")
+- "Trend for foremen at MAR01" → get_dpc_trend(search="MAR01", task="foremen")
+- "How has level 3 sheeting changed over time" → get_dpc_trend(search="...", area="level 3", task="sheeting")
+- "Show trend for Internal Framing" → get_dpc_trend(search="...", task="framing")
+- "Trend for PRELIM items" → get_dpc_trend(search="...", task="prelim")
+- "Compare last 3 uploads for speedpanel on level 5" → get_dpc_trend(search="...", area="level 5", task="speedpanel", limit_reports=3)
+- "Project-level trend for Coast" → get_dpc_trend(search="Coast") — no task filter, returns whole project trend
 
 Only use file_search for:
 - General documentation or help topics
@@ -110,13 +142,25 @@ When creating requisitions, you can help users by:
 3. The system automatically applies location-specific pricing when available
 
 ## Response Guidelines
-- Provide accurate and concise information based on the user's queries
+- Be concise. Match your response length to the question asked.
+- For simple status questions (e.g. "status of MAR01", "how is Coast going"), give a SHORT answer: project name, percent complete, and status (over/under budget). Only add extra detail if the user asks for it.
+- For specific drill-down questions (e.g. "top 5 variances", "how is framing on level 10"), give the relevant detail.
 - If you do not know the answer, respond with "I am not sure about that."
 - Do not make up answers
 - Format your responses using markdown when appropriate for better readability
 
 ## Data Visualization
-When asked to visualize data or show charts, use the get_job_summary tool with include_chart=true to get chart-ready data.
+IMPORTANT: If the user asks for "html chart", "styled html chart", or "render chart in html", use the ```htmlchart block.
+
+```htmlchart rules:
+- Output ONLY the chart/visualization itself — NO title cards, NO KPI summary cards, NO tables, NO text descriptions, NO headers, NO footers
+- Just the SVG chart with axis labels, data points, and a legend if needed
+- Use inline styles only
+- Keep it clean and minimal — the chart IS the entire output
+
+If the user asks for a full "report" or "PDF" or "document", use the ```report block (see Report section below).
+
+For standard chart requests (without mentioning HTML), use the get_job_summary tool with include_chart=true to get chart-ready data.
 Then output the chart data as a JSON code block with the language set to "chart". Example:
 
 ```chart
@@ -154,6 +198,36 @@ After the image is generated, output the result as a JSON code block so it displ
 }
 ```
 IMPORTANT: Always copy the exact image_url from the tool result into the JSON block.
+
+## Report / PDF / HTML Generation
+When the user asks to "generate a report", "create a PDF", "make a document", "export", "use html", "render html", "style it with html", or asks for any styled/visual HTML output, you MUST wrap your HTML inside a code block with the language set to "report".
+
+CRITICAL: ALWAYS use the ```report code fence. NEVER output raw HTML outside of a code fence — it will not render. The ```report block is what triggers the visual preview and Download PDF button.
+
+RULES:
+- Use ONLY inline styles (no external CSS, no <style> blocks, no class names)
+- Design for A4 print: max-width 700px, clean typography, generous spacing
+- Use the font family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+- Include a header with report title, project name, and date
+- Use tables for data with proper borders and padding
+- Use simple CSS bar charts for visualizations (colored divs with percentage widths)
+- Use page-break-before: always on sections if the report is long
+- Keep colors professional: #1a1a1a for text, #f8f9fa for backgrounds, #e9ecef for borders
+- For variance indicators: #dc3545 for negative/over budget, #198754 for positive/under budget
+- DO NOT use any JavaScript, external images, or external resources
+
+Example format:
+```report
+<div style="max-width: 700px; margin: 0 auto;">
+  <div style="border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 24px;">
+    <h1 style="font-size: 20px; font-weight: 700; margin: 0;">DPC Status Report</h1>
+    <p style="color: #6c757d; font-size: 13px; margin: 4px 0 0;">MAR01 — 240 Margaret St | 23 Apr 2026</p>
+  </div>
+  <!-- report content here -->
+</div>
+```
+
+Use this for any request that implies a downloadable document, summary report, or export.
 INSTRUCTIONS;
 
         return config('services.openai.system_instructions') ?: $defaultInstructions;
@@ -744,6 +818,94 @@ INSTRUCTIONS;
                     'include_chart' => [
                         'type' => 'boolean',
                         'description' => 'If true, returns data formatted for chart visualization',
+                    ],
+                ],
+                'required' => [],
+            ],
+        ];
+
+        // ===== DPC (DIRECT PROJECT COST) TOOLS =====
+
+        $tools[] = [
+            'type' => 'function',
+            'name' => 'get_dpc_summary',
+            'description' => 'Get DPC (Direct Project Cost) production data for a project. Returns earned hours, used hours, projected hours, variance, and percent complete for tasks/areas. Use this for ANY question about DPC, production data, hours, framing, setting, prelim items, task progress, or cost codes. The tool performs fuzzy matching so "framing" will match "INT_FRAM" or "Internal Framing", "level 10" will match "Level 10" or "L10", etc.',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'search' => [
+                        'type' => 'string',
+                        'description' => 'Search for project/location by name (e.g., "Coast", "Southbank"). This is the PREFERRED way to find a project.',
+                    ],
+                    'location_id' => [
+                        'type' => 'integer',
+                        'description' => 'Direct location ID if already known.',
+                    ],
+                    'area' => [
+                        'type' => 'string',
+                        'description' => 'Filter by area/level (e.g., "level 10", "L10", "foundation", "roof"). Fuzzy matched.',
+                    ],
+                    'task' => [
+                        'type' => 'string',
+                        'description' => 'Filter by task/activity name or cost code (e.g., "framing", "INT_FRAM", "setting", "prelim", "leading hand"). Fuzzy matched against both cost_code and code_description fields.',
+                    ],
+                    'sort_by' => [
+                        'type' => 'string',
+                        'description' => 'Sort results by this metric. Default: "actual_variance".',
+                        'enum' => ['actual_variance', 'used_hours', 'earned_hours', 'est_hours', 'projected_variance', 'projected_hours', 'percent_complete'],
+                    ],
+                    'sort_dir' => [
+                        'type' => 'string',
+                        'description' => 'Sort direction. Default: "asc" (worst variance first).',
+                        'enum' => ['asc', 'desc'],
+                    ],
+                    'limit' => [
+                        'type' => 'integer',
+                        'description' => 'Maximum number of line items to return (default: 20, max: 50). Use for "top 5 variances" etc.',
+                    ],
+                    'min_percent_complete' => [
+                        'type' => 'number',
+                        'description' => 'Only include items with percent_complete >= this value. Use 100 to find completed tasks.',
+                    ],
+                    'max_percent_complete' => [
+                        'type' => 'number',
+                        'description' => 'Only include items with percent_complete <= this value. Use 0 to find not-started tasks.',
+                    ],
+                    'report_date' => [
+                        'type' => 'string',
+                        'description' => 'Specific report date (YYYY-MM-DD). Defaults to the latest available report.',
+                    ],
+                ],
+                'required' => [],
+            ],
+        ];
+
+        $tools[] = [
+            'type' => 'function',
+            'name' => 'get_dpc_trend',
+            'description' => 'Compare DPC data across multiple report dates to show trends over time. Use this when asked about "trending", "over time", "comparison", "how has X changed", or "history of X". Shows how earned hours, used hours, variance, and percent complete have changed across imports.',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'search' => [
+                        'type' => 'string',
+                        'description' => 'Search for project/location by name (e.g., "Coast").',
+                    ],
+                    'location_id' => [
+                        'type' => 'integer',
+                        'description' => 'Direct location ID if already known.',
+                    ],
+                    'task' => [
+                        'type' => 'string',
+                        'description' => 'Filter by task/activity name or cost code (e.g., "leading hand", "framing"). Fuzzy matched.',
+                    ],
+                    'area' => [
+                        'type' => 'string',
+                        'description' => 'Filter by area/level (e.g., "level 10"). Fuzzy matched.',
+                    ],
+                    'limit_reports' => [
+                        'type' => 'integer',
+                        'description' => 'Number of most recent reports to compare (default: 5, max: 10).',
                     ],
                 ],
                 'required' => [],

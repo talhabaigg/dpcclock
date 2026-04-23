@@ -9,21 +9,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Legend,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
-} from 'recharts';
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from './types';
 
@@ -103,22 +90,22 @@ function CodeBlock({ language, children }: { language: string; children: string 
     );
 }
 
-// Chart colors palette
-const CHART_COLORS = [
-    '#8b5cf6', // violet
-    '#22c55e', // green
-    '#3b82f6', // blue
-    '#f97316', // orange
-    '#ec4899', // pink
-    '#eab308', // yellow
-    '#06b6d4', // cyan
-    '#ef4444', // red
+// Design-system chart tokens — uses CSS variables from --chart-1..5, extended for more datasets
+const CHART_TOKENS = [
+    'oklch(0.646 0.222 41.116)',  // chart-1: warm orange
+    'oklch(0.6 0.118 184.704)',   // chart-2: teal
+    'oklch(0.398 0.07 227.392)',  // chart-3: slate blue
+    'oklch(0.828 0.189 84.429)',  // chart-4: gold
+    'oklch(0.769 0.188 70.08)',   // chart-5: amber
+    'oklch(0.627 0.265 303.9)',   // extended: purple
+    'oklch(0.645 0.246 16.439)',  // extended: rose
+    'oklch(0.55 0.15 150)',       // extended: emerald
 ];
 
-// Chart visualization component
 interface ChartData {
     type: 'bar' | 'line' | 'pie';
     title?: string;
+    unit?: string;
     labels?: string[];
     datasets?: Array<{
         label: string;
@@ -132,7 +119,6 @@ function ChartBlock({ data }: { data: ChartData }) {
     const chartRef = useRef<HTMLDivElement>(null);
     const [isDownloading, setIsDownloading] = useState(false);
 
-    // Transform data for recharts format
     const chartData = data.labels
         ? data.labels.map((label, index) => {
               const point: Record<string, string | number> = { name: label };
@@ -143,226 +129,205 @@ function ChartBlock({ data }: { data: ChartData }) {
           })
         : data.data || [];
 
+    // Detect unit type from dataset labels, title, or explicit unit prop
+    const chartUnit = (() => {
+        if (data.unit) return data.unit;
+        const allText = [
+            data.title || '',
+            ...(data.datasets?.map((ds) => ds.label) || []),
+        ].join(' ');
+
+        if (/\bhours\b|\bhrs\b|earned.hours|used.hours|projected.hours/i.test(allText)) return 'hours';
+        if (/cost|revenue|spend|budget|\$|billing|invoice|amount|price/i.test(allText)) return 'currency';
+        if (/%|percent|complete|progress/i.test(allText)) return 'percent';
+        return 'number';
+    })();
+
     const formatValue = (value: number) => {
-        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-        if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-        return `$${value.toFixed(0)}`;
+        const abs = Math.abs(value);
+        switch (chartUnit) {
+            case 'hours':
+                if (abs >= 1000000) return `${(value / 1000000).toFixed(1)}M hrs`;
+                if (abs >= 1000) return `${(value / 1000).toFixed(1)}K hrs`;
+                return `${Math.round(value).toLocaleString()} hrs`;
+            case 'currency':
+                if (abs >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+                if (abs >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+                return `$${Math.round(value).toLocaleString()}`;
+            case 'percent':
+                return `${value.toFixed(1)}%`;
+            default:
+                if (abs >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+                if (abs >= 1000) return `${(value / 1000).toFixed(1)}K`;
+                return value.toLocaleString();
+        }
     };
+
+    const getColor = (index: number, explicit?: string | string[]) =>
+        (typeof explicit === 'string' && explicit) || CHART_TOKENS[index % CHART_TOKENS.length];
+
+    const chartConfig: ChartConfig = {};
+    data.datasets?.forEach((ds, i) => {
+        chartConfig[ds.label] = { label: ds.label, color: getColor(i, ds.backgroundColor) };
+    });
+    data.data?.forEach((item, i) => {
+        chartConfig[item.name] = { label: item.name, color: CHART_TOKENS[i % CHART_TOKENS.length] };
+    });
 
     const handleDownload = useCallback(async () => {
         if (!chartRef.current || isDownloading) return;
-
         setIsDownloading(true);
         try {
-            // Find the SVG element inside the chart container
             const svgElement = chartRef.current.querySelector('svg');
-            if (!svgElement) {
-                return;
-            }
+            if (!svgElement) { setIsDownloading(false); return; }
 
-            // Clone the SVG to avoid modifying the original
             const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
-
-            // Set explicit dimensions
             const bbox = svgElement.getBoundingClientRect();
             clonedSvg.setAttribute('width', String(bbox.width));
             clonedSvg.setAttribute('height', String(bbox.height));
 
-            // Add white background for better visibility
-            const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            background.setAttribute('width', '100%');
-            background.setAttribute('height', '100%');
-            background.setAttribute('fill', '#ffffff');
-            clonedSvg.insertBefore(background, clonedSvg.firstChild);
+            const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bg.setAttribute('width', '100%');
+            bg.setAttribute('height', '100%');
+            bg.setAttribute('fill', '#ffffff');
+            clonedSvg.insertBefore(bg, clonedSvg.firstChild);
 
-            // Convert SVG to data URL
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(clonedSvg);
-            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const svgBlob = new Blob([new XMLSerializer().serializeToString(clonedSvg)], { type: 'image/svg+xml;charset=utf-8' });
             const svgUrl = URL.createObjectURL(svgBlob);
-
-            // Create canvas and draw image
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
 
             img.onload = () => {
-                // Set canvas size with padding
-                const padding = 20;
-                canvas.width = bbox.width + padding * 2;
-                canvas.height = bbox.height + padding * 2;
-
+                const pad = 24;
+                canvas.width = bbox.width + pad * 2;
+                canvas.height = bbox.height + pad * 2;
                 if (ctx) {
-                    // Fill white background
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    // Draw the chart image centered
-                    ctx.drawImage(img, padding, padding);
-
-                    // Add title if present
-                    if (data.title) {
-                        ctx.fillStyle = '#1f2937';
-                        ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-                        ctx.textAlign = 'center';
-                        ctx.fillText(data.title, canvas.width / 2, 16);
-                    }
-
-                    // Convert to PNG and download
+                    ctx.drawImage(img, pad, pad);
                     canvas.toBlob((blob) => {
                         if (blob) {
                             const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = `chart-${data.title?.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'export'}-${Date.now()}.png`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${data.title?.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'chart'}-${Date.now()}.png`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
                             URL.revokeObjectURL(url);
                         }
                     }, 'image/png');
                 }
-
                 URL.revokeObjectURL(svgUrl);
                 setIsDownloading(false);
             };
 
-            img.onerror = () => {
-                URL.revokeObjectURL(svgUrl);
-                setIsDownloading(false);
-            };
-
+            img.onerror = () => { URL.revokeObjectURL(svgUrl); setIsDownloading(false); };
             img.src = svgUrl;
         } catch {
             setIsDownloading(false);
         }
     }, [data.title, isDownloading]);
 
-    // Custom tooltip component for better styling
-    const CustomTooltip = ({
-        active,
-        payload,
-        label,
-    }: {
-        active?: boolean;
-        payload?: Array<{ name: string; value: number; color: string }>;
-        label?: string;
-    }) => {
-        if (!active || !payload || !payload.length) return null;
+    const truncateLabel = (label: string, max: number = 10) =>
+        label.length <= max ? label : label.slice(0, max) + '\u2026';
 
-        return (
-            <div className="border-border bg-popover rounded-lg border px-3 py-2 shadow-lg">
-                <p className="text-foreground mb-1 text-xs font-medium">{label}</p>
-                {payload.map((entry, index) => (
-                    <div key={index} className="flex items-center gap-2 text-xs">
-                        <div className="size-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                        <span className="text-muted-foreground">{entry.name}:</span>
-                        <span className="text-foreground font-medium">{formatValue(entry.value)}</span>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    // Truncate long labels for X-axis
-    const truncateLabel = (label: string, maxLength: number = 8) => {
-        if (label.length <= maxLength) return label;
-        return label.slice(0, maxLength) + '...';
-    };
+    const tooltipFormatter = (value: unknown, name: unknown) => (
+        <div className="flex flex-1 items-center justify-between gap-4">
+            <span className="text-muted-foreground">{chartConfig[name as string]?.label ?? name}</span>
+            <span className="font-mono font-medium tabular-nums">{formatValue(value as number)}</span>
+        </div>
+    );
 
     return (
-        <div className="group/chart border-border/50 bg-card my-4 overflow-hidden rounded-xl border shadow-sm">
-            {/* Header with title and download button */}
-            <div className="border-border/50 bg-muted/30 flex items-center justify-between border-b px-4 py-3">
-                {data.title ? <h4 className="text-foreground text-sm font-semibold">{data.title}</h4> : <div />}
+        <div className="group/chart bg-card my-4 overflow-hidden rounded-xl border shadow-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-1">
+                {data.title && (
+                    <h4 className="text-foreground text-sm font-semibold tracking-tight">{data.title}</h4>
+                )}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground hover:bg-muted hover:text-foreground h-7 gap-1.5 px-2 text-xs opacity-0 transition-opacity group-hover/chart:opacity-100"
+                            size="icon"
+                            className="text-muted-foreground hover:text-foreground -mr-1 size-8 opacity-0 transition-opacity group-hover/chart:opacity-100"
                             onClick={handleDownload}
                             disabled={isDownloading}
                         >
-                            <Download className={cn('size-3.5', isDownloading && 'animate-bounce')} />
-                            {isDownloading ? 'Saving...' : 'Save'}
+                            <Download className={cn('size-3.5', isDownloading && 'animate-pulse')} />
+                            <span className="sr-only">Download as PNG</span>
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Download as PNG</TooltipContent>
+                    <TooltipContent side="left">Save as PNG</TooltipContent>
                 </Tooltip>
             </div>
-            <div ref={chartRef} className="h-[320px] w-full p-4">
-                <ResponsiveContainer width="100%" height="100%">
+
+            {/* Chart */}
+            <div ref={chartRef} className="px-2 pb-2">
+                <ChartContainer config={chartConfig} className="aspect-auto h-[260px] w-full">
                     {data.type === 'bar' ? (
-                        <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }} barCategoryGap="20%">
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                        <BarChart data={chartData} barCategoryGap="25%">
+                            <CartesianGrid vertical={false} />
                             <XAxis
                                 dataKey="name"
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                                tickLine={false}
-                                axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
-                                angle={-45}
-                                textAnchor="end"
-                                height={70}
-                                interval={0}
-                                tickFormatter={(value) => truncateLabel(String(value))}
-                            />
-                            <YAxis
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                                 tickLine={false}
                                 axisLine={false}
-                                tickFormatter={formatValue}
-                                width={60}
+                                tick={{ fontSize: 11 }}
+                                angle={-40}
+                                textAnchor="end"
+                                height={60}
+                                interval={0}
+                                tickFormatter={(v) => truncateLabel(String(v))}
                             />
-                            <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }} />
-                            <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} iconType="circle" iconSize={8} />
-                            {data.datasets?.map((dataset, index) => (
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={formatValue} width={52} tick={{ fontSize: 11 }} />
+                            <ChartTooltip content={<ChartTooltipContent formatter={tooltipFormatter} />} />
+                            <ChartLegend content={<ChartLegendContent />} />
+                            {data.datasets?.map((ds, i) => (
                                 <Bar
-                                    key={dataset.label}
-                                    dataKey={dataset.label}
-                                    fill={(dataset.backgroundColor as string) || CHART_COLORS[index % CHART_COLORS.length]}
-                                    radius={[4, 4, 0, 0]}
-                                    maxBarSize={50}
+                                    key={ds.label}
+                                    dataKey={ds.label}
+                                    fill={getColor(i, ds.backgroundColor)}
+                                    radius={[3, 3, 0, 0]}
+                                    maxBarSize={48}
                                 />
                             ))}
                         </BarChart>
                     ) : data.type === 'line' ? (
-                        <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                        <LineChart data={chartData}>
+                            <CartesianGrid vertical={false} />
                             <XAxis
                                 dataKey="name"
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                                tickLine={false}
-                                axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
-                                angle={-45}
-                                textAnchor="end"
-                                height={70}
-                                interval={0}
-                                tickFormatter={(value) => truncateLabel(String(value))}
-                            />
-                            <YAxis
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                                 tickLine={false}
                                 axisLine={false}
-                                tickFormatter={formatValue}
-                                width={60}
+                                tick={{ fontSize: 11 }}
+                                angle={-40}
+                                textAnchor="end"
+                                height={60}
+                                interval={0}
+                                tickFormatter={(v) => truncateLabel(String(v))}
                             />
-                            <RechartsTooltip
-                                content={<CustomTooltip />}
-                                cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '4 4' }}
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={formatValue} width={52} tick={{ fontSize: 11 }} />
+                            <ChartTooltip
+                                content={<ChartTooltipContent formatter={tooltipFormatter} />}
+                                cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
                             />
-                            <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} iconType="circle" iconSize={8} />
-                            {data.datasets?.map((dataset, index) => (
-                                <Line
-                                    key={dataset.label}
-                                    type="monotone"
-                                    dataKey={dataset.label}
-                                    stroke={(dataset.backgroundColor as string) || CHART_COLORS[index % CHART_COLORS.length]}
-                                    strokeWidth={2}
-                                    dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
-                                    activeDot={{ r: 6, strokeWidth: 2 }}
-                                />
-                            ))}
+                            <ChartLegend content={<ChartLegendContent />} />
+                            {data.datasets?.map((ds, i) => {
+                                const color = getColor(i, ds.backgroundColor);
+                                return (
+                                    <Line
+                                        key={ds.label}
+                                        type="natural"
+                                        dataKey={ds.label}
+                                        stroke={color}
+                                        strokeWidth={2}
+                                        dot={{ fill: 'hsl(var(--background))', stroke: color, strokeWidth: 2, r: 3 }}
+                                        activeDot={{ fill: color, stroke: 'hsl(var(--background))', strokeWidth: 2, r: 5 }}
+                                    />
+                                );
+                            })}
                         </LineChart>
                     ) : (
                         <PieChart>
@@ -370,52 +335,41 @@ function ChartBlock({ data }: { data: ChartData }) {
                                 data={chartData}
                                 cx="50%"
                                 cy="45%"
-                                innerRadius={55}
-                                outerRadius={95}
-                                paddingAngle={2}
+                                innerRadius={60}
+                                outerRadius={90}
+                                paddingAngle={3}
                                 dataKey="value"
                                 nameKey="name"
-                                label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
-                                    // Don't show labels for very small slices
-                                    if (percent < 0.02) return null;
+                                strokeWidth={0}
+                                label={({ name, percent, cx: pcx, cy: pcy, midAngle, outerRadius: oR }) => {
+                                    if (percent < 0.03) return null;
                                     const RADIAN = Math.PI / 180;
-                                    const radius = outerRadius + 25;
-                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                    const r = oR + 20;
+                                    const x = pcx + r * Math.cos(-midAngle * RADIAN);
+                                    const y = pcy + r * Math.sin(-midAngle * RADIAN);
                                     return (
                                         <text
-                                            x={x}
-                                            y={y}
-                                            fill="hsl(var(--foreground))"
-                                            textAnchor={x > cx ? 'start' : 'end'}
+                                            x={x} y={y}
+                                            fill="hsl(var(--muted-foreground))"
+                                            textAnchor={x > pcx ? 'start' : 'end'}
                                             dominantBaseline="central"
                                             fontSize={11}
-                                            fontWeight={500}
                                         >
-                                            {`${truncateLabel(name, 8)} ${(percent * 100).toFixed(0)}%`}
+                                            {`${truncateLabel(name, 10)} ${(percent * 100).toFixed(0)}%`}
                                         </text>
                                     );
                                 }}
-                                labelLine={{
-                                    stroke: 'hsl(var(--muted-foreground))',
-                                    strokeWidth: 1,
-                                    strokeOpacity: 0.5,
-                                }}
+                                labelLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
                             >
-                                {chartData.map((_, index) => (
-                                    <Cell
-                                        key={`cell-${index}`}
-                                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                                        stroke="hsl(var(--card))"
-                                        strokeWidth={2}
-                                    />
+                                {chartData.map((_, i) => (
+                                    <Cell key={`cell-${i}`} fill={CHART_TOKENS[i % CHART_TOKENS.length]} />
                                 ))}
                             </Pie>
-                            <RechartsTooltip content={<CustomTooltip />} />
-                            <Legend wrapperStyle={{ fontSize: '11px' }} iconType="circle" iconSize={8} layout="horizontal" verticalAlign="bottom" />
+                            <ChartTooltip content={<ChartTooltipContent hideLabel formatter={(v) => formatValue(v as number)} />} />
+                            <ChartLegend content={<ChartLegendContent />} />
                         </PieChart>
                     )}
-                </ResponsiveContainer>
+                </ChartContainer>
             </div>
         </div>
     );
@@ -546,6 +500,185 @@ function GeneratedImageBlock({ data }: { data: GeneratedImageData }) {
                     <span className="text-muted-foreground bg-muted/50 rounded px-2 py-0.5 text-[10px]">{data.size}</span>
                 </div>
             )}
+        </div>
+    );
+}
+
+// HTML chart component — renders AI-generated HTML/SVG with a download-as-image button
+function HtmlChartBlock({ html }: { html: string }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [downloading, setDownloading] = useState(false);
+
+    const handleDownload = useCallback(async () => {
+        const el = containerRef.current;
+        if (!el || downloading) return;
+        setDownloading(true);
+
+        try {
+            // Find the SVG inside the rendered HTML
+            const svg = el.querySelector('svg');
+            if (svg) {
+                // SVG-based download — clean and sharp
+                const clone = svg.cloneNode(true) as SVGSVGElement;
+                const bbox = svg.getBoundingClientRect();
+                clone.setAttribute('width', String(bbox.width));
+                clone.setAttribute('height', String(bbox.height));
+
+                // Add white background
+                const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bg.setAttribute('width', '100%');
+                bg.setAttribute('height', '100%');
+                bg.setAttribute('fill', '#ffffff');
+                clone.insertBefore(bg, clone.firstChild);
+
+                const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+
+                img.onload = () => {
+                    const pad = 16;
+                    canvas.width = (bbox.width + pad * 2) * 2;
+                    canvas.height = (bbox.height + pad * 2) * 2;
+                    canvas.style.width = `${bbox.width + pad * 2}px`;
+                    canvas.style.height = `${bbox.height + pad * 2}px`;
+                    if (ctx) {
+                        ctx.scale(2, 2);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, bbox.width + pad * 2, bbox.height + pad * 2);
+                        ctx.drawImage(img, pad, pad, bbox.width, bbox.height);
+                        canvas.toBlob((b) => {
+                            if (b) {
+                                const dl = URL.createObjectURL(b);
+                                const a = document.createElement('a');
+                                a.href = dl;
+                                a.download = `chart-${Date.now()}.png`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(dl);
+                            }
+                        }, 'image/png');
+                    }
+                    URL.revokeObjectURL(url);
+                    setDownloading(false);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); setDownloading(false); };
+                img.src = url;
+            }
+        } catch {
+            setDownloading(false);
+        }
+    }, [downloading]);
+
+    return (
+        <div className="group/htmlchart relative my-4 overflow-hidden">
+            <div ref={containerRef} className="overflow-x-auto [&>*]:max-w-full [&_svg]:max-w-full [&_svg]:h-auto" dangerouslySetInnerHTML={{ __html: html }} />
+            <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/htmlchart:opacity-100">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="bg-background/80 hover:bg-background text-muted-foreground hover:text-foreground size-8 backdrop-blur-sm"
+                            onClick={handleDownload}
+                            disabled={downloading}
+                        >
+                            <Download className={cn('size-3.5', downloading && 'animate-pulse')} />
+                            <span className="sr-only">Download as image</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">Save as image</TooltipContent>
+                </Tooltip>
+            </div>
+        </div>
+    );
+}
+
+// Report document component — renders AI-generated HTML with a PDF download button
+function ReportBlock({ html }: { html: string }) {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [iframeHeight, setIframeHeight] = useState(400);
+
+    // Wrap raw HTML in a print-ready document shell
+    const fullDocument = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; line-height: 1.5; padding: 32px; max-width: 800px; margin: 0 auto; font-size: 13px; }
+  @media print { body { padding: 0; } @page { margin: 20mm; size: A4; } }
+</style>
+</head><body>${html}</body></html>`;
+
+    useEffect(() => {
+        const iframe = iframeRef.current;
+        if (!iframe) return;
+
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(fullDocument);
+        doc.close();
+
+        // Auto-size iframe to content
+        const resize = () => {
+            const body = doc.body;
+            if (body) {
+                setIframeHeight(body.scrollHeight + 16);
+            }
+        };
+
+        // Resize after content loads (including images)
+        resize();
+        const timer = setTimeout(resize, 300);
+        return () => clearTimeout(timer);
+    }, [fullDocument]);
+
+    const handleDownload = useCallback(() => {
+        const iframe = iframeRef.current;
+        if (!iframe?.contentWindow) return;
+
+        // Open print dialog — user can "Save as PDF" from the browser
+        iframe.contentWindow.print();
+    }, []);
+
+    return (
+        <div className="group/report bg-card my-4 overflow-hidden rounded-xl border shadow-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3">
+                <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+                    <FileText className="size-3.5" />
+                    Report
+                </div>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-foreground h-7 gap-1.5 px-2.5 text-xs"
+                            onClick={handleDownload}
+                        >
+                            <Download className="size-3.5" />
+                            Download PDF
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Print or save as PDF</TooltipContent>
+                </Tooltip>
+            </div>
+
+            {/* Report preview */}
+            <div className="border-t bg-white">
+                <iframe
+                    ref={iframeRef}
+                    className="w-full border-0"
+                    style={{ height: iframeHeight }}
+                    sandbox="allow-same-origin allow-modals"
+                    title="Report preview"
+                />
+            </div>
         </div>
     );
 }
@@ -740,7 +873,266 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                     {isStreaming && !message.content ? (
                         <StreamingIndicator />
                     ) : isStreaming ? (
-                        <SmoothStreamingText content={message.content} />
+                        (() => {
+                            // If streaming content contains a report code block, show a loading state
+                            // Detect which type of HTML block is streaming
+                            const reportMatch = message.content.match(/```(?:report|html-report)\n?/);
+                            const chartHtmlMatch = message.content.match(/```(?:htmlchart|html-chart)\n?/);
+                            const looksLikeRawHtml = !reportMatch && !chartHtmlMatch && /^<div\s+style=/.test(message.content.trim());
+
+                            // HTML chart streaming — compact chart skeleton
+                            if (chartHtmlMatch) {
+                                const before = message.content.slice(0, chartHtmlMatch.index).trim();
+                                return (
+                                    <>
+                                        {before && <SmoothStreamingText content={before} />}
+                                        <div className="bg-card relative my-4 overflow-hidden rounded-xl border shadow-sm">
+                                            {/* Double shimmer — fast sweep + slow glow */}
+                                            <div className="pointer-events-none absolute inset-0 z-10" style={{
+                                                background: 'linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.04) 70%, transparent 100%)',
+                                                backgroundSize: '250% 100%',
+                                                animation: 'chart-shimmer 1.4s ease-in-out infinite',
+                                            }} />
+                                            <div className="pointer-events-none absolute inset-0 z-10" style={{
+                                                background: 'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 70%)',
+                                                animation: 'chart-glow 2.5s ease-in-out infinite',
+                                            }} />
+
+                                            <div className="p-5">
+                                                {/* Title skeleton */}
+                                                <div className="bg-muted h-5 w-44 rounded-md" style={{ animation: 'chart-bar-pulse 1.6s ease-in-out infinite' }} />
+                                                <div className="bg-muted/30 mt-2 h-3 w-64 rounded" style={{ animation: 'chart-bar-pulse 1.6s ease-in-out infinite 200ms' }} />
+
+                                                {/* Y-axis + chart area */}
+                                                <div className="mt-5 flex gap-2">
+                                                    {/* Y-axis labels */}
+                                                    <div className="flex flex-col justify-between py-1" style={{ height: 180 }}>
+                                                        {[0, 1, 2, 3, 4].map((i) => (
+                                                            <div key={i} className="bg-muted/50 h-2 w-7 rounded" style={{ animation: `chart-bar-pulse 1.6s ease-in-out infinite ${300 + i * 80}ms` }} />
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Chart bars / line area */}
+                                                    <div className="relative flex-1">
+                                                        {/* Grid lines */}
+                                                        {[0, 1, 2, 3, 4].map((i) => (
+                                                            <div key={i} className="absolute left-0 right-0 border-t" style={{
+                                                                top: `${i * 25}%`,
+                                                                borderColor: 'hsl(var(--muted) / 0.3)',
+                                                            }} />
+                                                        ))}
+
+                                                        {/* Animated bars that grow upward */}
+                                                        <div className="relative flex items-end gap-1" style={{ height: 180 }}>
+                                                            {[40, 60, 30, 75, 45, 65, 35, 80, 50, 70, 25, 55, 68, 42].map((h, i) => (
+                                                                <div key={i} className="relative flex-1 overflow-hidden rounded-t" style={{
+                                                                    backgroundColor: 'hsl(var(--muted))',
+                                                                    animation: `chart-bar-grow 1.8s ease-out infinite, chart-bar-pulse 2s ease-in-out infinite ${i * 60}ms`,
+                                                                    animationDelay: `${i * 70}ms`,
+                                                                    height: `${h}%`,
+                                                                }}>
+                                                                    {/* Inner glow sweep per bar */}
+                                                                    <div className="absolute inset-0" style={{
+                                                                        background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 60%)',
+                                                                        animation: `chart-bar-inner-sweep 2s ease-in-out infinite ${i * 100}ms`,
+                                                                    }} />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        {/* Animated line overlay — simulates a trend line being drawn */}
+                                                        <svg className="pointer-events-none absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ height: 180, width: '100%' }}>
+                                                            <polyline
+                                                                fill="none"
+                                                                stroke="hsl(var(--muted-foreground))"
+                                                                strokeWidth="0.8"
+                                                                strokeLinecap="round"
+                                                                strokeDasharray="200"
+                                                                strokeDashoffset="200"
+                                                                points="3,60 10,40 18,70 25,25 32,55 40,35 48,65 55,20 62,50 70,30 78,75 85,45 92,32 97,58"
+                                                                style={{ animation: 'chart-line-draw 2.5s ease-out forwards, chart-line-pulse 3s ease-in-out 2.5s infinite' }}
+                                                            />
+                                                            {/* Data point dots that appear after line draws */}
+                                                            {[
+                                                                [3,60],[10,40],[18,70],[25,25],[32,55],[40,35],[48,65],[55,20],[62,50],[70,30],[78,75],[85,45],[92,32],[97,58]
+                                                            ].map(([cx, cy], i) => (
+                                                                <circle key={i} cx={cx} cy={cy} r="1.2" fill="hsl(var(--muted-foreground))" opacity="0"
+                                                                    style={{ animation: `chart-dot-appear 0.3s ease-out ${1.8 + i * 0.08}s forwards` }}
+                                                                />
+                                                            ))}
+                                                        </svg>
+                                                    </div>
+                                                </div>
+
+                                                {/* X-axis labels */}
+                                                <div className="ml-9 mt-2 flex justify-between">
+                                                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                                                        <div key={i} className="bg-muted/40 h-2 rounded" style={{
+                                                            width: `${8 + Math.random() * 4}%`,
+                                                            animation: `chart-bar-pulse 1.6s ease-in-out infinite ${800 + i * 70}ms`,
+                                                        }} />
+                                                    ))}
+                                                </div>
+
+                                                {/* Legend skeleton */}
+                                                <div className="mt-4 flex items-center justify-center gap-4">
+                                                    {[0, 1, 2].map((i) => (
+                                                        <div key={i} className="flex items-center gap-1.5" style={{ animation: `chart-bar-pulse 1.6s ease-in-out infinite ${1200 + i * 120}ms` }}>
+                                                            <div className="bg-muted size-2.5 rounded-full" />
+                                                            <div className="bg-muted/60 h-2 w-14 rounded" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Status bar */}
+                                            <div className="border-t px-4 py-2.5">
+                                                <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                                                    <div className="relative flex size-4 items-center justify-center">
+                                                        <div className="bg-primary/30 absolute size-4 rounded-full" style={{ animation: 'chart-ping 1.2s ease-out infinite' }} />
+                                                        <div className="bg-primary/15 absolute size-6 rounded-full" style={{ animation: 'chart-ping 1.2s ease-out infinite 0.3s' }} />
+                                                        <div className="bg-primary relative size-2 rounded-full" />
+                                                    </div>
+                                                    Drawing chart...
+                                                </div>
+                                            </div>
+
+                                            <style>{`
+                                                @keyframes chart-shimmer {
+                                                    0% { background-position: 250% 0; }
+                                                    100% { background-position: -250% 0; }
+                                                }
+                                                @keyframes chart-glow {
+                                                    0%, 100% { opacity: 0; }
+                                                    50% { opacity: 1; }
+                                                }
+                                                @keyframes chart-bar-grow {
+                                                    0% { transform: scaleY(0.3); transform-origin: bottom; }
+                                                    50% { transform: scaleY(1); transform-origin: bottom; }
+                                                    100% { transform: scaleY(0.3); transform-origin: bottom; }
+                                                }
+                                                @keyframes chart-bar-pulse {
+                                                    0%, 100% { opacity: 0.4; }
+                                                    50% { opacity: 0.8; }
+                                                }
+                                                @keyframes chart-bar-inner-sweep {
+                                                    0%, 100% { transform: translateY(100%); }
+                                                    50% { transform: translateY(-100%); }
+                                                }
+                                                @keyframes chart-line-draw {
+                                                    to { stroke-dashoffset: 0; }
+                                                }
+                                                @keyframes chart-line-pulse {
+                                                    0%, 100% { opacity: 0.3; }
+                                                    50% { opacity: 0.7; }
+                                                }
+                                                @keyframes chart-dot-appear {
+                                                    to { opacity: 0.5; }
+                                                }
+                                                @keyframes chart-ping {
+                                                    0% { transform: scale(1); opacity: 0.5; }
+                                                    100% { transform: scale(2); opacity: 0; }
+                                                }
+                                            `}</style>
+                                        </div>
+                                    </>
+                                );
+                            }
+
+                            // Report streaming — full report skeleton
+                            if (reportMatch || looksLikeRawHtml) {
+                                const before = message.content.slice(0, reportMatch?.index ?? 0).trim();
+                                return (
+                                    <>
+                                        {before && <SmoothStreamingText content={before} />}
+                                        <div className="bg-card relative my-4 overflow-hidden rounded-xl border shadow-sm">
+                                            <div className="pointer-events-none absolute inset-0 z-10" style={{
+                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.08) 60%, transparent 100%)',
+                                                backgroundSize: '200% 100%',
+                                                animation: 'report-shimmer 2s ease-in-out infinite',
+                                            }} />
+                                            {/* Header */}
+                                            <div className="px-5 pt-5 pb-3">
+                                                <div className="bg-muted h-6 w-56 animate-pulse rounded-md" />
+                                                <div className="bg-muted/50 mt-2.5 h-3 w-72 animate-pulse rounded" style={{ animationDelay: '200ms' }} />
+                                                <div className="bg-muted/30 mt-4 h-px w-full" />
+                                            </div>
+                                            {/* Summary cards */}
+                                            <div className="grid grid-cols-4 gap-3 px-5 pb-4">
+                                                {[0, 1, 2, 3].map((i) => (
+                                                    <div key={i} className="bg-muted/30 animate-pulse rounded-lg border p-3.5" style={{ animationDelay: `${150 + i * 120}ms` }}>
+                                                        <div className="bg-muted/80 h-2 w-14 rounded" />
+                                                        <div className="bg-muted mt-2.5 h-5 w-20 rounded" />
+                                                        <div className="mt-2 flex items-center gap-1.5">
+                                                            <div className="bg-muted/60 h-1.5 w-full rounded-full">
+                                                                <div className="bg-muted h-1.5 rounded-full" style={{ width: `${30 + i * 15}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {/* Chart area */}
+                                            <div className="px-5 pb-4">
+                                                <div className="bg-muted/20 rounded-lg border p-4">
+                                                    <div className="bg-muted/60 mb-3 h-3 w-32 animate-pulse rounded" style={{ animationDelay: '600ms' }} />
+                                                    <div className="flex items-end gap-2" style={{ height: 80 }}>
+                                                        {[65, 40, 85, 55, 30, 70, 45, 90, 35, 60].map((h, i) => (
+                                                            <div key={i} className="flex-1 animate-pulse rounded-t" style={{
+                                                                height: `${h}%`,
+                                                                backgroundColor: i % 2 === 0 ? 'hsl(var(--muted))' : 'hsl(var(--muted)/0.5)',
+                                                                animationDelay: `${700 + i * 60}ms`,
+                                                            }} />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* Table */}
+                                            <div className="px-5 pb-4">
+                                                <div className="overflow-hidden rounded-lg border">
+                                                    <div className="bg-muted/40 flex gap-4 px-3 py-2.5">
+                                                        {[28, 16, 16, 18, 14].map((w, i) => (
+                                                            <div key={i} className="bg-muted h-3 animate-pulse rounded" style={{ width: `${w}%`, animationDelay: `${900 + i * 80}ms` }} />
+                                                        ))}
+                                                    </div>
+                                                    {[0, 1, 2, 3, 4, 5].map((row) => (
+                                                        <div key={row} className="border-muted/30 flex gap-4 border-t px-3 py-2.5">
+                                                            {[28, 16, 16, 18, 14].map((w, col) => (
+                                                                <div key={col} className="animate-pulse rounded" style={{
+                                                                    width: `${w}%`,
+                                                                    height: 10,
+                                                                    backgroundColor: `hsl(var(--muted) / ${0.7 - row * 0.05})`,
+                                                                    animationDelay: `${1000 + row * 100 + col * 60}ms`,
+                                                                }} />
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {/* Footer */}
+                                            <div className="px-5 pb-4">
+                                                <div className="bg-muted/50 h-2.5 w-48 animate-pulse rounded" style={{ animationDelay: '1600ms' }} />
+                                                <div className="bg-muted/30 mt-1.5 h-2.5 w-36 animate-pulse rounded" style={{ animationDelay: '1700ms' }} />
+                                            </div>
+                                            {/* Status */}
+                                            <div className="border-t px-5 py-3">
+                                                <div className="text-muted-foreground flex items-center gap-2.5 text-xs">
+                                                    <div className="relative flex size-4 items-center justify-center">
+                                                        <div className="bg-primary/20 absolute size-4 animate-ping rounded-full" />
+                                                        <div className="bg-primary relative size-2 rounded-full" />
+                                                    </div>
+                                                    Generating report...
+                                                </div>
+                                            </div>
+                                            <style>{`@keyframes report-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+                                        </div>
+                                    </>
+                                );
+                            }
+                            return <SmoothStreamingText content={message.content} />;
+                        })()
+                    ) : /^<div\s+style=/.test(message.content.trim()) && !message.content.includes('```') ? (
+                        // Fallback: AI output raw HTML without a ```report fence — render it as a report
+                        <ReportBlock html={message.content.trim()} />
                     ) : (
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -762,6 +1154,16 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                                                 {children}
                                             </code>
                                         );
+                                    }
+
+                                    // Check if this is an AI-generated report (HTML document)
+                                    if (language === 'report' || language === 'html-report') {
+                                        return <ReportBlock html={codeString} />;
+                                    }
+
+                                    // Inline HTML visual — just the chart/visual, no wrapper
+                                    if (language === 'htmlchart' || language === 'html-chart') {
+                                        return <HtmlChartBlock html={codeString} />;
                                     }
 
                                     // Check if this is chart data (language is 'chart' or 'json' containing chart data)
