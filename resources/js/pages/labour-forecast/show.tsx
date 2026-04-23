@@ -29,6 +29,7 @@
  */
 
 import AppLayout from '@/layouts/app-layout';
+import { api } from '@/lib/api';
 import { BreadcrumbItem } from '@/types';
 import { Head, router, useHttp } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -140,7 +141,7 @@ const LabourForecastShow = ({
     // ========================================================================
     // HTTP: useHttp instances
     // ========================================================================
-    const costCalcHttp = useHttp<{ weeks: unknown[] }, { costs: Record<string, number> }>({ weeks: [] });
+    const costCalcAbortRef = useRef<AbortController | null>(null);
     const budgetHttp = useHttp({});
 
     // ========================================================================
@@ -471,21 +472,30 @@ const LabourForecastShow = ({
             }
 
             setIsCalculatingCosts(true);
-            costCalcHttp.setData({ weeks: weeksWithData });
-            costCalcHttp.post(`/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`, {
-                onSuccess: (result) => {
-                    setWeeklyCosts({ ...newCosts, ...result.costs });
-                    setIsCalculatingCosts(false);
-                },
-                onError: () => {
-                    setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
-                    setIsCalculatingCosts(false);
-                },
-            });
+            costCalcAbortRef.current?.abort();
+            const abortController = new AbortController();
+            costCalcAbortRef.current = abortController;
+            api.post<{ costs: Record<string, number> }>(
+                `/location/${location.id}/labour-forecast/calculate-weekly-costs-batch`,
+                { weeks: weeksWithData },
+            )
+                .then((result) => {
+                    if (!abortController.signal.aborted) {
+                        setWeeklyCosts({ ...newCosts, ...result.costs });
+                        setIsCalculatingCosts(false);
+                    }
+                })
+                .catch(() => {
+                    if (!abortController.signal.aborted) {
+                        setWeeklyCosts((prev) => ({ ...prev, ...newCosts }));
+                        setIsCalculatingCosts(false);
+                    }
+                });
         }, 500);
 
         return () => {
             if (costCalculationTimeoutRef.current) clearTimeout(costCalculationTimeoutRef.current);
+            costCalcAbortRef.current?.abort();
         };
     }, [rowData, weeks, location.id]);
 
