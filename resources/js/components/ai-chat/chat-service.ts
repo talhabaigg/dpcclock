@@ -247,6 +247,32 @@ export class ChatService {
     }
 
     /**
+     * Transcribe an audio blob using Whisper
+     */
+    async transcribeAudio(audioBlob: Blob): Promise<string> {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'voice-note.webm');
+
+        const response = await csrfFetch(`${API_BASE}/chat/transcribe`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || errorData.error || 'Failed to transcribe audio');
+        }
+
+        const data = await response.json();
+        return data.text;
+    }
+
+    /**
      * Delete a conversation
      */
     async deleteConversation(conversationId: string): Promise<void> {

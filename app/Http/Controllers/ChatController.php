@@ -1537,6 +1537,47 @@ INSTRUCTIONS;
     }
 
     /**
+     * Transcribe an audio file using OpenAI Whisper
+     */
+    public function transcribe(Request $request)
+    {
+        try {
+            $request->validate([
+                'audio' => ['required', 'file', 'max:25600', 'mimes:webm,mp3,mp4,m4a,wav,ogg,flac,mpeg,mpga'],
+            ]);
+
+            $this->getUserId();
+
+            $file = $request->file('audio');
+
+            $response = Http::withToken($this->getApiKey())
+                ->timeout(60)
+                ->attach('file', file_get_contents($file->getRealPath()), $file->getClientOriginalName())
+                ->post('https://api.openai.com/v1/audio/transcriptions', [
+                    'model' => 'whisper-1',
+                    'language' => 'en',
+                ]);
+
+            if ($response->failed()) {
+                Log::error('Whisper API error', ['status' => $response->status(), 'body' => $response->json()]);
+
+                return response()->json(['error' => 'Failed to transcribe audio'], 503);
+            }
+
+            $text = $response->json('text');
+
+            return response()->json(['text' => $text]);
+        } catch (Throwable $e) {
+            Log::error('Transcription error', ['message' => $e->getMessage()]);
+
+            return response()->json([
+                'error' => 'Transcription failed',
+                'message' => app()->isProduction() ? 'Please try again' : $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Flush output buffers
      */
     private function flushOutput(): void

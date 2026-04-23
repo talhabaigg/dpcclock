@@ -1,8 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,26 +19,16 @@ import { format } from 'date-fns';
 import Echo from 'laravel-echo';
 import {
     AlertCircle,
-    ArrowDownRight,
     ArrowUp,
-    ArrowUpRight,
-    BarChart3,
-    Brain,
     CalendarIcon,
-    CheckCircle2,
     CloudDownload,
     Download,
     FileText,
     Filter,
     Loader2,
-    Minus,
     Printer,
     RefreshCw,
-    Sparkles,
     Square,
-    TrendingDown,
-    TrendingUp,
-    User,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import Pusher from 'pusher-js';
@@ -48,7 +37,7 @@ import { DateRange } from 'react-day-picker';
 import ReactMarkdown from 'react-markdown';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Reports', href: '/' },
+    { title: 'Reports', href: '/reports' },
     { title: 'PO Comparison Report', href: '/reports/po-comparison' },
 ];
 
@@ -211,10 +200,6 @@ export default function POComparisonReport() {
     const [lastSyncedPo, setLastSyncedPo] = useState<string | null>(null);
     const [isWsConnected, setIsWsConnected] = useState(false);
     const echoRef = useRef<any>(null);
-
-    // Expanded rows for detail view
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
     const buildFilters = useCallback(() => {
         const filters: Record<string, any> = {};
@@ -674,8 +659,22 @@ export default function POComparisonReport() {
         }
     };
 
+    const pushFiltersToUrl = useCallback(() => {
+        const filters = buildFilters();
+        const params = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                params.set(key, String(value));
+            }
+        });
+        const qs = params.toString();
+        const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+        window.history.replaceState({}, '', url);
+    }, [buildFilters]);
+
     const handleApplyFilters = () => {
         setHasSearched(true);
+        pushFiltersToUrl();
         fetchReportData();
         fetchSyncStatus();
         setChatMessages([]); // Clear chat when filters change
@@ -692,19 +691,18 @@ export default function POComparisonReport() {
         setMinVariance('');
         setOnlyDiscrepancies(false);
         setDateRange(undefined);
+        window.history.replaceState({}, '', window.location.pathname);
     };
 
-    const toggleRowExpand = (id: number) => {
-        setExpandedRows((prev) => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
-            return newSet;
-        });
-    };
+    // Auto-fetch on mount if URL has filter params
+    useEffect(() => {
+        if (initialFilters && Object.keys(initialFilters).length > 0) {
+            setHasSearched(true);
+            fetchReportData();
+            fetchSyncStatus();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handlePrint = () => {
         window.print();
@@ -754,14 +752,14 @@ export default function POComparisonReport() {
                 )}
             </div>
 
-            <div className="mx-auto space-y-4 p-4 print:p-0">
+            <div className="mx-auto max-w-5xl space-y-4 p-4 print:max-w-none print:p-0">
                 {/* Filters Section - Hide on print */}
                 <Card className="print:hidden">
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <Filter className="h-5 w-5" />
-                                <CardTitle className="text-lg">Report Filters</CardTitle>
+                                <Filter className="h-4 w-4" />
+                                <CardTitle>Report Filters</CardTitle>
                             </div>
                             <div className="flex gap-2">
                                 <Button variant="outline" size="sm" onClick={handleClearFilters}>
@@ -828,7 +826,7 @@ export default function POComparisonReport() {
                                                         {format(dateRange.from, 'dd/MM/yy')} - {format(dateRange.to, 'dd/MM/yy')}
                                                     </>
                                                 ) : (
-                                                    format(dateRange.from, 'dd/MM/yyyy')
+                                                    format(dateRange.from, 'dd/MM/yy')
                                                 )
                                             ) : (
                                                 'Select dates'
@@ -868,7 +866,7 @@ export default function POComparisonReport() {
                             {/* Minimum Variance */}
                             <div className="space-y-2">
                                 <Label>Min Variance ($)</Label>
-                                <Input type="number" placeholder="e.g. 1000" value={minVariance} onChange={(e) => setMinVariance(e.target.value)} />
+                                <Input type="number" min="0" placeholder="Show variances above..." value={minVariance} onChange={(e) => setMinVariance(e.target.value)} />
                             </div>
 
                             {/* Only Discrepancies Toggle */}
@@ -892,26 +890,14 @@ export default function POComparisonReport() {
                                             <span className="text-sm font-medium">Premier Data Sync</span>
                                             <span
                                                 className={cn('h-2 w-2 rounded-full', isWsConnected ? 'bg-green-500' : 'bg-red-500')}
-                                                title={isWsConnected ? 'Real-time updates connected' : 'Real-time updates disconnected'}
+                                                role="status"
+                                                aria-label={isWsConnected ? 'Real-time updates connected' : 'Real-time updates disconnected'}
                                             />
                                         </div>
-                                        <div className="flex items-center gap-3 text-sm">
-                                            <span className="flex items-center gap-1">
-                                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                                <span className="text-green-700 dark:text-green-400">{syncStatus.cached} cached</span>
-                                            </span>
-                                            {syncStatus.stale > 0 && (
-                                                <span className="flex items-center gap-1">
-                                                    <RefreshCw className="h-4 w-4 text-amber-500" />
-                                                    <span className="text-amber-700 dark:text-amber-400">{syncStatus.stale} stale</span>
-                                                </span>
-                                            )}
-                                            {syncStatus.missing > 0 && (
-                                                <span className="flex items-center gap-1">
-                                                    <AlertCircle className="h-4 w-4 text-red-500" />
-                                                    <span className="text-red-700 dark:text-red-400">{syncStatus.missing} missing</span>
-                                                </span>
-                                            )}
+                                        <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                                            <span>{syncStatus.cached} cached</span>
+                                            {syncStatus.stale > 0 && <span>{syncStatus.stale} stale</span>}
+                                            {syncStatus.missing > 0 && <span>{syncStatus.missing} missing</span>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -927,7 +913,7 @@ export default function POComparisonReport() {
                                                 Sync {syncStatus.needs_sync} POs
                                             </Button>
                                         )}
-                                        <Button variant="ghost" size="sm" onClick={fetchSyncStatus} disabled={syncStatusLoading || isSyncing}>
+                                        <Button variant="ghost" size="sm" onClick={fetchSyncStatus} disabled={syncStatusLoading || isSyncing} aria-label="Refresh sync status">
                                             <RefreshCw className={cn('h-4 w-4', (syncStatusLoading || isSyncing) && 'animate-spin')} />
                                         </Button>
                                     </div>
@@ -936,14 +922,7 @@ export default function POComparisonReport() {
                                 {/* Progress Bar */}
                                 <div className="flex items-center gap-3">
                                     <Progress value={syncStatus.ready_percent} className={cn('h-2 flex-1', isSyncing && 'animate-pulse')} />
-                                    <span
-                                        className={cn(
-                                            'min-w-[60px] text-right text-sm font-medium',
-                                            syncStatus.ready_percent === 100
-                                                ? 'text-green-600 dark:text-green-400'
-                                                : 'text-amber-600 dark:text-amber-400',
-                                        )}
-                                    >
+                                    <span className="text-muted-foreground min-w-[40px] text-right text-xs">
                                         {syncStatus.ready_percent}%
                                     </span>
                                 </div>
@@ -964,21 +943,17 @@ export default function POComparisonReport() {
                 {/* Loading State */}
                 {loading && (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                            {[...Array(4)].map((_, i) => (
-                                <Card key={i}>
-                                    <CardContent className="p-6">
-                                        <Skeleton className="mb-2 h-4 w-24" />
-                                        <Skeleton className="h-8 w-32" />
-                                    </CardContent>
-                                </Card>
-                            ))}
+                        <div className="rounded-md border p-4">
+                            <div className="mb-3 flex gap-6">
+                                <Skeleton className="h-5 w-32" />
+                                <Skeleton className="h-5 w-32" />
+                                <Skeleton className="h-5 w-32" />
+                            </div>
+                            <Skeleton className="h-4 w-64" />
                         </div>
-                        <Card>
-                            <CardContent className="p-6">
-                                <Skeleton className="h-64 w-full" />
-                            </CardContent>
-                        </Card>
+                        <div className="rounded-md border p-4">
+                            <Skeleton className="h-64 w-full" />
+                        </div>
                     </div>
                 )}
 
@@ -990,7 +965,7 @@ export default function POComparisonReport() {
                             <p className="text-muted-foreground text-sm">
                                 Showing {reportData.length} purchase orders
                                 {aggregate.pos_with_variances > 0 && (
-                                    <span className="ml-2 text-amber-600">({aggregate.pos_with_variances} with variances)</span>
+                                    <span className="ml-1">({aggregate.pos_with_variances} with variances)</span>
                                 )}
                             </p>
                             <div className="flex gap-2">
@@ -1005,195 +980,77 @@ export default function POComparisonReport() {
                             </div>
                         </div>
 
-                        {/* Executive Summary Cards */}
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 print:grid-cols-4">
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-muted-foreground text-sm">Total POs</p>
-                                            <p className="text-2xl font-bold">{aggregate.total_pos}</p>
-                                        </div>
-                                        <FileText className="h-8 w-8 text-blue-500 opacity-50" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-muted-foreground text-sm">Original Value</p>
-                                            <p className="text-2xl font-bold">{formatCurrency(aggregate.total_original_value)}</p>
-                                        </div>
-                                        <BarChart3 className="h-8 w-8 text-green-500 opacity-50" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-muted-foreground text-sm">Current Value</p>
-                                            <p className="text-2xl font-bold">{formatCurrency(aggregate.total_premier_value)}</p>
-                                        </div>
-                                        <TrendingUp className="h-8 w-8 text-purple-500 opacity-50" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card
-                                className={cn(
-                                    'print:border print:shadow-none',
-                                    aggregate.total_variance > 0
-                                        ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
-                                        : aggregate.total_variance < 0
-                                          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
-                                          : '',
+                        {/* Executive Summary */}
+                        <div className="flex flex-col gap-3 rounded-md border px-4 py-3 md:flex-row md:items-center md:justify-between print:border">
+                            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                                <div>
+                                    <span className="text-muted-foreground text-sm">Original</span>
+                                    <span className="ml-2 text-sm font-semibold tabular-nums">{formatCurrency(aggregate.total_original_value)}</span>
+                                </div>
+                                <span className="text-muted-foreground/40">→</span>
+                                <div>
+                                    <span className="text-muted-foreground text-sm">Current</span>
+                                    <span className="ml-2 text-sm font-semibold tabular-nums">{formatCurrency(aggregate.total_premier_value)}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground text-sm">Variance</span>
+                                    <span className="ml-2 text-sm font-bold tabular-nums">
+                                        {formatCurrency(aggregate.total_variance)} ({formatPercent(aggregate.variance_percent)})
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                <span>{aggregate.total_pos} POs</span>
+                                <span className="text-muted-foreground/30">|</span>
+                                <span>Invoiced {formatCurrency(aggregate.total_invoiced_value)}</span>
+                                {(aggregate.items_modified > 0 || aggregate.items_added > 0 || aggregate.items_removed > 0) && (
+                                    <>
+                                        <span className="text-muted-foreground/30">|</span>
+                                        <span>
+                                            {aggregate.items_modified > 0 && `${aggregate.items_modified} modified`}
+                                            {aggregate.items_added > 0 && ` +${aggregate.items_added} added`}
+                                            {aggregate.items_removed > 0 && ` -${aggregate.items_removed} removed`}
+                                        </span>
+                                    </>
                                 )}
-                            >
-                                <CardContent className="p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-muted-foreground text-sm">Total Variance</p>
-                                            <p
-                                                className={cn(
-                                                    'text-2xl font-bold',
-                                                    aggregate.total_variance > 0
-                                                        ? 'text-amber-600'
-                                                        : aggregate.total_variance < 0
-                                                          ? 'text-green-600'
-                                                          : '',
-                                                )}
-                                            >
-                                                {formatCurrency(aggregate.total_variance)}
-                                            </p>
-                                            <p className="text-muted-foreground text-xs">{formatPercent(aggregate.variance_percent)}</p>
-                                        </div>
-                                        {aggregate.total_variance > 0 ? (
-                                            <TrendingUp className="h-8 w-8 text-amber-500" />
-                                        ) : aggregate.total_variance < 0 ? (
-                                            <TrendingDown className="h-8 w-8 text-green-500" />
-                                        ) : (
-                                            <Minus className="h-8 w-8 text-gray-400" />
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            </div>
                         </div>
 
-                        {/* Secondary Stats Row */}
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-6 print:grid-cols-6">
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">Invoiced</p>
-                                    <p className="text-lg font-semibold">{formatCurrency(aggregate.total_invoiced_value)}</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">Items Unchanged</p>
-                                    <p className="text-lg font-semibold text-green-600 dark:text-green-400">{aggregate.items_unchanged}</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">Items Modified</p>
-                                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.items_modified}</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">Items Added</p>
-                                    <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">{aggregate.items_added}</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">Items Removed</p>
-                                    <p className="text-lg font-semibold text-red-600 dark:text-red-400">{aggregate.items_removed}</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="print:border print:shadow-none">
-                                <CardContent className="p-3 text-center">
-                                    <p className="text-muted-foreground text-xs">POs with Issues</p>
-                                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{aggregate.pos_with_variances}</p>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        {/* CRITICAL: Price List Violations Alert */}
+                        {/* Price List Violations Notice */}
                         {aggregate.price_list_violations > 0 && (
-                            <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/30 print:border print:bg-red-50">
-                                <AlertCircle className="h-5 w-5" />
-                                <AlertTitle className="text-lg font-bold">Price List Violations Detected</AlertTitle>
-                                <AlertDescription>
-                                    <p className="mb-2">
-                                        <strong>{aggregate.price_list_violations} item(s)</strong> with contracted price lists have pricing changes.
-                                        This represents a potential breach in the purchasing/invoice process.
-                                    </p>
-                                    <p className="text-lg font-bold text-red-700 dark:text-red-400">
-                                        Total Impact: {formatCurrency(aggregate.price_list_violation_value)}
-                                    </p>
-                                </AlertDescription>
-                            </Alert>
+                            <p className="text-muted-foreground text-sm print:block">
+                                <strong>{aggregate.price_list_violations} price list violation(s)</strong> totalling {formatCurrency(aggregate.price_list_violation_value)}.{' '}
+                                See Violations tab.
+                            </p>
                         )}
 
                         {/* Tabs for different views */}
                         <Tabs defaultValue={aggregate.price_list_violations > 0 ? 'violations' : 'summary'} className="print:hidden">
-                            <TabsList className="grid w-full grid-cols-4">
+                            <TabsList className={cn('grid w-full', aggregate.price_list_violations > 0 ? 'grid-cols-4' : 'grid-cols-3')}>
                                 {aggregate.price_list_violations > 0 && (
-                                    <TabsTrigger value="violations" className="text-red-600 dark:text-red-400">
-                                        <AlertCircle className="mr-2 h-4 w-4" />
+                                    <TabsTrigger value="violations">
                                         Violations ({aggregate.price_list_violations})
                                     </TabsTrigger>
                                 )}
-                                <TabsTrigger value="summary">
-                                    <BarChart3 className="mr-2 h-4 w-4" />
-                                    Summary
-                                </TabsTrigger>
-                                <TabsTrigger value="details">
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    Details
-                                </TabsTrigger>
-                                <TabsTrigger value="insights">
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                    Ask AI
-                                </TabsTrigger>
+                                <TabsTrigger value="summary">Summary</TabsTrigger>
+                                <TabsTrigger value="details">Details</TabsTrigger>
+                                <TabsTrigger value="insights">Insights</TabsTrigger>
                             </TabsList>
 
                             {/* Price List Violations Tab */}
                             {aggregate.price_list_violations > 0 && (
                                 <TabsContent value="violations" className="space-y-4">
-                                    <Card className="border-red-200 dark:border-red-800">
-                                        <CardHeader className="bg-red-50 dark:bg-red-950/30">
-                                            <div className="flex items-center gap-2">
-                                                <AlertCircle className="h-6 w-6 text-red-600" />
+                                    {priceListViolations.map((po, idx) => (
+                                        <div key={idx} className="rounded-md border">
+                                            <div className="flex items-center justify-between px-4 py-3">
                                                 <div>
-                                                    <CardTitle className="text-red-700 dark:text-red-300">Price List Compliance Violations</CardTitle>
-                                                    <CardDescription className="text-red-600 dark:text-red-400">
-                                                        Items with contracted price lists that have unauthorized price changes
-                                                    </CardDescription>
+                                                    <p className="text-sm font-medium">PO{po.po_number}</p>
+                                                    <p className="text-muted-foreground text-xs">
+                                                        {po.location} | {po.supplier}
+                                                    </p>
                                                 </div>
+                                                <span className="text-muted-foreground text-xs">{po.violations.length} violation(s)</span>
                                             </div>
-                                        </CardHeader>
-                                        <CardContent className="pt-4">
-                                            <div className="space-y-4">
-                                                {priceListViolations.map((po, idx) => (
-                                                    <Card key={idx} className="border-red-100 dark:border-red-900">
-                                                        <CardHeader className="pb-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <div>
-                                                                    <CardTitle className="text-base">PO{po.po_number}</CardTitle>
-                                                                    <CardDescription>
-                                                                        {po.location} | {po.supplier}
-                                                                    </CardDescription>
-                                                                </div>
-                                                                <Badge variant="destructive">{po.violations.length} violation(s)</Badge>
-                                                            </div>
-                                                        </CardHeader>
-                                                        <CardContent>
                                                             <Table>
                                                                 <TableHeader>
                                                                     <TableRow>
@@ -1207,17 +1064,12 @@ export default function POComparisonReport() {
                                                                 </TableHeader>
                                                                 <TableBody>
                                                                     {po.violations.map((v, vIdx) => (
-                                                                        <TableRow key={vIdx} className="bg-red-50 dark:bg-red-950/30">
+                                                                        <TableRow key={vIdx}>
                                                                             <TableCell className="max-w-[200px] truncate font-medium">
                                                                                 {v.description}
                                                                             </TableCell>
-                                                                            <TableCell>
-                                                                                <Badge
-                                                                                    variant="outline"
-                                                                                    className="bg-blue-50 text-xs text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
-                                                                                >
-                                                                                    {v.price_list}
-                                                                                </Badge>
+                                                                            <TableCell className="text-xs">
+                                                                                {v.price_list}
                                                                             </TableCell>
                                                                             <TableCell className="text-right tabular-nums">
                                                                                 {formatCurrency(v.original_unit_cost)}
@@ -1226,42 +1078,24 @@ export default function POComparisonReport() {
                                                                                 {formatCurrency(v.current_unit_cost)}
                                                                             </TableCell>
                                                                             <TableCell className="text-right tabular-nums">
-                                                                                <span
-                                                                                    className={cn(
-                                                                                        'font-medium',
-                                                                                        v.difference > 0 ? 'text-red-600' : 'text-green-600',
-                                                                                    )}
-                                                                                >
-                                                                                    {v.difference > 0 ? '+' : ''}
-                                                                                    {formatCurrency(v.difference)}
-                                                                                </span>
+                                                                                {v.difference > 0 ? '+' : ''}{formatCurrency(v.difference)}
                                                                             </TableCell>
-                                                                            <TableCell className="text-right font-bold text-red-600 tabular-nums">
+                                                                            <TableCell className="text-right font-medium tabular-nums">
                                                                                 {formatCurrency(v.total_impact)}
                                                                             </TableCell>
                                                                         </TableRow>
                                                                     ))}
                                                                 </TableBody>
                                                             </Table>
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                        </div>
+                                    ))}
                                 </TabsContent>
                             )}
 
                             {/* Summary Tab */}
-                            <TabsContent value="summary" className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>PO Comparison Summary</CardTitle>
-                                        <CardDescription>Overview of all purchase orders with variance analysis</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="overflow-x-auto">
-                                            <Table>
+                            <TabsContent value="summary">
+                                <div className="overflow-x-auto rounded-md border">
+                                    <Table>
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead>PO Number</TableHead>
@@ -1278,11 +1112,7 @@ export default function POComparisonReport() {
                                                     {reportData.map((item) => (
                                                         <TableRow
                                                             key={item.requisition.id}
-                                                            className={cn(
-                                                                'hover:bg-muted/50 cursor-pointer',
-                                                                item.summary.has_discrepancies && 'bg-amber-50/50 dark:bg-amber-950/30',
-                                                            )}
-                                                            onClick={() => toggleRowExpand(item.requisition.id)}
+                                                            className="hover:bg-muted/50"
                                                         >
                                                             <TableCell className="font-medium">PO{item.requisition.po_number}</TableCell>
                                                             <TableCell className="max-w-[150px] truncate">{item.location?.name || 'N/A'}</TableCell>
@@ -1296,94 +1126,48 @@ export default function POComparisonReport() {
                                                             <TableCell className="text-right tabular-nums">
                                                                 {formatCurrency(item.totals.invoiced)}
                                                             </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <div className="flex items-center justify-end gap-1">
-                                                                    {item.totals.variance > 0 ? (
-                                                                        <ArrowUpRight className="h-4 w-4 text-amber-500" />
-                                                                    ) : item.totals.variance < 0 ? (
-                                                                        <ArrowDownRight className="h-4 w-4 text-green-500" />
-                                                                    ) : null}
-                                                                    <span
-                                                                        className={cn(
-                                                                            'tabular-nums',
-                                                                            item.totals.variance > 0 && 'text-amber-600',
-                                                                            item.totals.variance < 0 && 'text-green-600',
-                                                                        )}
-                                                                    >
-                                                                        {formatCurrency(item.totals.variance)}
-                                                                    </span>
-                                                                </div>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(item.totals.variance)}
                                                             </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <div className="flex items-center justify-center gap-1">
-                                                                    {item.summary.modified_count > 0 && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="bg-amber-100 text-xs text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
-                                                                        >
-                                                                            {item.summary.modified_count} mod
-                                                                        </Badge>
-                                                                    )}
-                                                                    {item.summary.added_count > 0 && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="bg-blue-100 text-xs text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-                                                                        >
-                                                                            +{item.summary.added_count}
-                                                                        </Badge>
-                                                                    )}
-                                                                    {item.summary.removed_count > 0 && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="bg-red-100 text-xs text-red-700 dark:bg-red-900/50 dark:text-red-300"
-                                                                        >
-                                                                            -{item.summary.removed_count}
-                                                                        </Badge>
-                                                                    )}
-                                                                    {!item.summary.has_discrepancies && (
-                                                                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                                                    )}
-                                                                </div>
+                                                            <TableCell className="text-muted-foreground text-center text-xs">
+                                                                {item.summary.has_discrepancies ? (
+                                                                    <span>
+                                                                        {item.summary.modified_count > 0 && `${item.summary.modified_count} mod`}
+                                                                        {item.summary.added_count > 0 && ` +${item.summary.added_count}`}
+                                                                        {item.summary.removed_count > 0 && ` -${item.summary.removed_count}`}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span>OK</span>
+                                                                )}
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>
-                                            </Table>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                    </Table>
+                                </div>
                             </TabsContent>
 
                             {/* Details Tab */}
                             <TabsContent value="details" className="space-y-4">
                                 {reportData.map((item) => (
-                                    <Card
+                                    <div
                                         key={item.requisition.id}
-                                        className={cn(item.summary.has_discrepancies && 'border-amber-200 dark:border-amber-800')}
+                                        className="rounded-md border"
                                     >
-                                        <CardHeader className="pb-2">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle className="text-lg">PO{item.requisition.po_number}</CardTitle>
-                                                    <CardDescription>
-                                                        {item.location?.name} | {item.supplier?.name}
-                                                    </CardDescription>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-muted-foreground text-sm">Variance</p>
-                                                    <p
-                                                        className={cn(
-                                                            'text-lg font-bold',
-                                                            item.totals.variance > 0 && 'text-amber-600',
-                                                            item.totals.variance < 0 && 'text-green-600',
-                                                        )}
-                                                    >
-                                                        {formatCurrency(item.totals.variance)} ({formatPercent(item.totals.variance_percent)})
-                                                    </p>
-                                                </div>
+                                        <div className="flex items-center justify-between px-4 py-3">
+                                            <div>
+                                                <p className="text-sm font-medium">PO{item.requisition.po_number}</p>
+                                                <p className="text-muted-foreground text-xs">
+                                                    {item.location?.name} | {item.supplier?.name}
+                                                </p>
                                             </div>
-                                        </CardHeader>
-                                        <CardContent>
+                                            <div className="text-right">
+                                                <p className="text-muted-foreground text-xs">Variance</p>
+                                                <p className="text-sm font-semibold tabular-nums">
+                                                    {formatCurrency(item.totals.variance)} ({formatPercent(item.totals.variance_percent)})
+                                                </p>
+                                            </div>
+                                        </div>
                                             <div className="overflow-x-auto">
                                                 <Table>
                                                     <TableHeader>
@@ -1401,31 +1185,9 @@ export default function POComparisonReport() {
                                                     </TableHeader>
                                                     <TableBody>
                                                         {item.comparison.slice(0, 10).map((line: any, idx: number) => (
-                                                            <TableRow
-                                                                key={idx}
-                                                                className={cn(
-                                                                    line.status === 'added' && 'bg-blue-50 dark:bg-blue-950/30',
-                                                                    line.status === 'removed' && 'bg-red-50 dark:bg-red-950/30',
-                                                                    line.status === 'modified' && 'bg-amber-50 dark:bg-amber-950/30',
-                                                                )}
-                                                            >
+                                                            <TableRow key={idx}>
                                                                 <TableCell>
-                                                                    <Badge
-                                                                        variant="outline"
-                                                                        className={cn(
-                                                                            'text-xs',
-                                                                            line.status === 'unchanged' &&
-                                                                                'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-                                                                            line.status === 'modified' &&
-                                                                                'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
-                                                                            line.status === 'added' &&
-                                                                                'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-                                                                            line.status === 'removed' &&
-                                                                                'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-                                                                        )}
-                                                                    >
-                                                                        {line.status}
-                                                                    </Badge>
+                                                                    <span className="text-muted-foreground text-xs capitalize">{line.status}</span>
                                                                 </TableCell>
                                                                 <TableCell className="max-w-[200px] truncate">
                                                                     {line.local?.description || line.premier?.description || 'N/A'}
@@ -1445,18 +1207,9 @@ export default function POComparisonReport() {
                                                                     {line.premier ? formatCurrency(line.premier.total_cost) : '—'}
                                                                 </TableCell>
                                                                 <TableCell className="text-right tabular-nums">
-                                                                    {line.variances?.total_cost?.difference !== undefined ? (
-                                                                        <span
-                                                                            className={cn(
-                                                                                line.variances.total_cost.difference > 0 && 'text-amber-600',
-                                                                                line.variances.total_cost.difference < 0 && 'text-green-600',
-                                                                            )}
-                                                                        >
-                                                                            {formatCurrency(line.variances.total_cost.difference)}
-                                                                        </span>
-                                                                    ) : (
-                                                                        '—'
-                                                                    )}
+                                                                    {line.variances?.total_cost?.difference !== undefined
+                                                                        ? formatCurrency(line.variances.total_cost.difference)
+                                                                        : '—'}
                                                                 </TableCell>
                                                             </TableRow>
                                                         ))}
@@ -1470,40 +1223,33 @@ export default function POComparisonReport() {
                                                     </TableBody>
                                                 </Table>
                                             </div>
-                                        </CardContent>
-                                    </Card>
+                                    </div>
                                 ))}
                             </TabsContent>
 
                             {/* AI Insights Tab */}
                             <TabsContent value="insights" className="space-y-4">
-                                <Card className="flex h-[700px] flex-col">
-                                    <CardHeader className="flex-shrink-0">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Sparkles className="h-5 w-5 text-purple-500" />
-                                                <CardTitle>AI Procurement Advisor</CardTitle>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                {chatMessages.length === 0 && !insightsLoading && (
-                                                    <Button onClick={fetchInsights}>
-                                                        <Brain className="mr-2 h-4 w-4" />
-                                                        Start Analysis
-                                                    </Button>
-                                                )}
-                                                {chatMessages.length > 0 && (
-                                                    <Button variant="outline" onClick={refreshInsights} disabled={insightsLoading}>
-                                                        <RefreshCw className={cn('mr-2 h-4 w-4', insightsLoading && 'animate-spin')} />
-                                                        New Analysis
-                                                    </Button>
-                                                )}
-                                            </div>
+                                <div className="flex h-[600px] flex-col rounded-md border">
+                                    <div className="flex items-center justify-between border-b px-4 py-3">
+                                        <div>
+                                            <p className="text-sm font-medium">Procurement Insights</p>
+                                            <p className="text-muted-foreground text-xs">Analyse PO data for trends and recommendations</p>
                                         </div>
-                                        <CardDescription>
-                                            Chat with AI about your procurement data. Ask follow-up questions to dive deeper.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="flex flex-1 flex-col overflow-hidden">
+                                        <div className="flex gap-2">
+                                            {chatMessages.length === 0 && !insightsLoading && (
+                                                <Button size="sm" onClick={fetchInsights}>
+                                                    Start Analysis
+                                                </Button>
+                                            )}
+                                            {chatMessages.length > 0 && (
+                                                <Button variant="outline" size="sm" onClick={refreshInsights} disabled={insightsLoading}>
+                                                    {insightsLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                    New Analysis
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-1 flex-col overflow-hidden px-4 py-3">
                                         {insightsError && (
                                             <Alert variant="destructive" className="mb-4 flex-shrink-0">
                                                 <AlertCircle className="h-4 w-4" />
@@ -1515,40 +1261,28 @@ export default function POComparisonReport() {
                                         {/* Chat Messages Area */}
                                         <div className="mb-4 flex-1 space-y-4 overflow-y-auto pr-2">
                                             {chatMessages.length === 0 && !insightsLoading && !insightsError && (
-                                                <div className="py-12 text-center">
-                                                    <Brain className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-                                                    <p className="text-muted-foreground mb-2">Your AI Procurement Advisor</p>
-                                                    <p className="text-muted-foreground text-sm">
-                                                        Click "Start Analysis" to get insights on your PO data.
-                                                        <br />
-                                                        You can ask follow-up questions to explore specific areas.
-                                                    </p>
+                                                <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
+                                                    Click "Start Analysis" to begin
                                                 </div>
                                             )}
 
                                             {chatMessages.map((message) => (
-                                                <div key={message.id} className={cn('flex gap-3', message.role === 'user' && 'justify-end')}>
-                                                    {message.role === 'assistant' && (
-                                                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600">
-                                                            <Sparkles className="h-4 w-4 text-white" />
-                                                        </div>
-                                                    )}
+                                                <div key={message.id} className={cn('flex', message.role === 'user' && 'justify-end')}>
                                                     <div
                                                         className={cn(
-                                                            'max-w-[85%] rounded-lg p-4',
+                                                            'max-w-[85%] rounded-md px-3 py-2',
                                                             message.role === 'assistant'
-                                                                ? 'bg-muted/30 prose prose-sm dark:prose-invert prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-purple-300 prose-blockquote:bg-purple-50 dark:prose-blockquote:bg-purple-950/30 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded max-w-none border'
-                                                                : 'bg-primary text-primary-foreground',
-                                                            message.status === 'error' && 'border-destructive',
+                                                                ? 'prose prose-sm dark:prose-invert prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none'
+                                                                : 'bg-muted text-sm',
                                                         )}
                                                     >
                                                         {message.role === 'assistant' ? (
                                                             message.status === 'streaming' && !message.content ? (
                                                                 <div className="space-y-3">
                                                                     <div className="flex items-center gap-2">
-                                                                        <Sparkles className="size-4 animate-pulse text-violet-500" />
-                                                                        <span className="animate-pulse bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-sm font-medium text-transparent">
-                                                                            Thinking...
+                                                                        <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                                                                        <span className="text-muted-foreground text-sm font-medium">
+                                                                            Analysing...
                                                                         </span>
                                                                     </div>
                                                                     <div className="space-y-2">
@@ -1569,11 +1303,6 @@ export default function POComparisonReport() {
                                                             <p>{message.content}</p>
                                                         )}
                                                     </div>
-                                                    {message.role === 'user' && (
-                                                        <div className="bg-primary flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
-                                                            <User className="text-primary-foreground h-4 w-4" />
-                                                        </div>
-                                                    )}
                                                 </div>
                                             ))}
 
@@ -1583,79 +1312,56 @@ export default function POComparisonReport() {
                                         {/* Follow-up Input - Styled like chat-input */}
                                         {chatMessages.length > 0 && chatMessages.some((m) => m.status === 'complete') && (
                                             <div className="flex-shrink-0 border-t pt-4">
-                                                <div className="group relative">
-                                                    {/* Rainbow gradient border effect */}
-                                                    <div
-                                                        className="absolute -inset-[1px] rounded-2xl opacity-0 blur-sm transition-opacity duration-300 group-focus-within:opacity-60"
-                                                        style={{
-                                                            background:
-                                                                'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #ef4444, #f97316, #eab308, #22c55e, #3b82f6)',
-                                                            backgroundSize: '200% 100%',
-                                                            animation: 'rainbow-shift 8s linear infinite',
+                                                <div className="border-border focus-within:ring-ring flex items-center gap-2 rounded-lg border px-3 py-2 focus-within:ring-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ask a follow-up question..."
+                                                        aria-label="Follow-up question"
+                                                        value={followUpQuestion}
+                                                        onChange={(e) => setFollowUpQuestion(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                askFollowUp();
+                                                            }
                                                         }}
+                                                        disabled={followUpLoading || chatMessages.some((m) => m.status === 'streaming')}
+                                                        className="placeholder:text-muted-foreground min-h-[24px] flex-1 bg-transparent text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                                     />
-                                                    <div className="border-border/50 bg-card group-focus-within:border-border relative flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all duration-200 group-focus-within:shadow-md">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Ask a follow-up question..."
-                                                            value={followUpQuestion}
-                                                            onChange={(e) => setFollowUpQuestion(e.target.value)}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter' && !e.shiftKey) {
-                                                                    e.preventDefault();
-                                                                    askFollowUp();
-                                                                }
-                                                            }}
-                                                            disabled={followUpLoading || chatMessages.some((m) => m.status === 'streaming')}
-                                                            className="placeholder:text-muted-foreground/60 min-h-[24px] flex-1 bg-transparent text-base leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                                        />
-                                                        <div className="flex shrink-0 items-center">
-                                                            {followUpLoading || chatMessages.some((m) => m.status === 'streaming') ? (
-                                                                <Button
-                                                                    type="button"
-                                                                    size="icon"
-                                                                    variant="outline"
-                                                                    className="size-9 rounded-full"
-                                                                    onClick={() => abortControllerRef.current?.abort()}
-                                                                >
-                                                                    <Square className="size-4" fill="currentColor" />
-                                                                </Button>
-                                                            ) : (
-                                                                <Button
-                                                                    type="button"
-                                                                    size="icon"
-                                                                    className={cn(
-                                                                        'size-9 rounded-full transition-all',
-                                                                        followUpQuestion.trim()
-                                                                            ? 'bg-foreground text-background hover:bg-foreground/90 shadow-md hover:scale-105'
-                                                                            : 'bg-muted text-muted-foreground cursor-not-allowed',
-                                                                    )}
-                                                                    onClick={askFollowUp}
-                                                                    disabled={!followUpQuestion.trim()}
-                                                                >
-                                                                    <ArrowUp className="size-5" />
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                    {followUpLoading || chatMessages.some((m) => m.status === 'streaming') ? (
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="outline"
+                                                            className="size-8"
+                                                            aria-label="Stop generating"
+                                                            onClick={() => abortControllerRef.current?.abort()}
+                                                        >
+                                                            <Square className="size-3.5" fill="currentColor" />
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            className="size-8"
+                                                            aria-label="Send question"
+                                                            onClick={askFollowUp}
+                                                            disabled={!followUpQuestion.trim()}
+                                                        >
+                                                            <ArrowUp className="size-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
-                                                {/* CSS animation for rainbow effect */}
-                                                <style>{`
-                                                    @keyframes rainbow-shift {
-                                                        0% { background-position: 0% 50%; }
-                                                        100% { background-position: 200% 50%; }
-                                                    }
-                                                `}</style>
                                             </div>
                                         )}
-                                    </CardContent>
-                                </Card>
+                                    </div>
+                                </div>
                             </TabsContent>
                         </Tabs>
 
                         {/* Print-only detailed table */}
                         <div className="hidden print:block print:break-before-page">
-                            <h2 className="mb-4 text-xl font-bold">Detailed Comparison</h2>
+                            <h2 className="mb-4 text-base font-bold">Detailed Comparison</h2>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -1695,71 +1401,33 @@ export default function POComparisonReport() {
 
                 {/* Empty state - before search */}
                 {!loading && !error && !hasSearched && (
-                    <Card>
-                        <CardContent className="p-12 text-center">
-                            <Filter className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-                            <h3 className="mb-2 text-lg font-medium">Select Filters to Generate Report</h3>
-                            <p className="text-muted-foreground mb-4">
-                                Choose your filters above and click "Apply Filters" to generate the PO comparison report.
-                            </p>
-                            <Button onClick={handleApplyFilters}>
-                                <BarChart3 className="mr-2 h-4 w-4" />
-                                Generate Report
-                            </Button>
-                        </CardContent>
-                    </Card>
+                    <div className="py-12 text-center">
+                        <Filter className="text-muted-foreground mx-auto mb-4 h-10 w-10" />
+                        <h3 className="mb-2 text-sm font-medium">Select Filters to Generate Report</h3>
+                        <p className="text-muted-foreground mb-4 text-sm">
+                            Choose your filters above and click "Apply Filters" to generate the PO comparison report.
+                        </p>
+                        <Button onClick={handleApplyFilters}>
+                            Generate Report
+                        </Button>
+                    </div>
                 )}
 
                 {/* Empty state - after search with no results */}
                 {!loading && !error && hasSearched && reportData.length === 0 && (
-                    <Card>
-                        <CardContent className="p-12 text-center">
-                            <FileText className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-                            <h3 className="mb-2 text-lg font-medium">No Purchase Orders Found</h3>
-                            <p className="text-muted-foreground">
-                                No purchase orders match your current filters, or there are no POs synced with Premier yet.
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <div className="py-12 text-center">
+                        <FileText className="text-muted-foreground mx-auto mb-4 h-10 w-10" />
+                        <h3 className="mb-2 text-sm font-medium">No Purchase Orders Found</h3>
+                        <p className="text-muted-foreground mb-4 text-sm">
+                            No purchase orders match your current filters. Try broadening your search or clearing filters.
+                        </p>
+                        <Button variant="outline" onClick={handleClearFilters}>
+                            Clear Filters
+                        </Button>
+                    </div>
                 )}
             </div>
 
-            {/* Print Styles */}
-            <style>{`
-                @media print {
-                    .print\\:hidden {
-                        display: none !important;
-                    }
-                    .print\\:block {
-                        display: block !important;
-                    }
-                    .print\\:border {
-                        border: 1px solid #e5e7eb !important;
-                    }
-                    .print\\:shadow-none {
-                        box-shadow: none !important;
-                    }
-                    .print\\:p-0 {
-                        padding: 0 !important;
-                    }
-                    .print\\:mb-6 {
-                        margin-bottom: 1.5rem !important;
-                    }
-                    .print\\:grid-cols-4 {
-                        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-                    }
-                    .print\\:grid-cols-6 {
-                        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-                    }
-                    .print\\:break-before-page {
-                        break-before: page !important;
-                    }
-                    body {
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
-                    }
-                }
-            `}</style>
         </AppLayout>
     );
 }

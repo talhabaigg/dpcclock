@@ -947,6 +947,80 @@ trait ExecutesAiTools
         $this->applyDpcFilters($totalQuery, $arguments);
         $totalMatchingLines = $totalQuery->count();
 
+        // If no results found with filters, suggest similar items
+        if ($totalMatchingLines === 0 && (! empty($arguments['area']) || ! empty($arguments['task']))) {
+            $suggestions = [];
+
+            if (! empty($arguments['task'])) {
+                $task = $arguments['task'];
+                // Find distinct code_descriptions that partially match any word in the query
+                $words = preg_split('/[\s_\-]+/', $task);
+                $suggestQuery = ProductionUploadLine::where('production_upload_id', $upload->id);
+
+                if (! empty($arguments['area'])) {
+                    $area = $arguments['area'];
+                    $suggestQuery->where('area', 'like', "%{$area}%");
+                }
+
+                $suggestQuery->where(function ($q) use ($words) {
+                    foreach ($words as $word) {
+                        if (strlen($word) >= 3) {
+                            $q->orWhere('code_description', 'like', "%{$word}%")
+                              ->orWhere('cost_code', 'like', "%{$word}%");
+                        }
+                    }
+                });
+
+                $suggestions = $suggestQuery
+                    ->select('area', 'code_description', 'cost_code')
+                    ->distinct()
+                    ->limit(10)
+                    ->get()
+                    ->map(fn ($l) => "{$l->area} — {$l->code_description} ({$l->cost_code})")
+                    ->values()
+                    ->all();
+            }
+
+            // If word-based search found nothing, show all distinct items for the area
+            if (empty($suggestions) && ! empty($arguments['area'])) {
+                $area = $arguments['area'];
+                $suggestions = ProductionUploadLine::where('production_upload_id', $upload->id)
+                    ->where('area', 'like', "%{$area}%")
+                    ->select('area', 'code_description', 'cost_code')
+                    ->distinct()
+                    ->limit(15)
+                    ->get()
+                    ->map(fn ($l) => "{$l->area} — {$l->code_description} ({$l->cost_code})")
+                    ->values()
+                    ->all();
+            }
+
+            // If still nothing, show all distinct areas
+            if (empty($suggestions)) {
+                $suggestions = ProductionUploadLine::where('production_upload_id', $upload->id)
+                    ->select('area')
+                    ->distinct()
+                    ->orderBy('area')
+                    ->limit(20)
+                    ->pluck('area')
+                    ->all();
+
+                return json_encode([
+                    'no_match' => true,
+                    'message' => "No items matched your filter. Here are the available areas in {$location->name}:",
+                    'available_areas' => $suggestions,
+                    'tip' => 'Try filtering by one of these areas, or use a different task/cost code keyword.',
+                ], JSON_PRETTY_PRINT);
+            }
+
+            return json_encode([
+                'no_match' => true,
+                'message' => "No exact match found for your filter. Did you mean one of these?",
+                'suggestions' => $suggestions,
+                'tip' => 'Try using one of the suggested cost codes or descriptions above.',
+            ], JSON_PRETTY_PRINT);
+        }
+
         // Aggregate summary across ALL matching lines (not just the limited set)
         $aggregates = (clone $totalQuery)->selectRaw('
             SUM(est_hours) as total_est_hours,

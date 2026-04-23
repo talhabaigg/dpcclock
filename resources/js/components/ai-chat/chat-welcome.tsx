@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, AudioLines, Paperclip, Sparkles, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { chatService } from './chat-service';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 import type { SuggestedPrompt } from './types';
@@ -126,6 +127,12 @@ export function ChatWelcome({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isFocused, setIsFocused] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Get user name from Inertia props
     const { auth } = usePage<{ auth: { user?: { name?: string } } }>().props;
@@ -176,6 +183,90 @@ export function ChatWelcome({
         },
         [handleSubmit],
     );
+
+    const startRecording = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            audioChunksRef.current = [];
+            mediaRecorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach((t) => t.stop());
+                if (recordingTimerRef.current) {
+                    clearInterval(recordingTimerRef.current);
+                    recordingTimerRef.current = null;
+                }
+                setRecordingDuration(0);
+
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                if (audioBlob.size < 1000) return;
+
+                setIsTranscribing(true);
+                try {
+                    const text = await chatService.transcribeAudio(audioBlob);
+                    if (text.trim()) {
+                        onSubmit?.(text.trim());
+                    }
+                } catch {
+                    // Transcription failed
+                } finally {
+                    setIsTranscribing(false);
+                }
+            };
+
+            mediaRecorder.start(250);
+            setIsRecording(true);
+            setRecordingDuration(0);
+            recordingTimerRef.current = setInterval(() => setRecordingDuration((d) => d + 1), 1000);
+        } catch {
+            // Microphone access denied
+        }
+    }, [onSubmit]);
+
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+        setIsRecording(false);
+    }, []);
+
+    const cancelRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.ondataavailable = null;
+            mediaRecorderRef.current.onstop = () => {
+                mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+            };
+            mediaRecorderRef.current.stop();
+        }
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+        setIsRecording(false);
+        setRecordingDuration(0);
+        audioChunksRef.current = [];
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+                mediaRecorderRef.current.stop();
+            }
+        };
+    }, []);
+
+    const formatRecordingTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
 
     const canSubmit = inputValue.trim().length > 0 && !isLoading;
 
@@ -231,45 +322,65 @@ export function ChatWelcome({
                                 </div>
                             )}
 
-                            {/* Textarea area */}
+                            {/* Textarea area / Recording state */}
                             <div className="relative px-4 pt-4 pb-2">
-                                <textarea
-                                    ref={textareaRef}
-                                    value={inputValue}
-                                    onChange={(e) => setInputValue(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    onFocus={() => setIsFocused(true)}
-                                    onBlur={() => setIsFocused(false)}
-                                    placeholder={placeholder}
-                                    disabled={isLoading}
-                                    className={cn(
-                                        'max-h-[200px] min-h-[44px] w-full resize-none bg-transparent text-base leading-relaxed outline-none',
-                                        'placeholder:text-muted-foreground/50',
-                                        'disabled:cursor-not-allowed disabled:opacity-50',
-                                    )}
-                                    rows={2}
-                                />
+                                {isRecording ? (
+                                    <div className="flex min-h-[44px] items-center gap-3">
+                                        <span className="relative flex size-2.5">
+                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
+                                            <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
+                                        </span>
+                                        <span className="text-sm font-medium text-red-500">Recording {formatRecordingTime(recordingDuration)}</span>
+                                    </div>
+                                ) : isTranscribing ? (
+                                    <div className="flex min-h-[44px] items-center gap-3">
+                                        <svg className="text-muted-foreground size-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        <span className="text-muted-foreground text-sm">Transcribing voice note...</span>
+                                    </div>
+                                ) : (
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        onFocus={() => setIsFocused(true)}
+                                        onBlur={() => setIsFocused(false)}
+                                        placeholder={placeholder}
+                                        disabled={isLoading}
+                                        className={cn(
+                                            'max-h-[200px] min-h-[44px] w-full resize-none bg-transparent text-base leading-relaxed outline-none',
+                                            'placeholder:text-muted-foreground/50',
+                                            'disabled:cursor-not-allowed disabled:opacity-50',
+                                        )}
+                                        rows={2}
+                                    />
+                                )}
                             </div>
 
                             {/* Bottom toolbar */}
                             <div className="relative flex items-center justify-between px-3 pb-3">
                                 <div className="flex items-center gap-1">
                                     {/* Attachment button */}
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                disabled={isLoading}
-                                            >
-                                                <Paperclip className="size-[18px]" />
-                                            </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Attach file</TooltipContent>
-                                    </Tooltip>
-                                    {/* Voice button */}
-                                    {onVoiceCall && (
+                                    {!isRecording && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={isLoading || isTranscribing}
+                                                >
+                                                    <Paperclip className="size-[18px]" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Attach file</TooltipContent>
+                                        </Tooltip>
+                                    )}
+                                    {/* Voice call button */}
+                                    {onVoiceCall && !isRecording && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <button
@@ -283,22 +394,62 @@ export function ChatWelcome({
                                             <TooltipContent>Voice call</TooltipContent>
                                         </Tooltip>
                                     )}
+                                    {/* Cancel recording button */}
+                                    {isRecording && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-8 items-center justify-center rounded-full transition-colors"
+                                                    onClick={cancelRecording}
+                                                >
+                                                    <X className="size-[18px]" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Cancel recording</TooltipContent>
+                                        </Tooltip>
+                                    )}
                                 </div>
 
-                                {/* Send button */}
-                                <button
-                                    type="button"
-                                    className={cn(
-                                        'flex size-8 items-center justify-center rounded-full transition-all',
-                                        canSubmit
-                                            ? 'bg-foreground text-background hover:bg-foreground/90'
-                                            : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
+                                <div className="flex items-center gap-1">
+                                    {/* Voice note button */}
+                                    {!isLoading && !isTranscribing && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        'flex size-8 items-center justify-center rounded-full transition-all',
+                                                        isRecording
+                                                            ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                                                    )}
+                                                    onClick={isRecording ? stopRecording : startRecording}
+                                                >
+                                                    <Mic className="size-[18px]" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>{isRecording ? 'Send voice note' : 'Record voice note'}</TooltipContent>
+                                        </Tooltip>
                                     )}
-                                    onClick={handleSubmit}
-                                    disabled={!canSubmit}
-                                >
-                                    <ArrowUp className="size-[18px]" />
-                                </button>
+
+                                    {/* Send button */}
+                                    {!isRecording && !isTranscribing && (
+                                        <button
+                                            type="button"
+                                            className={cn(
+                                                'flex size-8 items-center justify-center rounded-full transition-all',
+                                                canSubmit
+                                                    ? 'bg-foreground text-background hover:bg-foreground/90'
+                                                    : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
+                                            )}
+                                            onClick={handleSubmit}
+                                            disabled={!canSubmit}
+                                        >
+                                            <ArrowUp className="size-[18px]" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

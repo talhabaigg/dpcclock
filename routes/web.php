@@ -158,6 +158,7 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth', 'permission:ai.chat'])->group(function () {
     Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream'])->name('chat.stream');
+    Route::post('/chat/transcribe', [ChatController::class, 'transcribe'])->name('chat.transcribe');
     Route::get('/chat/conversations', [ConversationController::class, 'index'])->name('chat.conversations.index');
     Route::get('/chat/conversations/{conversationId}', [ConversationController::class, 'show'])->name('chat.conversations.show');
     Route::delete('/chat/conversations/{conversationId}', [ConversationController::class, 'destroy'])->name('chat.conversations.destroy');
