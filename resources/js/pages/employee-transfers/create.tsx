@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchSelect } from '@/components/search-select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CalendarIcon, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface KioskOption {
@@ -78,24 +78,36 @@ function SectionHeader({ title, description }: { title: string; description?: st
     );
 }
 
-function RatingRow({ label, options, value, onChange, error }: {
+function RequiredLabel({ children, htmlFor, className }: { children: React.ReactNode; htmlFor?: string; className?: string }) {
+    return (
+        <Label htmlFor={htmlFor} className={className}>
+            {children} <span className="text-destructive">*</span>
+        </Label>
+    );
+}
+
+function RatingRow({ label, options, value, onChange, error, required }: {
     label: string;
     options: { value: string; label: string }[];
     value: string;
     onChange: (value: string) => void;
     error?: string;
+    required?: boolean;
 }) {
     return (
         <div className="space-y-2">
-            <Label className="text-sm font-medium">{label}</Label>
+            <Label className="text-sm font-medium">
+                {label}
+                {required && <span className="ml-1 text-destructive">*</span>}
+            </Label>
             <RadioGroup value={value} onValueChange={onChange} className="flex flex-wrap gap-2">
                 {options.map((opt) => (
                     <Label
                         key={opt.value}
                         className={cn(
-                            'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                            'flex min-h-12 flex-1 basis-[140px] cursor-pointer items-center justify-center gap-2 rounded-md border px-4 py-3 text-sm font-medium transition-colors active:scale-[0.99] select-none',
                             value === opt.value
-                                ? 'border-primary bg-primary/5 text-primary'
+                                ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30'
                                 : 'border-border bg-background hover:bg-muted',
                         )}
                     >
@@ -282,72 +294,222 @@ export default function Create({ kiosks, authUser }: Props) {
         setData('concerns', updated);
     }
 
+    const STEPS = [
+        { key: 'details', label: 'Details' },
+        { key: 'reason', label: 'Reason' },
+        { key: 'performance', label: 'Performance' },
+        { key: 'attendance', label: 'Attendance' },
+        { key: 'whs', label: 'WHS' },
+        { key: 'behaviour', label: 'Behaviour' },
+        { key: 'review', label: 'Review' },
+    ];
+    const [step, setStep] = useState(1);
+    const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
+
+    function validateStep(n: number): Record<string, string> {
+        const e: Record<string, string> = {};
+        if (n === 1) {
+            if (!data.current_kiosk_id) e.current_kiosk_id = 'Current project is required.';
+            if (!data.employee_id) e.employee_id = 'Employee is required.';
+            if (!data.proposed_kiosk_id) e.proposed_kiosk_id = 'Proposed project is required.';
+            if (!data.receiving_foreman_id) e.receiving_foreman_id = 'Receiving foreman is required.';
+            if (!data.proposed_start_date) e.proposed_start_date = 'Proposed start date is required.';
+            if (data.proposed_kiosk_id && data.current_kiosk_id && data.proposed_kiosk_id === data.current_kiosk_id) {
+                e.proposed_kiosk_id = 'Proposed project must differ from current project.';
+            }
+        }
+        if (n === 2) {
+            if (!data.transfer_reason) e.transfer_reason = 'Reason is required.';
+            if (data.transfer_reason === 'other' && !data.transfer_reason_other.trim()) {
+                e.transfer_reason_other = 'Please specify the reason.';
+            }
+        }
+        if (n === 3) {
+            if (!data.overall_performance) e.overall_performance = 'Required.';
+            if (!data.work_ethic_honesty) e.work_ethic_honesty = 'Required.';
+            if (!data.quality_of_work) e.quality_of_work = 'Required.';
+            if (!data.productivity_rating) e.productivity_rating = 'Required.';
+        }
+        if (n === 4) {
+            if (!data.punctuality) e.punctuality = 'Required.';
+            if (!data.attendance) e.attendance = 'Required.';
+            if (data.excessive_sick_leave && !data.sick_leave_details.trim()) {
+                e.sick_leave_details = 'Please provide details.';
+            }
+        }
+        if (n === 5) {
+            if (!data.safety_attitude) e.safety_attitude = 'Required.';
+            if (!data.swms_compliance) e.swms_compliance = 'Required.';
+            if (!data.ppe_compliance) e.ppe_compliance = 'Required.';
+            if (!data.prestart_toolbox_attendance) e.prestart_toolbox_attendance = 'Required.';
+        }
+        if (n === 6) {
+            if (!data.workplace_behaviour) e.workplace_behaviour = 'Required.';
+            if (!data.attitude_towards_foreman) e.attitude_towards_foreman = 'Required.';
+            if (!data.attitude_towards_coworkers) e.attitude_towards_coworkers = 'Required.';
+            if (data.has_disciplinary_actions && !data.disciplinary_details.trim()) {
+                e.disciplinary_details = 'Please provide details.';
+            }
+            if (data.concerns.length > 0 && !data.concerns_details.trim()) {
+                e.concerns_details = 'Please provide details.';
+            }
+        }
+        return e;
+    }
+
+    function goNext() {
+        const e = validateStep(step);
+        setStepErrors(e);
+        if (Object.keys(e).length === 0) {
+            setStep((s) => Math.min(s + 1, STEPS.length));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function goBack() {
+        setStep((s) => Math.max(s - 1, 1));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        // Run validation across all steps to guard against skipping
+        const allErrors: Record<string, string> = {};
+        for (let i = 1; i <= STEPS.length; i++) Object.assign(allErrors, validateStep(i));
+        setStepErrors(allErrors);
+        if (Object.keys(allErrors).length > 0) {
+            // Jump to first step with an error
+            for (let i = 1; i <= STEPS.length; i++) {
+                if (Object.keys(validateStep(i)).length > 0) {
+                    setStep(i);
+                    break;
+                }
+            }
+            return;
+        }
         post(route('employee-transfers.store'));
     }
+
+    const err = (key: string): string | undefined => stepErrors[key] || (errors as Record<string, string>)[key];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="New Employee Transfer" />
 
-            <div className="mx-auto max-w-5xl px-4 py-6 sm:w-full sm:px-6">
+            <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
                 <div className="mb-6">
                     <h1 className="text-xl font-semibold text-foreground">Internal Employee Transfer</h1>
                     <p className="mt-1 text-sm text-muted-foreground">Screening & approval form for employees transferring between projects</p>
                 </div>
 
+                {/* Stepper progress */}
+                <nav aria-label="Form steps" className="mb-6">
+                    {/* Mobile: dots + current label */}
+                    <div className="sm:hidden">
+                        <div className="flex items-center gap-1.5">
+                            {STEPS.map((s, idx) => {
+                                const n = idx + 1;
+                                const isActive = step === n;
+                                const isDone = step > n;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={s.key}
+                                        aria-label={`Step ${n}: ${s.label}`}
+                                        onClick={() => { if (isDone) setStep(n); }}
+                                        className={cn(
+                                            'h-2 flex-1 rounded-full transition-colors',
+                                            isActive && 'bg-primary',
+                                            isDone && !isActive && 'bg-primary/50',
+                                            !isActive && !isDone && 'bg-border',
+                                        )}
+                                    />
+                                );
+                            })}
+                        </div>
+                        <p className="mt-2 text-sm font-medium">
+                            <span className="text-muted-foreground">Step {step} of {STEPS.length} · </span>
+                            {STEPS[step - 1].label}
+                        </p>
+                    </div>
+
+                    {/* Tablet & desktop: full stepper */}
+                    <div className="hidden sm:block">
+                        <ol className="flex items-center gap-2">
+                            {STEPS.map((s, idx) => {
+                                const n = idx + 1;
+                                const isActive = step === n;
+                                const isDone = step > n;
+                                return (
+                                    <li key={s.key} className="flex flex-1 items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { if (isDone) setStep(n); }}
+                                            className={cn(
+                                                'flex min-h-10 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-2 text-sm transition-colors lg:px-4',
+                                                isActive && 'border-primary bg-primary text-primary-foreground',
+                                                isDone && !isActive && 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20',
+                                                !isActive && !isDone && 'border-border bg-background text-muted-foreground',
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                                                isActive ? 'bg-primary-foreground text-primary' : isDone ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                                            )}>
+                                                {isDone ? <CheckCircle2 className="size-3.5" /> : n}
+                                            </span>
+                                            <span className="hidden lg:inline">{s.label}</span>
+                                            <span className="lg:hidden">{isActive ? s.label : ''}</span>
+                                        </button>
+                                        {n < STEPS.length && <div className={cn('h-px flex-1', isDone ? 'bg-primary/40' : 'bg-border')} />}
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                        <p className="mt-2 text-xs text-muted-foreground">Step {step} of {STEPS.length}</p>
+                    </div>
+                </nav>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* ── Header: Employee & Project Details ── */}
-                    <Card className="p-5">
-                        <SectionHeader part="Transfer Details" title="Employee & Project Information" />
+                    {/* Step 1 — Employee & Project Details */}
+                    {step === 1 && <Card className="p-4 sm:p-5">
+                        <SectionHeader title="Employee & Project Information" />
 
                         <div className="space-y-4">
                             {/* Current Project (Kiosk) */}
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label>Current Project</Label>
-                                    <Select value={selectedKioskId} onValueChange={setSelectedKioskId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select current project" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {kiosks.map((k) => (
-                                                <SelectItem key={k.id} value={String(k.id)}>
-                                                    {k.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.current_kiosk_id} />
+                                    <RequiredLabel>Current Project</RequiredLabel>
+                                    <SearchSelect
+                                        options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
+                                        optionName="project"
+                                        placeholder="Select current project"
+                                        selectedOption={selectedKioskId}
+                                        onValueChange={setSelectedKioskId}
+                                        className="h-11 text-base"
+                                    />
+                                    <InputError message={err('current_kiosk_id')} />
                                 </div>
 
                                 {/* Employee */}
                                 <div className="space-y-2">
-                                    <Label>Employee</Label>
+                                    <RequiredLabel>Employee</RequiredLabel>
                                     {loadingEmployees ? (
-                                        <div className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+                                        <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
                                             <Loader2 className="size-4 animate-spin" /> Loading...
                                         </div>
                                     ) : (
-                                        <Select
-                                            value={data.employee_id}
+                                        <SearchSelect
+                                            options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                                            optionName="employee"
+                                            placeholder={selectedKioskId ? 'Select employee' : 'Select project first'}
+                                            selectedOption={data.employee_id}
                                             onValueChange={selectEmployee}
                                             disabled={!selectedKioskId}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={selectedKioskId ? 'Select employee' : 'Select project first'} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {employees.map((e) => (
-                                                    <SelectItem key={e.id} value={String(e.id)}>
-                                                        {e.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            className="h-11 text-base"
+                                        />
                                     )}
-                                    <InputError message={errors.employee_id} />
+                                    <InputError message={err('employee_id')} />
                                 </div>
                             </div>
 
@@ -356,11 +518,12 @@ export default function Create({ kiosks, authUser }: Props) {
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div className="space-y-2">
                                         <Label>Name</Label>
-                                        <Input value={data.employee_name} disabled />
+                                        <Input className="h-11 text-base" value={data.employee_name} disabled />
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Position / Type</Label>
                                         <Input
+                                            className="h-11 text-base"
                                             value={data.employee_position}
                                             onChange={(e) => setData('employee_position', e.target.value)}
                                             placeholder="e.g. Plasterer, Carpenter"
@@ -372,66 +535,55 @@ export default function Create({ kiosks, authUser }: Props) {
                             {/* Current Foreman */}
                             <div className="space-y-2">
                                 <Label>Current Foreman</Label>
-                                <Input value={authUser.name} disabled />
+                                <Input className="h-11 text-base" value={authUser.name} disabled />
                                 <p className="text-xs text-muted-foreground">Prepopulated with your account</p>
                             </div>
 
                             {/* Proposed Project & Receiving Foreman */}
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label>Proposed Project</Label>
-                                    <Select value={proposedKioskId} onValueChange={setProposedKioskId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select proposed project" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {kiosks.map((k) => (
-                                                <SelectItem key={k.id} value={String(k.id)}>
-                                                    {k.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.proposed_kiosk_id} />
+                                    <RequiredLabel>Proposed Project</RequiredLabel>
+                                    <SearchSelect
+                                        options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
+                                        optionName="project"
+                                        placeholder="Select proposed project"
+                                        selectedOption={proposedKioskId}
+                                        onValueChange={setProposedKioskId}
+                                        className="h-11 text-base"
+                                    />
+                                    <InputError message={err('proposed_kiosk_id')} />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Receiving Foreman</Label>
+                                    <RequiredLabel>Receiving Foreman</RequiredLabel>
                                     {loadingManagers ? (
-                                        <div className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+                                        <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
                                             <Loader2 className="size-4 animate-spin" /> Loading...
                                         </div>
                                     ) : (
-                                        <Select
-                                            value={data.receiving_foreman_id}
+                                        <SearchSelect
+                                            options={proposedManagers.map((m) => ({ value: String(m.id), label: m.name }))}
+                                            optionName="foreman"
+                                            placeholder={proposedKioskId ? 'Select foreman' : 'Select project first'}
+                                            selectedOption={data.receiving_foreman_id}
                                             onValueChange={(v) => setData('receiving_foreman_id', v)}
                                             disabled={!proposedKioskId}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={proposedKioskId ? 'Select foreman' : 'Select project first'} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {proposedManagers.map((m) => (
-                                                    <SelectItem key={m.id} value={String(m.id)}>
-                                                        {m.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            className="h-11 text-base"
+                                        />
                                     )}
-                                    <InputError message={errors.receiving_foreman_id} />
+                                    <InputError message={err('receiving_foreman_id')} />
                                 </div>
                             </div>
 
                             {/* Start Date */}
                             <div className="space-y-2">
-                                <Label>Proposed Start Date</Label>
+                                <RequiredLabel>Proposed Start Date</RequiredLabel>
                                 <Popover open={dateOpen} onOpenChange={setDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
                                             className={cn(
-                                                'w-full justify-start text-left font-normal sm:w-[260px]',
+                                                'h-12 w-full justify-start text-left text-base font-normal sm:w-[280px]',
                                                 !data.proposed_start_date && 'text-muted-foreground',
                                             )}
                                         >
@@ -450,56 +602,67 @@ export default function Create({ kiosks, authUser }: Props) {
                                         />
                                     </PopoverContent>
                                 </Popover>
-                                <InputError message={errors.proposed_start_date} />
+                                <InputError message={err('proposed_start_date')} />
                             </div>
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Part A: Reason for Transfer ── */}
-                    <Card className="p-5">
+                    {/* Step 2 — Reason for Transfer */}
+                    {step === 2 && <Card className="p-4 sm:p-5">
                         <SectionHeader title="Reason for Transfer" />
                         <div className="space-y-4">
-                            <Select value={data.transfer_reason} onValueChange={(v) => setData('transfer_reason', v)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select reason for transfer" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {TRANSFER_REASONS.map((r) => (
-                                        <SelectItem key={r.value} value={r.value}>
+                            <RequiredLabel>Reason</RequiredLabel>
+                            <div role="radiogroup" aria-label="Reason for transfer" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                                {TRANSFER_REASONS.map((r) => {
+                                    const selected = data.transfer_reason === r.value;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={r.value}
+                                            role="radio"
+                                            aria-checked={selected}
+                                            onClick={() => setData('transfer_reason', r.value)}
+                                            className={cn(
+                                                'flex min-h-16 items-center justify-center rounded-md border px-3 py-3 text-center text-sm font-medium transition-colors active:scale-[0.99]',
+                                                selected
+                                                    ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30'
+                                                    : 'border-border bg-background hover:bg-muted',
+                                            )}
+                                        >
                                             {r.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.transfer_reason} />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <InputError message={err('transfer_reason')} />
 
                             {data.transfer_reason === 'other' && (
                                 <div className="space-y-2">
-                                    <Label>Please specify</Label>
-                                    <Textarea
+                                    <RequiredLabel>Please specify</RequiredLabel>
+                                    <Textarea className="min-h-24 text-base"
                                         value={data.transfer_reason_other}
                                         onChange={(e) => setData('transfer_reason_other', e.target.value)}
                                         placeholder="Enter reason for transfer..."
                                         rows={2}
                                     />
-                                    <InputError message={errors.transfer_reason_other} />
+                                    <InputError message={err('transfer_reason_other')} />
                                 </div>
                             )}
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Part B: Internal Performance Snapshot ── */}
-                    <Card className="p-5">
+                    {/* Step 3 — Internal Performance Snapshot */}
+                    {step === 3 && <Card className="p-4 sm:p-5">
                         <SectionHeader title="Internal Performance Snapshot" description="Current foreman assessment" />
                         <div className="space-y-5">
-                            <RatingRow label="Overall Performance" name="overall_performance" options={PERFORMANCE_OPTIONS} value={data.overall_performance} onChange={(v) => setData('overall_performance', v)} error={errors.overall_performance} />
-                            <RatingRow label="Work Ethic & Honesty" name="work_ethic_honesty" options={PERFORMANCE_OPTIONS} value={data.work_ethic_honesty} onChange={(v) => setData('work_ethic_honesty', v)} error={errors.work_ethic_honesty} />
-                            <RatingRow label="Quality of Work" name="quality_of_work" options={QUALITY_OPTIONS} value={data.quality_of_work} onChange={(v) => setData('quality_of_work', v)} error={errors.quality_of_work} />
-                            <RatingRow label="Productivity" name="productivity_rating" options={QUALITY_OPTIONS} value={data.productivity_rating} onChange={(v) => setData('productivity_rating', v)} error={errors.productivity_rating} />
+                            <RatingRow required label="Overall Performance" options={PERFORMANCE_OPTIONS} value={data.overall_performance} onChange={(v) => setData('overall_performance', v)} error={err('overall_performance')} />
+                            <RatingRow required label="Work Ethic & Honesty" options={PERFORMANCE_OPTIONS} value={data.work_ethic_honesty} onChange={(v) => setData('work_ethic_honesty', v)} error={err('work_ethic_honesty')} />
+                            <RatingRow required label="Quality of Work" options={QUALITY_OPTIONS} value={data.quality_of_work} onChange={(v) => setData('quality_of_work', v)} error={err('quality_of_work')} />
+                            <RatingRow required label="Productivity" options={QUALITY_OPTIONS} value={data.productivity_rating} onChange={(v) => setData('productivity_rating', v)} error={err('productivity_rating')} />
 
                             <div className="space-y-2">
                                 <Label>Comments (optional)</Label>
-                                <Textarea
+                                <Textarea className="min-h-24 text-base"
                                     value={data.performance_comments}
                                     onChange={(e) => setData('performance_comments', e.target.value)}
                                     placeholder="Additional performance comments..."
@@ -507,44 +670,54 @@ export default function Create({ kiosks, authUser }: Props) {
                                 />
                             </div>
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Part C: Attendance & Reliability ── */}
-                    <Card className="p-5">
+                    {/* Step 4 — Attendance & Reliability */}
+                    {step === 4 && <Card className="p-4 sm:p-5">
                         <SectionHeader title="Attendance & Reliability" />
                         <div className="space-y-5">
-                            <RatingRow label="Punctuality / On Time" name="punctuality" options={PUNCTUALITY_OPTIONS} value={data.punctuality} onChange={(v) => setData('punctuality', v)} error={errors.punctuality} />
-                            <RatingRow label="Attendance" name="attendance" options={ATTENDANCE_OPTIONS} value={data.attendance} onChange={(v) => setData('attendance', v)} error={errors.attendance} />
+                            <RatingRow required label="Punctuality / On Time" options={PUNCTUALITY_OPTIONS} value={data.punctuality} onChange={(v) => setData('punctuality', v)} error={err('punctuality')} />
+                            <RatingRow required label="Attendance" options={ATTENDANCE_OPTIONS} value={data.attendance} onChange={(v) => setData('attendance', v)} error={err('attendance')} />
 
                             <div className="space-y-3">
-                                <div className="flex items-center gap-3">
+                                <Label
+                                    htmlFor="excessive_sick_leave"
+                                    className={cn(
+                                        'flex min-h-12 cursor-pointer select-none items-center gap-3 rounded-md border px-4 py-3 transition-colors active:scale-[0.99]',
+                                        data.excessive_sick_leave ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30' : 'border-border bg-background hover:bg-muted',
+                                    )}
+                                >
                                     <Checkbox
                                         id="excessive_sick_leave"
                                         checked={data.excessive_sick_leave}
                                         onCheckedChange={(checked) => setData('excessive_sick_leave', !!checked)}
+                                        className="size-5"
                                     />
-                                    <Label htmlFor="excessive_sick_leave" className="cursor-pointer">Excessive Sick Leave / Absenteeism</Label>
-                                </div>
+                                    <span className="text-sm font-medium">Excessive Sick Leave / Absenteeism</span>
+                                </Label>
                                 {data.excessive_sick_leave && (
-                                    <Textarea
-                                        value={data.sick_leave_details}
-                                        onChange={(e) => setData('sick_leave_details', e.target.value)}
-                                        placeholder="Provide details..."
-                                        rows={2}
-                                    />
+                                    <div className="space-y-1">
+                                        <Textarea className="min-h-24 text-base"
+                                            value={data.sick_leave_details}
+                                            onChange={(e) => setData('sick_leave_details', e.target.value)}
+                                            placeholder="Provide details..."
+                                            rows={2}
+                                        />
+                                        <InputError message={err('sick_leave_details')} />
+                                    </div>
                                 )}
                             </div>
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Part D: WHS & Site Compliance ── */}
-                    <Card className="p-5">
+                    {/* Step 5 — WHS & Site Compliance */}
+                    {step === 5 && <Card className="p-4 sm:p-5">
                         <SectionHeader title="WHS & Site Compliance" />
                         <div className="space-y-5">
-                            <RatingRow label="General Compliance & Attitude Towards Safety" name="safety_attitude" options={SAFETY_ATTITUDE_OPTIONS} value={data.safety_attitude} onChange={(v) => setData('safety_attitude', v)} error={errors.safety_attitude} />
-                            <RatingRow label="SWMS Compliance" name="swms_compliance" options={COMPLIANCE_OPTIONS} value={data.swms_compliance} onChange={(v) => setData('swms_compliance', v)} error={errors.swms_compliance} />
-                            <RatingRow label="PPE Compliance" name="ppe_compliance" options={COMPLIANCE_OPTIONS} value={data.ppe_compliance} onChange={(v) => setData('ppe_compliance', v)} error={errors.ppe_compliance} />
-                            <RatingRow label="Prestart & Toolbox Attendance" name="prestart_toolbox_attendance" options={PRESTART_OPTIONS} value={data.prestart_toolbox_attendance} onChange={(v) => setData('prestart_toolbox_attendance', v)} error={errors.prestart_toolbox_attendance} />
+                            <RatingRow required label="General Compliance & Attitude Towards Safety" options={SAFETY_ATTITUDE_OPTIONS} value={data.safety_attitude} onChange={(v) => setData('safety_attitude', v)} error={err('safety_attitude')} />
+                            <RatingRow required label="SWMS Compliance" options={COMPLIANCE_OPTIONS} value={data.swms_compliance} onChange={(v) => setData('swms_compliance', v)} error={err('swms_compliance')} />
+                            <RatingRow required label="PPE Compliance" options={COMPLIANCE_OPTIONS} value={data.ppe_compliance} onChange={(v) => setData('ppe_compliance', v)} error={err('ppe_compliance')} />
+                            <RatingRow required label="Prestart & Toolbox Attendance" options={PRESTART_OPTIONS} value={data.prestart_toolbox_attendance} onChange={(v) => setData('prestart_toolbox_attendance', v)} error={err('prestart_toolbox_attendance')} />
 
                             {/* Incidents / Near Misses — automated from injury register */}
                             <div className="space-y-3">
@@ -591,91 +764,144 @@ export default function Create({ kiosks, authUser }: Props) {
                                 )}
                             </div>
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Part E: Behaviour & Conduct ── */}
-                    <Card className="p-5">
+                    {/* Step 6 — Behaviour & Conduct */}
+                    {step === 6 && <Card className="p-4 sm:p-5">
                         <SectionHeader title="Behaviour & Conduct" />
                         <div className="space-y-5">
-                            <RatingRow label="Workplace Behaviour" name="workplace_behaviour" options={BEHAVIOUR_OPTIONS} value={data.workplace_behaviour} onChange={(v) => setData('workplace_behaviour', v)} error={errors.workplace_behaviour} />
-                            <RatingRow label="Attitude Towards Foreman" name="attitude_towards_foreman" options={ATTITUDE_OPTIONS} value={data.attitude_towards_foreman} onChange={(v) => setData('attitude_towards_foreman', v)} error={errors.attitude_towards_foreman} />
-                            <RatingRow label="Attitude Towards Co-Workers" name="attitude_towards_coworkers" options={ATTITUDE_OPTIONS} value={data.attitude_towards_coworkers} onChange={(v) => setData('attitude_towards_coworkers', v)} error={errors.attitude_towards_coworkers} />
+                            <RatingRow required label="Workplace Behaviour" options={BEHAVIOUR_OPTIONS} value={data.workplace_behaviour} onChange={(v) => setData('workplace_behaviour', v)} error={err('workplace_behaviour')} />
+                            <RatingRow required label="Attitude Towards Foreman" options={ATTITUDE_OPTIONS} value={data.attitude_towards_foreman} onChange={(v) => setData('attitude_towards_foreman', v)} error={err('attitude_towards_foreman')} />
+                            <RatingRow required label="Attitude Towards Co-Workers" options={ATTITUDE_OPTIONS} value={data.attitude_towards_coworkers} onChange={(v) => setData('attitude_towards_coworkers', v)} error={err('attitude_towards_coworkers')} />
 
                             <div className="space-y-3">
-                                <div className="flex items-center gap-3">
+                                <Label
+                                    htmlFor="has_disciplinary_actions"
+                                    className={cn(
+                                        'flex min-h-12 cursor-pointer select-none items-center gap-3 rounded-md border px-4 py-3 transition-colors active:scale-[0.99]',
+                                        data.has_disciplinary_actions ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30' : 'border-border bg-background hover:bg-muted',
+                                    )}
+                                >
                                     <Checkbox
                                         id="has_disciplinary_actions"
                                         checked={data.has_disciplinary_actions}
                                         onCheckedChange={(checked) => setData('has_disciplinary_actions', !!checked)}
+                                        className="size-5"
                                     />
-                                    <Label htmlFor="has_disciplinary_actions" className="cursor-pointer">Any Disciplinary Actions</Label>
-                                </div>
+                                    <span className="text-sm font-medium">Any Disciplinary Actions</span>
+                                </Label>
                                 {data.has_disciplinary_actions && (
-                                    <Textarea
-                                        value={data.disciplinary_details}
-                                        onChange={(e) => setData('disciplinary_details', e.target.value)}
-                                        placeholder="Provide details of disciplinary actions..."
-                                        rows={2}
-                                    />
+                                    <div className="space-y-1">
+                                        <Textarea className="min-h-24 text-base"
+                                            value={data.disciplinary_details}
+                                            onChange={(e) => setData('disciplinary_details', e.target.value)}
+                                            placeholder="Provide details of disciplinary actions..."
+                                            rows={2}
+                                        />
+                                        <InputError message={err('disciplinary_details')} />
+                                    </div>
                                 )}
                             </div>
 
                             <div className="space-y-3">
                                 <Label>Any Concerns Regarding</Label>
-                                <div className="flex flex-wrap gap-4">
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="concern_site_culture"
-                                            checked={data.concerns.includes('site_culture')}
-                                            onCheckedChange={() => toggleConcern('site_culture')}
-                                        />
-                                        <Label htmlFor="concern_site_culture" className="cursor-pointer text-sm">Site Culture</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="concern_attitude_builder"
-                                            checked={data.concerns.includes('attitude_towards_builder_client')}
-                                            onCheckedChange={() => toggleConcern('attitude_towards_builder_client')}
-                                        />
-                                        <Label htmlFor="concern_attitude_builder" className="cursor-pointer text-sm">Attitude Towards Builder / Client</Label>
-                                    </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {[
+                                        { key: 'site_culture', label: 'Site Culture' },
+                                        { key: 'attitude_towards_builder_client', label: 'Attitude Towards Builder / Client' },
+                                    ].map((c) => {
+                                        const selected = data.concerns.includes(c.key);
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={c.key}
+                                                role="checkbox"
+                                                aria-checked={selected}
+                                                onClick={() => toggleConcern(c.key)}
+                                                className={cn(
+                                                    'flex min-h-12 items-center gap-3 rounded-md border px-4 py-3 text-left text-sm font-medium transition-colors active:scale-[0.99]',
+                                                    selected ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30' : 'border-border bg-background hover:bg-muted',
+                                                )}
+                                            >
+                                                <span className={cn('flex size-5 shrink-0 items-center justify-center rounded border', selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
+                                                    {selected && <CheckCircle2 className="size-3.5" />}
+                                                </span>
+                                                {c.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                                 {data.concerns.length > 0 && (
-                                    <Textarea
-                                        value={data.concerns_details}
-                                        onChange={(e) => setData('concerns_details', e.target.value)}
-                                        placeholder="Provide details..."
-                                        rows={2}
-                                    />
+                                    <div className="space-y-1">
+                                        <Textarea className="min-h-24 text-base"
+                                            value={data.concerns_details}
+                                            onChange={(e) => setData('concerns_details', e.target.value)}
+                                            placeholder="Provide details..."
+                                            rows={2}
+                                        />
+                                        <InputError message={err('concerns_details')} />
+                                    </div>
                                 )}
                             </div>
                         </div>
-                    </Card>
+                    </Card>}
 
-                    {/* ── Notes (for injury/medical context) ── */}
-                    <Card className="p-5">
-                        <SectionHeader title="Injury & Medical Notes" description="Any existing injury or WorkCover data will be shown from the system on the review page. Add any additional notes below." />
-                        <Textarea
-                            value={data.injury_review_notes}
-                            onChange={(e) => setData('injury_review_notes', e.target.value)}
-                            placeholder="Additional notes regarding injury history, WorkCover, or medical considerations..."
-                            rows={3}
-                        />
-                    </Card>
+                    {/* Step 7 — Review & Submit */}
+                    {step === 7 && (
+                        <div className="space-y-6">
+                            <Card className="p-4 sm:p-5">
+                                <SectionHeader title="Injury & Medical Notes" description="Any existing injury or WorkCover data will be shown from the system on the review page. Add any additional notes below." />
+                                <Textarea className="min-h-24 text-base"
+                                    value={data.injury_review_notes}
+                                    onChange={(e) => setData('injury_review_notes', e.target.value)}
+                                    placeholder="Additional notes regarding injury history, WorkCover, or medical considerations..."
+                                    rows={3}
+                                />
+                            </Card>
 
-                    {/* Submit */}
-                    <div className="flex items-center justify-end gap-3 pb-8">
+                            <Card className="p-4 sm:p-5">
+                                <SectionHeader title="Review" description="Confirm details before submitting." />
+                                <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                                    <div><dt className="text-muted-foreground">Employee</dt><dd className="font-medium">{data.employee_name || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Position</dt><dd className="font-medium">{data.employee_position || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Current Project</dt><dd className="font-medium">{kiosks.find((k) => String(k.id) === data.current_kiosk_id)?.name || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Proposed Project</dt><dd className="font-medium">{kiosks.find((k) => String(k.id) === data.proposed_kiosk_id)?.name || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Receiving Foreman</dt><dd className="font-medium">{proposedManagers.find((m) => String(m.id) === data.receiving_foreman_id)?.name || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Start Date</dt><dd className="font-medium">{data.proposed_start_date ? format(new Date(data.proposed_start_date), 'dd/MM/yyyy') : '—'}</dd></div>
+                                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Reason</dt><dd className="font-medium">{TRANSFER_REASONS.find((r) => r.value === data.transfer_reason)?.label || '—'}{data.transfer_reason === 'other' && data.transfer_reason_other ? ` — ${data.transfer_reason_other}` : ''}</dd></div>
+                                </dl>
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* Navigation */}
+                    <div className="sticky bottom-0 -mx-3 flex items-center justify-between gap-2 border-t bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
+                            size="lg"
+                            className={cn('h-12', step > 1 && 'hidden sm:inline-flex')}
                             onClick={() => router.visit(route('employee-transfers.index'))}
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={processing}>
-                            {processing && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            Submit Transfer Request
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            {step > 1 && (
+                                <Button type="button" variant="outline" size="lg" className="h-12 px-5" onClick={goBack}>
+                                    <ChevronLeft className="mr-1 size-5" /> Back
+                                </Button>
+                            )}
+                            {step < STEPS.length ? (
+                                <Button type="button" size="lg" className="h-12 px-6 text-base" onClick={goNext}>
+                                    Next <ChevronRight className="ml-1 size-5" />
+                                </Button>
+                            ) : (
+                                <Button type="submit" size="lg" className="h-12 px-6 text-base" disabled={processing}>
+                                    {processing && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                    Submit
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </form>
             </div>

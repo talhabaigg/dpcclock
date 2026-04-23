@@ -24,9 +24,12 @@ interface SearchSelectProps {
     optionName: string;
     selectedOption: string;
     onValueChange: (value: string) => void;
+    disabled?: boolean;
+    className?: string;
+    placeholder?: string;
 }
 
-export function SearchSelect({ options, optionName, selectedOption, onValueChange }: SearchSelectProps) {
+export function SearchSelect({ options, optionName, selectedOption, onValueChange, disabled, className, placeholder }: SearchSelectProps) {
     const [open, setOpen] = React.useState(false);
     const [inputValue, setInputValue] = React.useState('');
 
@@ -56,11 +59,12 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
             }}
         >
             <ComboboxTrigger
-                render={<Button variant="outline" className="w-full justify-between overflow-hidden" />}
+                disabled={disabled}
+                render={<Button variant="outline" disabled={disabled} className={`w-full justify-between overflow-hidden ${className ?? ''}`} />}
                 aria-label={`Select ${optionName}`}
             >
                 <span className="truncate">
-                    <ComboboxValue placeholder={`Select ${optionName}`} />
+                    <ComboboxValue placeholder={placeholder ?? `Select ${optionName}`} />
                 </span>
             </ComboboxTrigger>
 

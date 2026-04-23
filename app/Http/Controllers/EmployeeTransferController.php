@@ -142,7 +142,7 @@ class EmployeeTransferController extends Controller
             'punctuality' => 'required|string',
             'attendance' => 'required|string',
             'excessive_sick_leave' => 'required|boolean',
-            'sick_leave_details' => 'nullable|string',
+            'sick_leave_details' => 'nullable|string|required_if:excessive_sick_leave,true,1',
 
             // Part D (has_incidents is now derived from injury register)
             'safety_attitude' => 'required|string',
@@ -155,9 +155,9 @@ class EmployeeTransferController extends Controller
             'attitude_towards_foreman' => 'required|string',
             'attitude_towards_coworkers' => 'required|string',
             'has_disciplinary_actions' => 'required|boolean',
-            'disciplinary_details' => 'nullable|string',
+            'disciplinary_details' => 'nullable|string|required_if:has_disciplinary_actions,true,1',
             'concerns' => 'nullable|array',
-            'concerns_details' => 'nullable|string',
+            'concerns_details' => 'nullable|string|required_with:concerns',
 
             'injury_review_notes' => 'nullable|string',
         ]);

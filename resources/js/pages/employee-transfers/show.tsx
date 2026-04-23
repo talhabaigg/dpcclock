@@ -1,3 +1,4 @@
+import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -842,77 +843,9 @@ export default function Show({ transfer, injuries, employeeFiles, isReceivingFor
                 </Card>
 
                 {/* Employee Files & Compliance */}
-                <Card className="mb-6 p-5">
-                    <SectionHeader
-                        title="Employee Files & Compliance"
-                        icon={Shield}
-                        description="Documents on file for this employee"
-                    />
-
-                    {(() => {
-                        const expiredFiles = employeeFiles.filter((f) => f.status === 'expired');
-                        const expiringFiles = employeeFiles.filter((f) => f.status === 'expiring_soon');
-
-                        return (
-                            <>
-                                {/* Alert banner for expired / expiring */}
-                                {(expiredFiles.length > 0 || expiringFiles.length > 0) && (
-                                    <div className="mb-4 space-y-2">
-                                        {expiredFiles.length > 0 && (
-                                            <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-                                                <XCircle className="size-4 shrink-0" />
-                                                <span><strong>{expiredFiles.length} expired</strong> document{expiredFiles.length !== 1 ? 's' : ''}: {expiredFiles.map((f) => f.type_name).join(', ')}</span>
-                                            </div>
-                                        )}
-                                        {expiringFiles.length > 0 && (
-                                            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                                <AlertTriangle className="size-4 shrink-0" />
-                                                <span><strong>{expiringFiles.length} expiring soon</strong>: {expiringFiles.map((f) => `${f.type_name} (${f.expires_at})`).join(', ')}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {employeeFiles.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">No files on record for this employee.</p>
-                                ) : (
-                                    <div className="divide-y divide-border">
-                                        {employeeFiles.map((file) => (
-                                            <div key={file.id} className="flex items-center justify-between gap-4 py-2.5">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className={cn(
-                                                        'size-2 shrink-0 rounded-full',
-                                                        file.status === 'expired' ? 'bg-red-500' : file.status === 'expiring_soon' ? 'bg-amber-500' : 'bg-green-500',
-                                                    )} />
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-medium truncate">{file.type_name}</p>
-                                                        {file.document_number && <p className="text-xs text-muted-foreground">#{file.document_number}</p>}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3 shrink-0">
-                                                    {file.expires_at && (
-                                                        <span className={cn(
-                                                            'text-xs',
-                                                            file.status === 'expired' ? 'font-medium text-red-600 dark:text-red-400'
-                                                                : file.status === 'expiring_soon' ? 'font-medium text-amber-600 dark:text-amber-400'
-                                                                    : 'text-muted-foreground',
-                                                        )}>
-                                                            {file.status === 'expired' ? 'Expired ' : file.status === 'expiring_soon' ? 'Expires ' : 'Exp '}
-                                                            {file.expires_at}
-                                                        </span>
-                                                    )}
-                                                    {!file.expires_at && (
-                                                        <span className="text-xs text-muted-foreground">No expiry</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </>
-                        );
-                    })()}
-                </Card>
+                <div className="mb-6">
+                    <EmployeeFilesCard employeeId={transfer.employee_id} />
+                </div>
 
                 {/* Receiving Foreman Data (read-only, when already submitted) */}
                 {!showReceivingForm && (transfer.position_applying_for || transfer.would_have_worker_again) && (
