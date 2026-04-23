@@ -63,7 +63,28 @@ Route::middleware('auth')->group(function () {
             ], 400);
         }
 
-        $user->notify(new TestPushNotification);
+        try {
+            $user->notify(new TestPushNotification);
+
+            \Illuminate\Support\Facades\Log::info('Test push notification sent', [
+                'user_id' => $user->id,
+                'subscription_count' => $user->pushSubscriptions()->count(),
+                'vapid_key_set' => ! empty(config('webpush.vapid.public_key')),
+                'vapid_private_set' => ! empty(config('webpush.vapid.private_key')),
+                'vapid_subject_set' => ! empty(config('webpush.vapid.subject')),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Test push notification failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Push failed: '.$e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'success' => true,

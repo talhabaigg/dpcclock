@@ -1,4 +1,3 @@
-import { useHttp } from '@inertiajs/react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface PushNotificationState {
@@ -27,6 +26,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     return outputArray;
 }
 
+function getCsrfToken(): string {
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+}
+
 export function usePushNotifications() {
     const [state, setState] = useState<PushNotificationState>({
         isSupported: false,
@@ -34,16 +37,6 @@ export function usePushNotifications() {
         permission: null,
         isLoading: true,
         error: null,
-    });
-
-    const subscribeHttp = useHttp({
-        endpoint: '',
-        keys: { p256dh: '', auth: '' },
-        contentEncoding: 'aesgcm',
-    });
-
-    const unsubscribeHttp = useHttp({
-        endpoint: '',
     });
 
     const checkSupport = useCallback(() => {
@@ -126,27 +119,32 @@ export function usePushNotifications() {
 
             // Send subscription to server
             const subscriptionJson = subscription.toJSON();
-            subscribeHttp.setData({
-                endpoint: subscriptionJson.endpoint || '',
-                keys: {
-                    p256dh: subscriptionJson.keys?.p256dh || '',
-                    auth: subscriptionJson.keys?.auth || '',
+            const response = await fetch('/push-subscriptions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                contentEncoding: (PushManager as any).supportedContentEncodings?.[0] || 'aesgcm',
+                body: JSON.stringify({
+                    endpoint: subscriptionJson.endpoint || '',
+                    keys: {
+                        p256dh: subscriptionJson.keys?.p256dh || '',
+                        auth: subscriptionJson.keys?.auth || '',
+                    },
+                    contentEncoding: (PushManager as any).supportedContentEncodings?.[0] || 'aesgcm',
+                }),
             });
 
-            await subscribeHttp.post('/push-subscriptions', {
-                onSuccess: () => {
-                    setState((prev) => ({
-                        ...prev,
-                        isSubscribed: true,
-                        isLoading: false,
-                    }));
-                },
-                onError: () => {
-                    throw new Error('Failed to save subscription on server');
-                },
-            });
+            if (!response.ok) {
+                throw new Error('Failed to save subscription on server');
+            }
+
+            setState((prev) => ({
+                ...prev,
+                isSubscribed: true,
+                isLoading: false,
+            }));
 
             return true;
         } catch (error) {
@@ -158,7 +156,7 @@ export function usePushNotifications() {
             }));
             return false;
         }
-    }, [state.permission, requestPermission, subscribeHttp]);
+    }, [state.permission, requestPermission]);
 
     const unsubscribe = useCallback(async (): Promise<boolean> => {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
@@ -178,19 +176,25 @@ export function usePushNotifications() {
             await subscription.unsubscribe();
 
             // Remove subscription from server
-            unsubscribeHttp.setData({ endpoint: subscription.endpoint });
-            await unsubscribeHttp.destroy('/push-subscriptions', {
-                onSuccess: () => {
-                    setState((prev) => ({
-                        ...prev,
-                        isSubscribed: false,
-                        isLoading: false,
-                    }));
+            const response = await fetch('/push-subscriptions', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                onError: () => {
-                    throw new Error('Failed to remove subscription from server');
-                },
+                body: JSON.stringify({ endpoint: subscription.endpoint }),
             });
+
+            if (!response.ok) {
+                throw new Error('Failed to remove subscription from server');
+            }
+
+            setState((prev) => ({
+                ...prev,
+                isSubscribed: false,
+                isLoading: false,
+            }));
 
             return true;
         } catch (error) {
@@ -202,7 +206,7 @@ export function usePushNotifications() {
             }));
             return false;
         }
-    }, [getSubscription, unsubscribeHttp]);
+    }, [getSubscription]);
 
     return {
         ...state,
