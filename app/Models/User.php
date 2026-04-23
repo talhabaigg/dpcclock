@@ -77,12 +77,10 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
             return null;
         }
 
-        if (app()->environment('production')) {
-            try {
-                return $media->getTemporaryUrl(now()->addMinutes(30));
-            } catch (\RuntimeException) {
-                // Fallback if disk doesn't support temporary URLs
-            }
+        try {
+            return $media->getTemporaryUrl(now()->addMinutes(30));
+        } catch (\RuntimeException) {
+            // Fallback if disk doesn't support temporary URLs (e.g. local/public disk)
         }
 
         return $media->getUrl();

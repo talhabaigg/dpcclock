@@ -1,5 +1,6 @@
 import InputSearch from '@/components/inputSearch';
 import LoadingDialog from '@/components/loading-dialog';
+import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,8 +22,8 @@ import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Filter, RefreshCcw, RotateCcw, Users, X } from 'lucide-react';
+import { type ColumnDef, flexRender, getCoreRowModel, type RowSelectionState, useReactTable } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, FilePlus2, Filter, RefreshCcw, RotateCcw, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface EmployeeDocument {
@@ -42,6 +43,13 @@ interface Employee {
     employment_type?: string | null;
     worktypes?: { eh_worktype_id: string; name: string }[];
     documents?: EmployeeDocument[];
+}
+
+interface DocumentTemplate {
+    id: number;
+    name: string;
+    placeholders: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
+    body_html: string | null;
 }
 
 interface FileTypeOption {
@@ -207,14 +215,20 @@ function LicenceFilterHeader({
 }
 
 export default function EmployeesList() {
-    const { employees, fileTypes, employmentTypes, filters, flash } = usePage<{
+    const { employees, fileTypes, employmentTypes, filters, flash, canSendDocuments, documentTemplates, savedSenderSignatureUrl, appUsers } = usePage<{
         employees: PaginatedEmployees;
         fileTypes: FileTypeOption[];
         employmentTypes: string[];
         filters: Filters;
         flash: { success?: string };
+        canSendDocuments: boolean;
+        documentTemplates: DocumentTemplate[];
+        savedSenderSignatureUrl: string | null;
+        appUsers: { id: number; name: string; position: string | null }[];
     }>().props;
 
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    const [showBulkModal, setShowBulkModal] = useState(false);
     const [searchValue, setSearchValue] = useState(filters.search ?? '');
     const [employmentTypeFilter, setEmploymentTypeFilter] = useState(filters.employment_type ?? 'all');
     const [licenceFilterIds, setLicenceFilterIds] = useState<Set<number>>(new Set(filters.licence_ids ?? []));
@@ -345,6 +359,23 @@ export default function EmployeesList() {
     };
 
     const columns: ColumnDef<Employee>[] = [
+        ...(canSendDocuments
+            ? [
+                  {
+                      id: 'select',
+                      header: ({ table }: any) => (
+                          <Checkbox
+                              checked={table.getIsAllPageRowsSelected()}
+                              onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                          />
+                      ),
+                      cell: ({ row }: any) => (
+                          <Checkbox checked={row.getIsSelected()} onCheckedChange={(v) => row.toggleSelected(!!v)} />
+                      ),
+                      enableSorting: false,
+                  } as ColumnDef<Employee>,
+              ]
+            : []),
         {
             accessorKey: 'name',
             header: () => (
@@ -495,8 +526,13 @@ export default function EmployeesList() {
     const table = useReactTable({
         data: employees.data,
         columns,
+        state: { rowSelection },
+        onRowSelectionChange: setRowSelection,
+        getRowId: (row) => String(row.id),
         getCoreRowModel: getCoreRowModel(),
     });
+
+    const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k]).map(Number);
 
     const resultsLabel =
         employees.total === 0 ? 'Showing 0 employees' : `Showing ${employees.from ?? 0}-${employees.to ?? 0} of ${employees.total} employees`;
@@ -582,6 +618,20 @@ export default function EmployeesList() {
                     </div>
                 )}
 
+                {/* Bulk action bar */}
+                {selectedIds.length > 0 && canSendDocuments && (
+                    <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
+                        <span className="text-sm font-medium">{selectedIds.length} selected</span>
+                        <Button size="sm" className="gap-1.5" onClick={() => setShowBulkModal(true)}>
+                            <FilePlus2 className="h-3.5 w-3.5" />
+                            Send for Signing
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>
+                            Clear
+                        </Button>
+                    </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">{resultsLabel}</p>
 
                 <div className="flex flex-col gap-2 sm:hidden">
@@ -663,7 +713,7 @@ export default function EmployeesList() {
                                 </TableRow>
                             ) : (
                                 table.getRowModel().rows.map((row) => (
-                                    <TableRow key={row.id} className="group">
+                                    <TableRow key={row.id} className="group" data-state={row.getIsSelected() ? 'selected' : undefined}>
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell key={cell.id} className="px-3">
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -708,6 +758,25 @@ export default function EmployeesList() {
                     </Pagination>
                 )}
             </div>
+
+            {/* Bulk send modal */}
+            {canSendDocuments && (
+                <SendForSigningModal
+                    open={showBulkModal}
+                    onOpenChange={(open) => {
+                        setShowBulkModal(open);
+                        if (!open) setRowSelection({});
+                    }}
+                    templates={documentTemplates ?? []}
+                    savedSenderSignatureUrl={savedSenderSignatureUrl}
+                    appUsers={appUsers ?? []}
+                    bulkEmployees={employees.data.filter((e) => selectedIds.includes(e.id)).map((e) => ({
+                        id: e.id,
+                        name: e.preferred_name || e.name,
+                        email: e.email,
+                    }))}
+                />
+            )}
         </AppLayout>
     );
 }

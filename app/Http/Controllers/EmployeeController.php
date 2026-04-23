@@ -127,6 +127,8 @@ class EmployeeController extends Controller
                 'category' => $ft->category[0] ?? 'Other',
             ]);
 
+        $canSendDocuments = $user->can('employees.view-all');
+
         return Inertia::render('employees/index', [
             'employees' => $employees,
             'fileTypes' => $allFileTypes,
@@ -139,6 +141,14 @@ class EmployeeController extends Controller
                 'sort' => $sortBy,
                 'direction' => $sortDirection,
             ],
+            'canSendDocuments' => $canSendDocuments,
+            'documentTemplates' => $canSendDocuments
+                ? \App\Models\DocumentTemplate::active()->forEmployeeType(false)->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
+                : [],
+            'savedSenderSignatureUrl' => $canSendDocuments ? $user->savedSignatureUrl() : null,
+            'appUsers' => $canSendDocuments
+                ? \App\Models\User::query()->whereNull('disabled_at')->orderBy('name')->get(['id', 'name', 'position'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'position' => $u->position])->values()
+                : [],
         ]);
     }
 

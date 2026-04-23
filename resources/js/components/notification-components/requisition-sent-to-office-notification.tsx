@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Building, ChevronRight, Clock, X } from 'lucide-react';
+import { ChevronRight, Clock, ShoppingCart, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { Button } from '../ui/button';
 import { type NotificationProps } from './Notification';
@@ -12,7 +12,6 @@ interface RequisitionSentToOfficeNotificationProps {
 const RequisitionSentToOfficeNotification = ({ notification, onDismiss }: RequisitionSentToOfficeNotificationProps) => {
     const { title, body, requisition_id, location_name, total_cost } = notification.data;
 
-    // Format the notification time
     const formatTime = (dateString: string) => {
         try {
             const date = new Date(dateString);
@@ -26,20 +25,19 @@ const RequisitionSentToOfficeNotification = ({ notification, onDismiss }: Requis
             if (diffMins < 60) return `${diffMins}m ago`;
             if (diffHours < 24) return `${diffHours}h ago`;
             if (diffDays < 7) return `${diffDays}d ago`;
+
             return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
         } catch {
             return '';
         }
     };
 
-    // Navigate to the requisition
     const handleViewRequisition = useCallback(() => {
         if (requisition_id) {
             router.visit(`/requisition/${requisition_id}`);
         }
     }, [requisition_id]);
 
-    // Dismiss notification
     const handleDismiss = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
@@ -49,73 +47,61 @@ const RequisitionSentToOfficeNotification = ({ notification, onDismiss }: Requis
     );
 
     return (
-        <div className="group relative mx-1 my-2 overflow-hidden rounded-lg border border-l-4 border-l-purple-500 bg-white shadow-sm transition-all hover:shadow-md dark:bg-gray-900">
+        <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-50/60 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:border-slate-300 focus-within:bg-slate-50/40 focus-within:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:focus-within:border-slate-700 dark:focus-within:bg-slate-900/80">
             <div className="p-3">
-                {/* Header row with icon, title, time, and close */}
                 <div className="flex items-start gap-3">
-                    {/* Icon */}
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/50">
-                        <Building className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 transition-colors duration-150 ease-out group-hover:bg-slate-200/70 dark:bg-slate-800/80 dark:group-hover:bg-slate-800">
+                        <ShoppingCart className="h-5 w-5 text-slate-600 transition-transform duration-150 ease-out motion-reduce:transform-none motion-safe:group-hover:scale-105 dark:text-slate-300" />
                     </div>
 
-                    {/* Content */}
                     <div className="min-w-0 flex-1">
-                        {/* Title and badge */}
-                        <div className="flex items-center gap-2">
-                            <h4 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{title || 'Requisition Needs Review'}</h4>
-                            <span className="inline-flex flex-shrink-0 items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
-                                Pending Review
-                            </span>
-                        </div>
+                        <h4 className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{title || 'Requisition Needs Review'}</h4>
+                        {body && <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{body}</p>}
 
-                        {/* Body text */}
-                        {body && <p className="mt-0.5 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{body}</p>}
-
-                        {/* Meta info row */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-500">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-500">
                             {requisition_id && (
                                 <span className="inline-flex items-center gap-1">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Order:</span>
-                                    <span className="font-mono">#{requisition_id}</span>
+                                    <span className="text-slate-400 dark:text-slate-600">Order</span>
+                                    <span className="font-mono text-slate-600 dark:text-slate-300">#{requisition_id}</span>
                                 </span>
                             )}
-                            {location_name && (
-                                <span className="inline-flex items-center gap-1">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Project:</span>
-                                    <span>{location_name}</span>
-                                </span>
-                            )}
+                            {requisition_id && location_name && <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">/</span>}
+                            {location_name && <span>{location_name}</span>}
                             {total_cost && (
-                                <span className="inline-flex items-center gap-1">
-                                    <span className="font-medium text-gray-700 dark:text-gray-300">Total:</span>
-                                    <span className="font-semibold text-purple-600 dark:text-purple-400">${total_cost}</span>
-                                </span>
+                                <>
+                                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">/</span>
+                                    <span className="font-mono text-slate-600 dark:text-slate-300">${total_cost}</span>
+                                </>
                             )}
+                            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">/</span>
                             <span className="inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 <span>{formatTime(notification.created_at)}</span>
                             </span>
                         </div>
 
-                        {/* Action button */}
                         {requisition_id && (
                             <div className="mt-3">
-                                <Button variant="outline" size="sm" onClick={handleViewRequisition} className="h-8 gap-1.5 text-xs font-medium">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleViewRequisition}
+                                    className="h-8 gap-1.5 border-slate-200 bg-transparent text-xs font-medium text-slate-700 shadow-none transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-100 active:scale-[0.98] motion-reduce:transform-none dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                                >
                                     View Requisition
-                                    <ChevronRight className="h-3.5 w-3.5" />
+                                    <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 ease-out motion-reduce:transform-none motion-safe:group-hover:translate-x-0.5" />
                                 </Button>
                             </div>
                         )}
                     </div>
 
-                    {/* Close button */}
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={handleDismiss}
-                        className="h-7 w-7 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        className="h-7 w-7 flex-shrink-0 opacity-100 transition-[opacity,background-color,color,transform] duration-150 ease-out hover:bg-slate-100 active:scale-95 motion-reduce:transform-none sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 dark:hover:bg-slate-900"
                     >
-                        <X className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300" />
+                        <X className="h-4 w-4 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" />
                         <span className="sr-only">Dismiss notification</span>
                     </Button>
                 </div>

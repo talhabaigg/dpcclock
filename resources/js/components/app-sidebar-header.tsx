@@ -1,16 +1,15 @@
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Bell } from 'lucide-react';
+import { Bell, BellOff, CheckCheck } from 'lucide-react';
 import AppNotificationDisplay from './app-notification-display';
 import { Button } from './ui/button';
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const props = usePage().props as any;
     const notifications = props.notifications;
-    // console.log(notifications);
-    const displayCount = notifications.unreadCount > 99 ? '99+' : notifications.unreadCount > 0 ? notifications.unreadCount.toString() : null;
+    const hasUnread = notifications.unreadCount > 0;
     return (
         <header className="border-sidebar-border/50 flex h-16 shrink-0 items-center gap-2 border-b px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
             <div className="flex items-center gap-2">
@@ -19,40 +18,51 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             </div>
 
             <Sheet>
-                <SheetTrigger className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring relative ml-auto rounded-md p-1 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none">
-                    <Bell className="h-5 w-5" />
+                <SheetTrigger className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring relative ml-auto rounded-lg p-2 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none">
+                    <Bell className="h-5 w-5 text-muted-foreground" />
 
-                    {displayCount && (
-                        <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-none font-semibold text-white">
-                            {displayCount}
+                    {hasUnread && (
+                        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500">
+                            <span className="absolute inset-0 animate-ping rounded-full bg-blue-500 opacity-75" />
                         </span>
                     )}
                 </SheetTrigger>
-                <SheetContent>
-                    <SheetHeader>
-                        <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
-                            Notifications
-                            {notifications?.unreadCount > 0 && (
-                                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] leading-none font-medium text-white">
-                                    {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
-                                </span>
+                <SheetContent className="flex flex-col gap-0 p-0">
+                    <SheetHeader className="border-b px-4 pr-12 py-4">
+                        <div className="flex items-center justify-between">
+                            <SheetTitle className="flex items-center gap-2 text-base font-semibold">
+                                Notifications
+                                {notifications?.unreadCount > 0 && (
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                        ({notifications.unreadCount > 99 ? '99+' : notifications.unreadCount} unread)
+                                    </span>
+                                )}
+                            </SheetTitle>
+                            {notifications.latest.length > 0 && (
+                                <Link href={route('notifications.markAllRead')}>
+                                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5 text-xs">
+                                        <CheckCheck className="h-3.5 w-3.5" />
+                                        Mark all read
+                                    </Button>
+                                </Link>
                             )}
-                        </SheetTitle>
-                        <SheetDescription>Unread notifications that need attention appear here.</SheetDescription>
+                        </div>
                     </SheetHeader>
 
                     {notifications.latest.length === 0 ? (
-                        <p className="text-muted-foreground py-4 text-center text-sm">You&apos;re caught up. New unread notifications will appear here.</p>
-                    ) : (
-                        <>
-                            <div className="-my-6 flex items-center justify-start">
-                                <Link href={route('notifications.markAllRead')}>
-                                    <Button variant="link">Mark all as read</Button>
-                                </Link>
+                        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                                <BellOff className="h-7 w-7 text-muted-foreground/60" />
                             </div>
-
+                            <div className="text-center">
+                                <p className="text-sm font-medium text-foreground">All caught up</p>
+                                <p className="text-muted-foreground mt-1 text-xs">New notifications will appear here when they arrive.</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto p-4">
                             <AppNotificationDisplay notifications={notifications.latest} />
-                        </>
+                        </div>
                     )}
                 </SheetContent>
             </Sheet>

@@ -701,7 +701,7 @@ export default function POComparisonReport() {
             fetchReportData();
             fetchSyncStatus();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
     const handlePrint = () => {

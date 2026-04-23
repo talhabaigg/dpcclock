@@ -10,7 +10,7 @@ interface JobForecastStatusNotificationProps {
 }
 
 const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastStatusNotificationProps) => {
-    const { type, action, title, body, job_number, forecast_month, location_id } = notification.data;
+    const { type, action, body, job_number, forecast_month, location_id } = notification.data;
     const isLabourForecast = type === 'LabourForecastStatus';
     const hasDeepLink = Boolean(location_id && forecast_month);
 
@@ -44,7 +44,9 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
 
     const currentConfig = config[action || 'default'] || config.default;
     const { Icon, iconBg, iconColor } = currentConfig;
-    const displayTitle = action === 'submitted' ? 'Forecast submitted' : title || 'Forecast Update';
+    const forecastLabel = isLabourForecast ? 'Labour forecast' : 'Job forecast';
+    const actionLabel = action === 'submitted' ? 'submitted' : action === 'finalized' ? 'finalized' : action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'update';
+    const displayTitle = `${forecastLabel} ${actionLabel}`;
 
     const formatMonth = (month?: string) => {
         if (!month) return null;
@@ -105,7 +107,7 @@ const JobForecastStatusNotification = ({ notification, onDismiss }: JobForecastS
     );
 
     return (
-        <div className="group relative mx-1 my-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-50/60 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:border-slate-300 focus-within:bg-slate-50/40 focus-within:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:focus-within:border-slate-700 dark:focus-within:bg-slate-900/80">
+        <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-50/60 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:border-slate-300 focus-within:bg-slate-50/40 focus-within:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:focus-within:border-slate-700 dark:focus-within:bg-slate-900/80">
             <div className="p-3">
                 <div className="flex items-start gap-3">
                     <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out group-hover:bg-slate-200/70 dark:group-hover:bg-slate-800 ${iconBg}`}>

@@ -114,7 +114,8 @@ class SigningRequestController extends Controller
         if ($request->boolean('use_saved_sender_signature')) {
             $media = $request->user()->getFirstMedia('signature');
             if ($media) {
-                return 'data:image/png;base64,' . base64_encode(file_get_contents($media->getPath()));
+                $contents = \Illuminate\Support\Facades\Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
+                return 'data:image/png;base64,' . base64_encode($contents);
             }
         }
 
