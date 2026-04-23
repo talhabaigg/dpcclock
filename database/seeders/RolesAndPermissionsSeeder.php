@@ -357,6 +357,13 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // EMPLOYEE TRANSFERS
+        // ============================================
+        'Employee Transfers' => [
+            'employee-transfers.view' => 'View and manage employee transfer requests',
+        ],
+
+        // ============================================
         // CREDIT CARD RECEIPTS
         // ============================================
         'Credit Card Receipts' => [

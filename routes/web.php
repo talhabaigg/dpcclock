@@ -67,6 +67,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\RetentionReportController;
 use App\Http\Controllers\WipReportController;
+use App\Http\Controllers\EmployeeTransferController;
 use App\Http\Controllers\WorkerScreeningController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
@@ -296,6 +297,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');
         Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
         Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
+    });
+
+    // ============================================
+    // EMPLOYEE TRANSFERS
+    // ============================================
+    Route::middleware('permission:employee-transfers.view')->group(function () {
+        Route::get('/employee-transfers', [EmployeeTransferController::class, 'index'])->name('employee-transfers.index');
+        Route::get('/employee-transfers/create', [EmployeeTransferController::class, 'create'])->name('employee-transfers.create');
+        Route::get('/employee-transfers/kiosk/{kiosk}/employees', [EmployeeTransferController::class, 'kioskEmployees'])->name('employee-transfers.kiosk-employees');
+        Route::get('/employee-transfers/kiosk/{kiosk}/managers', [EmployeeTransferController::class, 'kioskManagers'])->name('employee-transfers.kiosk-managers');
+        Route::get('/employee-transfers/employee/{employee}/injuries', [EmployeeTransferController::class, 'employeeInjuries'])->name('employee-transfers.employee-injuries');
+        Route::post('/employee-transfers', [EmployeeTransferController::class, 'store'])->name('employee-transfers.store');
+        Route::get('/employee-transfers/{employeeTransfer}', [EmployeeTransferController::class, 'show'])->name('employee-transfers.show');
+        Route::post('/employee-transfers/{employeeTransfer}/receiving-review', [EmployeeTransferController::class, 'submitReceivingReview'])->name('employee-transfers.receiving-review');
+        Route::post('/employee-transfers/{employeeTransfer}/recommendation', [EmployeeTransferController::class, 'submitRecommendation'])->name('employee-transfers.recommendation');
     });
 
     // ============================================
