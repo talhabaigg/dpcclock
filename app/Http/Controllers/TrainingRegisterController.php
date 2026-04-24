@@ -21,6 +21,7 @@ class TrainingRegisterController extends Controller
             'rows' => $data['rows'],
             'kiosks' => $data['kiosks'],
             'fileTypes' => $data['fileTypes'],
+            'visibleFileTypes' => $data['visibleFileTypes'],
             'filters' => $data['filters'],
         ]);
     }
@@ -93,7 +94,7 @@ class TrainingRegisterController extends Controller
         // Employees: active (not soft-deleted), attached to an active kiosk in scope
         $employeeQuery = Employee::query()
             ->with(['kiosks' => function ($q) use ($activeKioskIds) {
-                $q->whereIn('kiosks.id', $activeKioskIds);
+                $q->whereIn('kiosks.id', $activeKioskIds)->with('location:id,eh_location_id,external_id,name');
             }])
             ->whereHas('kiosks', function ($q) use ($activeKioskIds) {
                 $q->whereIn('kiosks.id', $activeKioskIds);
@@ -125,16 +126,41 @@ class TrainingRegisterController extends Controller
             $matrix[$file->employee_id][$file->employee_file_type_id] = true;
         }
 
-        $rows = $employees->map(fn (Employee $emp) => [
-            'id' => $emp->id,
-            'name' => $emp->preferred_name ?: $emp->name,
-            'kiosks' => $emp->kiosks
-                ->sortBy('name')
-                ->values()
-                ->map(fn ($k) => ['id' => $k->id, 'name' => $k->name])
-                ->all(),
-            'files' => array_map('intval', array_keys($matrix[$emp->id] ?? [])),
-        ])->values();
+        $visibleIds = $visibleFileTypes->pluck('id')->all();
+        $visibleCount = count($visibleIds);
+
+        $rows = $employees->map(function (Employee $emp) use ($matrix, $visibleIds, $visibleCount) {
+            $validForEmp = $matrix[$emp->id] ?? [];
+            $validInView = 0;
+            foreach ($visibleIds as $fid) {
+                if (isset($validForEmp[$fid])) {
+                    $validInView++;
+                }
+            }
+            return [
+                'id' => $emp->id,
+                'name' => $emp->preferred_name ?: $emp->name,
+                'kiosks' => $emp->kiosks
+                    ->sortBy('name')
+                    ->values()
+                    ->map(fn ($k) => [
+                        'id' => $k->id,
+                        'name' => $k->name,
+                        'job_number' => $k->location?->external_id,
+                    ])
+                    ->all(),
+                'files' => array_map('intval', array_keys($validForEmp)),
+                'missing_count' => max(0, $visibleCount - $validInView),
+            ];
+        })->values();
+
+        $sort = (string) $request->input('sort', 'missing_desc');
+        $rows = match ($sort) {
+            'name_asc' => $rows->sortBy(fn ($r) => strtolower($r['name']))->values(),
+            'name_desc' => $rows->sortByDesc(fn ($r) => strtolower($r['name']))->values(),
+            'missing_asc' => $rows->sortBy('missing_count')->values(),
+            default => $rows->sortByDesc('missing_count')->values(),
+        };
 
         $kiosksPayload = $accessibleKiosks
             ->map(fn ($k) => ['id' => $k->id, 'name' => $k->name])
@@ -160,6 +186,7 @@ class TrainingRegisterController extends Controller
                 'search' => $request->input('search'),
                 'kiosk_ids' => $filterKioskIds->all(),
                 'file_type_ids' => $filterFileTypeIds->all(),
+                'sort' => $sort,
             ],
         ];
     }

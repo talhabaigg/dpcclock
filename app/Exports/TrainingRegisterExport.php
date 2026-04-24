@@ -23,11 +23,13 @@ class TrainingRegisterExport implements FromCollection, ShouldAutoSize, WithHead
     {
         return $this->rows->map(function (array $row) {
             $validIds = array_flip($row['files']);
-            $kioskNames = collect($row['kiosks'])->pluck('name')->implode(', ');
+            $jobs = collect($row['kiosks'])
+                ->map(fn ($k) => $k['job_number'] ?: $k['name'])
+                ->implode(', ');
 
             $line = [
                 $row['name'],
-                $kioskNames,
+                $jobs,
             ];
 
             foreach ($this->fileTypes as $ft) {
@@ -42,7 +44,7 @@ class TrainingRegisterExport implements FromCollection, ShouldAutoSize, WithHead
     {
         return [
             'Worker',
-            'Kiosk(s)',
+            'Jobs',
             ...$this->fileTypes->pluck('name')->all(),
         ];
     }
