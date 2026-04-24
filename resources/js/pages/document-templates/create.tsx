@@ -17,7 +17,10 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create', href: '#' },
 ];
 
-const CATEGORIES = ['employment', 'safety', 'subcontractor', 'general'];
+const CATEGORIES: Record<string, string> = {
+    employment_contract: 'Employment Contract',
+    policies: 'Policies',
+};
 
 export default function CreateDocumentTemplate() {
     const [placeholders, setPlaceholders] = useState<PlaceholderItem[]>([]);
@@ -76,9 +79,9 @@ export default function CreateDocumentTemplate() {
                                 <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
-                                {CATEGORIES.map((cat) => (
-                                    <SelectItem key={cat} value={cat}>
-                                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                {Object.entries(CATEGORIES).map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                        {label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -113,9 +116,9 @@ export default function CreateDocumentTemplate() {
                                                 <SelectValue placeholder="Select category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {CATEGORIES.map((cat) => (
-                                                    <SelectItem key={cat} value={cat}>
-                                                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                                {Object.entries(CATEGORIES).map(([value, label]) => (
+                                                    <SelectItem key={value} value={value}>
+                                                        {label}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>

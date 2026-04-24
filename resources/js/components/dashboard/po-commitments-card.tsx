@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCompact } from './dashboard-utils';
 import { AgGridReact } from 'ag-grid-react';
-import { AllCommunityModule, ModuleRegistry, type ColDef, type ValueFormatterParams } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry, type ColDef, type ValueFormatterParams, type GridReadyEvent, type RowClassParams } from 'ag-grid-community';
 import { shadcnLightTheme, shadcnDarkTheme } from '@/themes/ag-grid-theme';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -32,13 +32,11 @@ const currencyFormatter = (params: ValueFormatterParams) => {
     return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2 }).format(params.value);
 };
 
-const fmt = (v: number) =>
-    new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2 }).format(v);
-
 export default function POCommitmentsCard({ value, poLines, isEditing }: POCommitmentsCardProps) {
     const [open, setOpen] = useState(false);
     const [isCompact, setIsCompact] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
+    const gridRef = useRef<AgGridReact<POLine>>(null);
     const hasLines = poLines && poLines.length > 0;
 
     const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
@@ -55,9 +53,9 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
     }, []);
 
     const columnDefs = useMemo<ColDef<POLine>[]>(() => [
-        { field: 'vendor', headerName: 'Vendor', filter: true, flex: 2, minWidth: 180 },
-        { field: 'po_no', headerName: 'PO #', filter: true, flex: 1, minWidth: 100 },
-        { field: 'approval_status', headerName: 'Status', filter: true, flex: 1, minWidth: 100 },
+        { field: 'vendor', headerName: 'Vendor', flex: 2, minWidth: 180 },
+        { field: 'po_no', headerName: 'PO #', flex: 1, minWidth: 100 },
+        { field: 'approval_status', headerName: 'Status', flex: 1, minWidth: 100 },
         { field: 'original_commitment', headerName: 'Original', filter: 'agNumberColumnFilter', valueFormatter: currencyFormatter, type: 'rightAligned', flex: 1, minWidth: 120 },
         { field: 'approved_changes', headerName: 'Changes', filter: 'agNumberColumnFilter', valueFormatter: currencyFormatter, type: 'rightAligned', flex: 1, minWidth: 120 },
         { field: 'current_commitment', headerName: 'Current', filter: 'agNumberColumnFilter', valueFormatter: currencyFormatter, type: 'rightAligned', flex: 1, minWidth: 120 },
@@ -67,11 +65,65 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
         },
     ], []);
 
+    // Filter out rows where outstanding is 0 by default
+    const filteredPoLines = useMemo(() => {
+        if (!poLines) return [];
+        return poLines.filter(line => line.os_commitment !== 0);
+    }, [poLines]);
+
+    const buildTotals = (rows: POLine[]): Partial<POLine>[] => {
+        let original = 0, changes = 0, current = 0, billed = 0, outstanding = 0;
+        for (const row of rows) {
+            original += row.original_commitment ?? 0;
+            changes += row.approved_changes ?? 0;
+            current += row.current_commitment ?? 0;
+            billed += row.total_billed ?? 0;
+            outstanding += row.os_commitment ?? 0;
+        }
+        return [{
+            vendor: `Total (${rows.length} PO${rows.length !== 1 ? 's' : ''})`,
+            po_no: '',
+            approval_status: '',
+            original_commitment: original,
+            approved_changes: changes,
+            current_commitment: current,
+            total_billed: billed,
+            os_commitment: outstanding,
+        }];
+    };
+
+    const [pinnedBottomRowData, setPinnedBottomRowData] = useState<Partial<POLine>[]>(
+        () => buildTotals(filteredPoLines),
+    );
+
+    const recomputeTotals = useCallback((api: AgGridReact<POLine>['api'] | undefined | null) => {
+        if (!api) return;
+        const visible: POLine[] = [];
+        api.forEachNodeAfterFilter((node) => { if (node.data) visible.push(node.data); });
+        setPinnedBottomRowData(buildTotals(visible));
+    }, []);
+
+    const onGridReady = useCallback((e: GridReadyEvent<POLine>) => {
+        recomputeTotals(e.api);
+    }, [recomputeTotals]);
+
+    const onFilterChanged = useCallback(() => {
+        recomputeTotals(gridRef.current?.api);
+    }, [recomputeTotals]);
+
     const defaultColDef = useMemo<ColDef>(() => ({
         sortable: true,
         resizable: true,
-        floatingFilter: true,
+        filter: true,
+        suppressHeaderMenuButton: true,
     }), []);
+
+    const getRowStyle = useCallback((params: RowClassParams<POLine>) => {
+        if (params.node.rowPinned) {
+            return { fontWeight: 700 as const, borderTop: '2px solid var(--ag-border-color)' };
+        }
+        return undefined;
+    }, []);
 
     return (
         <>
@@ -110,23 +162,24 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
 
             {hasLines && (
                 <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogContent className="min-w-full h-[80vh] flex flex-col">
+                    <DialogContent className="!max-w-[calc(100vw-4rem)] h-[80vh] flex flex-col">
                         <DialogHeader>
                             <DialogTitle className="text-sm">PO Commitment Detail</DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">
-                                {poLines.length} purchase order{poLines.length !== 1 ? 's' : ''} &mdash; Outstanding: {fmt(value!)}
-                            </DialogDescription>
                         </DialogHeader>
                         <div className="flex-1 min-h-0">
                             <AgGridReact<POLine>
+                                ref={gridRef}
                                 theme={isDark ? shadcnDarkTheme : shadcnLightTheme}
-                                rowData={poLines}
+                                rowData={filteredPoLines}
                                 columnDefs={columnDefs}
                                 defaultColDef={defaultColDef}
+                                pinnedBottomRowData={pinnedBottomRowData}
+                                onGridReady={onGridReady}
+                                onFilterChanged={onFilterChanged}
+                                getRowStyle={getRowStyle}
                                 animateRows
                                 rowHeight={36}
                                 headerHeight={36}
-                                floatingFiltersHeight={30}
                             />
                         </div>
                     </DialogContent>
