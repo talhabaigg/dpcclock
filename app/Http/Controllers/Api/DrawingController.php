@@ -215,6 +215,62 @@ class DrawingController extends Controller
         return response()->json(['message' => 'Drawing queued for reprocessing']);
     }
 
+    /**
+     * Stream the source drawing file (PDF/image) for the mobile viewer.
+     */
+    public function file(Drawing $drawing)
+    {
+        $media = $drawing->getFirstMedia('source');
+        if (! $media) {
+            return response()->json(['message' => 'File not found.'], 404);
+        }
+
+        $stream = $media->stream();
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $media->mime_type ?? 'application/pdf',
+            'Content-Length' => $media->size,
+            'Content-Disposition' => 'inline; filename="'.$media->file_name.'"',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    /**
+     * Stream the drawing thumbnail (rendered PDF preview or image conversion).
+     */
+    public function thumbnail(Drawing $drawing)
+    {
+        $thumbnail = $drawing->getFirstMedia('thumbnail');
+
+        if (! $thumbnail) {
+            $source = $drawing->getFirstMedia('source');
+            if ($source && str_starts_with(strtolower($source->mime_type ?? ''), 'image/')) {
+                $thumbnail = $source;
+            }
+        }
+
+        if (! $thumbnail) {
+            return response()->json(['message' => 'Thumbnail not available.'], 404);
+        }
+
+        $stream = $thumbnail->stream();
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $thumbnail->mime_type ?? 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
     // =========================================================================
     // PRODUCTION
     // =========================================================================

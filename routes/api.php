@@ -97,6 +97,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('api.drawings.revisions');
     Route::post('drawings/{drawing}/reprocess', [DrawingController::class, 'reprocess'])
         ->name('api.drawings.reprocess');
+    Route::get('drawings/{drawing}/file', [DrawingController::class, 'file'])
+        ->name('api.drawings.file');
+    Route::get('drawings/{drawing}/thumbnail', [DrawingController::class, 'thumbnail'])
+        ->name('api.drawings.thumbnail');
 
     // Drawing Observations
     Route::apiResource('drawing-observations', DrawingObservationController::class)
