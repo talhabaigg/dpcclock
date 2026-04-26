@@ -144,7 +144,7 @@ class Drawing extends Model implements HasMedia
     {
         $media = $this->getFirstMedia('source');
 
-        return $media?->getUrl();
+        return $media ? $this->mediaUrl($media) : null;
     }
 
     public function getThumbnailUrlAttribute(): ?string
@@ -152,7 +152,7 @@ class Drawing extends Model implements HasMedia
         // Prefer the explicitly-generated thumbnail (PDFs render here)
         $thumbnail = $this->getFirstMedia('thumbnail');
         if ($thumbnail) {
-            return $thumbnail->getUrl();
+            return $this->mediaUrl($thumbnail);
         }
 
         // For image sources, use Spatie's auto-generated thumb conversion
@@ -162,15 +162,32 @@ class Drawing extends Model implements HasMedia
         }
 
         if ($source->hasGeneratedConversion('thumb')) {
-            return $source->getUrl('thumb');
+            return $this->mediaUrl($source, 'thumb');
         }
 
         // Only fall back to the original source file if it's an image
         if (str_starts_with(strtolower($source->mime_type ?? ''), 'image/')) {
-            return $source->getUrl();
+            return $this->mediaUrl($source);
         }
 
         return null;
+    }
+
+    /**
+     * Build a fetchable URL for a media file. Uses a presigned temporary URL
+     * for S3 (private buckets); falls back to the public URL otherwise.
+     */
+    protected function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media, string $conversion = ''): ?string
+    {
+        if ($media->disk === 's3') {
+            try {
+                return $media->getTemporaryUrl(now()->addMinutes(60), $conversion);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        return $conversion === '' ? $media->getUrl() : $media->getUrl($conversion);
     }
 
     public function getDisplayNameAttribute(): string
