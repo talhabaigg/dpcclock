@@ -59,15 +59,18 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
             return;
         }
 
-        saveHttp.setData({
-            type: observationType,
-            description: description.trim(),
-            page_number: pendingPoint.pageNumber,
-            x: pendingPoint.x,
-            y: pendingPoint.y,
-            ...(photoFile ? { photo: photoFile } : {}),
-            is_360_photo: is360Photo ? '1' : '0',
-        });
+        const formData = new FormData();
+        formData.append('type', observationType);
+        formData.append('description', description.trim());
+        formData.append('page_number', pendingPoint.pageNumber.toString());
+        formData.append('x', pendingPoint.x.toString());
+        formData.append('y', pendingPoint.y.toString());
+        if (photoFile) {
+            formData.append('photo', photoFile);
+        }
+        formData.append('is_360_photo', is360Photo ? '1' : '0');
+
+        saveHttp.setData(formData as any);
         saveHttp.post(`/drawings/${drawingId}/observations`, {
             onSuccess: (data: Observation) => {
                 setServerObservations((prev) => [...prev, data]);
@@ -88,15 +91,18 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
             return;
         }
 
-        saveHttp.setData({
-            type: observationType,
-            description: description.trim(),
-            page_number: editingObservation.page_number,
-            x: editingObservation.x,
-            y: editingObservation.y,
-            ...(photoFile ? { photo: photoFile } : {}),
-            is_360_photo: is360Photo ? '1' : '0',
-        });
+        const formData = new FormData();
+        formData.append('type', observationType);
+        formData.append('description', description.trim());
+        formData.append('page_number', editingObservation.page_number.toString());
+        formData.append('x', editingObservation.x.toString());
+        formData.append('y', editingObservation.y.toString());
+        if (photoFile) {
+            formData.append('photo', photoFile);
+        }
+        formData.append('is_360_photo', is360Photo ? '1' : '0');
+
+        saveHttp.setData(formData as any);
         saveHttp.post(`/drawings/${drawingId}/observations/${editingObservation.id}`, {
             onSuccess: (data: Observation) => {
                 setServerObservations((prev) => prev.map((obs) => (obs.id === data.id ? data : obs)));

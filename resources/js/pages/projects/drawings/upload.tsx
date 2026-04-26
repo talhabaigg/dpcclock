@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { formatDistanceToNow } from 'date-fns';
 import { CheckCircle, Clock, Eye, FileText, Loader2, RefreshCw, Upload, X, XCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -44,7 +44,6 @@ export default function DrawingsUpload() {
 
     const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
     const [uploads, setUploads] = useState<UploadEntry[]>([]);
-    const uploadHttp = useHttp({});
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -54,29 +53,54 @@ export default function DrawingsUpload() {
     ];
 
     const uploadFile = useCallback(
-        (file: File, index: number) => {
+        async (file: File, index: number) => {
             setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'uploading' } : u)));
 
-            uploadHttp.setData({ files: [file] });
-            uploadHttp.post(`/projects/${project.id}/drawings`, {
-                onSuccess: (data: any) => {
-                    if (data.success && data.drawings) {
-                        setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'success' } : u)));
-                        setDrawings((prev) => [...data.drawings, ...prev]);
-                        toast.success(`${file.name} uploaded`);
-                    } else {
-                        setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: data.message } : u)));
-                        toast.error(`${file.name}: ${data.message || 'Upload failed'}`);
-                    }
-                },
-                onError: (errors: Record<string, string> = {}) => {
-                    const message =
-                        Object.values(errors).find(Boolean) ||
-                        (file.size > 50 * 1024 * 1024 ? `File is ${(file.size / 1024 / 1024).toFixed(1)}MB — limit is 50MB` : 'Upload failed (server rejected the file — likely too large for the server)');
+            const formData = new FormData();
+            formData.append('files[]', file);
+
+            const csrf = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
+
+            try {
+                const res = await fetch(`/projects/${project.id}/drawings`, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const data = await res.json().catch(() => ({}) as any);
+
+                if (!res.ok) {
+                    const errorMessage =
+                        (data?.errors && (Object.values(data.errors).flat() as string[]).find(Boolean)) ||
+                        data?.message ||
+                        (file.size > 50 * 1024 * 1024
+                            ? `File is ${(file.size / 1024 / 1024).toFixed(1)}MB — limit is 50MB`
+                            : `Upload failed (HTTP ${res.status})`);
+                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: errorMessage } : u)));
+                    toast.error(`${file.name}: ${errorMessage}`);
+                    return;
+                }
+
+                if (data.success && data.drawings) {
+                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'success' } : u)));
+                    setDrawings((prev) => [...data.drawings, ...prev]);
+                    toast.success(`${file.name} uploaded`);
+                } else {
+                    const message = data.message || 'Upload failed';
                     setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: message } : u)));
                     toast.error(`${file.name}: ${message}`);
-                },
-            });
+                }
+            } catch (e: any) {
+                const message = e?.message || 'Network error';
+                setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: message } : u)));
+                toast.error(`${file.name}: ${message}`);
+            }
         },
         [project.id],
     );
