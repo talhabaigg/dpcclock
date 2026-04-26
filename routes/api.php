@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\DrawingController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\SiteWalkController;
@@ -156,4 +157,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'tile'])
         ->name('api.drawings.tile')
         ->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
+
+    // ── Project Schedule (for React Native app) ──
+    Route::prefix('schedule')->name('api.schedule.')->group(function () {
+        Route::get('projects', [ScheduleController::class, 'projects'])->name('projects');
+        Route::get('projects/{project}/snapshot', [ScheduleController::class, 'snapshot'])->name('snapshot');
+        Route::post('projects/{project}/tasks/bulk-update', [ScheduleController::class, 'bulkUpdateTasks'])->name('tasks.bulk-update');
+
+        Route::post('projects/{project}/tasks', [ScheduleController::class, 'storeTask'])->name('tasks.store');
+        Route::patch('tasks/{task}', [ScheduleController::class, 'updateTask'])->name('tasks.update');
+        Route::delete('tasks/{task}', [ScheduleController::class, 'destroyTask'])->name('tasks.destroy');
+
+        Route::post('projects/{project}/links', [ScheduleController::class, 'storeLink'])->name('links.store');
+        Route::patch('links/{link}', [ScheduleController::class, 'updateLink'])->name('links.update');
+        Route::delete('links/{link}', [ScheduleController::class, 'destroyLink'])->name('links.destroy');
+    });
 });

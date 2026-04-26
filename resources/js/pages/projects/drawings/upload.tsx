@@ -57,10 +57,7 @@ export default function DrawingsUpload() {
         (file: File, index: number) => {
             setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'uploading' } : u)));
 
-            const formData = new FormData();
-            formData.append('files[]', file);
-
-            uploadHttp.setData(formData);
+            uploadHttp.setData({ files: [file] });
             uploadHttp.post(`/projects/${project.id}/drawings`, {
                 onSuccess: (data: any) => {
                     if (data.success && data.drawings) {
@@ -72,9 +69,12 @@ export default function DrawingsUpload() {
                         toast.error(`${file.name}: ${data.message || 'Upload failed'}`);
                     }
                 },
-                onError: () => {
-                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: 'Upload failed' } : u)));
-                    toast.error(`${file.name}: Upload failed`);
+                onError: (errors: Record<string, string> = {}) => {
+                    const message =
+                        Object.values(errors).find(Boolean) ||
+                        (file.size > 50 * 1024 * 1024 ? `File is ${(file.size / 1024 / 1024).toFixed(1)}MB — limit is 50MB` : 'Upload failed (server rejected the file — likely too large for the server)');
+                    setUploads((prev) => prev.map((u, i) => (i === index ? { ...u, status: 'error', error: message } : u)));
+                    toast.error(`${file.name}: ${message}`);
                 },
             });
         },
@@ -152,9 +152,17 @@ export default function DrawingsUpload() {
                                             {upload.status === 'success' && <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />}
                                             {upload.status === 'error' && <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
                                             {upload.status === 'pending' && <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400" />}
-                                            <span className="max-w-[120px] truncate sm:max-w-[200px]" title={upload.file.name}>
+                                            <span
+                                                className="max-w-[120px] truncate sm:max-w-[200px]"
+                                                title={upload.error ? `${upload.file.name} — ${upload.error}` : upload.file.name}
+                                            >
                                                 {upload.file.name}
                                             </span>
+                                            {upload.status === 'error' && upload.error && (
+                                                <span className="text-red-600 dark:text-red-400 max-w-[200px] truncate sm:max-w-[300px]" title={upload.error}>
+                                                    — {upload.error}
+                                                </span>
+                                            )}
                                             {(upload.status === 'success' || upload.status === 'error') && (
                                                 <Button
                                                     onClick={() => removeUpload(index)}

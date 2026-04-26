@@ -7,6 +7,7 @@ import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
+    ArrowRightLeft,
     BadgeDollarSign,
     Briefcase,
     Building,
@@ -24,9 +25,9 @@ import {
     FileText,
     FlaskConical,
     FolderOpen,
-    GraduationCap,
     FolderTree,
     GitCompare,
+    GraduationCap,
     Hammer,
     HardHat,
     Hash,
@@ -50,7 +51,6 @@ import {
     Store,
     TableProperties,
     Tags,
-    ArrowRightLeft,
     ToggleLeft,
     UserX,
     UsersRound,
@@ -331,7 +331,7 @@ const documents = [
         name: 'Master Data',
         icon: Database,
         permission: 'materials.view',
-        groupByAlpha: true,
+        groupByAlpha: false,
         subItems: [
             {
                 name: 'Allowance Types',
