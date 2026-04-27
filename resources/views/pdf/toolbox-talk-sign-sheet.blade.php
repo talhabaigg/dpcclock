@@ -99,6 +99,59 @@
         table.signatures tr:nth-child(even) {
             background: #fafafa;
         }
+
+        .digital-signatures table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+        }
+        .digital-signatures th {
+            background: #f1f5f9;
+            text-align: left;
+            padding: 6px 8px;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border-bottom: 2px solid #d1d5db;
+        }
+        .digital-signatures td {
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: middle;
+            font-size: 11px;
+        }
+        .digital-signatures tr {
+            page-break-inside: avoid;
+        }
+        .digital-signatures img.sig {
+            max-height: 44px;
+            max-width: 220px;
+            display: block;
+        }
+        .source-pill {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+        .source-pill.qr { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .source-pill.ipad { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+        .empty-state {
+            padding: 12px;
+            font-size: 11px;
+            color: #6b7280;
+            font-style: italic;
+            border: 1px dashed #d1d5db;
+            background: #f9fafb;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +237,44 @@
             @endforeach
         </ul>
     @endif
+
+    {{-- Digital Signatures --}}
+    <h2>Signed Attendees</h2>
+    <div class="digital-signatures">
+        @if(($digitalAttendees ?? collect())->isEmpty())
+            <div class="empty-state">No digital signatures captured yet.</div>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">Name</th>
+                        <th style="width: 22%;">Signed</th>
+                        <th style="width: 13%;">Source</th>
+                        <th style="width: 30%;">Signature</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($digitalAttendees as $attendee)
+                        <tr>
+                            <td><strong>{{ $attendee['name'] }}</strong></td>
+                            <td>{{ \Carbon\Carbon::parse($attendee['signed_at'])->setTimezone('Australia/Brisbane')->format('D d/m/Y H:i') }}</td>
+                            <td>
+                                @php $src = $attendee['source'] ?? 'qr'; @endphp
+                                <span class="source-pill {{ $src }}">{{ strtoupper($src) }}</span>
+                            </td>
+                            <td>
+                                @if($attendee['signature_data_uri'])
+                                    <img class="sig" src="{{ $attendee['signature_data_uri'] }}" alt="Signature" />
+                                @else
+                                    <span style="color:#9ca3af;font-style:italic;">Image unavailable</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </div>
 
 
 </body>

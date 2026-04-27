@@ -8,6 +8,7 @@ use App\Models\ToolboxTalk;
 use App\Models\ToolboxTalkAttendee;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Spatie\Browsershot\Browsershot;
@@ -229,11 +230,35 @@ class ToolboxTalkController extends Controller
     {
         $toolboxTalk->load('location', 'calledBy');
 
+        $digitalAttendees = ToolboxTalkAttendee::with('employee')
+            ->where('toolbox_talk_id', $toolboxTalk->id)
+            ->whereNotNull('signed_at')
+            ->whereNotNull('signature_path')
+            ->orderBy('signed_at')
+            ->get()
+            ->map(function (ToolboxTalkAttendee $a) {
+                $name = $a->employee?->preferred_name ?? $a->employee?->name ?? 'Unknown';
+                $signatureDataUri = null;
+                if ($a->signature_path && Storage::disk('public')->exists($a->signature_path)) {
+                    $signatureDataUri = 'data:image/png;base64,'
+                        .base64_encode(Storage::disk('public')->get($a->signature_path));
+                }
+
+                return [
+                    'name' => $name,
+                    'signed_at' => $a->signed_at,
+                    'source' => $a->source,
+                    'signature_data_uri' => $signatureDataUri,
+                ];
+            })
+            ->values();
+
         // Generate the toolbox talk content PDF
         $contentHtml = view('pdf.toolbox-talk-sign-sheet', [
             'talk' => $toolboxTalk,
             'subjectOptions' => ToolboxTalk::SUBJECT_OPTIONS,
             'generalItems' => ToolboxTalk::GENERAL_ITEMS,
+            'digitalAttendees' => $digitalAttendees,
         ])->render();
 
         $contentPdf = $this->renderPdf($contentHtml);
