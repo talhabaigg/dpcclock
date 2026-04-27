@@ -144,6 +144,7 @@ class ScheduleController extends Controller
             'headcount' => 'nullable|integer|min:0|max:9999',
             'responsible' => 'nullable|string|max:255',
             'status' => ['nullable', Rule::in(['not_started', 'in_progress', 'blocked', 'done'])],
+            'notes' => 'nullable|string|max:20000',
         ]);
 
         $nonWork = $this->loadNonWorkDays($project);
@@ -183,6 +184,7 @@ class ScheduleController extends Controller
             'headcount' => 'sometimes|nullable|integer|min:0|max:9999',
             'responsible' => 'sometimes|nullable|string|max:255',
             'status' => ['sometimes', 'nullable', Rule::in(['not_started', 'in_progress', 'blocked', 'done'])],
+            'notes' => 'sometimes|nullable|string|max:20000',
         ]);
 
         $nonWork = $this->loadNonWorkDays($task->location);

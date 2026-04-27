@@ -30,6 +30,7 @@ class ProjectTaskController extends Controller
             ],
             'responsible' => 'nullable|string|max:255',
             'status' => 'nullable|in:not_started,in_progress,blocked,done',
+            'notes' => 'nullable|string|max:20000',
         ]);
 
         $maxSort = $location->projectTasks()
@@ -67,6 +68,7 @@ class ProjectTaskController extends Controller
             ],
             'responsible' => 'sometimes|nullable|string|max:255',
             'status' => 'sometimes|nullable|in:not_started,in_progress,blocked,done',
+            'notes' => 'sometimes|nullable|string|max:20000',
         ]);
 
         $task->update($this->snapTaskDates($validated, $task->location));

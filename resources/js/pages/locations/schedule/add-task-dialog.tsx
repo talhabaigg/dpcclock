@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Check } from 'lucide-react';
@@ -31,6 +32,7 @@ interface AddTaskDialogProps {
         location_pay_rate_template_id: number | null;
         responsible: string | null;
         status: TaskStatus | null;
+        notes: string | null;
     }) => void;
     parentId: number | null;
     parentName: string | null;
@@ -58,6 +60,7 @@ export default function AddTaskDialog({
     const [templateId, setTemplateId] = useState<string>('');
     const [responsible, setResponsible] = useState('');
     const [status, setStatus] = useState<TaskStatus | ''>('');
+    const [notes, setNotes] = useState('');
 
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
@@ -78,6 +81,11 @@ export default function AddTaskDialog({
             location_pay_rate_template_id: templateId ? parseInt(templateId, 10) : null,
             responsible: responsible.trim() || null,
             status: status || null,
+            notes: (() => {
+                const div = document.createElement('div');
+                div.innerHTML = notes;
+                return (div.textContent ?? '').trim() ? notes : null;
+            })(),
         });
 
         setName('');
@@ -91,6 +99,7 @@ export default function AddTaskDialog({
         setTemplateId('');
         setResponsible('');
         setStatus('');
+        setNotes('');
         onOpenChange(false);
     }
 
@@ -263,6 +272,11 @@ export default function AddTaskDialog({
                                     <span className="text-muted-foreground text-xs">{isCritical ? 'Critical' : 'Normal'}</span>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="task-notes">Notes</Label>
+                            <AiRichTextEditor content={notes} onChange={setNotes} placeholder="Optional notes for this task…" />
                         </div>
                     </div>
                     <DialogFooter>

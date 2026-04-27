@@ -113,7 +113,7 @@ export default function ScheduleToolbar({
     visibleColumns,
     onToggleColumn,
 }: ScheduleToolbarProps) {
-    const columnKeys: ColumnKey[] = ['start', 'finish', 'days', 'responsible', 'status'];
+    const columnKeys: ColumnKey[] = ['start', 'finish', 'days', 'responsible', 'status', 'notes'];
 
     // Local input state keeps typing responsive — only the debounced value is lifted to the parent.
     const [searchInput, setSearchInput] = useState(searchQuery);

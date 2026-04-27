@@ -43,6 +43,7 @@ interface TaskTreePanelProps {
     onResponsibleChange: (id: number, value: string | null) => void;
     responsibleOptions: string[];
     onStatusChange: (id: number, status: import('./types').TaskStatus | null) => void;
+    onNotesChange: (id: number, value: string | null) => void;
     visibleColumns: ColumnVisibility;
     onAddTask: () => void;
     /** Called with the new full task list (with updated sort_order) after a manual drag. */
@@ -205,6 +206,7 @@ function TaskTreePanel({
     onResponsibleChange,
     responsibleOptions,
     onStatusChange,
+    onNotesChange,
     visibleColumns,
     onAddTask,
     onManualReorder,
@@ -359,7 +361,7 @@ function TaskTreePanel({
 
         // Name column + drag handle + trailing scrollbar spacer are fixed.
         // Per-column widths must stay in sync between header and row.
-        const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120 };
+        const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120, notes: 200 };
         const BASE_WIDTH = 4 /* drag */ + 340 /* name min-ish */ + 32; /* trailing */
         const panelWidth =
             BASE_WIDTH +
@@ -367,7 +369,8 @@ function TaskTreePanel({
             (visibleColumns.finish ? COL_WIDTHS.finish : 0) +
             (visibleColumns.days ? COL_WIDTHS.days : 0) +
             (visibleColumns.responsible ? COL_WIDTHS.responsible : 0) +
-            (visibleColumns.status ? COL_WIDTHS.status : 0);
+            (visibleColumns.status ? COL_WIDTHS.status : 0) +
+            (visibleColumns.notes ? COL_WIDTHS.notes : 0);
 
         const handleBodyScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
             onVerticalScroll?.(e.currentTarget.scrollTop);
@@ -375,8 +378,8 @@ function TaskTreePanel({
 
         return (
             <div className="flex shrink-0 flex-col min-h-0" style={{ width: panelWidth }}>
-                {/* Header */}
-                <div className="z-20">
+                {/* Header — reserve a scrollbar gutter to match the body so columns align in both. */}
+                <div className="z-20 [scrollbar-gutter:stable] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ overflowY: 'scroll' }}>
                     <div className="bg-muted/50 flex items-center border-b text-xs font-medium" style={{ height: ROW_HEIGHT }}>
                         {/* Spacer aligned with the per-row drag handle */}
                         <span className="w-4 shrink-0" />
@@ -466,13 +469,16 @@ function TaskTreePanel({
                                 <StatusFilter selected={statusFilter} onChange={onStatusFilterChange} />
                             </div>
                         )}
+                        {visibleColumns.notes && (
+                            <span className="w-[200px] shrink-0 border-l px-2 text-center">Notes</span>
+                        )}
                         <span className="w-[32px] shrink-0" />
                     </div>
                     <div className="bg-muted/30 border-b" style={{ height: 24 }} />
                 </div>
 
                 {/* Row area — own vertical scroll, synced with the gantt panel */}
-                <div className="flex-1 min-h-0 overflow-y-auto" ref={bodyScrollRef} onScroll={handleBodyScroll}>
+                <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]" ref={bodyScrollRef} onScroll={handleBodyScroll}>
                     {visibleTasks.length === 0 ? (
                         <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
                             No tasks yet. Click &quot;+&quot; to begin.
@@ -520,6 +526,7 @@ function TaskTreePanel({
                                             onResponsibleChange={onResponsibleChange}
                                             responsibleOptions={responsibleOptions}
                                             onStatusChange={onStatusChange}
+                                            onNotesChange={onNotesChange}
                                             visibleColumns={visibleColumns}
                                             onIndent={onIndent}
                                             onOutdent={onOutdent}

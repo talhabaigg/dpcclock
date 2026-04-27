@@ -38,6 +38,11 @@ interface AiRichTextEditorProps {
     enableAttachments?: boolean;
     attachments?: File[];
     onAttachmentsChange?: (files: File[]) => void;
+    /**
+     * If provided, plain Enter calls this (e.g., to save) and Cmd/Ctrl+Enter inserts a hard break.
+     * Without it, Enter behaves as in a normal Tiptap editor.
+     */
+    onEnter?: () => void;
 }
 
 type AiAction = 'summarize' | 'proofread' | 'rephrase' | 'improve' | 'shorten' | 'write';
@@ -143,7 +148,7 @@ function streamAiText(
     return controller;
 }
 
-export default function AiRichTextEditor({ content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange }: AiRichTextEditorProps) {
+export default function AiRichTextEditor({ content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange, onEnter }: AiRichTextEditorProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiPreview, setAiPreview] = useState<string | null>(null);
@@ -172,6 +177,20 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
         editorProps: {
             attributes: {
                 class: 'prose prose-sm max-w-none focus:outline-none min-h-[80px] px-3 py-2 dark:prose-invert',
+            },
+            handleKeyDown: (_view, event) => {
+                if (!onEnter || event.key !== 'Enter') return false;
+                if (event.metaKey || event.ctrlKey) {
+                    event.preventDefault();
+                    editor?.chain().focus().setHardBreak().run();
+                    return true;
+                }
+                if (!event.shiftKey) {
+                    event.preventDefault();
+                    onEnter();
+                    return true;
+                }
+                return false;
             },
         },
     });

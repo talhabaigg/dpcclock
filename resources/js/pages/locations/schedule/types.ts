@@ -16,6 +16,7 @@ export interface ProjectTask {
     location_pay_rate_template_id: number | null;
     responsible: string | null;
     status: TaskStatus | null;
+    notes: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -109,7 +110,7 @@ export const TREE_PANEL_WIDTH = 400;
 
 export type SortMode = 'manual' | 'start_asc' | 'start_desc' | 'finish_asc' | 'name_asc';
 
-export type ColumnKey = 'start' | 'finish' | 'days' | 'responsible' | 'status';
+export type ColumnKey = 'start' | 'finish' | 'days' | 'responsible' | 'status' | 'notes';
 
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
     start: 'Start',
@@ -117,6 +118,7 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
     days: 'Days',
     responsible: 'Responsible',
     status: 'Status',
+    notes: 'Notes',
 };
 
 export type ColumnVisibility = Record<ColumnKey, boolean>;
@@ -127,6 +129,7 @@ export const DEFAULT_COLUMN_VISIBILITY: ColumnVisibility = {
     days: true,
     responsible: true,
     status: true,
+    notes: false,
 };
 
 export const SORT_MODE_LABELS: Record<SortMode, string> = {

@@ -26,6 +26,7 @@ class ProjectTask extends Model
         'location_pay_rate_template_id',
         'responsible',
         'status',
+        'notes',
         'created_by',
         'updated_by',
     ];

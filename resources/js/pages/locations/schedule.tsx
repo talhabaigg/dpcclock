@@ -712,6 +712,22 @@ export default function Schedule() {
         [tasks, flashSaved],
     );
 
+    const handleNotesChange = useCallback(
+        (id: number, value: string | null) => {
+            const prev = tasks;
+            setTasks((curr) => curr.map((t) => (t.id === id ? { ...t, notes: value } : t)));
+            updateTaskHttp.setData({ notes: value });
+            updateTaskHttp.patch(`/tasks/${id}`, {
+                onSuccess: () => flashSaved(id),
+                onError: () => {
+                    setTasks(prev);
+                    toast.error('Failed to update notes');
+                },
+            });
+        },
+        [tasks, flashSaved],
+    );
+
     const responsibleOptions = useMemo(() => {
         const set = new Set<string>();
         for (const t of tasks) {
@@ -1136,6 +1152,7 @@ export default function Schedule() {
                         onResponsibleChange={handleResponsibleChange}
                         responsibleOptions={responsibleOptions}
                         onStatusChange={handleStatusChange}
+                        onNotesChange={handleNotesChange}
                         visibleColumns={visibleColumns}
                         onAddTask={() => openAddDialog()}
                         onManualReorder={persistManualReorder}

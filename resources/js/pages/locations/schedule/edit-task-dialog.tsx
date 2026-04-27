@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Check, ChevronDown, Copy, Trash2 } from 'lucide-react';
@@ -38,6 +39,7 @@ interface EditTaskDialogProps {
             location_pay_rate_template_id?: number | null;
             responsible?: string | null;
             status?: TaskStatus | null;
+            notes?: string | null;
         },
     ) => void;
     onDeleteTask?: (id: number) => void;
@@ -75,6 +77,7 @@ export default function EditTaskDialog({
     const [templateId, setTemplateId] = useState<string>('');
     const [responsible, setResponsible] = useState('');
     const [status, setStatus] = useState<TaskStatus | ''>('');
+    const [notes, setNotes] = useState('');
     const [showBaseline, setShowBaseline] = useState(false);
     const [showAppearance, setShowAppearance] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -92,6 +95,7 @@ export default function EditTaskDialog({
             setTemplateId(task.location_pay_rate_template_id ? String(task.location_pay_rate_template_id) : '');
             setResponsible(task.responsible ?? '');
             setStatus(task.status ?? '');
+            setNotes(task.notes ?? '');
             // Reveal baseline section automatically if the task already has a baseline set.
             setShowBaseline(!!(task.baseline_start || task.baseline_finish));
             // Reveal appearance section if the task has non-default appearance settings.
@@ -131,6 +135,11 @@ export default function EditTaskDialog({
             location_pay_rate_template_id: templateId ? parseInt(templateId, 10) : null,
             responsible: responsible.trim() || null,
             status: status || null,
+            notes: (() => {
+                const div = document.createElement('div');
+                div.innerHTML = notes;
+                return (div.textContent ?? '').trim() ? notes : null;
+            })(),
         });
         onOpenChange(false);
     }
@@ -292,6 +301,13 @@ export default function EditTaskDialog({
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="edit-notes" className="text-xs font-medium">
+                                    Notes
+                                </Label>
+                                <AiRichTextEditor content={notes} onChange={setNotes} placeholder="Optional notes for this task…" />
                             </div>
 
                             {!isGroup && (

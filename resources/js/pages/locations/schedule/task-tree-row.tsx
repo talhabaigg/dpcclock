@@ -3,6 +3,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -16,6 +17,7 @@ import {
     IndentIncrease,
     Pencil,
     Plus,
+    StickyNote,
     Trash2,
     Users,
     X,
@@ -24,7 +26,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { MANUAL_STATUSES, ROW_HEIGHT, STATUS_COLORS, STATUS_LABELS, type ColumnVisibility, type TaskNode, type TaskStatus } from './types';
 import { countWorkingDays, getEffectiveStatus, isNonWorkDay, snapToWorkday } from './utils';
 
-const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120 };
+const COL_WIDTHS = { start: 95, finish: 95, days: 40, responsible: 150, status: 120, notes: 200 };
 
 interface TaskTreeRowProps {
     node: TaskNode;
@@ -43,6 +45,7 @@ interface TaskTreeRowProps {
     onResponsibleChange: (id: number, value: string | null) => void;
     responsibleOptions: string[];
     onStatusChange: (id: number, status: TaskStatus | null) => void;
+    onNotesChange: (id: number, value: string | null) => void;
     visibleColumns: ColumnVisibility;
     onIndent: (id: number) => void;
     onOutdent: (id: number) => void;
@@ -67,6 +70,7 @@ interface TaskTreeRowContentProps {
     onResponsibleChange: (id: number, value: string | null) => void;
     responsibleOptions: string[];
     onStatusChange: (id: number, status: TaskStatus | null) => void;
+    onNotesChange: (id: number, value: string | null) => void;
     visibleColumns: ColumnVisibility;
     onIndent: (id: number) => void;
     onOutdent: (id: number) => void;
@@ -195,6 +199,85 @@ function ResponsibleCell({ value, options, onChange }: { value: string | null; o
     );
 }
 
+function htmlToPreview(html: string | null): string {
+    if (!html) return '';
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return (div.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function isEffectivelyEmpty(html: string): boolean {
+    return htmlToPreview(html).length === 0;
+}
+
+function NotesCell({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
+    const [open, setOpen] = useState(false);
+    const [draft, setDraft] = useState(value ?? '');
+    const skipCommitRef = useRef(false);
+
+    useEffect(() => {
+        if (open) {
+            setDraft(value ?? '');
+            skipCommitRef.current = false;
+        }
+    }, [open, value]);
+
+    function save() {
+        const next = isEffectivelyEmpty(draft) ? null : draft;
+        if (next !== (value ?? null)) onChange(next);
+        skipCommitRef.current = true;
+        setOpen(false);
+    }
+
+    function cancel() {
+        setDraft(value ?? '');
+        skipCommitRef.current = true;
+        setOpen(false);
+    }
+
+    const preview = htmlToPreview(value);
+
+    return (
+        <Popover
+            open={open}
+            onOpenChange={(v) => {
+                if (!v && !skipCommitRef.current) {
+                    save();
+                    return;
+                }
+                setOpen(v);
+            }}
+        >
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'hover:text-primary flex h-full w-full items-center gap-1 px-2 text-xs',
+                        !preview && 'text-muted-foreground',
+                    )}
+                    title={preview || 'Add notes'}
+                >
+                    <StickyNote className={cn('h-3 w-3 shrink-0', preview ? 'text-amber-500' : 'opacity-50')} />
+                    <span className="flex-1 truncate text-left">{preview || '—'}</span>
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                className="w-[480px] border-0 bg-popover p-0 shadow-md"
+                align="start"
+                side="bottom"
+                onKeyDownCapture={(e) => {
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancel();
+                    }
+                }}
+            >
+                <AiRichTextEditor content={draft} onChange={setDraft} onEnter={save} placeholder="Add notes…" />
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 function StatusCell({ node, onChange }: { node: TaskNode; onChange: (status: TaskStatus | null) => void }) {
     const effective = getEffectiveStatus(node);
     const isOverride = node.status != null;
@@ -245,6 +328,7 @@ function TaskTreeRowContent({
     onResponsibleChange,
     responsibleOptions,
     onStatusChange,
+    onNotesChange,
     visibleColumns,
     onIndent,
     onOutdent,
@@ -295,6 +379,7 @@ function TaskTreeRowContent({
         (visibleColumns.days ? COL_WIDTHS.days : 0) +
         (visibleColumns.responsible ? COL_WIDTHS.responsible : 0) +
         (visibleColumns.status ? COL_WIDTHS.status : 0) +
+        (visibleColumns.notes ? COL_WIDTHS.notes : 0) +
         32;
 
     return (
@@ -492,6 +577,31 @@ function TaskTreeRowContent({
                             )}
                         </div>
                     )}
+
+                    {/* Notes column — AI rich-text popover, hidden by default */}
+                    {visibleColumns.notes && (() => {
+                        const notesPreview = htmlToPreview(node.notes);
+                        return (
+                            <div className="flex h-full w-[200px] shrink-0 items-center border-l">
+                                {dragging ? (
+                                    <span className="text-muted-foreground flex w-full items-center gap-1 truncate px-2 text-xs">
+                                        <StickyNote className={cn('h-3 w-3 shrink-0', notesPreview ? 'text-amber-500' : 'opacity-50')} />
+                                        <span className="flex-1 truncate text-left">{notesPreview || '—'}</span>
+                                    </span>
+                                ) : showInteractiveControls ? (
+                                    <NotesCell value={node.notes} onChange={(v) => onNotesChange(node.id, v)} />
+                                ) : (
+                                    <span
+                                        className={cn('text-muted-foreground flex w-full items-center gap-1 truncate px-2 text-xs')}
+                                        title={notesPreview || undefined}
+                                    >
+                                        <StickyNote className={cn('h-3 w-3 shrink-0', notesPreview ? 'text-amber-500' : 'opacity-50')} />
+                                        <span className="flex-1 truncate text-left">{notesPreview || '—'}</span>
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* Spacer for scrollbar alignment */}
                     <div className="w-[32px] shrink-0" />
