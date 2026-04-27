@@ -2,7 +2,6 @@ import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
 import { Check, ChevronRight, Delete, Search, Users, X } from 'lucide-react';
-import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 
 type Employee = {
     id: number;
@@ -146,24 +145,7 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
         return (
             <>
                 <Head title="Toolbox Sign-In" />
-                <IpadFrame talk={talk} roster={roster} selected={selected} onPick={handlePick} />
-                <DialogPrimitive.Root
-                    open={selected !== null}
-                    onOpenChange={(open) => {
-                        if (!open) reset();
-                    }}
-                >
-                    <DialogPrimitive.Portal>
-                        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 [transition:opacity_180ms]" />
-                        <DialogPrimitive.Popup
-                            initialFocus={null}
-                            finalFocus={null}
-                            className="fixed top-1/2 left-1/2 z-50 flex max-h-[92vh] w-[min(700px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-none data-[ending-style]:opacity-0 data-[ending-style]:scale-95 data-[starting-style]:opacity-0 data-[starting-style]:scale-95 [transition:opacity_180ms,scale_180ms]"
-                        >
-                            {flow}
-                        </DialogPrimitive.Popup>
-                    </DialogPrimitive.Portal>
-                </DialogPrimitive.Root>
+                <IpadFrame talk={talk} roster={roster} selected={selected} onPick={handlePick} flow={flow} />
             </>
         );
     }
@@ -214,11 +196,13 @@ function IpadFrame({
     roster,
     selected,
     onPick,
+    flow,
 }: {
     talk: Talk;
     roster: Employee[];
     selected: Employee | null;
     onPick: (e: Employee) => void;
+    flow: React.ReactNode;
 }) {
     return (
         <div
@@ -228,7 +212,11 @@ function IpadFrame({
             <FrameTopBar talk={talk} roster={roster} />
             <div className="flex flex-1 overflow-hidden">
                 <FrameSidebar roster={roster} selected={selected} onPick={onPick} />
-                <FrameMain talk={talk} roster={roster} />
+                <main className="flex flex-1 overflow-hidden bg-zinc-50 p-6">
+                    <div className="mx-auto flex h-full w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-sm">
+                        {flow ? flow : <FrameWelcome talk={talk} roster={roster} />}
+                    </div>
+                </main>
             </div>
         </div>
     );
@@ -339,10 +327,10 @@ function FrameSidebar({
     );
 }
 
-function FrameMain({ talk, roster }: { talk: Talk; roster: Employee[] }) {
+function FrameWelcome({ talk, roster }: { talk: Talk; roster: Employee[] }) {
     const remaining = roster.filter((r) => !r.signed_at).length;
     return (
-        <main className="flex flex-1 items-center justify-center overflow-y-auto p-10">
+        <div className="flex flex-1 items-center justify-center overflow-y-auto p-10">
             <div className="max-w-xl text-center">
                 <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-white">
                     <Users className="h-7 w-7" />
@@ -364,7 +352,7 @@ function FrameMain({ talk, roster }: { talk: Talk; roster: Employee[] }) {
                     <p className="mt-8 text-xs uppercase tracking-wider text-zinc-400">{talk.subject_label}</p>
                 )}
             </div>
-        </main>
+        </div>
     );
 }
 
