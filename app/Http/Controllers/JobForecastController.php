@@ -667,31 +667,58 @@ class JobForecastController extends Controller
             ->orderBy('month')
             ->get();
 
-        $costComparison = $actualsByMonth
-            ->groupBy('cost_item')
-            ->map(function ($items) use ($forecastData) {
-                $first = $items->first();
+        $actualsByCostItem = $actualsByMonth->groupBy('cost_item');
+
+        // Cost items that appear in this forecast (even if they have no actuals from $month onward).
+        $forecastCostItems = $forecastData->keys()
+            ->filter(fn ($key) => str_starts_with($key, 'cost_'))
+            ->map(fn ($key) => substr($key, 5))
+            ->all();
+
+        $allCostItems = collect($actualsByCostItem->keys())
+            ->merge($forecastCostItems)
+            ->unique()
+            ->values();
+
+        // Resolve descriptions for cost items that only have a forecast (no actuals row to read from).
+        $forecastOnlyDescriptions = \App\Models\CostCode::whereIn(
+            'code',
+            $allCostItems->diff($actualsByCostItem->keys())->all()
+        )->pluck('description', 'code');
+
+        $costComparison = $allCostItems
+            ->map(function ($costItem) use ($actualsByCostItem, $forecastData, $forecastOnlyDescriptions) {
                 $months = [];
+                $description = '';
 
-                foreach ($items as $item) {
-                    $forecastAmount = null;
-                    $forecastKey = 'cost_'.$item->cost_item;
-                    if (isset($forecastData[$forecastKey])) {
-                        $forecastRecord = $forecastData[$forecastKey]->firstWhere('month', $item->month);
-                        if ($forecastRecord) {
-                            $forecastAmount = (float) $forecastRecord->forecast_amount;
-                        }
+                if ($actualsByCostItem->has($costItem)) {
+                    $actualItems = $actualsByCostItem[$costItem];
+                    $description = $actualItems->first()->cost_item_description ?? '';
+                    foreach ($actualItems as $item) {
+                        $months[$item->month] = [
+                            'actual' => (float) $item->actual,
+                            'forecast' => null,
+                        ];
                     }
+                }
 
-                    $months[$item->month] = [
-                        'actual' => (float) $item->actual,
-                        'forecast' => $forecastAmount,
-                    ];
+                $forecastKey = 'cost_'.$costItem;
+                if (isset($forecastData[$forecastKey])) {
+                    foreach ($forecastData[$forecastKey] as $f) {
+                        if (! isset($months[$f->month])) {
+                            $months[$f->month] = ['actual' => 0.0, 'forecast' => null];
+                        }
+                        $months[$f->month]['forecast'] = (float) $f->forecast_amount;
+                    }
+                }
+
+                if (! $description) {
+                    $description = $forecastOnlyDescriptions[$costItem] ?? '';
                 }
 
                 return [
-                    'cost_item' => $first->cost_item,
-                    'cost_item_description' => $first->cost_item_description ?? '',
+                    'cost_item' => $costItem,
+                    'cost_item_description' => $description,
                     'months' => $months,
                 ];
             })
@@ -730,9 +757,14 @@ class JobForecastController extends Controller
             ->values()
             ->all();
 
+        $forecastMonths = $jobForecast
+            ? $jobForecast->data->pluck('month')->unique()->values()
+            : collect();
+
         $months = $actualsByMonth
             ->pluck('month')
             ->merge($revenuesByMonth->pluck('month'))
+            ->merge($forecastMonths)
             ->unique()
             ->sort()
             ->values()
