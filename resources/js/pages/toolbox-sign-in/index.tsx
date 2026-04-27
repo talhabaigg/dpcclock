@@ -934,7 +934,7 @@ function SignScreen({
                 <p className="mt-0.5 text-base font-semibold text-zinc-900">{employee.name}</p>
             </div>
             <div ref={wrapRef} className="px-5 pt-2">
-                <div className="aspect-video w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="aspect-[21/9] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
                     <canvas ref={canvasRef} className="block h-full w-full touch-none" />
                 </div>
                 <p className="mt-2 text-center text-[11px] text-zinc-400">Sign with your finger</p>
