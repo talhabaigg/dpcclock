@@ -2,12 +2,26 @@ import { SuccessAlertFlash } from '@/components/alert-flash';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Copy, Download, Pencil, QrCode, Tablet, Upload } from 'lucide-react';
+import {
+    Activity,
+    Building2,
+    Check,
+    Copy,
+    Download,
+    ExternalLink,
+    FileSignature,
+    Pencil,
+    QrCode,
+    Tag,
+    Upload,
+    User,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useState } from 'react';
+import { Fragment, type ReactNode, useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -41,13 +55,54 @@ interface Props {
     ipadUrl: string;
 }
 
-export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, signInUrl, ipadUrl }: Props) {
-    const [copied, setCopied] = useState<string | null>(null);
-    const copy = (text: string, label: string) => {
-        navigator.clipboard?.writeText(text);
-        setCopied(label);
-        setTimeout(() => setCopied(null), 1500);
+function CopyField({ label, value }: { label: string; value: string }) {
+    const [copied, setCopied] = useState(false);
+    const onCopy = async () => {
+        try {
+            await navigator.clipboard?.writeText(value);
+        } catch {
+            /* swallow */
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1400);
     };
+    return (
+        <div className="grid grid-cols-[64px_1fr_auto] items-center gap-2.5">
+            <label className="text-sm font-medium text-muted-foreground">{label}</label>
+            <Input value={value} readOnly className="font-mono text-xs" />
+            <Button type="button" size="sm" variant="outline" onClick={onCopy} className="min-w-[76px] gap-1.5">
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? 'Copied' : 'Copy'}
+            </Button>
+        </div>
+    );
+}
+
+function DetailField({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+    return (
+        <div>
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                {icon}
+                <span>{label}</span>
+            </div>
+            <div className="text-sm font-medium text-foreground">{children}</div>
+        </div>
+    );
+}
+
+function highlightMust(text: string) {
+    return text.split(/(\bMUST\b)/g).map((part, i) =>
+        part === 'MUST' ? (
+            <strong key={i} className="font-semibold text-foreground">
+                {part}
+            </strong>
+        ) : (
+            <Fragment key={i}>{part}</Fragment>
+        ),
+    );
+}
+
+export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, signInUrl, ipadUrl }: Props) {
     const { flash, auth } = usePage<{ flash: { success?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string };
         auth: { permissions?: string[] };
@@ -81,10 +136,17 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
     const renderList = (title: string, items: { description: string }[] | null, files: MediaItem[]) =>
         items && items.length > 0 ? (
             <Card>
-                <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
-                <CardContent>
-                    <ul className="list-disc space-y-1 pl-5">
-                        {items.map((item, i) => <li key={i}>{item.description}</li>)}
+                <CardHeader className="border-b">
+                    <CardTitle className="text-sm">{title}</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                    <ul className="space-y-2">
+                        {items.map((item, i) => (
+                            <li key={i} className="flex items-center gap-2.5 text-sm text-foreground">
+                                <span className="size-[5px] shrink-0 rounded-full bg-muted-foreground" />
+                                {item.description}
+                            </li>
+                        ))}
                     </ul>
                     {renderFiles(files)}
                 </CardContent>
@@ -94,123 +156,132 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Toolbox Talk - ${talk.meeting_date_formatted}`} />
-            <div className="mx-auto w-full max-w-4xl space-y-6 p-4">
+            <div className="mx-auto w-full max-w-4xl space-y-4 p-4 sm:p-6">
                 {flash?.success && <SuccessAlertFlash message={flash.success} />}
 
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Toolbox Talk - {talk.meeting_date_formatted}</h1>
-                    <div className="flex gap-2">
+                <header className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-baseline gap-3">
+                        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Toolbox Talk</h1>
+                        <span className="text-sm font-medium text-muted-foreground">{talk.meeting_date_formatted}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                         {can('prestarts.edit') && !talk.is_locked && (
-                            <Button variant="outline" asChild>
+                            <Button variant="outline" size="sm" asChild>
                                 <Link href={`/toolbox-talks/${talk.id}/edit`}>
-                                    <Pencil className="mr-2 h-4 w-4" />
+                                    <Pencil className="size-3.5" />
                                     Edit
                                 </Link>
                             </Button>
                         )}
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <a href={`/toolbox-talks/${talk.id}/pdf`} target="_blank" rel="noreferrer">
-                                <Download className="mr-2 h-4 w-4" />
+                                <Download className="size-3.5" />
                                 Download PDF
                             </a>
                         </Button>
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <a href={`/toolbox-talks/${talk.id}/sign-sheet`} target="_blank" rel="noreferrer">
-                                <Download className="mr-2 h-4 w-4" />
+                                <Download className="size-3.5" />
                                 Sign Sheet
                             </a>
                         </Button>
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <a href={`/toolbox-talks/${talk.id}/qr-sheet`} target="_blank" rel="noreferrer">
-                                <QrCode className="mr-2 h-4 w-4" />
+                                <QrCode className="size-3.5" />
                                 Print QR
                             </a>
                         </Button>
                     </div>
-                </div>
+                </header>
 
-                {/* QR Sign-In */}
+                {/* Worker Sign-In */}
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Worker Sign-In {talk.is_locked && <Badge variant="secondary" className="ml-2">Closed</Badge>}</CardTitle>
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-sm">Worker Sign-In</CardTitle>
                     </CardHeader>
-                        <CardContent>
-                            <div className="grid gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
-                                <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                                    <QRCodeSVG value={signInUrl} size={160} level="M" />
+                    <CardContent className="pt-2">
+                        <div className="grid items-start gap-6 sm:grid-cols-[200px_1fr]">
+                            <div className="w-fit rounded-xl border border-border bg-background p-3 shadow-[0_1px_0_rgba(15,17,21,0.02)]">
+                                <QRCodeSVG value={signInUrl} size={176} level="M" />
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <p className="m-0 max-w-[480px] text-[13.5px] leading-snug text-muted-foreground">
+                                    Workers scan this code to sign in via their phone. Or open the link directly on a shared iPad.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <CopyField label="Mobile" value={signInUrl} />
+                                    <CopyField label="iPad" value={ipadUrl} />
                                 </div>
-                                <div className="space-y-3">
-                                    <p className="text-sm text-muted-foreground">
-                                        Workers scan this code to sign in via their phone. Or open the link directly on a shared iPad.
-                                    </p>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-zinc-700">Mobile:</span>
-                                            <code className="flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-xs">{signInUrl}</code>
-                                            <Button size="sm" variant="ghost" onClick={() => copy(signInUrl, 'mobile')}>
-                                                <Copy className="h-3.5 w-3.5" />
-                                                {copied === 'mobile' ? 'Copied' : 'Copy'}
-                                            </Button>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-zinc-700">iPad:</span>
-                                            <code className="flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-xs">{ipadUrl}</code>
-                                            <Button size="sm" variant="ghost" onClick={() => copy(ipadUrl, 'ipad')}>
-                                                <Copy className="h-3.5 w-3.5" />
-                                                {copied === 'ipad' ? 'Copied' : 'Copy'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 pt-1">
-                                        <Button size="sm" variant="outline" asChild>
-                                            <a href={`/toolbox-talks/${talk.id}/qr-sheet`} target="_blank" rel="noreferrer">
-                                                <QrCode className="mr-2 h-4 w-4" />
-                                                Printable QR Sheet
-                                            </a>
-                                        </Button>
-                                        <Button size="sm" variant="outline" asChild>
-                                            <a href={ipadUrl} target="_blank" rel="noreferrer">
-                                                <Tablet className="mr-2 h-4 w-4" />
-                                                Open on iPad
-                                            </a>
-                                        </Button>
-                                    </div>
+                                <div className="mt-1 flex flex-wrap gap-2">
+                                    <Button size="sm" variant="outline" asChild>
+                                        <a href={`/toolbox-talks/${talk.id}/qr-sheet`} target="_blank" rel="noreferrer">
+                                            <QrCode className="size-3.5" />
+                                            Printable QR Sheet
+                                        </a>
+                                    </Button>
+                                    <Button size="sm" variant="outline" asChild>
+                                        <a href={ipadUrl} target="_blank" rel="noreferrer">
+                                            <ExternalLink className="size-3.5" />
+                                            Open on iPad
+                                        </a>
+                                    </Button>
                                 </div>
                             </div>
-                        </CardContent>
+                        </div>
+                    </CardContent>
                 </Card>
 
                 {/* Details */}
                 <Card>
-                    <CardHeader><CardTitle>Details</CardTitle></CardHeader>
-                    <CardContent>
-                        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Project</dt>
-                                <dd>{talk.location?.name ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Meeting Called By</dt>
-                                <dd>{talk.called_by?.name ?? '-'}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Subject</dt>
-                                <dd><Badge variant="outline">{subjectOptions[talk.meeting_subject] ?? talk.meeting_subject}</Badge></dd>
-                            </div>
-                            <div>
-                                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
-                                <dd><Badge variant={talk.is_locked ? 'secondary' : 'default'}>{talk.is_locked ? 'Locked' : 'Active'}</Badge></dd>
-                            </div>
-                        </dl>
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-sm">Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+                            <DetailField icon={<Building2 className="size-3.5" />} label="Project">
+                                {talk.location?.name ?? '-'}
+                            </DetailField>
+                            <DetailField icon={<User className="size-3.5" />} label="Meeting Called By">
+                                {talk.called_by?.name ?? '-'}
+                            </DetailField>
+                            <DetailField icon={<Tag className="size-3.5" />} label="Subject">
+                                <Badge variant="outline">{subjectOptions[talk.meeting_subject] ?? talk.meeting_subject}</Badge>
+                            </DetailField>
+                            <DetailField icon={<Activity className="size-3.5" />} label="Status">
+                                {talk.is_locked ? (
+                                    <Badge variant="secondary">Closed</Badge>
+                                ) : (
+                                    <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400">
+                                        <span className="size-1.5 rounded-full bg-emerald-600" />
+                                        Active
+                                    </span>
+                                )}
+                            </DetailField>
+                        </div>
                     </CardContent>
                 </Card>
 
                 {/* General Items */}
                 <Card>
-                    <CardHeader><CardTitle>General Items to be Discussed</CardTitle></CardHeader>
-                    <CardContent>
-                        <ol className="list-decimal space-y-1 pl-5 text-sm">
-                            {generalItems.map((item, i) => <li key={i}>{item}</li>)}
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-sm">General Items to be Discussed</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pt-1 pb-2">
+                        <ol className="m-0 flex list-none flex-col p-0">
+                            {generalItems.map((item, i) => (
+                                <li
+                                    key={i}
+                                    className={
+                                        'grid grid-cols-[28px_1fr] gap-2 py-3 text-[13.5px] leading-snug ' +
+                                        (i === generalItems.length - 1 ? '' : 'border-b border-dashed border-border')
+                                    }
+                                >
+                                    <span className="pt-px font-mono text-xs tabular-nums text-muted-foreground">
+                                        {String(i + 1).padStart(2, '0')}
+                                    </span>
+                                    <span className="text-foreground">{highlightMust(item)}</span>
+                                </li>
+                            ))}
                         </ol>
                     </CardContent>
                 </Card>
@@ -223,26 +294,42 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
 
                 {/* Signatures */}
                 <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Signatures</CardTitle>
-                            {can('prestarts.edit') && (
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-sm">Signatures</CardTitle>
+                        {can('prestarts.edit') && (
+                            <CardAction>
                                 <Button variant="outline" size="sm" asChild>
                                     <Link href={`/toolbox-talks/${talk.id}/upload-signatures`}>
-                                        <Upload className="mr-2 h-4 w-4" />
+                                        <Upload className="size-3.5" />
                                         Upload Signatures
                                     </Link>
                                 </Button>
-                            )}
-                        </div>
+                            </CardAction>
+                        )}
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-2">
                         {signedPdf ? (
-                            <a href={signedPdf.original_url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
-                                {signedPdf.file_name}
-                            </a>
+                            <div className="flex items-center gap-3 rounded-[10px] border border-border bg-muted p-3">
+                                <div className="grid size-9 place-items-center rounded-lg border border-border bg-background text-muted-foreground">
+                                    <FileSignature className="size-[18px]" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[13.5px] font-medium">{signedPdf.file_name}</div>
+                                </div>
+                                <Button size="sm" variant="outline" asChild>
+                                    <a href={signedPdf.original_url} target="_blank" rel="noreferrer">
+                                        <Download className="size-3.5" />
+                                        Download
+                                    </a>
+                                </Button>
+                            </div>
                         ) : (
-                            <p className="text-sm text-muted-foreground">No signed PDF uploaded yet.</p>
+                            <div className="flex items-center gap-2.5 text-[13.5px] text-muted-foreground">
+                                <span className="grid size-7 place-items-center rounded-lg border border-dashed border-border bg-muted">
+                                    <FileSignature className="size-3.5" />
+                                </span>
+                                No signed PDF uploaded yet.
+                            </div>
                         )}
                     </CardContent>
                 </Card>
