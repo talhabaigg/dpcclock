@@ -191,7 +191,7 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
     return (
         <div className="flex h-full flex-1 flex-col">
             <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center">
-                <img src="/logo.svg" alt="Superior" className="h-10 w-auto sm:h-12" />
+                <img src="/superior-group-logo.svg" alt="Superior" className="h-10 w-auto sm:h-12" />
                 <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">Sign in to your toolbox talk</h1>
                 <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
                 {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
@@ -218,11 +218,11 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
                     <div className="px-6 py-12 text-center text-sm text-zinc-400">No matches.</div>
                 ) : (
                     grouped.map(([letter, items]) => (
-                        <div key={letter} className="mx-auto w-full max-w-6xl">
+                        <div key={letter} className="mx-auto w-full max-w-2xl">
                             <div className="sticky top-0 z-10 bg-white/95 px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 backdrop-blur sm:px-6">
                                 {letter}
                             </div>
-                            <ul className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <ul>
                                 {items.map((emp) => (
                                     <li key={emp.id}>
                                         <button
