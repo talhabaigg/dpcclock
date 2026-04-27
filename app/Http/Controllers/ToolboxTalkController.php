@@ -92,6 +92,30 @@ class ToolboxTalkController extends Controller
             'talk' => $toolboxTalk,
             'subjectOptions' => ToolboxTalk::SUBJECT_OPTIONS,
             'generalItems' => ToolboxTalk::GENERAL_ITEMS,
+            'signInUrl' => url('/t/'.$toolboxTalk->public_token),
+            'ipadUrl' => url('/t/'.$toolboxTalk->public_token.'/ipad'),
+        ]);
+    }
+
+    public function qrSheet(ToolboxTalk $toolboxTalk)
+    {
+        $toolboxTalk->load('location');
+
+        $url = url('/t/'.$toolboxTalk->public_token);
+
+        $html = view('pdf.toolbox-talk-qr-sheet', [
+            'talk' => $toolboxTalk,
+            'signInUrl' => $url,
+        ])->render();
+
+        $pdf = $this->renderPdf($html);
+
+        $filename = 'toolbox-talk-qr-'.$toolboxTalk->meeting_date.'.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"{$filename}\"",
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
     }
 
