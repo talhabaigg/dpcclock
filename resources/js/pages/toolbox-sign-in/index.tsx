@@ -391,6 +391,8 @@ function PinScreen({
     );
 }
 
+type Point = { title?: string; description?: string; body?: string; correction?: string };
+
 function ContentScreen({
     talk,
     acknowledged,
@@ -404,106 +406,166 @@ function ContentScreen({
     onBack: () => void;
     onContinue: () => void;
 }) {
-    const sections: { id: string; label: string; items: { description: string }[]; empty?: string }[] = [
-        { id: 'topics', label: 'Key topics on site', items: talk.key_topics ?? [] },
-        { id: 'actions', label: 'Action points from last meeting', items: talk.action_points ?? [] },
-        {
+    const normalize = (items: { description?: string; title?: string; correction?: string }[] = []): Point[] =>
+        items.map((it) => ({
+            title: it.title || it.description || '',
+            body: it.title ? it.description : undefined,
+            correction: it.correction,
+        }));
+
+    const incidents = [...normalize(talk.injuries ?? []), ...normalize(talk.near_misses ?? [])];
+
+    type Section =
+        | { id: string; label: string; points: Point[]; footnote?: string }
+        | { id: string; label: string; empty: string };
+
+    const sections: Section[] = [];
+    sections.push({ id: 'general', label: 'General items', points: (talk.general_items ?? []).map((g) => ({ title: g })) });
+    if ((talk.key_topics ?? []).length) sections.push({ id: 'topics', label: 'Key topics on site', points: normalize(talk.key_topics) });
+    if ((talk.action_points ?? []).length)
+        sections.push({ id: 'actions', label: 'Action points from last meeting', points: normalize(talk.action_points) });
+
+    if (incidents.length) {
+        sections.push({
             id: 'incidents',
             label: 'Injuries & near misses',
-            items: [...(talk.injuries ?? []), ...(talk.near_misses ?? [])],
-            empty: 'No injuries or near misses reported this week.',
-        },
-        { id: 'comments', label: 'Comments from the floor', items: talk.floor_comments ?? [], empty: 'No comments from the floor recorded.' },
-    ];
+            points: incidents,
+            footnote: (talk.near_misses ?? []).length === 0 ? 'No near misses reported this week.' : undefined,
+        });
+    } else {
+        sections.push({ id: 'incidents', label: 'Injuries & near misses', empty: 'No injuries or near misses reported this week.' });
+    }
+
+    if ((talk.floor_comments ?? []).length)
+        sections.push({ id: 'comments', label: 'Comments from the floor', points: normalize(talk.floor_comments) });
+    else sections.push({ id: 'comments', label: 'Comments from the floor', empty: 'No comments from the floor recorded.' });
 
     return (
         <div className="flex h-full flex-1 flex-col">
-            <header className="flex items-center justify-between px-4 pt-6 pb-4">
-                <button onClick={onBack} className="text-sm font-medium text-zinc-500">
-                    Back
-                </button>
-                <div className="text-sm font-semibold text-zinc-900">Toolbox talk</div>
-                <div className="w-10" />
-            </header>
-
-            <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-32">
-                <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">{talk.subject_label}</p>
-                    <h2 className="mt-1 text-lg font-semibold text-zinc-900">{talk.meeting_date_formatted}</h2>
-                    {talk.location && <p className="mt-0.5 text-sm text-zinc-500">{talk.location.name}</p>}
+            {/* Big header (matches design's ScreenHeader) */}
+            <div className="flex-shrink-0 border-b border-zinc-200 bg-white px-5 pt-8 pb-4">
+                <div className="mb-3 flex min-h-8 items-center">
+                    <button
+                        onClick={onBack}
+                        className="-ml-1 flex items-center gap-1 px-2 py-1.5 text-[15px] font-medium text-zinc-900"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Back
+                    </button>
                 </div>
-
-                {talk.general_items?.length > 0 && (
-                    <Section label="General items">
-                        <ul className="space-y-2">
-                            {talk.general_items.map((item, i) => (
-                                <li key={i} className="text-sm leading-relaxed text-zinc-700">
-                                    {item}
-                                </li>
-                            ))}
-                        </ul>
-                    </Section>
-                )}
-
-                {sections.map((s) => (
-                    <Section key={s.id} label={s.label} count={s.items.length || undefined}>
-                        {s.items.length === 0 ? (
-                            <p className="text-sm italic text-zinc-400">{s.empty || 'Nothing recorded.'}</p>
-                        ) : (
-                            <ul className="space-y-3">
-                                {s.items.map((p: any, i: number) => (
-                                    <li key={i} className="rounded-lg border border-zinc-200 p-3">
-                                        {p.title && <p className="text-sm font-medium text-zinc-900">{p.title}</p>}
-                                        <p className="text-sm leading-relaxed text-zinc-700">{p.description}</p>
-                                        {p.correction && (
-                                            <p className="mt-2 rounded-md bg-zinc-50 p-2 text-xs text-zinc-600">
-                                                <span className="font-medium text-zinc-700">Corrective action: </span>
-                                                {p.correction}
-                                            </p>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </Section>
-                ))}
+                <h1 className="text-[26px] font-bold leading-tight tracking-tight text-zinc-900">Toolbox Talk</h1>
+                <p className="mt-1 text-sm text-zinc-500">
+                    {talk.meeting_date_formatted}
+                    {talk.location ? ` · ${talk.location.name}` : ''}
+                    {talk.called_by ? ` · ${talk.called_by.name}` : ''}
+                </p>
             </div>
 
-            <div className="sticky bottom-0 border-t border-zinc-200 bg-white px-5 pt-3 pb-5">
-                <label className="flex items-start gap-3">
-                    <input
-                        type="checkbox"
-                        checked={acknowledged}
-                        onChange={(e) => setAcknowledged(e.target.checked)}
-                        className="mt-0.5 h-5 w-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                    />
-                    <span className="text-sm leading-snug text-zinc-700">
-                        I have read and understood the points discussed in this toolbox talk.
-                    </span>
-                </label>
+            <div className="flex-1 overflow-y-auto">
+                {sections.map((section, sIdx) => (
+                    <div key={section.id} style={{ borderTop: sIdx === 0 ? 'none' : '8px solid #f4f4f5' }}>
+                        {/* Section eyebrow */}
+                        <div className="flex items-center justify-between px-5 pt-[18px] pb-2">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-500">{section.label}</span>
+                            {'points' in section && (
+                                <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500">
+                                    {section.points.length}
+                                </span>
+                            )}
+                        </div>
+
+                        {'points' in section ? (
+                            <div className="px-5 pb-4">
+                                {section.points.map((p, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-start gap-3.5 px-1 py-3.5"
+                                        style={{
+                                            borderBottom: i < section.points.length - 1 ? '1px solid #e4e4e7' : 'none',
+                                        }}
+                                    >
+                                        <div className="mt-px flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-xs font-bold tabular-nums text-zinc-900">
+                                            {i + 1}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            {p.title && (
+                                                <div className="text-[15.5px] font-semibold leading-tight tracking-tight text-zinc-900">
+                                                    {p.title}
+                                                </div>
+                                            )}
+                                            {p.body && <div className="mt-1.5 text-[13.5px] leading-[1.5] text-zinc-500">{p.body}</div>}
+                                            {p.correction && (
+                                                <div className="mt-2.5 rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2.5">
+                                                    <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-zinc-500">
+                                                        Corrective action
+                                                    </div>
+                                                    <div className="text-[13px] leading-[1.5] text-zinc-900">{p.correction}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {'footnote' in section && section.footnote && (
+                                    <div className="mt-3 rounded-lg border border-dashed border-zinc-200 bg-zinc-100 px-3.5 py-2.5 text-[13px] italic text-zinc-500">
+                                        {section.footnote}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="px-5 pb-[18px]">
+                                <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-100 px-4 py-3.5 text-[13.5px] italic text-zinc-500">
+                                    {section.empty}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                <div className="h-2" />
+            </div>
+
+            {/* Acknowledgment footer */}
+            <div className="flex-shrink-0 border-t border-zinc-200 bg-white px-5 pt-3.5 pb-7">
+                <button
+                    type="button"
+                    onClick={() => setAcknowledged(!acknowledged)}
+                    className="mb-3 flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition"
+                    style={{
+                        background: acknowledged ? '#f4f4f5' : '#ffffff',
+                        borderColor: acknowledged ? '#d4d4d8' : '#e4e4e7',
+                    }}
+                >
+                    <div
+                        className="mt-px flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md transition"
+                        style={{
+                            border: `1.6px solid ${acknowledged ? '#09090b' : '#d4d4d8'}`,
+                            background: acknowledged ? '#09090b' : 'transparent',
+                        }}
+                    >
+                        {acknowledged && (
+                            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                                <path d="M2.5 6.8l2.8 2.7L10.5 3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        )}
+                    </div>
+                    <div className="flex-1 text-[13.5px] leading-[1.45] text-zinc-900">
+                        I acknowledge &amp; understand the information provided and the requirement that I must attend the Toolbox Talk in
+                        person.
+                    </div>
+                </button>
                 <button
                     onClick={onContinue}
                     disabled={!acknowledged}
-                    className="mt-3 w-full rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300"
+                    className="flex w-full items-center justify-center gap-1 rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
-                    Continue to sign
+                    Continue to signature
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="ml-1">
+                        <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                 </button>
             </div>
         </div>
-    );
-}
-
-function Section({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
-    return (
-        <section>
-            <div className="mb-2 flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
-                {typeof count === 'number' && (
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{count}</span>
-                )}
-            </div>
-            {children}
-        </section>
     );
 }
 
