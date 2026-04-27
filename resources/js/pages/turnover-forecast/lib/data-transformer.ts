@@ -449,7 +449,27 @@ export function createTargetRows(
         isActualMonth: {},
     };
 
+    const cumulativeVarianceRow: UnifiedRow = {
+        id: 'cumulative-variance-row',
+        rowType: 'variance',
+        jobId: 0,
+        jobNumber: 'Cumulative Variance',
+        jobName: '',
+        projectType: 'summary',
+        path: ['cumulative-variance-row'],
+        totalValue: null,
+        toDate: null,
+        remainingTotal: null,
+        contractFY: null,
+        fyToDate: 0,
+        remainingFY: 0,
+        fyTotal: 0,
+        isActualMonth: {},
+    };
+
     const revenueOnlyRows = revenueRows.filter((r) => r.rowType === 'revenue' && !r.isCompanyGroup && !r.isTotal);
+
+    let cumulativeVariance = 0;
 
     months.forEach((month) => {
         // Sum revenue from pre-transformed rows (exclude cost/profit children)
@@ -460,10 +480,12 @@ export function createTargetRows(
 
         const targetValue = safeNumber(monthlyTargets?.[month]);
         const varianceValue = totalRevenue - targetValue;
+        cumulativeVariance += varianceValue;
 
         (targetRow as any)[`month_${month}`] = targetValue;
         (actualRow as any)[`month_${month}`] = totalRevenue;
         (varianceRow as any)[`month_${month}`] = varianceValue;
+        (cumulativeVarianceRow as any)[`month_${month}`] = cumulativeVariance;
 
         targetRow.fyTotal = safeNumber(targetRow.fyTotal) + targetValue;
         actualRow.fyTotal = safeNumber(actualRow.fyTotal) + totalRevenue;
@@ -474,6 +496,7 @@ export function createTargetRows(
             targetRow.fyToDate = safeNumber(targetRow.fyToDate) + targetValue;
             actualRow.fyToDate = safeNumber(actualRow.fyToDate) + totalRevenue;
             varianceRow.fyToDate = safeNumber(varianceRow.fyToDate) + varianceValue;
+            cumulativeVarianceRow.fyToDate = cumulativeVariance;
         } else {
             targetRow.remainingFY = safeNumber(targetRow.remainingFY) + targetValue;
             actualRow.remainingFY = safeNumber(actualRow.remainingFY) + totalRevenue;
@@ -481,5 +504,9 @@ export function createTargetRows(
         }
     });
 
-    return [targetRow, actualRow, varianceRow];
+    // The cumulative variance FY total is the final cumulative value (same as total variance)
+    cumulativeVarianceRow.fyTotal = cumulativeVariance;
+    // Remaining FY for cumulative doesn't apply — leave as 0
+
+    return [targetRow, actualRow, varianceRow, cumulativeVarianceRow];
 }

@@ -684,7 +684,7 @@ function PinScreen({
                 }
             })();
         }
-    }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [pin]);  
 
     return (
         <div className="flex h-full flex-1 flex-col">
