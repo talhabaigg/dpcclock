@@ -46,6 +46,17 @@ const initials = (name: string) =>
         .join('')
         .toUpperCase();
 
+function SuperiorMark({ className }: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98.5 152.36" className={className} aria-label="Superior">
+            <polygon points="98.5 152.28 61 115.62 61 61.07 98.5 97.73 98.5 152.28" fill="#4495d1" />
+            <polygon points="98.49 152.36 39.32 152.36 1.68 115.54 60.86 115.54 98.49 152.36" fill="#4154a4" />
+            <polygon points="0 0.08 37.5 36.74 37.5 91.29 0 54.63 0 0.08" fill="#4495d1" />
+            <polygon points="0.01 0 59.19 0 96.82 36.82 37.64 36.82 0.01 0" fill="#4154a4" />
+        </svg>
+    );
+}
+
 function useIsLargeScreen() {
     const [large, setLarge] = useState(() => {
         if (typeof window === 'undefined') return false;
@@ -233,7 +244,7 @@ function FrameTopBar({ talk, roster }: { talk: Talk; roster: Employee[] }) {
                     {talk.location ? ` · ${talk.location.name}` : ''}
                 </h2>
             </div>
-            <img src="/superior-group-logo.svg" alt="Superior" className="h-9 w-auto justify-self-center" />
+            <SuperiorMark className="h-9 w-auto justify-self-center" />
             <div className="flex items-center gap-2 justify-self-end rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 <span className="text-xs font-medium text-emerald-700">
@@ -260,6 +271,16 @@ function FrameSidebar({
         return roster.filter((e) => e.name.toLowerCase().includes(q) || e.full_name.toLowerCase().includes(q));
     }, [roster, query]);
 
+    const grouped = useMemo(() => {
+        const map = new Map<string, Employee[]>();
+        for (const e of filtered) {
+            const letter = (e.name[0] || '?').toUpperCase();
+            if (!map.has(letter)) map.set(letter, []);
+            map.get(letter)!.push(e);
+        }
+        return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [filtered]);
+
     return (
         <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-zinc-200 bg-white lg:w-96">
             <div className="border-b border-zinc-200 p-4">
@@ -277,48 +298,55 @@ function FrameSidebar({
                     <span>{filtered.length} workers</span>
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
-                {filtered.length === 0 ? (
+            <div className="flex-1 overflow-y-auto">
+                {grouped.length === 0 ? (
                     <p className="px-3 py-8 text-center text-sm text-zinc-400">No matches.</p>
                 ) : (
-                    <ul className="space-y-1">
-                        {filtered.map((emp) => (
-                            <li key={emp.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => onPick(emp)}
-                                    disabled={!!emp.signed_at}
-                                    className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
-                                        selected?.id === emp.id ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'
-                                    } ${emp.signed_at ? 'opacity-60' : ''}`}
-                                >
-                                    <span
-                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                                            selected?.id === emp.id ? 'bg-white/15 text-white' : emp.signed_at ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'
-                                        }`}
-                                    >
-                                        {emp.signed_at ? <Check className="h-4 w-4" /> : initials(emp.name)}
-                                    </span>
-                                    <span className="flex-1 truncate text-sm font-medium">{emp.name}</span>
-                                    {emp.signed_at ? (
-                                        <span
-                                            className={`text-[11px] font-medium ${
-                                                selected?.id === emp.id ? 'text-white/70' : 'text-emerald-600'
-                                            }`}
+                    grouped.map(([letter, items]) => (
+                        <div key={letter}>
+                            <div className="sticky top-0 z-10 border-b border-t border-zinc-200/50 bg-zinc-50/90 px-4 py-1.5 backdrop-blur-sm">
+                                <span className="text-xs font-semibold uppercase text-zinc-500">{letter}</span>
+                            </div>
+                            <ul className="divide-y divide-zinc-100">
+                                {items.map((emp) => (
+                                    <li key={emp.id} className="px-2 py-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => onPick(emp)}
+                                            disabled={!!emp.signed_at}
+                                            className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                                                selected?.id === emp.id ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'
+                                            } ${emp.signed_at ? 'opacity-60' : ''}`}
                                         >
-                                            Signed
-                                        </span>
-                                    ) : (
-                                        <ChevronRight
-                                            className={`h-4 w-4 transition ${
-                                                selected?.id === emp.id ? 'text-white' : 'text-zinc-300 group-hover:text-zinc-500'
-                                            }`}
-                                        />
-                                    )}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
+                                            <span
+                                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                                                    selected?.id === emp.id ? 'bg-white/15 text-white' : emp.signed_at ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'
+                                                }`}
+                                            >
+                                                {emp.signed_at ? <Check className="h-4 w-4" /> : initials(emp.name)}
+                                            </span>
+                                            <span className="flex-1 truncate text-sm font-medium">{emp.name}</span>
+                                            {emp.signed_at ? (
+                                                <span
+                                                    className={`text-[11px] font-medium ${
+                                                        selected?.id === emp.id ? 'text-white/70' : 'text-emerald-600'
+                                                    }`}
+                                                >
+                                                    Signed
+                                                </span>
+                                            ) : (
+                                                <ChevronRight
+                                                    className={`h-4 w-4 transition ${
+                                                        selected?.id === emp.id ? 'text-white' : 'text-zinc-300 group-hover:text-zinc-500'
+                                                    }`}
+                                                />
+                                            )}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))
                 )}
             </div>
         </aside>
@@ -378,7 +406,7 @@ function PhonePicker({ talk, roster, onPick }: { talk: Talk; roster: Employee[];
     return (
         <div className="flex h-full flex-1 flex-col">
             <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center">
-                <img src="/superior-group-logo.svg" alt="Superior" className="h-10 w-auto" />
+                <SuperiorMark className="h-10 w-auto" />
                 <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
                 <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
                 {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
@@ -906,7 +934,7 @@ function SignScreen({
                 <p className="mt-0.5 text-base font-semibold text-zinc-900">{employee.name}</p>
             </div>
             <div ref={wrapRef} className="px-5 pt-2">
-                <div className="aspect-[16/9] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="aspect-video w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
                     <canvas ref={canvasRef} className="block h-full w-full touch-none" />
                 </div>
                 <p className="mt-2 text-center text-[11px] text-zinc-400">Sign with your finger</p>
