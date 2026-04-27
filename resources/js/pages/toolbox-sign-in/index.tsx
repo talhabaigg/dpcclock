@@ -277,7 +277,7 @@ function ScanQrDialog({ talk }: { talk: Talk }) {
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
                     <QrCode className="h-4 w-4" />
-                    <span>Sign in on phone</span>
+                    <span>Show QR</span>
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
