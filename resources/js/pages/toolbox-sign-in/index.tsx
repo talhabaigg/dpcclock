@@ -77,11 +77,11 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
 
     return (
         <div
-            className="min-h-screen w-full bg-zinc-100 antialiased"
+            className="min-h-screen w-full bg-white antialiased"
             style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif' }}
         >
             <Head title="Toolbox Sign-In" />
-            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white sm:max-w-xl sm:shadow-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+            <div className="flex min-h-screen w-full flex-col bg-white">
                 {talk.is_locked ? (
                     <LockedScreen talk={talk} />
                 ) : screen === 'picker' ? (
@@ -156,7 +156,7 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
 
 function LockedScreen({ talk }: { talk: Talk }) {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-200 text-zinc-700">
                 <X className="h-6 w-6" />
             </div>
@@ -190,9 +190,9 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
 
     return (
         <div className="flex h-full flex-1 flex-col">
-            <div className="flex flex-col items-center px-6 pt-10 pb-4">
-                <img src="/logo.png" alt="Superior Group" className="h-10 w-auto sm:h-12" />
-                <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
+            <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center">
+                <img src="/logo.svg" alt="Superior" className="h-10 w-auto sm:h-12" />
+                <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">Sign in to your toolbox talk</h1>
                 <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
                 {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
                 <p className="mt-3 text-xs font-medium text-zinc-500">
@@ -200,7 +200,7 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
                 </p>
             </div>
 
-            <div className="px-4 pb-3">
+            <div className="mx-auto w-full max-w-3xl px-4 pb-3">
                 <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5">
                     <Search className="h-4 w-4 text-zinc-400" />
                     <input
@@ -218,18 +218,18 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
                     <div className="px-6 py-12 text-center text-sm text-zinc-400">No matches.</div>
                 ) : (
                     grouped.map(([letter, items]) => (
-                        <div key={letter}>
-                            <div className="sticky top-0 bg-white/95 px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 backdrop-blur">
+                        <div key={letter} className="mx-auto w-full max-w-6xl">
+                            <div className="sticky top-0 z-10 bg-white/95 px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 backdrop-blur sm:px-6">
                                 {letter}
                             </div>
-                            <ul>
+                            <ul className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {items.map((emp) => (
                                     <li key={emp.id}>
                                         <button
                                             type="button"
                                             onClick={() => onPick(emp)}
                                             disabled={!!emp.signed_at}
-                                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-zinc-100 disabled:opacity-50"
+                                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50 sm:px-3"
                                         >
                                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700">
                                                 {initials(emp.name)}
@@ -333,7 +333,7 @@ function PinScreen({
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
     return (
-        <div className="flex h-full flex-1 flex-col">
+        <div className="mx-auto flex h-full w-full max-w-md flex-1 flex-col">
             <header className="flex items-center justify-between px-4 pt-6 pb-4">
                 <button onClick={onBack} className="text-sm font-medium text-zinc-500">
                     Back
@@ -441,7 +441,7 @@ function ContentScreen({
     else sections.push({ id: 'comments', label: 'Comments from the floor', empty: 'No comments from the floor recorded.' });
 
     return (
-        <div className="flex h-full flex-1 flex-col">
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-1 flex-col">
             {/* Big header (matches design's ScreenHeader) */}
             <div className="flex-shrink-0 border-b border-zinc-200 bg-white px-5 pt-8 pb-4">
                 <div className="mb-3 flex min-h-8 items-center">
@@ -680,7 +680,7 @@ function SignScreen({
     };
 
     return (
-        <div className="flex h-full flex-1 flex-col">
+        <div className="mx-auto flex h-full w-full max-w-2xl flex-1 flex-col">
             <header className="flex items-center justify-between px-4 pt-6 pb-4">
                 <button onClick={onBack} className="text-sm font-medium text-zinc-500">
                     Back
@@ -723,7 +723,7 @@ function SignScreen({
 
 function SuccessScreen({ employee, onDone, autoReset }: { employee: Employee; onDone: () => void; autoReset: boolean }) {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="relative flex h-20 w-20 items-center justify-center">
                 <div className="absolute inset-0 animate-ping rounded-full bg-emerald-100" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white">
