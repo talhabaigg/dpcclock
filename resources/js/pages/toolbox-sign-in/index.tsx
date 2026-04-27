@@ -225,18 +225,16 @@ function IpadFrame({
 function FrameTopBar({ talk, roster }: { talk: Talk; roster: Employee[] }) {
     const signed = roster.filter((r) => r.signed_at).length;
     return (
-        <header className="flex h-16 w-full shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 shadow-sm">
-            <div className="flex items-center gap-3">
-                <img src="/superior-group-logo.svg" alt="" className="h-9 w-auto" />
-                <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Toolbox Talk</p>
-                    <h2 className="-mt-0.5 text-base font-semibold leading-tight text-zinc-900">
-                        {talk.meeting_date_formatted}
-                        {talk.location ? ` · ${talk.location.name}` : ''}
-                    </h2>
-                </div>
+        <header className="grid h-16 w-full shrink-0 grid-cols-3 items-center border-b border-zinc-200 bg-white px-6 shadow-sm">
+            <div className="justify-self-start">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Toolbox Talk</p>
+                <h2 className="-mt-0.5 text-base font-semibold leading-tight text-zinc-900">
+                    {talk.meeting_date_formatted}
+                    {talk.location ? ` · ${talk.location.name}` : ''}
+                </h2>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+            <img src="/superior-group-logo.svg" alt="Superior" className="h-9 w-auto justify-self-center" />
+            <div className="flex items-center gap-2 justify-self-end rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 <span className="text-xs font-medium text-emerald-700">
                     {signed} of {roster.length} signed in
