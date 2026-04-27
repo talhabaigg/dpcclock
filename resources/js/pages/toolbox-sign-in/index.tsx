@@ -180,7 +180,12 @@ function Shell({ children }: { children: React.ReactNode }) {
             className="min-h-screen w-full bg-zinc-100 antialiased"
             style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif' }}
         >
-            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-sm">{children}</div>
+            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-sm">
+                <header className="flex h-14 shrink-0 items-center justify-center border-b border-zinc-200 bg-white">
+                    <SuperiorMark className="h-7 w-auto" />
+                </header>
+                <div className="flex flex-1 flex-col">{children}</div>
+            </div>
         </div>
     );
 }
@@ -403,9 +408,8 @@ function PhonePicker({ talk, roster, onPick }: { talk: Talk; roster: Employee[];
 
     return (
         <div className="flex h-full flex-1 flex-col">
-            <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center">
-                <SuperiorMark className="h-10 w-auto" />
-                <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
+            <div className="flex flex-col items-center px-6 pt-8 pb-4 text-center">
+                <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
                 <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
                 {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
                 <p className="mt-3 text-xs font-medium text-zinc-500">
