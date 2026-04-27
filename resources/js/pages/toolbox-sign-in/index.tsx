@@ -214,10 +214,8 @@ function IpadFrame({
             <FrameTopBar talk={talk} roster={roster} />
             <div className="flex flex-1 overflow-hidden">
                 <FrameSidebar roster={roster} selected={selected} onPick={onPick} />
-                <main className="flex flex-1 overflow-hidden bg-zinc-50 p-6">
-                    <div className="flex h-full w-full overflow-hidden rounded-2xl bg-white shadow-sm">
-                        {flow ? flow : <FrameWelcome talk={talk} roster={roster} />}
-                    </div>
+                <main className="flex flex-1 overflow-hidden bg-white">
+                    {flow ? flow : <FrameWelcome talk={talk} roster={roster} />}
                 </main>
             </div>
         </div>
@@ -608,17 +606,17 @@ function PinScreen({
                 <div className="text-sm font-semibold text-zinc-900">Enter PIN</div>
                 <div className="w-10" />
             </header>
-            <div className="flex flex-col items-center px-6 pt-2 pb-6">
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-base font-semibold text-zinc-700">
-                    {initials(employee.name)}
-                </span>
-                <p className="mt-3 text-base font-medium text-zinc-900">{employee.name}</p>
-            </div>
-            <div className={`flex justify-center px-6 pb-2 ${shake ? 'animate-[shake_0.35s]' : ''}`}>
-                <PinInputBox pin={pin} error={!!pinError} />
-            </div>
-            <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600">{pinError}</div>
-            <div className="mt-auto flex justify-center px-6 pb-8">
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-8">
+                <div className="flex flex-col items-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-base font-semibold text-zinc-700">
+                        {initials(employee.name)}
+                    </span>
+                    <p className="mt-3 text-base font-medium text-zinc-900">{employee.name}</p>
+                </div>
+                <div className={shake ? 'animate-[shake_0.35s]' : ''}>
+                    <PinInputBox pin={pin} error={!!pinError} />
+                </div>
+                <div className="min-h-[20px] text-center text-xs font-medium text-red-600">{pinError}</div>
                 <PinNumpad onClick={handleNumClick} disabled={verifying} />
             </div>
             <style>{`@keyframes shake {0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
