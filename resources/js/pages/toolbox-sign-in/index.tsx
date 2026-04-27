@@ -1,7 +1,10 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
-import { Check, ChevronRight, Search, Users, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, ExternalLink, QrCode, Search, Users, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import PinNumpad from '@/pages/kiosks/auth/components/numpad';
 import PinInputBox from '@/pages/kiosks/auth/components/pinInputBox';
 
@@ -248,13 +251,69 @@ function FrameTopBar({ talk, roster }: { talk: Talk; roster: Employee[] }) {
                 </h2>
             </div>
             <SuperiorMark className="h-9 w-auto justify-self-center" />
-            <div className="flex items-center gap-2 justify-self-end rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className="text-xs font-medium text-emerald-700">
-                    {signed} of {roster.length} signed in
-                </span>
+            <div className="flex items-center gap-3 justify-self-end">
+                <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-700">
+                        {signed} of {roster.length} signed in
+                    </span>
+                </div>
+                <ScanQrDialog talk={talk} />
             </div>
         </header>
+    );
+}
+
+function ScanQrDialog({ talk }: { talk: Talk }) {
+    const [open, setOpen] = useState(false);
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/t/${talk.token}` : '';
+
+    const copy = () => {
+        navigator.clipboard?.writeText(url);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                    <QrCode className="h-4 w-4" />
+                    <span>Sign in on phone</span>
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="text-center">
+                    <DialogTitle className="flex items-center justify-center gap-2">
+                        <QrCode className="h-5 w-5 text-primary" />
+                        Scan to sign in on your phone
+                    </DialogTitle>
+                    <DialogDescription>
+                        Open your camera, point it at the code, then continue the toolbox sign-in on your phone.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col items-center gap-4 py-2">
+                    <div className="rounded-xl border-2 border-primary/20 bg-white p-4 shadow-lg shadow-primary/5">
+                        <QRCodeSVG value={url} size={224} level="M" />
+                    </div>
+                    <div className="w-full space-y-3">
+                        <div className="rounded-lg bg-muted/50 p-3">
+                            <p className="text-center text-xs text-muted-foreground break-all">{url}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={copy}>
+                                <Copy className="h-4 w-4" />
+                                Copy Link
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 gap-2" asChild>
+                                <a href={url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open Link
+                                </a>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
