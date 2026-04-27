@@ -27,12 +27,7 @@ return new class extends Migration
                 }
             });
 
-        $hasUnique = collect(DB::select(
-            "SELECT INDEX_NAME FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project_tasks' AND INDEX_NAME = 'project_tasks_uuid_unique'"
-        ))->isNotEmpty();
-
-        if (!$hasUnique) {
+        if (!Schema::hasIndex('project_tasks', 'project_tasks_uuid_unique')) {
             Schema::table('project_tasks', function (Blueprint $table) {
                 $table->unique('uuid');
             });
@@ -43,7 +38,9 @@ return new class extends Migration
     {
         if (Schema::hasColumn('project_tasks', 'uuid')) {
             Schema::table('project_tasks', function (Blueprint $table) {
-                $table->dropUnique('project_tasks_uuid_unique');
+                if (Schema::hasIndex('project_tasks', 'project_tasks_uuid_unique')) {
+                    $table->dropUnique('project_tasks_uuid_unique');
+                }
                 $table->dropColumn('uuid');
             });
         }
