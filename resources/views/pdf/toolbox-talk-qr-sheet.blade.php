@@ -3,12 +3,12 @@
     use Endroid\QrCode\Builder\Builder;
     use Endroid\QrCode\Writer\PngWriter;
 
-    $qrPng = Builder::create()
-        ->writer(new PngWriter())
-        ->data($signInUrl)
-        ->size(560)
-        ->margin(8)
-        ->build();
+    $qrPng = (new Builder(
+        writer: new PngWriter(),
+        data: $signInUrl,
+        size: 560,
+        margin: 8,
+    ))->build();
     $qrDataUri = $qrPng->getDataUri();
 
     $location = $talk->location;
