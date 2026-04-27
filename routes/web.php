@@ -16,6 +16,7 @@ use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
+use App\Http\Controllers\ToolboxSignController;
 use App\Http\Controllers\ToolboxTalkController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
@@ -112,6 +113,14 @@ Route::middleware('throttle:30,1')->group(function () {
     Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
     Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
     Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
+});
+
+// Toolbox Sign-In — public routes (token-based, no auth)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/t/{token}', [ToolboxSignController::class, 'show'])->name('toolbox-sign.show');
+    Route::get('/t/{token}/ipad', [ToolboxSignController::class, 'ipad'])->name('toolbox-sign.ipad');
+    Route::post('/t/{token}/verify-pin', [ToolboxSignController::class, 'verifyPin'])->name('toolbox-sign.verify-pin')->middleware('throttle:20,1');
+    Route::post('/t/{token}/submit', [ToolboxSignController::class, 'submit'])->name('toolbox-sign.submit')->middleware('throttle:10,1');
 });
 
 // Public form routes (no auth — token-based)
@@ -1345,6 +1354,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:prestarts.edit');
         Route::get('/toolbox-talks/{toolboxTalk}/pdf', [ToolboxTalkController::class, 'downloadPdf'])->name('toolbox-talks.pdf');
         Route::get('/toolbox-talks/{toolboxTalk}/sign-sheet', [ToolboxTalkController::class, 'downloadSignSheet'])->name('toolbox-talks.sign-sheet');
+        Route::get('/toolbox-talks/{toolboxTalk}/qr-sheet', [ToolboxTalkController::class, 'qrSheet'])->name('toolbox-talks.qr-sheet');
         Route::get('/toolbox-talks/{toolboxTalk}/upload-signatures', [ToolboxTalkController::class, 'uploadSignatures'])->name('toolbox-talks.upload-signatures')
             ->middleware('permission:prestarts.edit');
         Route::post('/toolbox-talks/{toolboxTalk}/upload-signatures', [ToolboxTalkController::class, 'storeSignatures'])->name('toolbox-talks.store-signatures')

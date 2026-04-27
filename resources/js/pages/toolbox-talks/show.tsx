@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Download, Pencil, Upload } from 'lucide-react';
+import { Copy, Download, Pencil, QrCode, Tablet, Upload } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -35,9 +37,17 @@ interface Props {
     talk: Talk;
     subjectOptions: Record<string, string>;
     generalItems: string[];
+    signInUrl: string;
+    ipadUrl: string;
 }
 
-export default function ToolboxTalkShow({ talk, subjectOptions, generalItems }: Props) {
+export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, signInUrl, ipadUrl }: Props) {
+    const [copied, setCopied] = useState<string | null>(null);
+    const copy = (text: string, label: string) => {
+        navigator.clipboard?.writeText(text);
+        setCopied(label);
+        setTimeout(() => setCopied(null), 1500);
+    };
     const { flash, auth } = usePage<{ flash: { success?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string };
         auth: { permissions?: string[] };
@@ -110,8 +120,65 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems }: 
                                 Sign Sheet
                             </a>
                         </Button>
+                        <Button variant="outline" asChild>
+                            <a href={`/toolbox-talks/${talk.id}/qr-sheet`} target="_blank" rel="noreferrer">
+                                <QrCode className="mr-2 h-4 w-4" />
+                                Print QR
+                            </a>
+                        </Button>
                     </div>
                 </div>
+
+                {/* QR Sign-In */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Worker Sign-In {talk.is_locked && <Badge variant="secondary" className="ml-2">Closed</Badge>}</CardTitle>
+                    </CardHeader>
+                        <CardContent>
+                            <div className="grid gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
+                                <div className="rounded-xl border border-zinc-200 bg-white p-3">
+                                    <QRCodeSVG value={signInUrl} size={160} level="M" />
+                                </div>
+                                <div className="space-y-3">
+                                    <p className="text-sm text-muted-foreground">
+                                        Workers scan this code to sign in via their phone. Or open the link directly on a shared iPad.
+                                    </p>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-zinc-700">Mobile:</span>
+                                            <code className="flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-xs">{signInUrl}</code>
+                                            <Button size="sm" variant="ghost" onClick={() => copy(signInUrl, 'mobile')}>
+                                                <Copy className="h-3.5 w-3.5" />
+                                                {copied === 'mobile' ? 'Copied' : 'Copy'}
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-zinc-700">iPad:</span>
+                                            <code className="flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-xs">{ipadUrl}</code>
+                                            <Button size="sm" variant="ghost" onClick={() => copy(ipadUrl, 'ipad')}>
+                                                <Copy className="h-3.5 w-3.5" />
+                                                {copied === 'ipad' ? 'Copied' : 'Copy'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        <Button size="sm" variant="outline" asChild>
+                                            <a href={`/toolbox-talks/${talk.id}/qr-sheet`} target="_blank" rel="noreferrer">
+                                                <QrCode className="mr-2 h-4 w-4" />
+                                                Printable QR Sheet
+                                            </a>
+                                        </Button>
+                                        <Button size="sm" variant="outline" asChild>
+                                            <a href={ipadUrl} target="_blank" rel="noreferrer">
+                                                <Tablet className="mr-2 h-4 w-4" />
+                                                Open on iPad
+                                            </a>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                </Card>
 
                 {/* Details */}
                 <Card>

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
@@ -28,7 +29,17 @@ class ToolboxTalk extends Model implements HasMedia
         'floor_comments',
         'created_by',
         'locked_at',
+        'public_token',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $talk) {
+            if (empty($talk->public_token)) {
+                $talk->public_token = (string) Str::uuid();
+            }
+        });
+    }
 
     protected $casts = [
         'key_topics' => 'array',
@@ -101,6 +112,7 @@ class ToolboxTalk extends Model implements HasMedia
         $this->addMediaCollection('near_miss_files');
         $this->addMediaCollection('floor_comment_files');
         $this->addMediaCollection('signed_pdf');
+        $this->addMediaCollection('attendee_signatures');
     }
 
     // --- Relationships ---
