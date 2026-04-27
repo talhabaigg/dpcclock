@@ -1,7 +1,8 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
-import { Check, ChevronRight, Delete, Search, X } from 'lucide-react';
+import { Check, ChevronRight, Delete, Search, Users, X } from 'lucide-react';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 
 type Employee = {
     id: number;
@@ -34,7 +35,7 @@ type Props = {
     roster: Employee[];
 };
 
-type Screen = 'picker' | 'pin' | 'content' | 'sign' | 'success';
+type Screen = 'pin' | 'content' | 'sign' | 'success';
 
 const initials = (name: string) =>
     name
@@ -44,9 +45,26 @@ const initials = (name: string) =>
         .join('')
         .toUpperCase();
 
+function useIsLargeScreen() {
+    const [large, setLarge] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia('(min-width: 768px)').matches;
+    });
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mq = window.matchMedia('(min-width: 768px)');
+        const handler = (e: MediaQueryListEvent) => setLarge(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+    return large;
+}
+
 export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Props) {
-    const isIpad = mode === 'ipad';
-    const [screen, setScreen] = useState<Screen>('picker');
+    const isLarge = useIsLargeScreen();
+    const isIpad = mode === 'ipad' || isLarge;
+
+    const [screen, setScreen] = useState<Screen | null>(null);
     const [selected, setSelected] = useState<Employee | null>(null);
     const [pin, setPin] = useState('');
     const [pinError, setPinError] = useState<string | null>(null);
@@ -58,7 +76,7 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
     const [roster, setRoster] = useState(initialRoster);
 
     const reset = useCallback(() => {
-        setScreen('picker');
+        setScreen(null);
         setSelected(null);
         setPin('');
         setPinError(null);
@@ -67,7 +85,7 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
         setVerifiedPin(null);
     }, []);
 
-    // Auto-reset on iPad after success (kiosk-style)
+    // Auto-reset on iPad after success
     useEffect(() => {
         if (isIpad && screen === 'success') {
             const t = setTimeout(reset, 6000);
@@ -75,88 +93,108 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
         }
     }, [isIpad, screen, reset]);
 
+    const handlePick = (e: Employee) => {
+        if (e.signed_at) return;
+        setSelected(e);
+        setPin('');
+        setPinError(null);
+        setAcknowledged(false);
+        setSubmitError(null);
+        setVerifiedPin(null);
+        setScreen('pin');
+    };
+
+    const flow = selected && screen ? (
+        <FlowSteps
+            screen={screen}
+            setScreen={setScreen}
+            talk={talk}
+            employee={selected}
+            mode={mode}
+            pin={pin}
+            setPin={setPin}
+            pinError={pinError}
+            setPinError={setPinError}
+            shake={shake}
+            setShake={setShake}
+            acknowledged={acknowledged}
+            setAcknowledged={setAcknowledged}
+            submitting={submitting}
+            setSubmitting={setSubmitting}
+            submitError={submitError}
+            setSubmitError={setSubmitError}
+            verifiedPin={verifiedPin}
+            setVerifiedPin={setVerifiedPin}
+            isIpad={isIpad}
+            onClose={reset}
+            onSigned={(employeeId) => {
+                setRoster((r) => r.map((m) => (m.id === employeeId ? { ...m, signed_at: new Date().toISOString() } : m)));
+                setScreen('success');
+            }}
+        />
+    ) : null;
+
+    if (talk.is_locked) {
+        return (
+            <Shell>
+                <LockedScreen talk={talk} />
+            </Shell>
+        );
+    }
+
+    if (isLarge) {
+        return (
+            <>
+                <Head title="Toolbox Sign-In" />
+                <IpadFrame talk={talk} roster={roster} selected={selected} onPick={handlePick} />
+                <DialogPrimitive.Root
+                    open={selected !== null}
+                    onOpenChange={(open) => {
+                        if (!open) reset();
+                    }}
+                >
+                    <DialogPrimitive.Portal>
+                        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 [transition:opacity_180ms]" />
+                        <DialogPrimitive.Popup
+                            initialFocus={null}
+                            finalFocus={null}
+                            className="fixed top-1/2 left-1/2 z-50 flex max-h-[92vh] w-[min(700px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-none data-[ending-style]:opacity-0 data-[ending-style]:scale-95 data-[starting-style]:opacity-0 data-[starting-style]:scale-95 [transition:opacity_180ms,scale_180ms]"
+                        >
+                            {flow}
+                        </DialogPrimitive.Popup>
+                    </DialogPrimitive.Portal>
+                </DialogPrimitive.Root>
+            </>
+        );
+    }
+
+    // Phone — linear single-screen flow
+    return (
+        <Shell>
+            <Head title="Toolbox Sign-In" />
+            {selected && screen ? (
+                flow
+            ) : (
+                <PhonePicker talk={talk} roster={roster} onPick={handlePick} />
+            )}
+        </Shell>
+    );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
     return (
         <div
             className="min-h-screen w-full bg-zinc-100 antialiased"
             style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif' }}
         >
-            <Head title="Toolbox Sign-In" />
-            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-sm md:max-w-6xl md:my-8 md:min-h-[calc(100vh-4rem)] md:rounded-2xl md:shadow-xl">
-                {talk.is_locked ? (
-                    <LockedScreen talk={talk} />
-                ) : screen === 'picker' ? (
-                    <PickerScreen
-                        talk={talk}
-                        roster={roster}
-                        onPick={(e) => {
-                            setSelected(e);
-                            setPin('');
-                            setPinError(null);
-                            setScreen('pin');
-                        }}
-                    />
-                ) : screen === 'pin' ? (
-                    <PinScreen
-                        employee={selected!}
-                        token={talk.token}
-                        pin={pin}
-                        setPin={setPin}
-                        pinError={pinError}
-                        setPinError={setPinError}
-                        shake={shake}
-                        setShake={setShake}
-                        onBack={() => {
-                            setSelected(null);
-                            setPin('');
-                            setPinError(null);
-                            setScreen('picker');
-                        }}
-                        onVerified={(p) => {
-                            setVerifiedPin(p);
-                            setScreen('content');
-                        }}
-                    />
-                ) : screen === 'content' ? (
-                    <ContentScreen
-                        talk={talk}
-                        acknowledged={acknowledged}
-                        setAcknowledged={setAcknowledged}
-                        onBack={() => setScreen('pin')}
-                        onContinue={() => setScreen('sign')}
-                    />
-                ) : screen === 'sign' ? (
-                    <SignScreen
-                        talk={talk}
-                        employee={selected!}
-                        pin={verifiedPin!}
-                        mode={mode}
-                        submitting={submitting}
-                        setSubmitting={setSubmitting}
-                        submitError={submitError}
-                        setSubmitError={setSubmitError}
-                        onBack={() => setScreen('content')}
-                        onSigned={(employeeId) => {
-                            setRoster((r) =>
-                                r.map((m) => (m.id === employeeId ? { ...m, signed_at: new Date().toISOString() } : m)),
-                            );
-                            setScreen('success');
-                        }}
-                    />
-                ) : (
-                    <SuccessScreen
-                        employee={selected!}
-                        onDone={reset}
-                        autoReset={isIpad}
-                    />
-                )}
-            </div>
+            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-sm">{children}</div>
         </div>
     );
 }
 
 function LockedScreen({ talk }: { talk: Talk }) {
     return (
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <div className="mx-auto flex w-full flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-200 text-zinc-700">
                 <X className="h-6 w-6" />
             </div>
@@ -168,7 +206,67 @@ function LockedScreen({ talk }: { talk: Talk }) {
     );
 }
 
-function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]; onPick: (e: Employee) => void }) {
+// ─────────────────────────────────────────────────────────────────────
+// iPad / Kiosk Frame — persistent top bar + sidebar with roster
+// ─────────────────────────────────────────────────────────────────────
+function IpadFrame({
+    talk,
+    roster,
+    selected,
+    onPick,
+}: {
+    talk: Talk;
+    roster: Employee[];
+    selected: Employee | null;
+    onPick: (e: Employee) => void;
+}) {
+    return (
+        <div
+            className="flex h-screen flex-col bg-zinc-50 antialiased"
+            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif' }}
+        >
+            <FrameTopBar talk={talk} roster={roster} />
+            <div className="flex flex-1 overflow-hidden">
+                <FrameSidebar roster={roster} selected={selected} onPick={onPick} />
+                <FrameMain talk={talk} roster={roster} />
+            </div>
+        </div>
+    );
+}
+
+function FrameTopBar({ talk, roster }: { talk: Talk; roster: Employee[] }) {
+    const signed = roster.filter((r) => r.signed_at).length;
+    return (
+        <header className="flex h-16 w-full shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 shadow-sm">
+            <div className="flex items-center gap-3">
+                <img src="/superior-group-logo.svg" alt="" className="h-9 w-auto" />
+                <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Toolbox Talk</p>
+                    <h2 className="-mt-0.5 text-base font-semibold leading-tight text-zinc-900">
+                        {talk.meeting_date_formatted}
+                        {talk.location ? ` · ${talk.location.name}` : ''}
+                    </h2>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="text-xs font-medium text-emerald-700">
+                    {signed} of {roster.length} signed in
+                </span>
+            </div>
+        </header>
+    );
+}
+
+function FrameSidebar({
+    roster,
+    selected,
+    onPick,
+}: {
+    roster: Employee[];
+    selected: Employee | null;
+    onPick: (e: Employee) => void;
+}) {
     const [query, setQuery] = useState('');
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -176,6 +274,110 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
         return roster.filter((e) => e.name.toLowerCase().includes(q) || e.full_name.toLowerCase().includes(q));
     }, [roster, query]);
 
+    return (
+        <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-zinc-200 bg-white lg:w-96">
+            <div className="border-b border-zinc-200 p-4">
+                <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+                    <Search className="h-4 w-4 text-zinc-400" />
+                    <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search workers"
+                        className="flex-1 bg-transparent text-sm outline-none placeholder-zinc-400"
+                    />
+                </div>
+                <div className="mt-3 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>{filtered.length} workers</span>
+                </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+                {filtered.length === 0 ? (
+                    <p className="px-3 py-8 text-center text-sm text-zinc-400">No matches.</p>
+                ) : (
+                    <ul className="space-y-1">
+                        {filtered.map((emp) => (
+                            <li key={emp.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => onPick(emp)}
+                                    disabled={!!emp.signed_at}
+                                    className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                                        selected?.id === emp.id ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'
+                                    } ${emp.signed_at ? 'opacity-60' : ''}`}
+                                >
+                                    <span
+                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                                            selected?.id === emp.id ? 'bg-white/15 text-white' : emp.signed_at ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'
+                                        }`}
+                                    >
+                                        {emp.signed_at ? <Check className="h-4 w-4" /> : initials(emp.name)}
+                                    </span>
+                                    <span className="flex-1 truncate text-sm font-medium">{emp.name}</span>
+                                    {emp.signed_at ? (
+                                        <span
+                                            className={`text-[11px] font-medium ${
+                                                selected?.id === emp.id ? 'text-white/70' : 'text-emerald-600'
+                                            }`}
+                                        >
+                                            Signed
+                                        </span>
+                                    ) : (
+                                        <ChevronRight
+                                            className={`h-4 w-4 transition ${
+                                                selected?.id === emp.id ? 'text-white' : 'text-zinc-300 group-hover:text-zinc-500'
+                                            }`}
+                                        />
+                                    )}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </aside>
+    );
+}
+
+function FrameMain({ talk, roster }: { talk: Talk; roster: Employee[] }) {
+    const remaining = roster.filter((r) => !r.signed_at).length;
+    return (
+        <main className="flex flex-1 items-center justify-center overflow-y-auto p-10">
+            <div className="max-w-xl text-center">
+                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-white">
+                    <Users className="h-7 w-7" />
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Tap your name to sign in</h1>
+                <p className="mt-3 text-base text-zinc-500">
+                    Select your name from the list, enter your 4-digit PIN, acknowledge the talking points and sign.
+                </p>
+                {remaining > 0 ? (
+                    <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-1.5 text-sm font-medium text-zinc-700">
+                        {remaining} {remaining === 1 ? 'worker' : 'workers'} still to sign
+                    </p>
+                ) : (
+                    <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700">
+                        <Check className="h-4 w-4" /> Everyone has signed in
+                    </p>
+                )}
+                {talk.subject_label && (
+                    <p className="mt-8 text-xs uppercase tracking-wider text-zinc-400">{talk.subject_label}</p>
+                )}
+            </div>
+        </main>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phone Picker (matches Claude Design)
+// ─────────────────────────────────────────────────────────────────────
+function PhonePicker({ talk, roster, onPick }: { talk: Talk; roster: Employee[]; onPick: (e: Employee) => void }) {
+    const [query, setQuery] = useState('');
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return roster;
+        return roster.filter((e) => e.name.toLowerCase().includes(q) || e.full_name.toLowerCase().includes(q));
+    }, [roster, query]);
     const grouped = useMemo(() => {
         const map = new Map<string, Employee[]>();
         for (const e of filtered) {
@@ -185,82 +387,154 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
         }
         return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
     }, [filtered]);
-
     const signedCount = roster.filter((r) => r.signed_at).length;
 
     return (
-        <div className="flex h-full flex-1 flex-col md:flex-row">
-            {/* Brand/meta — top on phone, sticky left rail on iPad */}
-            <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center md:w-80 md:shrink-0 md:items-start md:border-r md:border-zinc-200 md:px-10 md:pt-12 md:pb-10 md:text-left">
-                <img src="/superior-group-logo.svg" alt="Superior" className="h-10 w-auto md:h-14" />
-                <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900 md:mt-8 md:text-3xl md:leading-tight">
-                    Sign in to your toolbox talk
-                </h1>
-                <p className="mt-1 text-sm text-zinc-500 md:mt-3 md:text-base">{talk.meeting_date_formatted}</p>
-                {talk.location && <p className="mt-0.5 text-xs text-zinc-400 md:text-sm">{talk.location.name}</p>}
-                <p className="mt-3 text-xs font-medium text-zinc-500 md:mt-6 md:text-sm">
+        <div className="flex h-full flex-1 flex-col">
+            <div className="flex flex-col items-center px-6 pt-10 pb-4 text-center">
+                <img src="/superior-group-logo.svg" alt="Superior" className="h-10 w-auto" />
+                <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
+                <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
+                {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
+                <p className="mt-3 text-xs font-medium text-zinc-500">
                     {signedCount} of {roster.length} signed
                 </p>
             </div>
-
-            {/* Search + roster */}
-            <div className="flex flex-1 flex-col md:min-h-0">
-                <div className="px-4 pb-3 md:px-10 md:pt-12 md:pb-4">
-                    <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 md:py-3">
-                        <Search className="h-4 w-4 text-zinc-400" />
-                        <input
-                            autoFocus={false}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search your name"
-                            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none md:text-base"
-                        />
-                    </div>
+            <div className="px-4 pb-3">
+                <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+                    <Search className="h-4 w-4 text-zinc-400" />
+                    <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search your name"
+                        className="flex-1 bg-transparent text-sm outline-none placeholder-zinc-400"
+                    />
                 </div>
-
-                <div className="flex-1 overflow-y-auto pb-6 md:px-10">
-                    {grouped.length === 0 ? (
-                        <div className="px-6 py-12 text-center text-sm text-zinc-400">No matches.</div>
-                    ) : (
-                        grouped.map(([letter, items]) => (
-                            <div key={letter}>
-                                <div className="sticky top-0 z-10 bg-white/95 px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 backdrop-blur md:px-2">
-                                    {letter}
-                                </div>
-                                    <ul>
-                                    {items.map((emp) => (
-                                        <li key={emp.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => onPick(emp)}
-                                                disabled={!!emp.signed_at}
-                                                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
-                                            >
-                                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700 md:h-11 md:w-11 md:text-sm">
-                                                    {initials(emp.name)}
-                                                </span>
-                                                <span className="flex-1 truncate text-sm font-medium text-zinc-900 md:text-base">{emp.name}</span>
-                                                {emp.signed_at ? (
-                                                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                                                        <Check className="h-3.5 w-3.5" />
-                                                        Signed
-                                                    </span>
-                                                ) : (
-                                                    <ChevronRight className="h-4 w-4 text-zinc-300" />
-                                                )}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
+            </div>
+            <div className="flex-1 overflow-y-auto pb-6">
+                {grouped.length === 0 ? (
+                    <div className="px-6 py-12 text-center text-sm text-zinc-400">No matches.</div>
+                ) : (
+                    grouped.map(([letter, items]) => (
+                        <div key={letter}>
+                            <div className="sticky top-0 z-10 bg-white/95 px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 backdrop-blur">
+                                {letter}
                             </div>
-                        ))
-                    )}
-                </div>
+                            <ul>
+                                {items.map((emp) => (
+                                    <li key={emp.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => onPick(emp)}
+                                            disabled={!!emp.signed_at}
+                                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-zinc-100 disabled:opacity-50"
+                                        >
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700">
+                                                {initials(emp.name)}
+                                            </span>
+                                            <span className="flex-1 truncate text-sm font-medium text-zinc-900">{emp.name}</span>
+                                            {emp.signed_at ? (
+                                                <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                                                    <Check className="h-3.5 w-3.5" />
+                                                    Signed
+                                                </span>
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4 text-zinc-300" />
+                                            )}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Flow Steps (PIN → Content → Sign → Success). Used both as full-screen
+// (phone) and inside the dialog (iPad).
+// ─────────────────────────────────────────────────────────────────────
+type FlowProps = {
+    screen: Screen;
+    setScreen: (s: Screen) => void;
+    talk: Talk;
+    employee: Employee;
+    mode: 'mobile' | 'ipad';
+    pin: string;
+    setPin: (s: string) => void;
+    pinError: string | null;
+    setPinError: (s: string | null) => void;
+    shake: boolean;
+    setShake: (b: boolean) => void;
+    acknowledged: boolean;
+    setAcknowledged: (b: boolean) => void;
+    submitting: boolean;
+    setSubmitting: (b: boolean) => void;
+    submitError: string | null;
+    setSubmitError: (s: string | null) => void;
+    verifiedPin: string | null;
+    setVerifiedPin: (s: string | null) => void;
+    isIpad: boolean;
+    onClose: () => void;
+    onSigned: (employeeId: number) => void;
+};
+
+function FlowSteps(p: FlowProps) {
+    if (p.screen === 'pin') {
+        return (
+            <PinScreen
+                employee={p.employee}
+                token={p.talk.token}
+                pin={p.pin}
+                setPin={p.setPin}
+                pinError={p.pinError}
+                setPinError={p.setPinError}
+                shake={p.shake}
+                setShake={p.setShake}
+                onBack={p.onClose}
+                onVerified={(verified) => {
+                    p.setVerifiedPin(verified);
+                    p.setScreen('content');
+                }}
+            />
+        );
+    }
+    if (p.screen === 'content') {
+        return (
+            <ContentScreen
+                talk={p.talk}
+                acknowledged={p.acknowledged}
+                setAcknowledged={p.setAcknowledged}
+                onBack={() => p.setScreen('pin')}
+                onContinue={() => p.setScreen('sign')}
+            />
+        );
+    }
+    if (p.screen === 'sign') {
+        return (
+            <SignScreen
+                talk={p.talk}
+                employee={p.employee}
+                pin={p.verifiedPin!}
+                mode={p.mode}
+                submitting={p.submitting}
+                setSubmitting={p.setSubmitting}
+                submitError={p.submitError}
+                setSubmitError={p.setSubmitError}
+                onBack={() => p.setScreen('content')}
+                onSigned={p.onSigned}
+            />
+        );
+    }
+    return <SuccessScreen employee={p.employee} onDone={p.onClose} autoReset={p.isIpad} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PIN
+// ─────────────────────────────────────────────────────────────────────
 function PinScreen({
     employee,
     token,
@@ -285,7 +559,6 @@ function PinScreen({
     onVerified: (pin: string) => void;
 }) {
     const [verifying, setVerifying] = useState(false);
-
     const tap = (digit: string) => {
         if (verifying || pin.length >= 4) return;
         setPinError(null);
@@ -339,78 +612,65 @@ function PinScreen({
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
     return (
-        <div className="flex h-full flex-1 flex-col md:flex-row md:items-stretch">
-            {/* Phone: top header. iPad: header is invisible, replaced by left rail back button */}
-            <header className="flex items-center justify-between px-4 pt-6 pb-4 md:hidden">
+        <div className="flex h-full flex-1 flex-col">
+            <header className="flex items-center justify-between px-4 pt-6 pb-4">
                 <button onClick={onBack} className="text-sm font-medium text-zinc-500">
                     Back
                 </button>
                 <div className="text-sm font-semibold text-zinc-900">Enter PIN</div>
                 <div className="w-10" />
             </header>
-
-            {/* Employee/title — top stack on phone, left rail on iPad */}
-            <div className="flex flex-col items-center px-6 pt-2 pb-6 md:w-80 md:shrink-0 md:items-start md:justify-center md:border-r md:border-zinc-200 md:px-10 md:py-12">
-                <button onClick={onBack} className="mb-6 hidden items-center gap-1 text-sm font-medium text-zinc-500 md:flex">
-                    <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-                        <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Back
-                </button>
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-base font-semibold text-zinc-700 md:h-20 md:w-20 md:text-xl">
+            <div className="flex flex-col items-center px-6 pt-2 pb-6">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-base font-semibold text-zinc-700">
                     {initials(employee.name)}
                 </span>
-                <p className="mt-3 text-base font-medium text-zinc-900 md:mt-5 md:text-2xl md:font-semibold">{employee.name}</p>
-                <p className="mt-1 hidden text-sm text-zinc-500 md:block">Enter your 4-digit PIN to continue.</p>
+                <p className="mt-3 text-base font-medium text-zinc-900">{employee.name}</p>
             </div>
-
-            {/* Pin dots + keypad */}
-            <div className="flex flex-1 flex-col md:items-center md:justify-center md:px-10 md:py-12">
-                <div className={`flex justify-center gap-3 px-6 pb-2 md:gap-4 md:pb-4 ${shake ? 'animate-[shake_0.35s]' : ''}`}>
-                    {[0, 1, 2, 3].map((i) => (
-                        <span
-                            key={i}
-                            className={`h-3.5 w-3.5 rounded-full transition md:h-4 md:w-4 ${
-                                pin.length > i ? 'bg-zinc-900' : 'bg-zinc-200'
-                            } ${pinError ? 'bg-red-500' : ''}`}
-                        />
+            <div className={`flex justify-center gap-3 px-6 pb-2 ${shake ? 'animate-[shake_0.35s]' : ''}`}>
+                {[0, 1, 2, 3].map((i) => (
+                    <span
+                        key={i}
+                        className={`h-3.5 w-3.5 rounded-full transition ${
+                            pin.length > i ? 'bg-zinc-900' : 'bg-zinc-200'
+                        } ${pinError ? 'bg-red-500' : ''}`}
+                    />
+                ))}
+            </div>
+            <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600">{pinError}</div>
+            <div className="mt-auto px-6 pb-8">
+                <div className="mx-auto grid w-full max-w-xs grid-cols-3 gap-3">
+                    {keys.map((k) => (
+                        <button
+                            key={k}
+                            onClick={() => tap(k)}
+                            className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200"
+                        >
+                            {k}
+                        </button>
                     ))}
-                </div>
-                <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600 md:text-sm">{pinError}</div>
-
-                <div className="mt-auto px-6 pb-8 md:mt-6 md:w-full md:max-w-md md:px-0 md:pb-0">
-                    <div className="grid grid-cols-3 gap-3 md:gap-4">
-                        {keys.map((k) => (
-                            <button
-                                key={k}
-                                onClick={() => tap(k)}
-                                className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200 md:py-7 md:text-3xl"
-                            >
-                                {k}
-                            </button>
-                        ))}
-                        <div />
-                        <button
-                            onClick={() => tap('0')}
-                            className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200 md:py-7 md:text-3xl"
-                        >
-                            0
-                        </button>
-                        <button
-                            onClick={back}
-                            className="flex items-center justify-center rounded-2xl py-5 text-zinc-500 transition active:bg-zinc-100 md:py-7"
-                        >
-                            <Delete className="h-5 w-5 md:h-6 md:w-6" />
-                        </button>
-                    </div>
+                    <div />
+                    <button
+                        onClick={() => tap('0')}
+                        className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200"
+                    >
+                        0
+                    </button>
+                    <button
+                        onClick={back}
+                        className="flex items-center justify-center rounded-2xl py-5 text-zinc-500 transition active:bg-zinc-100"
+                    >
+                        <Delete className="h-5 w-5" />
+                    </button>
                 </div>
             </div>
-
             <style>{`@keyframes shake {0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
         </div>
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Content
+// ─────────────────────────────────────────────────────────────────────
 type Point = { title?: string; description?: string; body?: string; correction?: string };
 
 function ContentScreen({
@@ -435,16 +695,12 @@ function ContentScreen({
 
     const incidents = [...normalize(talk.injuries ?? []), ...normalize(talk.near_misses ?? [])];
 
-    type Section =
-        | { id: string; label: string; points: Point[]; footnote?: string }
-        | { id: string; label: string; empty: string };
-
+    type Section = { id: string; label: string; points: Point[]; footnote?: string } | { id: string; label: string; empty: string };
     const sections: Section[] = [];
     sections.push({ id: 'general', label: 'General items', points: (talk.general_items ?? []).map((g) => ({ title: g })) });
     if ((talk.key_topics ?? []).length) sections.push({ id: 'topics', label: 'Key topics on site', points: normalize(talk.key_topics) });
     if ((talk.action_points ?? []).length)
         sections.push({ id: 'actions', label: 'Action points from last meeting', points: normalize(talk.action_points) });
-
     if (incidents.length) {
         sections.push({
             id: 'incidents',
@@ -455,101 +711,83 @@ function ContentScreen({
     } else {
         sections.push({ id: 'incidents', label: 'Injuries & near misses', empty: 'No injuries or near misses reported this week.' });
     }
-
     if ((talk.floor_comments ?? []).length)
         sections.push({ id: 'comments', label: 'Comments from the floor', points: normalize(talk.floor_comments) });
     else sections.push({ id: 'comments', label: 'Comments from the floor', empty: 'No comments from the floor recorded.' });
 
     return (
         <div className="flex h-full flex-1 flex-col">
-            {/* Big header */}
-            <div className="flex-shrink-0 border-b border-zinc-200 bg-white px-5 pt-8 pb-4 md:px-10 md:pt-10 md:pb-6">
-                <div className="mb-3 flex min-h-8 items-center md:mb-4">
-                    <button
-                        onClick={onBack}
-                        className="-ml-1 flex items-center gap-1 px-2 py-1.5 text-[15px] font-medium text-zinc-900 md:text-base"
-                    >
+            <div className="flex-shrink-0 border-b border-zinc-200 bg-white px-5 pt-8 pb-4">
+                <div className="mb-3 flex min-h-8 items-center">
+                    <button onClick={onBack} className="-ml-1 flex items-center gap-1 px-2 py-1.5 text-[15px] font-medium text-zinc-900">
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                             <path d="M11 4l-5 5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                         Back
                     </button>
                 </div>
-                <h1 className="text-[26px] font-bold leading-tight tracking-tight text-zinc-900 md:text-4xl">Toolbox Talk</h1>
-                <p className="mt-1 text-sm text-zinc-500 md:mt-2 md:text-base">
+                <h1 className="text-[26px] font-bold leading-tight tracking-tight text-zinc-900">Toolbox Talk</h1>
+                <p className="mt-1 text-sm text-zinc-500">
                     {talk.meeting_date_formatted}
                     {talk.location ? ` · ${talk.location.name}` : ''}
-                    {talk.called_by ? ` · ${talk.called_by.name}` : ''}
                 </p>
             </div>
-
             <div className="flex-1 overflow-y-auto">
-                <div className="mx-auto w-full max-w-3xl">
-                    {sections.map((section, sIdx) => (
-                        <div key={section.id} style={{ borderTop: sIdx === 0 ? 'none' : '8px solid #f4f4f5' }}>
-                            {/* Section eyebrow */}
-                            <div className="flex items-center justify-between px-5 pt-[18px] pb-2 md:px-10">
-                                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-500 md:text-xs">{section.label}</span>
-                                {'points' in section && (
-                                    <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500">
-                                        {section.points.length}
-                                    </span>
-                                )}
-                            </div>
-
-                            {'points' in section ? (
-                                <div className="px-5 pb-4 md:px-10">
-                                    {section.points.map((p, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-start gap-3.5 px-1 py-3.5 md:gap-5"
-                                            style={{
-                                                borderBottom: i < section.points.length - 1 ? '1px solid #e4e4e7' : 'none',
-                                            }}
-                                        >
-                                            <div className="mt-px flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-xs font-bold tabular-nums text-zinc-900 md:h-8 md:w-8 md:text-sm">
-                                                {i + 1}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                {p.title && (
-                                                    <div className="text-[15.5px] font-semibold leading-tight tracking-tight text-zinc-900 md:text-lg">
-                                                        {p.title}
-                                                    </div>
-                                                )}
-                                                {p.body && <div className="mt-1.5 text-[13.5px] leading-[1.5] text-zinc-500 md:text-base">{p.body}</div>}
-                                                {p.correction && (
-                                                    <div className="mt-2.5 rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2.5 md:px-4 md:py-3">
-                                                        <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-zinc-500 md:text-xs">
-                                                            Corrective action
-                                                        </div>
-                                                        <div className="text-[13px] leading-[1.5] text-zinc-900 md:text-[15px]">{p.correction}</div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {'footnote' in section && section.footnote && (
-                                        <div className="mt-3 rounded-lg border border-dashed border-zinc-200 bg-zinc-100 px-3.5 py-2.5 text-[13px] italic text-zinc-500 md:text-sm">
-                                            {section.footnote}
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="px-5 pb-[18px] md:px-10">
-                                    <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-100 px-4 py-3.5 text-[13.5px] italic text-zinc-500 md:text-sm">
-                                        {section.empty}
-                                    </div>
-                                </div>
+                {sections.map((section, sIdx) => (
+                    <div key={section.id} style={{ borderTop: sIdx === 0 ? 'none' : '8px solid #f4f4f5' }}>
+                        <div className="flex items-center justify-between px-5 pt-[18px] pb-2">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-500">{section.label}</span>
+                            {'points' in section && (
+                                <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500">
+                                    {section.points.length}
+                                </span>
                             )}
                         </div>
-                    ))}
-                    <div className="h-2" />
-                </div>
+                        {'points' in section ? (
+                            <div className="px-5 pb-4">
+                                {section.points.map((p, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-start gap-3.5 px-1 py-3.5"
+                                        style={{ borderBottom: i < section.points.length - 1 ? '1px solid #e4e4e7' : 'none' }}
+                                    >
+                                        <div className="mt-px flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-xs font-bold tabular-nums text-zinc-900">
+                                            {i + 1}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            {p.title && (
+                                                <div className="text-[15.5px] font-semibold leading-tight tracking-tight text-zinc-900">{p.title}</div>
+                                            )}
+                                            {p.body && <div className="mt-1.5 text-[13.5px] leading-[1.5] text-zinc-500">{p.body}</div>}
+                                            {p.correction && (
+                                                <div className="mt-2.5 rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2.5">
+                                                    <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-zinc-500">
+                                                        Corrective action
+                                                    </div>
+                                                    <div className="text-[13px] leading-[1.5] text-zinc-900">{p.correction}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {'footnote' in section && section.footnote && (
+                                    <div className="mt-3 rounded-lg border border-dashed border-zinc-200 bg-zinc-100 px-3.5 py-2.5 text-[13px] italic text-zinc-500">
+                                        {section.footnote}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="px-5 pb-[18px]">
+                                <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-100 px-4 py-3.5 text-[13.5px] italic text-zinc-500">
+                                    {section.empty}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                <div className="h-2" />
             </div>
-
-            {/* Acknowledgment footer */}
-            <div className="flex-shrink-0 border-t border-zinc-200 bg-white">
-                <div className="mx-auto w-full max-w-3xl px-5 pt-3.5 pb-7 md:px-10 md:py-6">
+            <div className="flex-shrink-0 border-t border-zinc-200 bg-white px-5 pt-3.5 pb-7">
                 <button
                     type="button"
                     onClick={() => setAcknowledged(!acknowledged)}
@@ -573,26 +811,27 @@ function ContentScreen({
                         )}
                     </div>
                     <div className="flex-1 text-[13.5px] leading-[1.45] text-zinc-900">
-                        I acknowledge &amp; understand the information provided and the requirement that I must attend the Toolbox Talk in
-                        person.
+                        I acknowledge &amp; understand the information provided and the requirement that I must attend the Toolbox Talk in person.
                     </div>
                 </button>
                 <button
                     onClick={onContinue}
                     disabled={!acknowledged}
-                    className="flex w-full items-center justify-center gap-1 rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300 md:py-4 md:text-base"
+                    className="flex w-full items-center justify-center gap-1 rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
                     Continue to signature
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="ml-1">
                         <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </button>
-                </div>
             </div>
         </div>
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Sign
+// ─────────────────────────────────────────────────────────────────────
 function SignScreen({
     talk,
     employee,
@@ -624,7 +863,6 @@ function SignScreen({
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         const sizeCanvas = () => {
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
             const rect = canvas.getBoundingClientRect();
@@ -638,7 +876,6 @@ function SignScreen({
                 padRef.current.fromData(data);
             }
         };
-
         sizeCanvas();
         padRef.current = new SignaturePad(canvas, {
             penColor: 'rgb(15, 23, 42)',
@@ -646,11 +883,9 @@ function SignScreen({
         });
         const handleEnd = () => setEmpty(padRef.current?.isEmpty() ?? true);
         padRef.current.addEventListener('endStroke', handleEnd);
-
         const ro = new ResizeObserver(() => sizeCanvas());
         ro.observe(canvas);
         window.addEventListener('orientationchange', sizeCanvas);
-
         return () => {
             ro.disconnect();
             window.removeEventListener('orientationchange', sizeCanvas);
@@ -672,9 +907,7 @@ function SignScreen({
         }
         setSubmitting(true);
         setSubmitError(null);
-
         const dataUrl = padRef.current.toDataURL('image/png');
-
         try {
             const res = await fetch(`/t/${talk.token}/submit`, {
                 method: 'POST',
@@ -705,27 +938,25 @@ function SignScreen({
 
     return (
         <div className="flex h-full flex-1 flex-col">
-            <header className="flex items-center justify-between px-4 pt-6 pb-4 md:px-10 md:pt-10">
-                <button onClick={onBack} className="text-sm font-medium text-zinc-500 md:text-base">
+            <header className="flex items-center justify-between px-4 pt-6 pb-4">
+                <button onClick={onBack} className="text-sm font-medium text-zinc-500">
                     Back
                 </button>
-                <div className="text-sm font-semibold text-zinc-900 md:text-base">Sign</div>
+                <div className="text-sm font-semibold text-zinc-900">Sign</div>
                 <div className="w-10" />
             </header>
-            <div className="mx-auto w-full max-w-3xl px-5 pb-2 md:px-10">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400 md:text-sm">Signing as</p>
-                <p className="mt-0.5 text-base font-semibold text-zinc-900 md:text-2xl">{employee.name}</p>
+            <div className="px-5 pb-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">Signing as</p>
+                <p className="mt-0.5 text-base font-semibold text-zinc-900">{employee.name}</p>
             </div>
-            <div ref={wrapRef} className="mx-auto w-full max-w-3xl px-5 pt-2 md:px-10 md:pt-4">
-                <div className="aspect-[16/9] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:aspect-[2.4/1]">
+            <div ref={wrapRef} className="px-5 pt-2">
+                <div className="aspect-[16/9] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
                     <canvas ref={canvasRef} className="block h-full w-full touch-none" />
                 </div>
-                <p className="mt-2 text-center text-[11px] text-zinc-400 md:text-xs">Sign with your finger</p>
+                <p className="mt-2 text-center text-[11px] text-zinc-400">Sign with your finger</p>
             </div>
-
-            <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600 md:text-sm">{submitError}</div>
-
-            <div className="mt-auto flex gap-3 px-5 pb-6 pt-3 md:mx-auto md:w-full md:max-w-3xl md:px-10 md:pb-10">
+            <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600">{submitError}</div>
+            <div className="mt-auto flex gap-3 px-5 pb-6 pt-3">
                 <button
                     onClick={clear}
                     disabled={empty || submitting}
@@ -736,7 +967,7 @@ function SignScreen({
                 <button
                     onClick={submit}
                     disabled={empty || submitting}
-                    className="flex-[2] rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300 md:py-4 md:text-base"
+                    className="flex-[2] rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
                     {submitting ? 'Submitting…' : 'Submit signature'}
                 </button>
@@ -745,17 +976,20 @@ function SignScreen({
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Success
+// ─────────────────────────────────────────────────────────────────────
 function SuccessScreen({ employee, onDone, autoReset }: { employee: Employee; onDone: () => void; autoReset: boolean }) {
     return (
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center md:gap-6 md:p-12">
-            <div className="relative flex h-20 w-20 items-center justify-center md:h-28 md:w-28">
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="relative flex h-20 w-20 items-center justify-center">
                 <div className="absolute inset-0 animate-ping rounded-full bg-emerald-100" />
-                <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white md:h-28 md:w-28">
-                    <Check className="h-10 w-10 md:h-14 md:w-14" strokeWidth={3} />
+                <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <Check className="h-10 w-10" strokeWidth={3} />
                 </div>
             </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-4xl">You're signed in</h1>
-            <p className="text-sm text-zinc-500 md:text-base">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">You're signed in</h1>
+            <p className="text-sm text-zinc-500">
                 Thanks, <span className="font-medium text-zinc-700">{employee.name}</span>. Stay safe out there.
             </p>
             {!autoReset ? (
