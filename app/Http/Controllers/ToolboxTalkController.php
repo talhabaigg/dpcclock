@@ -17,7 +17,7 @@ class ToolboxTalkController extends Controller
 {
     public function index(Request $request)
     {
-        $query = ToolboxTalk::with(['location', 'calledBy']);
+        $query = ToolboxTalk::with(['location', 'calledBy', 'attendees.employee']);
 
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->location_id);
@@ -27,6 +27,35 @@ class ToolboxTalkController extends Controller
         }
 
         $talks = $query->latest('meeting_date')->paginate(25)->withQueryString();
+
+        $talks->getCollection()->transform(function (ToolboxTalk $talk) {
+            $location = $talk->location;
+            $kioskEmployees = collect();
+
+            if ($location) {
+                $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
+                if ($kiosk) {
+                    $kioskEmployees = $kiosk->employees()->get(['employees.id', 'name', 'preferred_name']);
+                }
+            }
+
+            $signedAttendees = $talk->attendees->filter(fn ($a) => $a->signed_at !== null || $a->signed);
+            $signedIds = $signedAttendees->pluck('employee_id')->toArray();
+
+            $talk->signed_employees = $signedAttendees->map(fn ($a) => [
+                'id' => $a->employee?->id,
+                'name' => $a->employee?->preferred_name ?? $a->employee?->name,
+            ])->filter(fn ($e) => $e['id'] !== null)->values();
+
+            $talk->not_signed_employees = $kioskEmployees
+                ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
+                ->map(fn ($emp) => [
+                    'id' => $emp->id,
+                    'name' => $emp->preferred_name ?? $emp->name,
+                ])->values();
+
+            return $talk;
+        });
 
         $meetingDates = ToolboxTalk::select('meeting_date')
             ->distinct()

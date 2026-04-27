@@ -1,5 +1,6 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
 import AppLayout from '@/layouts/app-layout';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,10 +10,67 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useInitials } from '@/hooks/use-initials';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, Copy, Lock, LockOpen, MoreHorizontal, Plus } from 'lucide-react';
 import { useState } from 'react';
+
+interface EmployeeSummary {
+    id: number;
+    name: string;
+}
+
+function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; variant: 'signed' | 'not_signed' }) {
+    const getInitials = useInitials();
+    const maxShow = 5;
+    const shown = employees.slice(0, maxShow);
+    const overflow = employees.length - maxShow;
+
+    if (employees.length === 0) {
+        return <span className="text-muted-foreground text-sm">-</span>;
+    }
+
+    const colorClass = variant === 'signed'
+        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+        : 'bg-red-50 text-red-600 border-red-200';
+
+    return (
+        <TooltipProvider>
+            <div className="flex -space-x-2">
+                {shown.map((emp) => (
+                    <Tooltip key={emp.id}>
+                        <TooltipTrigger asChild>
+                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
+                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>
+                                    {getInitials(emp.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent>{emp.name}</TooltipContent>
+                    </Tooltip>
+                ))}
+                {overflow > 0 && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
+                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>
+                                    +{overflow}
+                                </AvatarFallback>
+                            </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-48 text-xs">
+                            {employees.slice(maxShow).map((e) => (
+                                <div key={e.id}>{e.name}</div>
+                            ))}
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+            </div>
+        </TooltipProvider>
+    );
+}
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Toolbox Talks', href: '/toolbox-talks' }];
 
@@ -29,6 +87,8 @@ interface Talk {
     is_locked: boolean;
     location: Location | null;
     called_by: { id: number; name: string } | null;
+    signed_employees?: EmployeeSummary[];
+    not_signed_employees?: EmployeeSummary[];
 }
 
 interface PaginatedTalks {
@@ -158,13 +218,15 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                 <TableHead>Project</TableHead>
                                 <TableHead>Subject</TableHead>
                                 <TableHead>Called By</TableHead>
+                                <TableHead>Signed</TableHead>
+                                <TableHead>Not Signed</TableHead>
                                 <TableHead className="w-12"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {talks.data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                                         No toolbox talks found.
                                     </TableCell>
                                 </TableRow>
@@ -180,6 +242,12 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                     <TableCell>{t.location?.name ?? '-'}</TableCell>
                                     <TableCell>{subjectOptions[t.meeting_subject] ?? t.meeting_subject}</TableCell>
                                     <TableCell>{t.called_by?.name ?? '-'}</TableCell>
+                                    <TableCell>
+                                        <AvatarGroup employees={t.signed_employees ?? []} variant="signed" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <AvatarGroup employees={t.not_signed_employees ?? []} variant="not_signed" />
+                                    </TableCell>
                                     <TableCell>
                                         <DropdownMenu modal={false}>
                                             <DropdownMenuTrigger asChild>
