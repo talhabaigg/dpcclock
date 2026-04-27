@@ -11,8 +11,10 @@
     ))->build();
     $qrDataUri = $qrPng->getDataUri();
 
-    $logoPath = public_path('superior-group-logo.svg');
-    $logoSvg = file_exists($logoPath) ? file_get_contents($logoPath) : null;
+    $logoPath = public_path('logo.png');
+    $logoDataUri = file_exists($logoPath)
+        ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+        : null;
 
     $location = $talk->location;
     $subjectLabel = \App\Models\ToolboxTalk::SUBJECT_OPTIONS[$talk->meeting_subject] ?? $talk->meeting_subject;
@@ -39,10 +41,10 @@
             text-align: center;
         }
         .logo {
-            height: 56px;
+            height: 64px;
             margin-bottom: 24px;
         }
-        .logo svg { height: 56px; width: auto; display: block; }
+        .logo img { height: 64px; width: auto; display: block; }
         .eyebrow {
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -119,8 +121,8 @@
 </head>
 <body>
 <div class="page">
-    @if($logoSvg)
-        <div class="logo">{!! $logoSvg !!}</div>
+    @if($logoDataUri)
+        <div class="logo"><img src="{{ $logoDataUri }}" alt="Superior Group" /></div>
     @endif
     <div class="eyebrow">Toolbox Talk · Sign-In</div>
     <h1>Scan to sign in</h1>

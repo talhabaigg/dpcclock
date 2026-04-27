@@ -81,7 +81,7 @@ export default function ToolboxSignIn({ mode, talk, roster: initialRoster }: Pro
             style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif' }}
         >
             <Head title="Toolbox Sign-In" />
-            <div className={isIpad ? 'mx-auto flex min-h-screen max-w-3xl flex-col bg-white p-0 shadow-xl' : 'mx-auto flex min-h-screen max-w-md flex-col bg-white'}>
+            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white sm:max-w-xl sm:shadow-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
                 {talk.is_locked ? (
                     <LockedScreen talk={talk} />
                 ) : screen === 'picker' ? (
@@ -191,7 +191,7 @@ function PickerScreen({ talk, roster, onPick }: { talk: Talk; roster: Employee[]
     return (
         <div className="flex h-full flex-1 flex-col">
             <div className="flex flex-col items-center px-6 pt-10 pb-4">
-                <img src="/superior-group-logo.svg" alt="Superior Group" className="h-9 w-auto" />
+                <img src="/logo.png" alt="Superior Group" className="h-10 w-auto sm:h-12" />
                 <h1 className="mt-5 text-xl font-semibold tracking-tight text-zinc-900">Sign in to your toolbox talk</h1>
                 <p className="mt-1 text-sm text-zinc-500">{talk.meeting_date_formatted}</p>
                 {talk.location && <p className="mt-0.5 text-xs text-zinc-400">{talk.location.name}</p>}
@@ -600,19 +600,36 @@ function SignScreen({
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        const ctx = canvas.getContext('2d');
-        ctx?.scale(ratio, ratio);
+
+        const sizeCanvas = () => {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const rect = canvas.getBoundingClientRect();
+            const data = padRef.current?.toData();
+            canvas.width = rect.width * ratio;
+            canvas.height = rect.height * ratio;
+            const ctx = canvas.getContext('2d');
+            ctx?.scale(ratio, ratio);
+            if (padRef.current && data) {
+                padRef.current.clear();
+                padRef.current.fromData(data);
+            }
+        };
+
+        sizeCanvas();
         padRef.current = new SignaturePad(canvas, {
             penColor: 'rgb(15, 23, 42)',
             backgroundColor: 'rgb(255, 255, 255)',
         });
         const handleEnd = () => setEmpty(padRef.current?.isEmpty() ?? true);
         padRef.current.addEventListener('endStroke', handleEnd);
+
+        const ro = new ResizeObserver(() => sizeCanvas());
+        ro.observe(canvas);
+        window.addEventListener('orientationchange', sizeCanvas);
+
         return () => {
+            ro.disconnect();
+            window.removeEventListener('orientationchange', sizeCanvas);
             padRef.current?.removeEventListener('endStroke', handleEnd);
             padRef.current?.off();
         };
