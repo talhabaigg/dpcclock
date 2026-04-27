@@ -3,10 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class ProjectTaskLink extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
+        'uuid',
         'location_id',
         'source_id',
         'target_id',
@@ -22,6 +27,7 @@ class ProjectTaskLink extends Model
     protected static function booted(): void
     {
         static::creating(function (self $link) {
+            $link->uuid ??= (string) Str::uuid();
             $link->created_by ??= auth()->id();
         });
     }

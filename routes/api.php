@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\DrawingController;
 use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\ScheduleSyncController;
 use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\SiteWalkController;
@@ -175,5 +176,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('projects/{project}/links', [ScheduleController::class, 'storeLink'])->name('links.store');
         Route::patch('links/{link}', [ScheduleController::class, 'updateLink'])->name('links.update');
         Route::delete('links/{link}', [ScheduleController::class, 'destroyLink'])->name('links.destroy');
+
+        // WatermelonDB sync (offline-first RN client)
+        Route::get('projects/{project}/sync/pull', [ScheduleSyncController::class, 'pull'])->name('sync.pull');
+        Route::post('projects/{project}/sync/push', [ScheduleSyncController::class, 'push'])->name('sync.push');
     });
 });

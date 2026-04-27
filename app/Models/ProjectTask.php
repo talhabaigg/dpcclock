@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class ProjectTask extends Model
 {
     use SoftDeletes;
 
     protected $fillable = [
+        'uuid',
         'location_id',
         'parent_id',
         'name',
@@ -45,6 +47,7 @@ class ProjectTask extends Model
     protected static function booted(): void
     {
         static::creating(function (self $task) {
+            $task->uuid ??= (string) Str::uuid();
             $task->created_by ??= auth()->id();
             $task->updated_by ??= auth()->id();
         });

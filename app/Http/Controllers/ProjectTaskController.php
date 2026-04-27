@@ -172,8 +172,10 @@ class ProjectTaskController extends Controller
 
     public function destroyAll(Location $location)
     {
-        // Delete all links then all tasks for this location
-        ProjectTaskLink::where('location_id', $location->id)->delete();
+        // Delete all links then all tasks for this location.
+        // forceDelete on links so a fresh import doesn't trip the
+        // (source_id, target_id) unique index against soft-deleted tombstones.
+        ProjectTaskLink::where('location_id', $location->id)->forceDelete();
         $location->projectTasks()->forceDelete();
 
         return response()->json(['success' => true]);
@@ -258,16 +260,36 @@ class ProjectTaskController extends Controller
             }
         }
 
-        // Create dependency links now that all tasks exist
+        // Create dependency links now that all tasks exist.
+        // withTrashed so we restore tombstones rather than collide on the unique index.
         $linksCreated = 0;
         foreach ($pendingLinks as $pl) {
             $sourceId = $wbsMap[$pl['source_wbs']] ?? null;
             $targetId = $wbsMap[$pl['target_wbs']] ?? null;
             if ($sourceId && $targetId && $sourceId !== $targetId) {
-                ProjectTaskLink::updateOrCreate(
-                    ['source_id' => $sourceId, 'target_id' => $targetId],
-                    ['location_id' => $location->id, 'type' => $pl['type'], 'lag_days' => $pl['lag_days'] ?? 0],
-                );
+                $existing = ProjectTaskLink::withTrashed()
+                    ->where('source_id', $sourceId)
+                    ->where('target_id', $targetId)
+                    ->first();
+
+                if ($existing) {
+                    if ($existing->trashed()) {
+                        $existing->restore();
+                    }
+                    $existing->update([
+                        'location_id' => $location->id,
+                        'type' => $pl['type'],
+                        'lag_days' => $pl['lag_days'] ?? 0,
+                    ]);
+                } else {
+                    ProjectTaskLink::create([
+                        'location_id' => $location->id,
+                        'source_id' => $sourceId,
+                        'target_id' => $targetId,
+                        'type' => $pl['type'],
+                        'lag_days' => $pl['lag_days'] ?? 0,
+                    ]);
+                }
                 $linksCreated++;
             }
         }
@@ -769,17 +791,29 @@ class ProjectTaskController extends Controller
             'lag_days' => 'sometimes|integer|min:-365|max:365',
         ]);
 
-        $link = ProjectTaskLink::updateOrCreate(
-            [
-                'source_id' => $validated['source_id'],
-                'target_id' => $validated['target_id'],
-            ],
-            [
+        $link = ProjectTaskLink::withTrashed()
+            ->where('source_id', $validated['source_id'])
+            ->where('target_id', $validated['target_id'])
+            ->first();
+
+        if ($link) {
+            if ($link->trashed()) {
+                $link->restore();
+            }
+            $link->update([
                 'location_id' => $location->id,
                 'type' => $validated['type'],
                 'lag_days' => $validated['lag_days'] ?? 0,
-            ]
-        );
+            ]);
+        } else {
+            $link = ProjectTaskLink::create([
+                'location_id' => $location->id,
+                'source_id' => $validated['source_id'],
+                'target_id' => $validated['target_id'],
+                'type' => $validated['type'],
+                'lag_days' => $validated['lag_days'] ?? 0,
+            ]);
+        }
 
         return response()->json($link->fresh());
     }

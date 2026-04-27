@@ -227,14 +227,29 @@ class ScheduleController extends Controller
             'lag_days' => 'sometimes|integer|min:-365|max:365',
         ]);
 
-        $link = ProjectTaskLink::updateOrCreate(
-            ['source_id' => $validated['source_id'], 'target_id' => $validated['target_id']],
-            [
+        $link = ProjectTaskLink::withTrashed()
+            ->where('source_id', $validated['source_id'])
+            ->where('target_id', $validated['target_id'])
+            ->first();
+
+        if ($link) {
+            if ($link->trashed()) {
+                $link->restore();
+            }
+            $link->update([
                 'location_id' => $project->id,
                 'type' => $validated['type'],
                 'lag_days' => $validated['lag_days'] ?? 0,
-            ]
-        );
+            ]);
+        } else {
+            $link = ProjectTaskLink::create([
+                'location_id' => $project->id,
+                'source_id' => $validated['source_id'],
+                'target_id' => $validated['target_id'],
+                'type' => $validated['type'],
+                'lag_days' => $validated['lag_days'] ?? 0,
+            ]);
+        }
 
         return response()->json($link->fresh(), 201);
     }
