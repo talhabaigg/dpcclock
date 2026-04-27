@@ -1,7 +1,9 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
-import { Check, ChevronRight, Delete, Search, Users, X } from 'lucide-react';
+import { Check, ChevronRight, Search, Users, X } from 'lucide-react';
+import PinNumpad from '@/pages/kiosks/auth/components/numpad';
+import PinInputBox from '@/pages/kiosks/auth/components/pinInputBox';
 
 type Employee = {
     id: number;
@@ -213,7 +215,7 @@ function IpadFrame({
             <div className="flex flex-1 overflow-hidden">
                 <FrameSidebar roster={roster} selected={selected} onPick={onPick} />
                 <main className="flex flex-1 overflow-hidden bg-zinc-50 p-6">
-                    <div className="mx-auto flex h-full w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-sm">
+                    <div className="flex h-full w-full overflow-hidden rounded-2xl bg-white shadow-sm">
                         {flow ? flow : <FrameWelcome talk={talk} roster={roster} />}
                     </div>
                 </main>
@@ -545,15 +547,17 @@ function PinScreen({
     onVerified: (pin: string) => void;
 }) {
     const [verifying, setVerifying] = useState(false);
-    const tap = (digit: string) => {
-        if (verifying || pin.length >= 4) return;
-        setPinError(null);
-        setPin(pin + digit);
-    };
-    const back = () => {
+
+    const handleNumClick = (value: string) => {
         if (verifying) return;
         setPinError(null);
-        setPin(pin.slice(0, -1));
+        if (value === 'DEL') {
+            setPin(pin.slice(0, -1));
+        } else if (value === 'C') {
+            setPin('');
+        } else if (pin.length < 4) {
+            setPin(pin + value);
+        }
     };
 
     useEffect(() => {
@@ -595,8 +599,6 @@ function PinScreen({
         }
     }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-
     return (
         <div className="flex h-full flex-1 flex-col">
             <header className="flex items-center justify-between px-4 pt-6 pb-4">
@@ -612,42 +614,12 @@ function PinScreen({
                 </span>
                 <p className="mt-3 text-base font-medium text-zinc-900">{employee.name}</p>
             </div>
-            <div className={`flex justify-center gap-3 px-6 pb-2 ${shake ? 'animate-[shake_0.35s]' : ''}`}>
-                {[0, 1, 2, 3].map((i) => (
-                    <span
-                        key={i}
-                        className={`h-3.5 w-3.5 rounded-full transition ${
-                            pin.length > i ? 'bg-zinc-900' : 'bg-zinc-200'
-                        } ${pinError ? 'bg-red-500' : ''}`}
-                    />
-                ))}
+            <div className={`flex justify-center px-6 pb-2 ${shake ? 'animate-[shake_0.35s]' : ''}`}>
+                <PinInputBox pin={pin} error={!!pinError} />
             </div>
             <div className="min-h-[20px] px-6 pt-2 text-center text-xs font-medium text-red-600">{pinError}</div>
-            <div className="mt-auto px-6 pb-8">
-                <div className="mx-auto grid w-full max-w-xs grid-cols-3 gap-3">
-                    {keys.map((k) => (
-                        <button
-                            key={k}
-                            onClick={() => tap(k)}
-                            className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200"
-                        >
-                            {k}
-                        </button>
-                    ))}
-                    <div />
-                    <button
-                        onClick={() => tap('0')}
-                        className="rounded-2xl bg-zinc-100 py-5 text-2xl font-medium text-zinc-900 transition active:bg-zinc-200"
-                    >
-                        0
-                    </button>
-                    <button
-                        onClick={back}
-                        className="flex items-center justify-center rounded-2xl py-5 text-zinc-500 transition active:bg-zinc-100"
-                    >
-                        <Delete className="h-5 w-5" />
-                    </button>
-                </div>
+            <div className="mt-auto flex justify-center px-6 pb-8">
+                <PinNumpad onClick={handleNumClick} disabled={verifying} />
             </div>
             <style>{`@keyframes shake {0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
         </div>
