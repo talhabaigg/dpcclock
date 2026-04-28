@@ -437,7 +437,7 @@ export default function VariationPricingTab({
                                                     !selectedConditionId ||
                                                     !conditionQty ||
                                                     parseFloat(conditionQty) <= 0 ||
-                                                    loading
+                                                    http.processing
                                                 }
                                                 className="h-9 gap-1.5"
                                             >
@@ -523,7 +523,7 @@ export default function VariationPricingTab({
                                                 onClick={handleAddManual}
                                                 size="sm"
                                                 variant="outline"
-                                                disabled={!manualDescription || !manualQty || loading}
+                                                disabled={!manualDescription || !manualQty || http.processing}
                                                 className="h-9 w-full gap-1.5 sm:w-auto"
                                             >
                                                 <Plus className="h-3.5 w-3.5" />

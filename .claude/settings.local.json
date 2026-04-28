@@ -106,7 +106,8 @@
       "WebFetch(domain:superior-group-company.monday.com)",
       "Bash(npx impeccable *)",
       "mcp__a91a8eb0-c95f-48b8-8566-bf1d9e19df9d__create_item",
-      "mcp__a91a8eb0-c95f-48b8-8566-bf1d9e19df9d__create_update"
+      "mcp__a91a8eb0-c95f-48b8-8566-bf1d9e19df9d__create_update",
+      "Bash(xargs basename *)"
     ]
   }
 }
