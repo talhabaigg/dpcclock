@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn, fmtCurrency, round2 } from '@/lib/utils';
 import { api, ApiError } from '@/lib/api';
@@ -49,7 +48,6 @@ export interface PricingItem {
     } | null;
 }
 
-const UNIT_OPTIONS = ['EA', 'LM', 'm2', 'm3', 'm', 'HR', 'DAY', 'LOT'];
 
 interface VariationPricingTabProps {
     variationId?: number;
@@ -342,8 +340,15 @@ export default function VariationPricingTab({
             sort_order: pricingItems.length + 1,
         };
         onPricingItemsChange([...pricingItems, newItem]);
-        // Auto-start editing the new row
-        setTimeout(() => startEditing(pricingItems.length), 0);
+        // Start editing with fresh values directly
+        const newIdx = pricingItems.length;
+        setEditingIdx(newIdx);
+        setEditValues({
+            description: '',
+            qty: '1',
+            labour_cost: '0',
+            material_cost: '0',
+        });
     };
 
     const handleDelete = (item: PricingItem, index: number) => {
@@ -398,7 +403,8 @@ export default function VariationPricingTab({
 
     const qtyFetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-    const handleQtyChangeForCondition = useCallback((conditionId: number, qty: number, rowIdx: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleQtyChangeForCondition = useCallback((conditionId: number, qty: number, _rowIdx: number) => {
         clearTimeout(qtyFetchTimerRef.current);
         qtyFetchTimerRef.current = setTimeout(() => {
             if (!locationId) return;

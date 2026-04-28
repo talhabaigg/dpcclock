@@ -548,7 +548,7 @@ class DocumentSigningService
         ]);
 
         // Attach uploaded file before sending notification
-        if ($uploadedFilePath && file_exists($uploadedFilePath)) {
+        if ($uploadedFilePath && is_file($uploadedFilePath)) {
             $signingRequest->addMedia($uploadedFilePath)
                 ->preservingOriginal()
                 ->toMediaCollection('uploaded_document');

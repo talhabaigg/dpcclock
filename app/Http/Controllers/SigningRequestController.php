@@ -635,11 +635,19 @@ class SigningRequestController extends Controller
             ? \App\Models\User::findOrFail($validated['internal_signer_user_id'])
             : null;
 
-        // Store attachments to temp for bulk reuse
+        // Store attachments to S3 temp for bulk reuse
         $attachmentPaths = [];
         foreach ($attachments as $file) {
+            $storedPath = $file->store('temp-uploads', 's3');
+
+            if ($storedPath === false) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'attachments' => 'Failed to store uploaded file: ' . $file->getClientOriginalName(),
+                ]);
+            }
+
             $attachmentPaths[] = [
-                'path' => $file->store('temp-uploads', 'local'),
+                'path' => $storedPath,
                 'name' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
             ];
         }
@@ -795,21 +803,28 @@ class SigningRequestController extends Controller
             // 3. Attachments (always info-only)
             foreach ($attachmentPaths as $att) {
                 if (! $recipient['email']) continue;
+
+                // Download from S3 to a local temp file for Spatie addMedia
+                $tempFile = tempnam(sys_get_temp_dir(), 'att_');
+                file_put_contents($tempFile, \Illuminate\Support\Facades\Storage::disk('s3')->get($att['path']));
+
                 $this->signingService->createAndDeliver(
                     admin: $request->user(),
                     recipientName: $recipient['name'],
                     recipientEmail: $recipient['email'],
                     signable: $recipient['signable'],
                     documentTitle: $att['name'],
-                    uploadedFilePath: \Illuminate\Support\Facades\Storage::disk('local')->path($att['path']),
+                    uploadedFilePath: $tempFile,
                 );
+
+                @unlink($tempFile);
                 $created++;
             }
         }
 
-        // Cleanup temp files
+        // Cleanup S3 temp files
         foreach ($attachmentPaths as $att) {
-            \Illuminate\Support\Facades\Storage::disk('local')->delete($att['path']);
+            \Illuminate\Support\Facades\Storage::disk('s3')->delete($att['path']);
         }
 
         if ($requiresSig) {

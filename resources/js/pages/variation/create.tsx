@@ -1,12 +1,10 @@
 import { ConditionManager } from '@/components/condition-manager';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
 import { cn, fmtCurrency } from '@/lib/utils';
@@ -16,22 +14,18 @@ import { api, ApiError } from '@/lib/api';
 import { format } from 'date-fns';
 import {
     AlertCircle,
-    ArrowLeft,
     CalendarDays,
     Check,
     ChevronsUpDown,
     ClipboardList,
     DollarSign,
     GripHorizontal,
-    Package,
     Plus,
     Save,
     Send,
     Settings,
     Trash2,
     TrendingUp,
-    Wrench,
-    Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -108,7 +102,8 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create', href: '/variations/create' },
 ];
 
-const VariationCreate = ({ locations, costCodes, variation, conditions = [], selectedLocationId, changeTypes = [] }: VariationCreateProps) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const VariationCreate = ({ locations, costCodes, variation, conditions = [], selectedLocationId }: VariationCreateProps) => {
     const gridRef = useRef<VariationLineGridRef>(null);
     const { data, setData, post, errors } = useForm({
         location_id: variation ? String(variation.location_id) : selectedLocationId ? String(selectedLocationId) : '',
@@ -142,9 +137,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const [saving, setSaving] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
 
-    // --- Quick Gen state ---
-    const [quickGenOpen, setQuickGenOpen] = useState(false);
-    const [genAmount, setGenAmount] = useState('');
 
     // --- Grid resize state ---
     const [gridHeight, setGridHeight] = useState(() => localStorage.getItem('variationGridSize') || '500px');
@@ -179,11 +171,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const hasAutoNumbering = selectedLocation?.variation_next_number != null && variation?.status !== 'sent';
     const detailsComplete = !!(data.location_id && (hasAutoNumbering || data.co_number.trim()) && data.description.trim());
 
-    const gridTotals = useMemo(() => {
-        const totalCost = data.line_items.reduce((sum: number, i: any) => sum + (Number(i.total_cost) || 0), 0);
-        const totalRevenue = data.line_items.reduce((sum: number, i: any) => sum + (Number(i.revenue) || 0), 0);
-        return { totalCost, totalRevenue };
-    }, [data.line_items]);
 
     const pricingTotals = useMemo(() => {
         const labour = pricingItems.reduce((sum, i) => sum + (i.labour_cost || 0), 0);
@@ -334,7 +321,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
             const hasUnsaved = pricingItems.some((item) => !item.id);
             if (!varId && hasUnsaved) {
                 if (!data.location_id || !data.co_number || !data.description) {
-                    toast.error('Please fill in Location, Variation Number, and Description to save');
+                    toast.error('Please fill in Project, Variation Number, and Description to save');
                     setSaving(false);
                     return;
                 }
@@ -373,49 +360,6 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
         }
     };
 
-    // --- Quick Gen ---
-    const generatePrelimLines = (type: 'LAB' | 'MAT') => {
-        if (!genAmount || !data.location_id) {
-            toast.error('Please select a location and enter an amount.');
-            return;
-        }
-        setQuickGenOpen(false);
-
-        const onCostData = costData.map((code) => {
-            const percentRaw = code.pivot?.variation_ratio;
-            const prelimTypeRaw = code.pivot?.prelim_type ?? '';
-            const prelimType = String(prelimTypeRaw).trim().toUpperCase();
-            const costType = costCodes.find((costCode) => costCode.code === code.code)?.cost_type?.code || '';
-            return {
-                cost_item: code.code,
-                cost_type: costType,
-                percent: (percentRaw ?? 0) / 100 || 0,
-                prelim_type: prelimType,
-                description: code.description,
-            };
-        });
-
-        const filtered = onCostData.filter((item) => item.prelim_type.startsWith(type));
-        const baseAmount = parseFloat(genAmount);
-
-        const newLines = filtered.map((item, index) => {
-            const lineAmount = +(baseAmount * item.percent).toFixed(2);
-            return {
-                line_number: data.line_items.length + index + 1,
-                cost_item: item.cost_item,
-                cost_type: item.cost_type,
-                description: item.description,
-                qty: 1,
-                unit_cost: lineAmount,
-                total_cost: lineAmount,
-                revenue: 0,
-            };
-        });
-
-        setData('line_items', [...data.line_items, ...newLines]);
-        setGenAmount('');
-        toast.success(`Generated ${newLines.length} ${type === 'LAB' ? 'labour' : 'material'} lines`);
-    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -433,14 +377,12 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
 
                 <aside
                     className={cn(
-                        'border-r bg-muted/30 flex-shrink-0 transition-transform duration-200',
-                        // Mobile: fixed overlay. Desktop: static in flex row
-                        'fixed inset-y-0 left-0 z-40 w-64',
+                        'border-r bg-background flex-shrink-0 transition-transform duration-200',
+                        'fixed inset-y-0 left-0 z-40 w-56',
                         'lg:static lg:inset-auto lg:z-auto lg:translate-x-0',
                         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
                     )}
                 >
-                    {/* Mobile overlay backdrop */}
                     {sidebarOpen && (
                         <div
                             className="fixed inset-0 z-[-1] bg-black/20 lg:hidden"
@@ -449,39 +391,20 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                     )}
 
                     <div className="flex h-full flex-col overflow-hidden">
-                        {/* Sidebar header */}
-                        <div className="border-b px-4 py-3">
-                            <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => window.history.back()}>
-                                    <ArrowLeft className="h-4 w-4" />
-                                </Button>
-                                <div>
-                                    <h2 className="text-sm font-semibold tracking-tight leading-tight">
-                                        {savedVariationId ? 'Edit Variation' : 'New Variation'}
-                                    </h2>
-                                    <p className="text-muted-foreground text-xs">
-                                        {savedVariationId ? 'Update details & lines' : 'Fill sections below'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Step navigation */}
-                        <nav className="flex-1 overflow-y-auto px-2 py-3">
-                            <ul className="space-y-1">
+                        {/* Steps */}
+                        <nav className="flex-1 overflow-y-auto px-2 py-2">
+                            <ul className="space-y-0.5">
                                 {STEPS.map((step) => {
                                     const isActive = activeSection === step.id;
                                     const isComplete = stepStatus[step.id];
-                                    const Icon = step.icon;
 
-                                    // Step-specific meta
                                     let meta: string | null = null;
                                     if (step.id === 'details' && selectedLocation) {
                                         meta = selectedLocation.name;
                                     } else if (step.id === 'pricing' && pricingItems.length > 0) {
                                         meta = `${pricingItems.length} items · ${fmtCurrency(pricingTotals.total)}`;
                                     } else if (step.id === 'client' && clientTotals.totalSell > 0) {
-                                        meta = `Margin ${clientTotals.marginPct.toFixed(0)}%`;
+                                        meta = `${clientTotals.marginPct.toFixed(0)}% margin`;
                                     } else if (step.id === 'premier' && data.line_items.some((i: any) => i.cost_item)) {
                                         meta = `${data.line_items.length} lines`;
                                     }
@@ -492,36 +415,17 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                 type="button"
                                                 onClick={() => scrollToSection(step.id)}
                                                 className={cn(
-                                                    'group flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                                                    'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors',
                                                     isActive
-                                                        ? 'bg-primary/10 text-primary'
-                                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                                        ? 'bg-muted font-medium text-foreground'
+                                                        : 'text-muted-foreground hover:text-foreground',
                                                 )}
                                             >
-                                                {/* Status indicator */}
-                                                <span
-                                                    className={cn(
-                                                        'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all',
-                                                        isComplete && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
-                                                        isActive && !isComplete && 'bg-primary text-primary-foreground',
-                                                        !isActive && !isComplete && 'border border-muted-foreground/30',
-                                                    )}
-                                                >
-                                                    {isComplete ? (
-                                                        <Check className="h-3.5 w-3.5" />
-                                                    ) : (
-                                                        <Icon className="h-3.5 w-3.5" />
-                                                    )}
-                                                </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-sm font-medium leading-tight">{step.label}</div>
-                                                    <div className={cn(
-                                                        'mt-0.5 truncate text-xs leading-tight',
-                                                        isActive ? 'text-primary/70' : 'text-muted-foreground',
-                                                    )}>
-                                                        {meta || step.description}
-                                                    </div>
-                                                </div>
+                                                {isComplete && <Check className="h-3 w-3 shrink-0" />}
+                                                <span className="truncate">{step.label}</span>
+                                                {meta && (
+                                                    <span className="ml-auto truncate text-[10px] text-muted-foreground">{meta}</span>
+                                                )}
                                             </button>
                                         </li>
                                     );
@@ -529,83 +433,39 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             </ul>
                         </nav>
 
-                        {/* Live summary */}
-                        <div className="border-t px-4 py-3 space-y-2">
-                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Summary
-                            </div>
-                            <div className="space-y-1.5 text-xs">
-                                {selectedLocation && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Location</span>
-                                        <span className="font-medium truncate max-w-[120px]">{selectedLocation.name}</span>
-                                    </div>
-                                )}
-                                {data.co_number && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Var #</span>
-                                        <span className="font-medium font-mono">{data.co_number}</span>
-                                    </div>
-                                )}
-                                {data.type && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Type</span>
-                                        <span className="font-medium capitalize">{data.type}</span>
-                                    </div>
-                                )}
-                                {pricingTotals.total > 0 && (
-                                    <>
-                                        <Separator />
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-muted-foreground">Cost</span>
-                                            <span className="font-semibold tabular-nums">{fmtCurrency(pricingTotals.total)}</span>
-                                        </div>
-                                    </>
-                                )}
-                                {clientTotals.totalSell > 0 && (
-                                    <div className="flex items-center justify-between">
+                        {/* Summary */}
+                        <div className="border-t px-3 py-2.5 space-y-1 text-xs">
+                            {selectedLocation && (
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Project</span>
+                                    <span className="truncate max-w-[100px] font-medium">{selectedLocation.name}</span>
+                                </div>
+                            )}
+                            {pricingTotals.total > 0 && (
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Cost</span>
+                                    <span className="font-medium tabular-nums">{fmtCurrency(pricingTotals.total)}</span>
+                                </div>
+                            )}
+                            {clientTotals.totalSell > 0 && (
+                                <>
+                                    <div className="flex justify-between">
                                         <span className="text-muted-foreground">Sell</span>
-                                        <span className="font-semibold tabular-nums text-blue-600 dark:text-blue-400">
-                                            {fmtCurrency(clientTotals.totalSell)}
-                                        </span>
+                                        <span className="font-medium tabular-nums">{fmtCurrency(clientTotals.totalSell)}</span>
                                     </div>
-                                )}
-                                {clientTotals.margin !== 0 && clientTotals.totalSell > 0 && (
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex justify-between">
                                         <span className="text-muted-foreground">Margin</span>
-                                        <span className={cn(
-                                            'font-semibold tabular-nums',
-                                            clientTotals.margin >= 0
-                                                ? 'text-emerald-600 dark:text-emerald-400'
-                                                : 'text-red-600 dark:text-red-400',
-                                        )}>
-                                            {clientTotals.marginPct.toFixed(0)}%
-                                        </span>
+                                        <span className="font-medium tabular-nums">{clientTotals.marginPct.toFixed(0)}%</span>
                                     </div>
-                                )}
-                                {gridTotals.totalCost > 0 && (
-                                    <>
-                                        <Separator />
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-muted-foreground">Premier Cost</span>
-                                            <span className="font-semibold tabular-nums">{fmtCurrency(gridTotals.totalCost)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-muted-foreground">Revenue</span>
-                                            <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                {fmtCurrency(gridTotals.totalRevenue)}
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
+                                </>
+                            )}
                         </div>
 
-                        {/* Save button in sidebar */}
-                        <div className="border-t px-4 py-3">
-                            <Button onClick={handleSubmit} disabled={saving} className="w-full" size="sm">
-                                <Save className="mr-1.5 h-4 w-4" />
-                                {saving ? 'Saving...' : variation?.id ? 'Update Variation' : 'Save Variation'}
+                        {/* Save */}
+                        <div className="border-t px-3 py-2.5">
+                            <Button onClick={handleSubmit} disabled={saving} className="w-full h-8 text-xs" size="sm">
+                                <Save className="mr-1.5 h-3.5 w-3.5" />
+                                {saving ? 'Saving...' : variation?.id ? 'Update' : 'Save'}
                             </Button>
                         </div>
                     </div>
@@ -697,7 +557,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             </div>
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
-                                    <Label>Location</Label>
+                                    <Label className="font-normal">Project</Label>
                                     <Popover open={locationOpen} onOpenChange={setLocationOpen}>
                                         <PopoverTrigger asChild>
                                             <Button
@@ -707,15 +567,15 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                 className="w-full min-w-0 justify-between overflow-hidden font-normal"
                                                 disabled={!!selectedLocationId}
                                             >
-                                                <span className="min-w-0 truncate">{selectedLocation?.name || 'Search locations...'}</span>
+                                                <span className="min-w-0 truncate">{selectedLocation?.name || 'Search projects...'}</span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-(--anchor-width) p-0" align="start">
                                             <Command>
-                                                <CommandInput placeholder="Search locations..." />
+                                                <CommandInput placeholder="Search projects..." />
                                                 <CommandList>
-                                                    <CommandEmpty>No location found.</CommandEmpty>
+                                                    <CommandEmpty>No project found.</CommandEmpty>
                                                     <CommandGroup>
                                                         {sortedLocations.map((loc) => (
                                                             <CommandItem
@@ -744,7 +604,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="description">Description</Label>
+                                    <Label htmlFor="description" className="font-normal">Description</Label>
                                     <Input
                                         id="description"
                                         value={data.description}
@@ -753,9 +613,9 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     />
                                 </div>
 
-                                {/* Status */}
+                                {/* Change Type */}
                                 <div className="space-y-1.5">
-                                    <Label>Status</Label>
+                                    <Label className="font-normal">Type</Label>
                                     <div className="flex items-center gap-2">
                                         <div className="inline-flex rounded-md border">
                                             {([
