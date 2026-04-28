@@ -1,5 +1,5 @@
 import { CostCode } from '@/pages/purchasing/types';
-import { shadcnDarkTheme, shadcnLightTheme } from '@/themes/ag-grid-theme';
+import { compactDarkTheme, compactLightTheme } from './compact-theme';
 import { AllCommunityModule, CellValueChangedEvent, ModuleRegistry } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
@@ -25,7 +25,7 @@ export interface VariationLineGridRef {
     getSelectedCount: () => number;
 }
 const isDarkMode = document.documentElement.classList.contains('dark');
-const appliedTheme = isDarkMode ? shadcnDarkTheme : shadcnLightTheme;
+const appliedTheme = isDarkMode ? compactDarkTheme : compactLightTheme;
 
 const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProps>(
     ({ lineItems, costCodes, costTypes, onDataChange, onSelectionChange, height }, ref) => {
@@ -148,6 +148,13 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
             return createColumnDefs(costCodes, costTypes, handleDeleteRow, canDelete);
         }, [costCodes, costTypes, handleDeleteRow, canDelete]);
 
+        const onGridReady = useCallback(() => {
+            const gridApi = gridRef.current?.api;
+            if (gridApi) {
+                gridApi.sizeColumnsToFit();
+            }
+        }, []);
+
         // Grid options
         const gridOptions = useMemo(() => {
             return {
@@ -155,8 +162,12 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
                 onCellValueChanged,
                 getRowStyle,
                 onSelectionChanged,
+                onGridReady,
+                onGridSizeChanged: () => {
+                    gridRef.current?.api?.sizeColumnsToFit();
+                },
             };
-        }, [onCellValueChanged, onSelectionChanged]);
+        }, [onCellValueChanged, onSelectionChanged, onGridReady]);
 
         // Expose methods to parent via ref
         useImperativeHandle(ref, () => ({
@@ -226,7 +237,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
         }));
 
         return (
-            <div className="w-full" style={{ height: height || '500px', minHeight: '300px' }}>
+            <div className="w-full [&_.ag-checkbox-input-wrapper]:ml-2 [&_.ag-cell-editor_input]:text-xs [&_.ag-text-field-input]:text-xs [&_.ag-overlay-no-rows-center]:text-xs" style={{ height: height || '500px', minHeight: '300px' }}>
                 <AgGridReact ref={gridRef} theme={appliedTheme} rowData={internalRowData} columnDefs={columnDefs} {...gridOptions} />
             </div>
         );

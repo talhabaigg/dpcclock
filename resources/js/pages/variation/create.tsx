@@ -27,6 +27,7 @@ import {
     Plus,
     Save,
     Send,
+    Settings,
     Trash2,
     TrendingUp,
     Wrench,
@@ -128,18 +129,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                   total_cost: item.total_cost,
                   revenue: item.revenue,
               }))
-            : [
-                  {
-                      line_number: 1,
-                      cost_item: '',
-                      cost_type: '',
-                      description: '',
-                      qty: 1,
-                      unit_cost: 0,
-                      total_cost: 0,
-                      revenue: 0,
-                  },
-              ],
+            : [],
     });
 
     // --- Core state ---
@@ -809,14 +799,21 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             data-section="pricing"
                             className="scroll-mt-4"
                         >
-                            <h2 className="mb-4 text-sm font-bold">Variation Pricing</h2>
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-sm font-bold">Variation Pricing</h2>
+                                {data.location_id && (
+                                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setShowConditionManager(true)}>
+                                        <Settings className="h-3 w-3" />
+                                        Conditions
+                                    </Button>
+                                )}
+                            </div>
                             <VariationPricingTab
                                 variationId={savedVariationId}
                                 conditions={localConditions}
                                 locationId={data.location_id}
                                 pricingItems={pricingItems}
                                 onPricingItemsChange={setPricingItems}
-                                onManageConditions={() => setShowConditionManager(true)}
                             />
                         </section>
 
@@ -846,109 +843,34 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             data-section="premier"
                             className="scroll-mt-4"
                         >
-                            <h2 className="mb-4 text-sm font-bold">Premier Variation</h2>
-                            <PremierVariationTab
-                                variationId={savedVariationId}
-                                locationId={data.location_id}
-                                pricingItems={pricingItems}
-                                lineItems={data.line_items}
-                                onLineItemsChange={(items) => setData('line_items', items)}
-                            />
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-sm font-bold">Premier Variation</h2>
+                                <PremierVariationTab
+                                    variationId={savedVariationId}
+                                    locationId={data.location_id}
+                                    pricingItems={pricingItems}
+                                    lineItems={data.line_items}
+                                    onLineItemsChange={(items) => setData('line_items', items)}
+                                />
+                            </div>
 
                             {/* Line Items Grid */}
-                            <div className="mt-6 rounded-lg border">
-                                <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <h3 className="flex items-center gap-2 text-base font-semibold">
-                                            <ClipboardList className="h-4 w-4" />
-                                            Line Items
-                                            <span className="bg-muted text-muted-foreground ml-1 rounded-md px-2 py-0.5 text-xs font-normal">
-                                                {selectedCount > 0
-                                                    ? `${selectedCount} selected`
-                                                    : `${data.line_items.length} total`}
-                                            </span>
-                                        </h3>
-                                        <p className="text-muted-foreground mt-0.5 hidden text-sm sm:block">Premier line items for export.</p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Dialog open={quickGenOpen} onOpenChange={setQuickGenOpen}>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm">
-                                                    <Zap className="mr-1.5 h-3.5 w-3.5" />
-                                                    <span className="hidden sm:inline">Quick Gen</span>
-                                                </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="sm:max-w-md">
-                                                <DialogHeader>
-                                                    <DialogTitle>Quick Generate</DialogTitle>
-                                                    <DialogDescription>
-                                                        Generate preliminary line items from a base amount.
-                                                    </DialogDescription>
-                                                </DialogHeader>
-
-                                                <div className="space-y-4 py-4">
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="gen-amount">Base Amount</Label>
-                                                        <Input
-                                                            id="gen-amount"
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            value={genAmount}
-                                                            onChange={(e) => setGenAmount(e.target.value.replace(/,/g, ''))}
-                                                            placeholder="0.00"
-                                                        />
-                                                    </div>
-
-                                                    <Separator />
-
-                                                    <div className="space-y-2">
-                                                        <Label>Generation Type</Label>
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <Button
-                                                                variant="outline"
-                                                                onClick={() => generatePrelimLines('LAB')}
-                                                                className="h-auto flex-col gap-1 py-4"
-                                                            >
-                                                                <Wrench className="h-5 w-5" />
-                                                                <span className="text-sm font-medium">Labour</span>
-                                                                <span className="text-muted-foreground text-xs">
-                                                                    Generate labour costs
-                                                                </span>
-                                                            </Button>
-
-                                                            <Button
-                                                                variant="outline"
-                                                                onClick={() => generatePrelimLines('MAT')}
-                                                                className="h-auto flex-col gap-1 py-4"
-                                                            >
-                                                                <Package className="h-5 w-5" />
-                                                                <span className="text-sm font-medium">Material</span>
-                                                                <span className="text-muted-foreground text-xs">
-                                                                    Generate material costs
-                                                                </span>
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </DialogContent>
-                                        </Dialog>
-                                        <Button onClick={addRow} size="sm" variant="outline">
-                                            <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                            Add Row
-                                        </Button>
+                            <div className="overflow-hidden rounded-lg border">
+                                {selectedCount > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-1.5 border-b">
+                                        <span className="text-xs text-muted-foreground">{selectedCount} selected</span>
                                         <Button
                                             onClick={deleteSelectedRows}
                                             size="sm"
-                                            variant="outline"
-                                            disabled={selectedCount === 0}
+                                            variant="destructive"
+                                            className="h-6 gap-1 px-2 text-xs"
                                         >
-                                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                            Delete
-                                            {selectedCount > 0 && <span className="ml-1">({selectedCount})</span>}
+                                            <Trash2 className="h-3 w-3" />
+                                            Delete ({selectedCount})
                                         </Button>
                                     </div>
-                                </div>
-                                <div ref={resizeRef} className="px-4">
+                                )}
+                                <div ref={resizeRef}>
                                     <VariationLineGrid
                                         ref={gridRef}
                                         lineItems={data.line_items}
@@ -959,36 +881,27 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                         height={gridHeight}
                                     />
                                 </div>
-                                <div
-                                    onMouseDown={handleResizeStart}
-                                    className={cn(
-                                        'group flex w-full cursor-ns-resize items-center justify-center py-1 transition-all',
-                                        'hover:bg-muted',
-                                        isResizing && 'bg-muted',
-                                    )}
-                                    title="Drag to resize"
-                                >
-                                    <GripHorizontal className="text-muted-foreground h-4 w-4" />
-                                </div>
-                                {/* Totals Footer */}
-                                <div className="bg-muted/50 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border-t px-4 py-3">
-                                    <div className="flex items-center gap-4 text-sm sm:gap-6">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-muted-foreground text-xs font-medium">Total Cost:</span>
-                                            <span className="font-semibold tabular-nums">{fmtCurrency(gridTotals.totalCost)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-muted-foreground text-xs font-medium">Revenue:</span>
-                                            <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                {fmtCurrency(gridTotals.totalRevenue)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <span className="text-muted-foreground text-xs">
-                                        {data.line_items.length} {data.line_items.length === 1 ? 'line' : 'lines'}
-                                    </span>
-                                </div>
                             </div>
+                            <div
+                                onMouseDown={handleResizeStart}
+                                className={cn(
+                                    'group flex w-full cursor-ns-resize items-center justify-center py-0.5 transition-all',
+                                    'hover:bg-muted rounded',
+                                    isResizing && 'bg-muted',
+                                )}
+                                title="Drag to resize"
+                            >
+                                <GripHorizontal className="text-muted-foreground h-3.5 w-3.5" />
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={addRow}
+                                className="mt-2 h-6 gap-1 px-2 text-xs"
+                            >
+                                <Plus className="h-3 w-3" />
+                                Row
+                            </Button>
                         </section>
 
                         {/* Bottom spacer for scroll tracking */}

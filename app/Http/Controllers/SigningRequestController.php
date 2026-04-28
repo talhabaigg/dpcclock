@@ -1293,6 +1293,11 @@ class SigningRequestController extends Controller
     {
         $signingRequest = $this->findByToken($token);
 
+        // If already signed (e.g. double-submit), redirect to thank-you instead of showing expired
+        if ($signingRequest->isSigned()) {
+            return $this->redirectToNextOrThankYou($signingRequest, $token);
+        }
+
         $validated = $request->validate([
             'signature_data' => 'required|string',
             'initials_data' => 'nullable|string',
@@ -1308,6 +1313,12 @@ class SigningRequestController extends Controller
                 $validated['initials_data'] ?? null,
             );
         } catch (\RuntimeException $e) {
+            // Check again - a concurrent request may have completed signing
+            $signingRequest->refresh();
+            if ($signingRequest->isSigned()) {
+                return $this->redirectToNextOrThankYou($signingRequest, $token);
+            }
+
             return view('signing.expired', ['message' => $e->getMessage()]);
         }
 

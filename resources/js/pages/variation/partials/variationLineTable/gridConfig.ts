@@ -24,12 +24,12 @@ export const getGridOptions = (): GridOptions => {
         enableCellTextSelection: true,
         ensureDomOrder: true,
         animateRows: true,
-        rowHeight: 44,
-        headerHeight: 40,
+        rowHeight: 28,
+        headerHeight: 28,
         suppressMenuHide: true,
         suppressContextMenu: false,
         enableBrowserTooltips: true,
-        suppressHorizontalScroll: false,
+        suppressHorizontalScroll: true,
         popupParent: document.body,
     };
 };

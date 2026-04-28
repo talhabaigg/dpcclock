@@ -1,4 +1,4 @@
-import { CostCodeSelector } from '@/pages/purchasing/costCodeSelector';
+import { CostCodeSearchEditor } from './cellEditors/CostCodeSearchEditor';
 import { CostCode } from '@/pages/purchasing/types';
 import { ColDef } from 'ag-grid-community';
 import { CostTypeSearchEditor } from './cellEditors/CostTypeSearchEditor';
@@ -12,8 +12,8 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         {
             field: 'line_number',
             headerName: '#',
-            width: 70,
-            maxWidth: 80,
+            width: 45,
+            maxWidth: 50,
             flex: 0,
             editable: false,
             sortable: false,
@@ -21,32 +21,32 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             cellStyle: () => ({
                 color: isDark() ? '#a1a1aa' : '#71717a',
                 fontWeight: 500,
-                fontSize: '12px',
             }),
         },
         {
             field: 'cost_item',
             headerName: 'Cost Item',
-            flex: 2,
-            minWidth: 200,
+            flex: 1.5,
+            minWidth: 120,
             editable: true,
-            cellEditor: CostCodeSelector,
+            cellEditor: CostCodeSearchEditor,
             cellEditorParams: (params: any) => ({
                 value: params.value || '',
                 costCodes: costCodes,
                 onValueChange: params.onValueChange,
             }),
             valueFormatter: (params) => {
-                if (!params.value) return 'Select Cost Item...';
+                if (!params.value) return 'Select cost item...';
                 const costCode = costCodes.find((code) => code.code === params.value);
                 return costCode ? `${costCode.code} - ${costCode.description}` : params.value;
             },
+            cellStyle: (params) => params.value ? {} : { color: isDark() ? '#52525b' : '#a1a1aa' },
         },
         {
             field: 'cost_type',
-            headerName: 'Cost Type',
-            flex: 1.5,
-            minWidth: 150,
+            headerName: 'Type',
+            flex: 0.8,
+            minWidth: 70,
             editable: true,
             cellEditor: CostTypeSearchEditor,
             cellEditorParams: (params: any) => ({
@@ -55,44 +55,32 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 onValueChange: params.onValueChange,
             }),
             valueFormatter: (params) => {
-                if (!params.value) return 'Select Cost Type...';
-                const costType = costTypes.find((type) => type.value === params.value);
-                return costType ? costType.description : params.value;
+                if (!params.value) return 'Type...';
+                return params.value;
             },
+            cellStyle: (params) => params.value ? {} : { color: isDark() ? '#52525b' : '#a1a1aa' },
         },
         {
             field: 'description',
             headerName: 'Description',
-            flex: 2.5,
-            minWidth: 200,
+            flex: 2,
+            minWidth: 140,
             editable: true,
-            cellEditor: 'agLargeTextCellEditor',
-            cellEditorPopup: true,
-            cellEditorParams: {
-                maxLength: 500,
-                rows: 3,
-                cols: 50,
-            },
-            valueFormatter: (params) => {
-                if (!params.value) return 'Enter Description...';
-                return params.value;
-            },
-            wrapText: true,
+            cellEditor: 'agTextCellEditor',
+            valueFormatter: (params) => params.value || 'Enter description...',
+            cellStyle: (params) => params.value ? {} : { color: isDark() ? '#52525b' : '#a1a1aa' },
+            wrapText: false,
             autoHeight: false,
-            cellClass: 'ag-cell-wrap-text',
         },
         {
             field: 'qty',
             headerName: 'Qty',
-            flex: 0.8,
-            minWidth: 90,
-            maxWidth: 120,
+            flex: 0.6,
+            minWidth: 60,
+            maxWidth: 80,
             editable: (params) => params.data?.cost_type !== 'REV',
             cellEditor: 'agNumberCellEditor',
-            cellEditorParams: {
-                min: 0,
-                precision: 2,
-            },
+            cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: (params) => {
                 if (params.value == null) return '';
                 return parseFloat(params.value).toFixed(2);
@@ -101,25 +89,22 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         },
         {
             field: 'unit_cost',
-            headerName: 'Unit Cost',
-            flex: 1,
-            minWidth: 110,
-            maxWidth: 140,
+            headerName: 'Unit $',
+            flex: 0.8,
+            minWidth: 75,
+            maxWidth: 100,
             editable: (params) => params.data?.cost_type !== 'REV',
             cellEditor: 'agNumberCellEditor',
-            cellEditorParams: {
-                min: 0,
-                precision: 2,
-            },
+            cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: currencyFormatter,
             type: 'numericColumn',
         },
         {
             field: 'waste_ratio',
-            headerName: 'Waste %',
-            flex: 0.7,
-            minWidth: 85,
-            maxWidth: 100,
+            headerName: 'W%',
+            flex: 0.5,
+            minWidth: 50,
+            maxWidth: 65,
             editable: false,
             valueFormatter: (params) => {
                 if (params.value == null || params.value === '' || params.value === 0) return '-';
@@ -132,16 +117,13 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         },
         {
             field: 'total_cost',
-            headerName: 'Total Cost',
-            flex: 1,
-            minWidth: 120,
-            maxWidth: 150,
+            headerName: 'Total',
+            flex: 0.8,
+            minWidth: 80,
+            maxWidth: 110,
             editable: (params) => params.data?.cost_type !== 'REV',
             cellEditor: 'agNumberCellEditor',
-            cellEditorParams: {
-                min: 0,
-                precision: 2,
-            },
+            cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: currencyFormatter,
             type: 'numericColumn',
             cellStyle: { fontWeight: 600 },
@@ -149,32 +131,19 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
         {
             field: 'revenue',
             headerName: 'Revenue',
-            flex: 1,
-            minWidth: 120,
-            maxWidth: 150,
+            flex: 0.8,
+            minWidth: 80,
+            maxWidth: 110,
             editable: (params) => params.data?.cost_type === 'REV',
             cellEditor: 'agNumberCellEditor',
-            cellEditorParams: {
-                min: 0,
-                precision: 2,
-            },
+            cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: currencyFormatter,
             type: 'numericColumn',
-            cellStyle: (params) => {
-                if (params.data?.cost_type === 'REV') {
-                    return {
-                        backgroundColor: isDark() ? '#052e16' : '#f0fdf4',
-                        color: isDark() ? '#4ade80' : '#16a34a',
-                        fontWeight: 600,
-                    };
-                }
-                return {};
-            },
         },
         {
             field: 'actions',
             headerName: '',
-            width: 60,
+            width: 40,
             flex: 0,
             editable: false,
             sortable: false,
