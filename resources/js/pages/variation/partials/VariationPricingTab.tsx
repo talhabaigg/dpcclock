@@ -88,7 +88,7 @@ function SortableRow({
     onSelectCondition: (conditionId: number, idx: number) => void;
     isSelected: boolean;
     onToggleSelect: () => void;
-    onQtyChangeForCondition: (conditionId: number, qty: number, rowIdx: number) => void;
+    onQtyChangeForCondition: (conditionId: number, qty: number) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
     const [popoverOpen, setPopoverOpen] = useState(false);
@@ -202,7 +202,7 @@ function SortableRow({
                         const newQty = e.target.value;
                         setEditValues({ ...editValues, qty: newQty });
                         if (item.takeoff_condition_id && parseFloat(newQty) > 0) {
-                            onQtyChangeForCondition(item.takeoff_condition_id, parseFloat(newQty), idx);
+                            onQtyChangeForCondition(item.takeoff_condition_id, parseFloat(newQty));
                         }
                     }} className="w-16 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring" onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
                 ) : item.qty}
@@ -403,8 +403,8 @@ export default function VariationPricingTab({
 
     const qtyFetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const handleQtyChangeForCondition = useCallback((conditionId: number, qty: number, _rowIdx: number) => {
+     
+    const handleQtyChangeForCondition = useCallback((conditionId: number, qty: number) => {
         clearTimeout(qtyFetchTimerRef.current);
         qtyFetchTimerRef.current = setTimeout(() => {
             if (!locationId) return;
