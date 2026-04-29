@@ -91,6 +91,21 @@ type MeasurementLayerProps = {
     snapEnabled?: boolean;
     // Hover highlight from panel
     hoveredMeasurementId?: number | null;
+    /** Override drawing color (e.g. active condition). Falls back to per-type defaults. */
+    activeColor?: string | null;
+    /** Receives finish/undo/cancel functions + current draw state so the parent can render
+     *  a stylus-friendly floating panel. Called whenever state changes. */
+    onDrawingControlsChange?: (state: DrawingControls | null) => void;
+};
+
+export type DrawingControls = {
+    viewMode: ViewMode;
+    pointCount: number;
+    canFinish: boolean;
+    canUndo: boolean;
+    finish: () => void;
+    undo: () => void;
+    cancel: () => void;
 };
 
 function computePixelDistance(p1: Point, p2: Point, pixelW: number, pixelH: number): number {
@@ -129,6 +144,67 @@ function formatValue(pixelValue: number, ppu: number, unit: string, type: 'linea
     }
 }
 
+function escapeHtml(s: string): string {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/** Build the structured HTML for a saved-measurement hover tooltip. */
+function savedMeasurementTooltipHtml(opts: {
+    name: string;
+    value: number | null;
+    unit: string | null;
+    perimeter?: number | null;
+    perimeterUnit?: string;
+    typeLabel: 'Length' | 'Area' | 'Count';
+    co?: string | null;
+    accentColor: string;
+    isDeduction?: boolean;
+}): string {
+    const { name, value, unit, perimeter, perimeterUnit, typeLabel, co, accentColor, isDeduction } = opts;
+    const valStr = value != null ? value.toFixed(2) : null;
+    const unitStr = unit ?? '';
+    const co_html = co ? `<span class="m-co">${escapeHtml(co)}</span>` : '';
+    const dedHtml = isDeduction
+        ? `<span class="m-deduction">Deduction</span>`
+        : '';
+    return `
+<div class="m-tt" style="--m-accent:${accentColor}">
+  <div class="m-head">${dedHtml}${co_html}<span class="m-name">${escapeHtml(name)}</span></div>
+  ${valStr != null
+    ? `<div class="m-value">${valStr}<span class="m-unit">${escapeHtml(unitStr)}</span></div>`
+    : `<div class="m-value m-value-empty">—</div>`}
+  <div class="m-meta">
+    <span class="m-type">${typeLabel}</span>
+    ${perimeter != null && !isDeduction
+        ? `<span class="m-meta-sep"></span><span class="m-perimeter">Perimeter ${perimeter.toFixed(2)} ${escapeHtml(perimeterUnit ?? '')}</span>`
+        : ''}
+  </div>
+</div>`.trim();
+}
+
+/** Build a structured live tooltip for the in-progress drawing. */
+function liveTooltipHtml(opts: {
+    title: string;
+    primary?: string;
+    secondary?: string;
+    hint?: string;
+    accentColor: string;
+}): string {
+    const { title, primary, secondary, hint, accentColor } = opts;
+    return `
+<div class="m-tt m-tt-live" style="--m-accent:${accentColor}">
+  <div class="m-head"><span class="m-name">${escapeHtml(title)}</span></div>
+  ${primary ? `<div class="m-value">${escapeHtml(primary)}</div>` : ''}
+  ${secondary ? `<div class="m-meta"><span class="m-perimeter">${escapeHtml(secondary)}</span></div>` : ''}
+  ${hint ? `<div class="m-hint">${escapeHtml(hint)}</div>` : ''}
+</div>`.trim();
+}
+
 export function getSegmentColor(percent: number): string {
     if (percent >= 100) return '#22c55e'; // green-500
     return '#3b82f6';                      // blue-500
@@ -160,6 +236,18 @@ function snapToAngle(anchor: Point, cursor: Point, imgW: number, imgH: number, i
 
 function normalizedToLatLng(point: Point, imgW: number, imgH: number): L.LatLng {
     return L.latLng(-point.y * imgH, point.x * imgW);
+}
+
+/** Per-tool default accent color when no `activeColor` is supplied. */
+function defaultDrawColor(viewMode: ViewMode): string {
+    switch (viewMode) {
+        case 'calibrate': return '#f59e0b';
+        case 'measure_line': return '#3b82f6';
+        case 'measure_area': return '#10b981';
+        case 'measure_rectangle': return '#0ea5e9';
+        case 'measure_count': return '#8b5cf6';
+        default: return '#3b82f6';
+    }
 }
 
 function latLngToNormalized(latlng: L.LatLng, imgW: number, imgH: number): Point {
@@ -195,6 +283,8 @@ export function MeasurementLayer({
     onVertexDelete,
     snapEnabled = true,
     hoveredMeasurementId,
+    activeColor,
+    onDrawingControlsChange,
 }: MeasurementLayerProps) {
     const map = useMap();
     const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -210,10 +300,20 @@ export function MeasurementLayer({
     const vertexLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const snapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const hoverLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+    const creationPulseLayerRef = useRef<L.LayerGroup>(L.layerGroup());
     const tooltipRef = useRef<L.Tooltip | null>(null);
     const ghostLineRef = useRef<L.Polyline | null>(null);
     const ghostPolygonRef = useRef<L.Polygon | null>(null);
     const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Track previous measurement IDs to detect newly-created measurements (length increased by 1)
+    const prevMeasurementIdsRef = useRef<Set<number>>(new Set());
+    const prevMeasurementCountRef = useRef<number>(0);
+
+    // Defer expensive saved-layer rebuilds while a zoom animation is in flight.
+    // Re-running clearLayers + add mid-zoom causes flicker.
+    const isZoomingRef = useRef(false);
+    const queuedSavedRenderRef = useRef<(() => void) | null>(null);
 
     // Auto-pan map to selected measurement (smooth pan to center, no zoom change)
     useEffect(() => {
@@ -253,6 +353,8 @@ export function MeasurementLayer({
     }, [selectedMeasurementId, map, measurements, imageWidth, imageHeight]);
 
     // Build snap candidates from all saved measurements (endpoints + midpoints)
+    // plus the in-progress polyline vertices (so double-clicking back to the start
+    // of a polygon locks exactly onto it).
     const snapCandidates = useMemo<SnapCandidate[]>(() => {
         const candidates: SnapCandidate[] = [];
         for (const m of measurements) {
@@ -276,8 +378,13 @@ export function MeasurementLayer({
                 }
             }
         }
+        // Also include the points the user has placed on the in-progress drawing.
+        // The first vertex matters most — closing-to-start in area mode benefits.
+        for (const pt of currentPoints) {
+            candidates.push({ point: pt, kind: 'endpoint' });
+        }
         return candidates;
-    }, [measurements]);
+    }, [measurements, currentPoints]);
 
     /**
      * Find the nearest snap candidate within screen pixel threshold.
@@ -327,6 +434,7 @@ export function MeasurementLayer({
         const vertex = vertexLayerRef.current;
         const snap = snapLayerRef.current;
         const hover = hoverLayerRef.current;
+        const pulse = creationPulseLayerRef.current;
         saved.addTo(map);
         drawing.addTo(map);
         calib.addTo(map);
@@ -334,6 +442,7 @@ export function MeasurementLayer({
         vertex.addTo(map);
         snap.addTo(map);
         hover.addTo(map);
+        pulse.addTo(map);
         return () => {
             saved.remove();
             drawing.remove();
@@ -342,8 +451,72 @@ export function MeasurementLayer({
             vertex.remove();
             snap.remove();
             hover.remove();
+            pulse.remove();
         };
     }, [map]);
+
+    // Creation pulse: when a single new measurement appears (length increased by exactly 1),
+    // draw a brief outward pulse on it for confirmation feedback.
+    useEffect(() => {
+        const currentIds = new Set(measurements.map((m) => m.id));
+        const lengthIncreased = measurements.length === prevMeasurementCountRef.current + 1;
+
+        if (lengthIncreased) {
+            const newIds = [...currentIds].filter((id) => !prevMeasurementIdsRef.current.has(id));
+            if (newIds.length === 1) {
+                const m = measurements.find((x) => x.id === newIds[0]);
+                if (m && m.points.length > 0) {
+                    const latlngs = m.points.map((p) => normalizedToLatLng(p, imageWidth, imageHeight));
+                    const pulseGroup = L.layerGroup();
+
+                    if (m.type === 'count') {
+                        latlngs.forEach((ll) => {
+                            L.circleMarker(ll, {
+                                radius: 8,
+                                color: m.color,
+                                fillColor: m.color,
+                                fillOpacity: 0,
+                                weight: 4,
+                                className: 'measurement-creation-pulse',
+                                interactive: false,
+                            }).addTo(pulseGroup);
+                        });
+                    } else if (m.type === 'linear') {
+                        L.polyline(latlngs, {
+                            color: m.color,
+                            weight: 4,
+                            opacity: 0.9,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                            className: 'measurement-creation-pulse',
+                            interactive: false,
+                        }).addTo(pulseGroup);
+                    } else {
+                        L.polygon(latlngs, {
+                            color: m.color,
+                            weight: 4,
+                            opacity: 0.9,
+                            fill: false,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                            className: 'measurement-creation-pulse',
+                            interactive: false,
+                        }).addTo(pulseGroup);
+                    }
+
+                    pulseGroup.addTo(creationPulseLayerRef.current);
+                    const t = setTimeout(() => {
+                        creationPulseLayerRef.current.removeLayer(pulseGroup);
+                    }, 1300);
+                    // No cleanup return — pulse is fire-and-forget; if unmounted, layer group goes with parent
+                    void t;
+                }
+            }
+        }
+
+        prevMeasurementIdsRef.current = currentIds;
+        prevMeasurementCountRef.current = measurements.length;
+    }, [measurements, imageWidth, imageHeight]);
 
     // Disable double-click zoom during measurement modes
     useEffect(() => {
@@ -356,6 +529,25 @@ export function MeasurementLayer({
             map.doubleClickZoom.enable();
         };
     }, [map, isMeasuring]);
+
+    // Track zoom state. Saved-layer rebuilds queue up while zooming, replay on zoomend.
+    useEffect(() => {
+        const onZoomStart = () => { isZoomingRef.current = true; };
+        const onZoomEnd = () => {
+            isZoomingRef.current = false;
+            if (queuedSavedRenderRef.current) {
+                const fn = queuedSavedRenderRef.current;
+                queuedSavedRenderRef.current = null;
+                fn();
+            }
+        };
+        map.on('zoomstart', onZoomStart);
+        map.on('zoomend', onZoomEnd);
+        return () => {
+            map.off('zoomstart', onZoomStart);
+            map.off('zoomend', onZoomEnd);
+        };
+    }, [map]);
 
     // Reset drawing state when viewMode changes away from measurement
     useEffect(() => {
@@ -381,12 +573,13 @@ export function MeasurementLayer({
         }
     }, [map, isMeasuring, viewMode]);
 
-    // Render saved measurements
+    // Render saved measurements (deferred during zoom animation to avoid mid-zoom flicker)
     useEffect(() => {
-        const group = savedLayersRef.current;
-        group.clearLayers();
+        const doRender = () => {
+            const group = savedLayersRef.current;
+            group.clearLayers();
 
-        measurements.forEach((m) => {
+            measurements.forEach((m) => {
             const latlngs = m.points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
             const isSelected = m.id === selectedMeasurementId;
             const weight = isSelected ? 6 : 4;
@@ -402,12 +595,21 @@ export function MeasurementLayer({
                 latlngs.forEach((ll, idx) => {
                     const marker = L.circleMarker(ll, {
                         radius: isSelected ? 10 : 8,
-                        color: m.color,
+                        color: '#fff',
                         fillColor: m.color,
-                        fillOpacity: isSelected ? 0.9 : 0.7,
+                        fillOpacity: isSelected ? 0.95 : 0.85,
                         weight: isSelected ? 3 : 2,
+                        className: 'measurement-saved-path measurement-count-marker',
                     });
-                    marker.bindTooltip(`${m.name} #${idx + 1}`, { permanent: false, className: 'measurement-tooltip' });
+                    const countTooltipHtml = savedMeasurementTooltipHtml({
+                        name: `${m.name} · #${idx + 1}`,
+                        value: m.computed_value,
+                        unit: m.unit,
+                        typeLabel: 'Count',
+                        co: m.scope === 'variation' ? m.variation?.co_number : null,
+                        accentColor: m.color,
+                    });
+                    marker.bindTooltip(countTooltipHtml, { permanent: false, className: 'measurement-tooltip', sticky: true, opacity: 1, direction: 'top', offset: [0, -8] });
                     marker.on('click', (e) => {
                         if (isMeasuring) return;
                         L.DomEvent.stopPropagation(e);
@@ -455,6 +657,7 @@ export function MeasurementLayer({
                                 weight: weight + 6,
                                 opacity: 0.7,
                                 lineCap: 'round',
+                                lineJoin: 'round',
                             }).addTo(group);
                         }
 
@@ -462,6 +665,9 @@ export function MeasurementLayer({
                             color: displayColor,
                             weight: (segSelected || isMeasSelected) ? weight + 2 : weight,
                             opacity,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                            className: 'measurement-saved-path',
                         });
                         // Segment length tooltip
                         if (calibration) {
@@ -493,11 +699,12 @@ export function MeasurementLayer({
                     // Add vertex circles at all points
                     latlngs.forEach(ll => {
                         L.circleMarker(ll, {
-                            radius: 1,
+                            radius: 2.5,
                             color: '#475569',
                             fillColor: '#fff',
                             fillOpacity: 1,
-                            weight: 2.5,
+                            weight: 2,
+                            className: 'measurement-vertex',
                         }).addTo(group);
                     });
                 } else {
@@ -516,6 +723,7 @@ export function MeasurementLayer({
                             weight: weight + 6,
                             opacity: 0.7,
                             lineCap: 'round',
+                            lineJoin: 'round',
                         }).addTo(group);
                     }
 
@@ -524,16 +732,20 @@ export function MeasurementLayer({
                         weight: isMeasSelected ? weight + 2 : weight,
                         opacity,
                         dashArray: (isLinearDeduction || isVariation) ? '12, 6' : undefined,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        className: 'measurement-saved-path',
                     });
 
                     // Add vertex circles
                     latlngs.forEach(ll => {
                         L.circleMarker(ll, {
-                            radius: 1,
+                            radius: 2.5,
                             color: displayColor,
                             fillColor: '#fff',
                             fillOpacity: 1,
-                            weight: 2.5,
+                            weight: 2,
+                            className: 'measurement-vertex',
                         }).addTo(group);
                     });
 
@@ -547,17 +759,29 @@ export function MeasurementLayer({
                                 weight: 14,
                                 opacity: 0,
                             });
-                            segHit.bindTooltip(`${segLength.toFixed(2)} ${calibration.unit}`, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                            const segTooltipHtml = savedMeasurementTooltipHtml({
+                                name: `${m.name} · seg ${si + 1}`,
+                                value: segLength,
+                                unit: calibration.unit,
+                                typeLabel: 'Length',
+                                co: m.scope === 'variation' ? m.variation?.co_number : null,
+                                accentColor: m.color,
+                            });
+                            segHit.bindTooltip(segTooltipHtml, { permanent: false, direction: 'top', offset: [0, -6], className: 'measurement-tooltip', sticky: true, opacity: 1 });
                             segHit.addTo(group);
                         }
                     }
 
-                    const linearDeductionPrefix = isLinearDeduction ? '(−) ' : '';
-                    const coPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
-                    const label = m.computed_value != null
-                        ? `${linearDeductionPrefix}${coPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}`
-                        : `${linearDeductionPrefix}${coPrefix}${m.name}`;
-                    line.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                    const linearTooltipHtml = savedMeasurementTooltipHtml({
+                        name: m.name,
+                        value: m.computed_value,
+                        unit: m.unit,
+                        typeLabel: 'Length',
+                        co: m.scope === 'variation' ? m.variation?.co_number : null,
+                        accentColor: displayColor,
+                        isDeduction: isLinearDeduction,
+                    });
+                    line.bindTooltip(linearTooltipHtml, { permanent: false, direction: 'top', offset: [0, -6], className: 'measurement-tooltip', sticky: true, opacity: 1 });
                     line.on('click', (e) => {
                         if (isMeasuring) return;
                         L.DomEvent.stopPropagation(e);
@@ -584,6 +808,8 @@ export function MeasurementLayer({
                         weight: weight + 6,
                         opacity: 0.7,
                         fill: false,
+                        lineCap: 'round',
+                        lineJoin: 'round',
                     }).addTo(group);
                 }
 
@@ -597,6 +823,9 @@ export function MeasurementLayer({
                     fillColor: polyFillColor,
                     fillOpacity: polyFillOpacity,
                     dashArray: (isDeduction || isVariation) ? '12, 6' : undefined,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                    className: 'measurement-saved-path',
                 });
 
                 polygon.addTo(group);
@@ -604,24 +833,28 @@ export function MeasurementLayer({
                 // Add vertex circles
                 latlngs.forEach(ll => {
                     L.circleMarker(ll, {
-                        radius: 1,
+                        radius: 2.5,
                         color: displayColor,
                         fillColor: '#fff',
                         fillOpacity: 1,
-                        weight: 2.5,
+                        weight: 2,
+                        className: 'measurement-vertex',
                     }).addTo(group);
                 });
 
-                const deductionPrefix = isDeduction ? '(−) ' : '';
-                const areaCOPrefix = m.scope === 'variation' && m.variation?.co_number ? `[${m.variation.co_number}] ` : '';
                 const perimeterUnit = m.unit?.replace('sq ', '') || '';
-                const perimeterSuffix = m.perimeter_value != null && !isDeduction
-                    ? `\nPerimeter: ${m.perimeter_value.toFixed(2)} ${perimeterUnit}`
-                    : '';
-                const label = m.computed_value != null
-                    ? `${deductionPrefix}${areaCOPrefix}${m.name}: ${m.computed_value.toFixed(2)} ${m.unit || ''}${perimeterSuffix}`
-                    : `${deductionPrefix}${areaCOPrefix}${m.name}`;
-                polygon.bindTooltip(label, { permanent: false, direction: 'center', className: 'measurement-tooltip' });
+                const areaTooltipHtml = savedMeasurementTooltipHtml({
+                    name: m.name,
+                    value: m.computed_value,
+                    unit: m.unit,
+                    perimeter: m.perimeter_value ?? null,
+                    perimeterUnit,
+                    typeLabel: 'Area',
+                    co: m.scope === 'variation' ? m.variation?.co_number : null,
+                    accentColor: displayColor,
+                    isDeduction,
+                });
+                polygon.bindTooltip(areaTooltipHtml, { permanent: false, direction: 'top', offset: [0, -6], className: 'measurement-tooltip', sticky: true, opacity: 1 });
                 polygon.on('click', (e) => {
                     if (isMeasuring) return;
                     L.DomEvent.stopPropagation(e);
@@ -654,6 +887,13 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
+        };
+
+        if (isZoomingRef.current) {
+            queuedSavedRenderRef.current = doRender;
+        } else {
+            doRender();
+        }
     }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionOpacities, productionLabels, segmentStatuses, hiddenSegments, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
 
     // Lightweight hover highlight (separate from main render to avoid full rebuild)
@@ -752,11 +992,17 @@ export function MeasurementLayer({
 
         const latlngs = points.map(p => normalizedToLatLng(p, imageWidth, imageHeight));
 
+        // Resolve color: activeColor (e.g. condition) wins; otherwise per-tool default.
+        // Calibration always uses its amber accent — calibration isn't a "condition" measurement.
+        const drawColor = viewMode === 'calibrate'
+            ? defaultDrawColor(viewMode)
+            : (activeColor || defaultDrawColor(viewMode));
+
         if (viewMode === 'calibrate') {
             // Just show the first point marker during calibration
             L.circleMarker(latlngs[0], {
                 radius: 6,
-                color: '#f59e0b',
+                color: drawColor,
                 fillColor: '#fff',
                 fillOpacity: 1,
                 weight: 2,
@@ -765,19 +1011,22 @@ export function MeasurementLayer({
             if (cursorPoint) {
                 const cursorLatLng = normalizedToLatLng(cursorPoint, imageWidth, imageHeight);
                 L.polyline([latlngs[0], cursorLatLng], {
-                    color: '#f59e0b',
+                    color: drawColor,
                     weight: 2,
                     dashArray: '6, 4',
                     opacity: 0.7,
+                    lineCap: 'round',
                 }).addTo(group);
             }
         } else if (viewMode === 'measure_line') {
             // Draw the polyline
             if (latlngs.length >= 2) {
                 L.polyline(latlngs, {
-                    color: '#3b82f6',
+                    color: drawColor,
                     weight: 4,
                     opacity: 0.9,
+                    lineCap: 'round',
+                    lineJoin: 'round',
                 }).addTo(group);
             }
 
@@ -785,7 +1034,7 @@ export function MeasurementLayer({
             latlngs.forEach(ll => {
                 L.circleMarker(ll, {
                     radius: 6,
-                    color: '#3b82f6',
+                    color: drawColor,
                     fillColor: '#fff',
                     fillOpacity: 1,
                     weight: 2.5,
@@ -796,10 +1045,11 @@ export function MeasurementLayer({
             if (cursorPoint) {
                 const cursorLatLng = normalizedToLatLng(cursorPoint, imageWidth, imageHeight);
                 L.polyline([latlngs[latlngs.length - 1], cursorLatLng], {
-                    color: '#3b82f6',
+                    color: drawColor,
                     weight: 3,
                     dashArray: '8, 5',
                     opacity: 0.6,
+                    lineCap: 'round',
                 }).addTo(group);
             }
         } else if (viewMode === 'measure_area') {
@@ -808,17 +1058,20 @@ export function MeasurementLayer({
             // Draw polygon preview
             if (allPoints.length >= 3) {
                 L.polygon(allPoints, {
-                    color: '#10b981',
+                    color: drawColor,
                     weight: 4,
                     opacity: 0.9,
-                    fillColor: '#10b981',
+                    fillColor: drawColor,
                     fillOpacity: 0.15,
+                    lineCap: 'round',
+                    lineJoin: 'round',
                 }).addTo(group);
             } else if (allPoints.length === 2) {
                 L.polyline(allPoints, {
-                    color: '#10b981',
+                    color: drawColor,
                     weight: 4,
                     opacity: 0.9,
+                    lineCap: 'round',
                 }).addTo(group);
             }
 
@@ -826,7 +1079,7 @@ export function MeasurementLayer({
             latlngs.forEach(ll => {
                 L.circleMarker(ll, {
                     radius: 6,
-                    color: '#10b981',
+                    color: drawColor,
                     fillColor: '#fff',
                     fillOpacity: 1,
                     weight: 2.5,
@@ -844,11 +1097,13 @@ export function MeasurementLayer({
                     normalizedToLatLng({ x: corner1.x, y: corner2.y }, imageWidth, imageHeight),
                 ];
                 L.polygon(rectPoints, {
-                    color: '#0ea5e9',
+                    color: drawColor,
                     weight: 4,
                     opacity: 0.9,
-                    fillColor: '#0ea5e9',
+                    fillColor: drawColor,
                     fillOpacity: 0.15,
+                    lineCap: 'round',
+                    lineJoin: 'round',
                 }).addTo(group);
             }
 
@@ -856,7 +1111,7 @@ export function MeasurementLayer({
             if (latlngs.length >= 1) {
                 L.circleMarker(latlngs[0], {
                     radius: 6,
-                    color: '#0ea5e9',
+                    color: drawColor,
                     fillColor: '#fff',
                     fillOpacity: 1,
                     weight: 2.5,
@@ -867,14 +1122,14 @@ export function MeasurementLayer({
             latlngs.forEach((ll) => {
                 L.circleMarker(ll, {
                     radius: 8,
-                    color: '#8b5cf6',
-                    fillColor: '#8b5cf6',
+                    color: drawColor,
+                    fillColor: drawColor,
                     fillOpacity: 0.7,
                     weight: 2,
                 }).addTo(group);
             });
         }
-    }, [viewMode, imageWidth, imageHeight]);
+    }, [viewMode, imageWidth, imageHeight, activeColor]);
 
     // Handle mousemove for ghost lines and live tooltip
     useEffect(() => {
@@ -899,6 +1154,7 @@ export function MeasurementLayer({
                             fillOpacity: 0.4,
                             weight: 2,
                             dashArray: snap.kind === 'midpoint' ? '3, 3' : undefined,
+                            className: 'measurement-snap-indicator',
                         }).addTo(snapLayerRef.current);
                     }
                 }
@@ -952,18 +1208,34 @@ export function MeasurementLayer({
             let tooltipContent = '';
             if (viewMode === 'calibrate' && currentPoints.length === 1) {
                 const dist = computePixelDistance(currentPoints[0], cursorPoint, pixelWidth, pixelHeight);
-                tooltipContent = `${dist.toFixed(0)} px`;
+                tooltipContent = liveTooltipHtml({
+                    title: 'Calibrating',
+                    primary: `${dist.toFixed(0)} px`,
+                    hint: 'Click the second point',
+                    accentColor: '#f59e0b',
+                });
             } else if (viewMode === 'measure_line' && calibration) {
                 const allPoints = [...currentPoints, cursorPoint];
                 const totalPixelDist = computePolylineLength(allPoints, pixelWidth, pixelHeight);
-                tooltipContent = formatValue(totalPixelDist, calibration.pixels_per_unit, calibration.unit, 'linear');
+                tooltipContent = liveTooltipHtml({
+                    title: 'Length',
+                    primary: formatValue(totalPixelDist, calibration.pixels_per_unit, calibration.unit, 'linear'),
+                    secondary: `${currentPoints.length + 1} pts · double-click to finish`,
+                    accentColor: activeColor || '#3b82f6',
+                });
             } else if (viewMode === 'measure_area' && calibration && currentPoints.length >= 2) {
                 const allPoints = [...currentPoints, cursorPoint];
                 const areaPixels = computePolygonAreaPixels(allPoints, pixelWidth, pixelHeight);
                 const perimPixels = computePolylineLength([...allPoints, allPoints[0]], pixelWidth, pixelHeight);
                 const areaStr = formatValue(areaPixels, calibration.pixels_per_unit, calibration.unit, 'area');
                 const perimStr = formatValue(perimPixels, calibration.pixels_per_unit, calibration.unit, 'linear');
-                tooltipContent = `${areaStr}\nPerimeter: ${perimStr}`;
+                tooltipContent = liveTooltipHtml({
+                    title: 'Area',
+                    primary: areaStr,
+                    secondary: `Perimeter ${perimStr}`,
+                    hint: 'Double-click to close polygon',
+                    accentColor: activeColor || '#10b981',
+                });
             } else if (viewMode === 'measure_rectangle' && calibration && currentPoints.length >= 1) {
                 const corner1 = currentPoints[0];
                 const corner2 = cursorPoint;
@@ -977,9 +1249,20 @@ export function MeasurementLayer({
                 const perimPixels = computePolylineLength([...rectPoints, rectPoints[0]], pixelWidth, pixelHeight);
                 const areaStr = formatValue(areaPixels, calibration.pixels_per_unit, calibration.unit, 'area');
                 const perimStr = formatValue(perimPixels, calibration.pixels_per_unit, calibration.unit, 'linear');
-                tooltipContent = `${areaStr}\nPerimeter: ${perimStr}`;
+                tooltipContent = liveTooltipHtml({
+                    title: 'Rectangle',
+                    primary: areaStr,
+                    secondary: `Perimeter ${perimStr}`,
+                    hint: 'Hold Shift for square',
+                    accentColor: activeColor || '#0ea5e9',
+                });
             } else if (viewMode === 'measure_count') {
-                tooltipContent = `Count: ${currentPoints.length} ea\nClick to place, double-click to finish`;
+                tooltipContent = liveTooltipHtml({
+                    title: 'Count',
+                    primary: `${currentPoints.length} ea`,
+                    hint: 'Click to place · double-click to finish',
+                    accentColor: activeColor || '#8b5cf6',
+                });
             }
 
             if (tooltipContent) {
@@ -989,8 +1272,9 @@ export function MeasurementLayer({
                     tooltipRef.current = L.tooltip({
                         permanent: true,
                         direction: 'right',
-                        offset: [15, 0],
+                        offset: [18, 0],
                         className: 'measurement-live-tooltip',
+                        opacity: 1,
                     })
                         .setLatLng(e.latlng)
                         .setContent(tooltipContent)
@@ -1063,6 +1347,95 @@ export function MeasurementLayer({
         };
     }, [map, isMeasuring, viewMode, currentPoints, onMeasurementComplete]);
 
+    // ── Drawing controls exposed to parent (finish/undo/cancel) ──
+    // These are the same actions the keyboard handlers run; we surface them so a parent
+    // can render touch/stylus buttons (no keyboard required on iPad/Apple Pencil).
+    const finishDrawing = useCallback(() => {
+        const points = currentPointsRef.current;
+        if (viewMode === 'measure_line' && points.length >= 2) {
+            onMeasurementComplete?.(points, 'linear');
+            setCurrentPoints([]);
+            drawingLayersRef.current.clearLayers();
+        } else if (viewMode === 'measure_area' && points.length >= 3) {
+            onMeasurementComplete?.(points, 'area');
+            setCurrentPoints([]);
+            drawingLayersRef.current.clearLayers();
+        } else if (viewMode === 'measure_rectangle' && points.length >= 2) {
+            const c1 = points[0];
+            const c2 = points[1];
+            const rectPoints = [c1, { x: c2.x, y: c1.y }, c2, { x: c1.x, y: c2.y }];
+            onMeasurementComplete?.(rectPoints, 'area');
+            setCurrentPoints([]);
+            drawingLayersRef.current.clearLayers();
+        } else if (viewMode === 'measure_count' && points.length >= 1) {
+            onMeasurementComplete?.(points, 'count');
+            setCurrentPoints([]);
+            drawingLayersRef.current.clearLayers();
+        }
+    }, [viewMode, onMeasurementComplete]);
+
+    const undoLastPoint = useCallback(() => {
+        if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = null;
+        }
+        setCurrentPoints((prev) => prev.slice(0, -1));
+    }, []);
+
+    const cancelDrawing = useCallback(() => {
+        if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = null;
+        }
+        setCurrentPoints([]);
+        drawingLayersRef.current.clearLayers();
+    }, []);
+
+    // Notify parent whenever the drawing state or actions change.
+    useEffect(() => {
+        if (!onDrawingControlsChange) return;
+        if (!isMeasuring) {
+            onDrawingControlsChange(null);
+            return;
+        }
+        const minPointsToFinish =
+            viewMode === 'measure_line' ? 2 :
+            viewMode === 'measure_area' ? 3 :
+            viewMode === 'measure_rectangle' ? 2 :
+            viewMode === 'measure_count' ? 1 :
+            Infinity; // 'calibrate' has its own deterministic 2-click flow
+        onDrawingControlsChange({
+            viewMode,
+            pointCount: currentPoints.length,
+            canFinish: currentPoints.length >= minPointsToFinish,
+            canUndo: currentPoints.length > 0,
+            finish: finishDrawing,
+            undo: undoLastPoint,
+            cancel: cancelDrawing,
+        });
+    }, [isMeasuring, viewMode, currentPoints.length, finishDrawing, undoLastPoint, cancelDrawing, onDrawingControlsChange]);
+
+    // Brief radial burst at click location — gives instant tactile confirmation each click.
+    const fireClickBurst = useCallback(
+        (normPoint: Point, color: string) => {
+            const ll = normalizedToLatLng(normPoint, imageWidth, imageHeight);
+            const burst = L.circleMarker(ll, {
+                radius: 6,
+                color,
+                fillOpacity: 0,
+                weight: 3,
+                opacity: 0.9,
+                className: 'measurement-click-burst',
+                interactive: false,
+            });
+            burst.addTo(map);
+            window.setTimeout(() => {
+                try { map.removeLayer(burst); } catch { /* map already torn down */ }
+            }, 550);
+        },
+        [map, imageWidth, imageHeight],
+    );
+
     // Map click and double-click handlers
     // Double-click fires two click events first, so we delay click handling
     // and cancel the pending click when dblclick is detected.
@@ -1072,6 +1445,9 @@ export function MeasurementLayer({
 
             let point = latLngToNormalized(e.latlng, imageWidth, imageHeight);
             const shift = e.originalEvent.shiftKey;
+            const burstColor = viewMode === 'calibrate'
+                ? defaultDrawColor(viewMode)
+                : (activeColor || defaultDrawColor(viewMode));
 
             if (viewMode === 'calibrate') {
                 const pts = currentPointsRef.current;
@@ -1079,8 +1455,10 @@ export function MeasurementLayer({
                     point = snapToAngle(pts[0], point, imageWidth, imageHeight);
                 }
                 if (pts.length === 0) {
+                    fireClickBurst(point, burstColor);
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
+                    fireClickBurst(point, burstColor);
                     onCalibrationComplete?.(pts[0], point);
                     setCurrentPoints([]);
                     drawingLayersRef.current.clearLayers();
@@ -1093,6 +1471,7 @@ export function MeasurementLayer({
                     if (snap) point = snap.point;
                 }
                 if (pts.length === 0) {
+                    fireClickBurst(point, burstColor);
                     setCurrentPoints([point]);
                 } else if (pts.length === 1) {
                     const c1 = pts[0];
@@ -1107,6 +1486,7 @@ export function MeasurementLayer({
                             y: c1.y + (Math.sign(dy) * side) / imageHeight,
                         };
                     }
+                    fireClickBurst(c2, burstColor);
                     const rectPoints: Point[] = [c1, { x: c2.x, y: c1.y }, c2, { x: c1.x, y: c2.y }];
                     onMeasurementComplete?.(rectPoints, 'area');
                     setCurrentPoints([]);
@@ -1129,6 +1509,7 @@ export function MeasurementLayer({
                 const snappedPoint = point;
                 clickTimerRef.current = setTimeout(() => {
                     clickTimerRef.current = null;
+                    fireClickBurst(snappedPoint, burstColor);
                     setCurrentPoints(prev => [...prev, snappedPoint]);
                 }, 250);
             }
@@ -1145,19 +1526,57 @@ export function MeasurementLayer({
             }
 
             const points = currentPointsRef.current;
+            const burstColor = viewMode === 'calibrate'
+                ? defaultDrawColor(viewMode)
+                : (activeColor || defaultDrawColor(viewMode));
 
-            if (viewMode === 'measure_line' && points.length >= 2) {
-                onMeasurementComplete?.(points, 'linear');
-                setCurrentPoints([]);
-                drawingLayersRef.current.clearLayers();
-            } else if (viewMode === 'measure_area' && points.length >= 3) {
-                onMeasurementComplete?.(points, 'area');
-                setCurrentPoints([]);
-                drawingLayersRef.current.clearLayers();
-            } else if (viewMode === 'measure_count' && points.length >= 1) {
-                onMeasurementComplete?.(points, 'count');
-                setCurrentPoints([]);
-                drawingLayersRef.current.clearLayers();
+            // Compute the dblclick location with shift-angle + snap applied. This is the
+            // implicit final vertex — the gesture both PLACES it and FINISHES the drawing,
+            // so users don't have to single-click the last point and then double-click.
+            let finalPoint = latLngToNormalized(e.latlng, imageWidth, imageHeight);
+            const shift = e.originalEvent.shiftKey;
+            if (shift && points.length > 0 && viewMode !== 'measure_count') {
+                finalPoint = snapToAngle(points[points.length - 1], finalPoint, imageWidth, imageHeight);
+            }
+            if (snapEnabled) {
+                const snap = findSnapPoint(finalPoint);
+                if (snap) finalPoint = snap.point;
+            }
+
+            // For area: if the dblclick lands almost exactly on the first vertex (e.g. user
+            // dropped onto the start to close), don't add a duplicate point — the polygon
+            // closes naturally.
+            const closesToStart = (() => {
+                if (viewMode !== 'measure_area' || points.length === 0) return false;
+                const start = points[0];
+                const dx = (finalPoint.x - start.x) * imageWidth;
+                const dy = (finalPoint.y - start.y) * imageHeight;
+                return Math.hypot(dx, dy) < 1.5; // ~1.5 image-coord units = effectively the same point
+            })();
+
+            if (viewMode === 'measure_line' && points.length >= 1) {
+                const finalPts = closesToStart ? points : [...points, finalPoint];
+                if (finalPts.length >= 2) {
+                    fireClickBurst(finalPoint, burstColor);
+                    onMeasurementComplete?.(finalPts, 'linear');
+                    setCurrentPoints([]);
+                    drawingLayersRef.current.clearLayers();
+                }
+            } else if (viewMode === 'measure_area' && points.length >= 2) {
+                const finalPts = closesToStart ? points : [...points, finalPoint];
+                if (finalPts.length >= 3) {
+                    fireClickBurst(finalPoint, burstColor);
+                    onMeasurementComplete?.(finalPts, 'area');
+                    setCurrentPoints([]);
+                    drawingLayersRef.current.clearLayers();
+                }
+            } else if (viewMode === 'measure_count') {
+                // Count: dblclick "finish" — don't add an extra marker at the dblclick spot.
+                if (points.length >= 1) {
+                    onMeasurementComplete?.(points, 'count');
+                    setCurrentPoints([]);
+                    drawingLayersRef.current.clearLayers();
+                }
             }
         },
     });
@@ -1251,6 +1670,151 @@ export function MeasurementLayer({
             boxSelectLayerRef.current.clearLayers();
         };
     }, [map, boxSelectMode, imageWidth, imageHeight, onBoxSelectComplete]);
+
+    // Press-and-drag rectangle drawing — natural iPad/Apple-Pencil gesture.
+    // Tap corner 1, drag to corner 2, lift = rectangle saved in one motion.
+    // The legacy 2-tap pattern still works for users who prefer it (small movement
+    // between mousedown/up triggers a click instead, hitting the click handler above).
+    useEffect(() => {
+        if (viewMode !== 'measure_rectangle') return;
+
+        // Disable pan-drag so a finger/pencil drag draws the rectangle instead of panning.
+        map.dragging.disable();
+
+        const container = map.getContainer();
+        let startNorm: Point | null = null;
+        let startScreen: { x: number; y: number } | null = null;
+        let previewRect: L.Polygon | null = null;
+        let dragMovedEnough = false;
+        const DRAG_THRESHOLD_PX = 6;
+
+        const containerPoint = (e: MouseEvent) => {
+            const rect = container.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        };
+
+        const onPointerDown = (e: MouseEvent) => {
+            if (e.button !== 0) return;
+            const cp = containerPoint(e);
+            const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+            let pt = latLngToNormalized(ll, imageWidth, imageHeight);
+            if (snapEnabled) {
+                const snap = findSnapPoint(pt);
+                if (snap) pt = snap.point;
+            }
+            startNorm = pt;
+            startScreen = cp;
+            dragMovedEnough = false;
+        };
+
+        const onPointerMove = (e: MouseEvent) => {
+            if (!startNorm || !startScreen) return;
+            const cp = containerPoint(e);
+            const dx = cp.x - startScreen.x;
+            const dy = cp.y - startScreen.y;
+            if (!dragMovedEnough && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+            dragMovedEnough = true;
+
+            const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+            let cursorPt = latLngToNormalized(ll, imageWidth, imageHeight);
+            const shift = e.shiftKey;
+            if (shift) {
+                // Constrain to a square
+                const ndx = (cursorPt.x - startNorm.x) * imageWidth;
+                const ndy = (cursorPt.y - startNorm.y) * imageHeight;
+                const side = Math.max(Math.abs(ndx), Math.abs(ndy));
+                cursorPt = {
+                    x: startNorm.x + (Math.sign(ndx) * side) / imageWidth,
+                    y: startNorm.y + (Math.sign(ndy) * side) / imageHeight,
+                };
+            }
+            if (snapEnabled) {
+                const snap = findSnapPoint(cursorPt);
+                if (snap) cursorPt = snap.point;
+            }
+
+            const c1 = startNorm;
+            const c2 = cursorPt;
+            const rectLatLngs = [
+                normalizedToLatLng(c1, imageWidth, imageHeight),
+                normalizedToLatLng({ x: c2.x, y: c1.y }, imageWidth, imageHeight),
+                normalizedToLatLng(c2, imageWidth, imageHeight),
+                normalizedToLatLng({ x: c1.x, y: c2.y }, imageWidth, imageHeight),
+            ];
+
+            const drawColor = activeColor || defaultDrawColor('measure_rectangle');
+            if (previewRect) {
+                previewRect.setLatLngs(rectLatLngs);
+            } else {
+                previewRect = L.polygon(rectLatLngs, {
+                    color: drawColor,
+                    weight: 4,
+                    opacity: 0.9,
+                    fillColor: drawColor,
+                    fillOpacity: 0.15,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                });
+                previewRect.addTo(drawingLayersRef.current);
+            }
+        };
+
+        const onPointerUp = (e: MouseEvent) => {
+            const start = startNorm;
+            const moved = dragMovedEnough;
+            startNorm = null;
+            startScreen = null;
+            if (previewRect) {
+                drawingLayersRef.current.removeLayer(previewRect);
+                previewRect = null;
+            }
+
+            if (!start || !moved) return; // tap with no drag — let the click handler take over
+
+            const cp = containerPoint(e);
+            const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+            let endPt = latLngToNormalized(ll, imageWidth, imageHeight);
+            const shift = e.shiftKey;
+            if (shift) {
+                const ndx = (endPt.x - start.x) * imageWidth;
+                const ndy = (endPt.y - start.y) * imageHeight;
+                const side = Math.max(Math.abs(ndx), Math.abs(ndy));
+                endPt = {
+                    x: start.x + (Math.sign(ndx) * side) / imageWidth,
+                    y: start.y + (Math.sign(ndy) * side) / imageHeight,
+                };
+            }
+            if (snapEnabled) {
+                const snap = findSnapPoint(endPt);
+                if (snap) endPt = snap.point;
+            }
+
+            const burstColor = activeColor || defaultDrawColor('measure_rectangle');
+            fireClickBurst(endPt, burstColor);
+
+            const rectPoints: Point[] = [
+                start,
+                { x: endPt.x, y: start.y },
+                endPt,
+                { x: start.x, y: endPt.y },
+            ];
+            onMeasurementComplete?.(rectPoints, 'area');
+        };
+
+        container.addEventListener('mousedown', onPointerDown);
+        container.addEventListener('mousemove', onPointerMove);
+        container.addEventListener('mouseup', onPointerUp);
+
+        return () => {
+            container.removeEventListener('mousedown', onPointerDown);
+            container.removeEventListener('mousemove', onPointerMove);
+            container.removeEventListener('mouseup', onPointerUp);
+            if (previewRect) {
+                drawingLayersRef.current.removeLayer(previewRect);
+            }
+            map.dragging.enable();
+        };
+    }, [map, viewMode, imageWidth, imageHeight, snapEnabled, findSnapPoint, activeColor, onMeasurementComplete, fireClickBurst]);
 
     // Vertex editing: render draggable handles on selected measurement
     useEffect(() => {

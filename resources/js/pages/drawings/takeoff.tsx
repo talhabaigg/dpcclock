@@ -1,6 +1,6 @@
 import { BidAreaManager, type BidArea } from '@/components/bid-area-manager';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
-import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { TakeoffPanel } from '@/components/takeoff-panel';
 import { Button } from '@/components/ui/button';
@@ -12,19 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { ObservationDialog } from '@/components/observation-dialog';
 import CalibrationDialog from '@/components/calibration-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
 import { ScaleChip } from '@/components/scale-chip';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { useConfirm } from '@/hooks/use-confirm';
-import { useObservations } from '@/hooks/use-observations';
 import { useCalibration } from '@/hooks/use-calibration';
+import { measurementIntersectsRect } from '@/lib/drawing-geometry';
 import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } from '@/lib/constants';
-import type { Project, Observation, Revision, Drawing } from '@/types/takeoff';
+import type { Project, Revision, Drawing } from '@/types/takeoff';
 import { usePage } from '@inertiajs/react';
 import {
     FolderTree,
@@ -67,13 +66,6 @@ export default function DrawingTakeoff() {
 
     // Promise-based confirmation dialog
     const { confirm, dialogProps: confirmDialogProps } = useConfirm();
-
-    // Observations hook
-    const obs = useObservations({
-        drawingId: drawing.id,
-        initialObservations: drawing.observations || [],
-        confirm,
-    });
 
     // Revision comparison
     const [showCompareOverlay, setShowCompareOverlay] = useState(false);
@@ -179,6 +171,10 @@ export default function DrawingTakeoff() {
     const [bidAreaComboOpen, setBidAreaComboOpen] = useState(false);
     const [bidAreaComboInput, setBidAreaComboInput] = useState('');
     const [activeBidAreaId, setActiveBidAreaId] = useState<number | null>(null);
+
+    // Drag-select multi-selection (set when viewMode === 'select')
+    const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<Set<number>>(new Set());
+    const [bulkDeleting, setBulkDeleting] = useState(false);
 
     // Undo/redo system
     const { pushUndo, undo, redo } = useMeasurementHistory({
@@ -430,6 +426,82 @@ export default function DrawingTakeoff() {
         }
     };
 
+    // Drag-select: collect measurements whose geometry intersects the dragged rectangle
+    const handleBoxSelect = useCallback(
+        (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => {
+            const next = new Set<number>();
+            for (const m of visibleMeasurements) {
+                if (measurementIntersectsRect(m, bounds)) next.add(m.id);
+            }
+            setSelectedMeasurementIds(next);
+        },
+        [visibleMeasurements],
+    );
+
+    const handleClearMultiSelection = useCallback(() => {
+        setSelectedMeasurementIds(new Set());
+    }, []);
+
+    const handleBulkDelete = useCallback(async () => {
+        if (selectedMeasurementIds.size === 0) return;
+        const confirmed = await confirm({
+            title: `Delete ${selectedMeasurementIds.size} measurement${selectedMeasurementIds.size > 1 ? 's' : ''}?`,
+            description: 'This cannot be undone from this dialog. Use Ctrl+Z afterwards if you change your mind.',
+            confirmLabel: 'Delete',
+            variant: 'destructive',
+        });
+        if (!confirmed) return;
+
+        setBulkDeleting(true);
+        const ids = Array.from(selectedMeasurementIds);
+        const deleted: MeasurementData[] = [];
+        const failed: number[] = [];
+
+        for (const id of ids) {
+            try {
+                const data = await api.delete<{ measurement: MeasurementData }>(
+                    `/drawings/${drawing.id}/measurements/${id}`,
+                );
+                deleted.push(data.measurement);
+            } catch {
+                failed.push(id);
+            }
+        }
+
+        if (deleted.length > 0) {
+            setMeasurements((prev) =>
+                prev
+                    .filter((m) => !deleted.some((d) => d.id === m.id))
+                    .map((m) => ({
+                        ...m,
+                        deductions: m.deductions?.filter((d) => !deleted.some((x) => x.id === d.id)),
+                    })),
+            );
+            for (const m of deleted) {
+                pushUndo({ type: 'delete', measurement: m, drawingId: drawing.id });
+            }
+            if (selectedMeasurementId !== null && deleted.some((m) => m.id === selectedMeasurementId)) {
+                setSelectedMeasurementId(null);
+            }
+        }
+
+        setSelectedMeasurementIds(new Set());
+        setBulkDeleting(false);
+
+        if (failed.length > 0) {
+            toast.error(`Deleted ${deleted.length}, failed ${failed.length}.`);
+        } else {
+            toast.success(`Deleted ${deleted.length} measurement${deleted.length !== 1 ? 's' : ''}.`);
+        }
+    }, [selectedMeasurementIds, drawing.id, confirm, pushUndo, selectedMeasurementId]);
+
+    // Clear multi-selection when leaving drag-select mode
+    useEffect(() => {
+        if (viewMode !== 'select' && selectedMeasurementIds.size > 0) {
+            setSelectedMeasurementIds(new Set());
+        }
+    }, [viewMode, selectedMeasurementIds.size]);
+
     const handleEditMeasurement = (measurement: MeasurementData) => {
         setEditingMeasurement(measurement);
         setPendingMeasurementData(null);
@@ -546,58 +618,42 @@ export default function DrawingTakeoff() {
             statusBar={
                 <>
                     <span className="font-medium">
-                        {viewMode === 'pan' ? 'Pan' : viewMode === 'select' ? 'Select' : viewMode === 'calibrate' ? 'Calibrate' : viewMode === 'measure_line' ? 'Line' : viewMode === 'measure_area' ? 'Area' : viewMode === 'measure_rectangle' ? 'Rectangle' : viewMode === 'measure_count' ? 'Count' : 'Pan'}
+                        {viewMode === 'pan' ? 'Pan' : viewMode === 'select' ? 'Drag select' : viewMode === 'calibrate' ? 'Calibrate' : viewMode === 'measure_line' ? 'Line' : viewMode === 'measure_area' ? 'Area' : viewMode === 'measure_rectangle' ? 'Rectangle' : viewMode === 'measure_count' ? 'Count' : 'Pan'}
                     </span>
                     <div className="bg-border h-3 w-px" />
                     <span>{measurements.length} measurement{measurements.length !== 1 ? 's' : ''}</span>
                     <div className="flex-1" />
 
-                    {/* Observation selection controls */}
-                    {obs.selectedObservationIds.size > 0 && (
+                    {viewMode === 'select' && selectedMeasurementIds.size === 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                            Drag a rectangle to select measurements
+                        </span>
+                    )}
+
+                    {selectedMeasurementIds.size > 0 && (
                         <>
-                            <span className="rounded-sm bg-yellow-100 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                {obs.selectedObservationIds.size} selected
+                            <span className="rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {selectedMeasurementIds.size} selected
                             </span>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                                onClick={obs.handleDeleteSelectedObservations}
-                                disabled={obs.bulkDeleting}
-                            >
-                                <Trash2 className="h-2.5 w-2.5" />
-                                {obs.bulkDeleting ? '...' : 'Delete'}
-                            </Button>
+                            {canEditTakeoff && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                    onClick={handleBulkDelete}
+                                    disabled={bulkDeleting}
+                                >
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                    {bulkDeleting ? '...' : 'Delete'}
+                                </Button>
+                            )}
                             <button
                                 className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
-                                onClick={obs.handleClearSelection}
+                                onClick={handleClearMultiSelection}
                                 title="Clear selection"
                             >
                                 <X className="h-3 w-3" />
                             </button>
-                        </>
-                    )}
-
-                    {/* Observation count */}
-                    {obs.serverObservations.length > 0 && obs.selectedObservationIds.size === 0 && (
-                        <>
-                            <span className="rounded-sm border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                {obs.serverObservations.length} obs
-                            </span>
-                            {obs.serverObservations.filter((o) => o.source === 'ai_comparison').length > 0 && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
-                                    onClick={obs.handleDeleteAllAIObservations}
-                                    disabled={obs.bulkDeleting}
-                                >
-                                    <Trash2 className="h-2.5 w-2.5" />
-                                    {obs.bulkDeleting
-                                        ? '...'
-                                        : `${obs.serverObservations.filter((o) => o.source === 'ai_comparison').length} AI`}
-                                </Button>
-                            )}
                         </>
                     )}
                 </>
@@ -611,7 +667,7 @@ export default function DrawingTakeoff() {
                     canEdit={canEditTakeoff}
                     hasCalibration={!!calibration}
                     showSelectMode
-                    selectModeTitle="Add observation (O)"
+                    selectModeTitle="Drag select"
                     activeCondition={activeConditionDisplay}
                 />
             }
@@ -853,19 +909,10 @@ export default function DrawingTakeoff() {
                             imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}
                             comparisonImageUrl={comparisonImageUrl}
                             comparisonOpacity={overlayOpacity}
-                            observations={obs.serverObservations.map((o) => ({
-                                ...o,
-                                type: o.type as 'defect' | 'observation',
-                            })) as LeafletObservation[]}
-                            selectedObservationIds={obs.selectedObservationIds}
                             viewMode={viewMode}
-                            onObservationClick={(o) => obs.openForEdit(o as unknown as Observation)}
-                            onMapClick={(x, y) => {
-                                if (viewMode !== 'select') return;
-                                obs.openForNew(x, y);
-                            }}
                             measurements={visibleMeasurements}
                             selectedMeasurementId={selectedMeasurementId}
+                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
                             calibration={calibration}
                             conditionOpacities={conditionOpacities}
                             onCalibrationComplete={cal.handleCalibrationComplete}
@@ -876,6 +923,9 @@ export default function DrawingTakeoff() {
                             onVertexDelete={handleVertexDelete}
                             snapEnabled={snapEnabled}
                             hoveredMeasurementId={hoveredMeasurementId}
+                            boxSelectMode={viewMode === 'select'}
+                            onBoxSelectComplete={handleBoxSelect}
+                            activeColor={activeConditionDisplay?.color ?? null}
                             className="absolute inset-0"
                         />
                     </div>
@@ -923,32 +973,6 @@ export default function DrawingTakeoff() {
                         />
                     </div>
                 </div>
-
-            {/* Observation Dialog */}
-            <ObservationDialog
-                open={obs.dialogOpen}
-                onOpenChange={obs.setDialogOpen}
-                editingObservation={obs.editingObservation}
-                observationType={obs.observationType}
-                onObservationTypeChange={obs.setObservationType}
-                description={obs.description}
-                onDescriptionChange={obs.setDescription}
-                photoFile={obs.photoFile}
-                onPhotoFileChange={obs.setPhotoFile}
-                is360Photo={obs.is360Photo}
-                onIs360PhotoChange={obs.setIs360Photo}
-                saving={obs.saving}
-                confirming={obs.confirming}
-                deleting={obs.deleting}
-                describing={obs.describing}
-                onSave={obs.handleCreateObservation}
-                onUpdate={obs.handleUpdateObservation}
-                onDelete={obs.handleDeleteObservation}
-                onConfirm={obs.handleConfirmObservation}
-                onDescribeWithAI={obs.handleDescribeWithAI}
-                onDetect360={obs.detect360FromFile}
-                onReset={obs.resetDialog}
-            />
 
             {/* Calibration Dialog */}
             <CalibrationDialog

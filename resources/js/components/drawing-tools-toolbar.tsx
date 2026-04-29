@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
 import type { ViewMode } from '@/components/measurement-layer';
+import { cn } from '@/lib/utils';
 import { Hand, Hash, Magnet, Minus, MousePointer, Pentagon, Scale, Square } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 type ActiveCondition = {
     id: number;
@@ -16,13 +18,59 @@ type DrawingToolsToolbarProps = {
     onSnapToggle: () => void;
     canEdit: boolean;
     hasCalibration: boolean;
-    /** Show the Select tool button (used for observations on takeoff, box-select on DPC, etc.) */
+    /** Show the Select tool button (drag-select for measurements / box-select on DPC). */
     showSelectMode?: boolean;
     /** Tooltip text for the select tool button */
     selectModeTitle?: string;
     /** Show the active-condition pulse indicator */
     activeCondition?: ActiveCondition | null;
 };
+
+/**
+ * Internal: a single tool button with consistent active/idle/tap polish.
+ * - Smooth scale + ring transition when becoming active (works for both clicks and shortcuts).
+ * - Tap-down feedback on click.
+ * - Respects prefers-reduced-motion via the underlying transition.
+ */
+function ToolButton({
+    isActive,
+    onClick,
+    title,
+    icon,
+    shortcut,
+}: {
+    isActive: boolean;
+    onClick: () => void;
+    title: string;
+    icon: ReactNode;
+    shortcut?: string;
+}) {
+    return (
+        <Button
+            type="button"
+            size="sm"
+            variant={isActive ? 'secondary' : 'ghost'}
+            onClick={onClick}
+            title={title}
+            className={cn(
+                'relative h-7 w-7 rounded-sm p-0',
+                // Stylus / touch: enlarge tap targets to ~44pt and hide the keyboard-shortcut kbd hint
+                'coarse:h-11 coarse:w-11 coarse:rounded-md',
+                'transition-[transform,box-shadow,background-color,color] duration-150 ease-out',
+                'active:scale-90',
+                'motion-reduce:transition-none motion-reduce:active:scale-100',
+                isActive && 'scale-110 shadow-[inset_0_0_0_1px_var(--color-primary)] ring-1 ring-primary/40',
+            )}
+        >
+            {icon}
+            {shortcut && (
+                <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70 coarse:hidden">
+                    {shortcut}
+                </kbd>
+            )}
+        </Button>
+    );
+}
 
 export function DrawingToolsToolbar({
     viewMode,
@@ -32,7 +80,7 @@ export function DrawingToolsToolbar({
     canEdit,
     hasCalibration,
     showSelectMode = false,
-    selectModeTitle = 'Select (O)',
+    selectModeTitle = 'Drag select',
     activeCondition = null,
 }: DrawingToolsToolbarProps) {
     const toggleMode = (target: ViewMode) => onViewModeChange(viewMode === target ? 'pan' : target);
@@ -43,31 +91,21 @@ export function DrawingToolsToolbar({
     return (
         <>
             {/* View Mode */}
-            <div className="bg-background flex flex-col items-center rounded-sm border p-px">
-                <Button
-                    type="button"
-                    size="sm"
-                    variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
+            <div className="bg-background flex flex-col items-center gap-px rounded-sm border p-px">
+                <ToolButton
+                    isActive={viewMode === 'pan'}
                     onClick={() => onViewModeChange('pan')}
-                    className="relative h-7 w-7 rounded-sm p-0"
                     title="Pan mode (P)"
-                >
-                    <Hand className="h-3.5 w-3.5" />
-                    <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                        P
-                    </kbd>
-                </Button>
+                    icon={<Hand className="h-3.5 w-3.5" />}
+                    shortcut="P"
+                />
                 {showSelectMode && (
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === 'select' ? 'secondary' : 'ghost'}
+                    <ToolButton
+                        isActive={viewMode === 'select'}
                         onClick={() => onViewModeChange(viewMode === 'select' ? 'pan' : 'select')}
-                        className="relative h-7 w-7 rounded-sm p-0"
                         title={selectModeTitle}
-                    >
-                        <MousePointer className="h-3.5 w-3.5" />
-                    </Button>
+                        icon={<MousePointer className="h-3.5 w-3.5" />}
+                    />
                 )}
             </div>
 
@@ -75,95 +113,59 @@ export function DrawingToolsToolbar({
             {canEdit && (
                 <>
                     <div className="bg-border h-px w-5" />
-                    <div className="bg-background flex flex-col items-center rounded-sm border p-px">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
+                    <div className="bg-background flex flex-col items-center gap-px rounded-sm border p-px">
+                        <ToolButton
+                            isActive={viewMode === 'calibrate'}
                             onClick={() => toggleMode('calibrate')}
-                            className="relative h-7 w-7 rounded-sm p-0"
                             title="Calibrate scale (S)"
-                        >
-                            <Scale className="h-3.5 w-3.5" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                S
-                            </kbd>
-                        </Button>
+                            icon={<Scale className="h-3.5 w-3.5" />}
+                            shortcut="S"
+                        />
                         {showScaledMeasurements && (
                             <>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
+                                <ToolButton
+                                    isActive={viewMode === 'measure_line'}
                                     onClick={() => toggleMode('measure_line')}
-                                    className="relative h-7 w-7 rounded-sm p-0"
                                     title="Measure line (L)"
-                                >
-                                    <Minus className="h-3.5 w-3.5" />
-                                    <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                        L
-                                    </kbd>
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
+                                    icon={<Minus className="h-3.5 w-3.5" />}
+                                    shortcut="L"
+                                />
+                                <ToolButton
+                                    isActive={viewMode === 'measure_area'}
                                     onClick={() => toggleMode('measure_area')}
-                                    className="relative h-7 w-7 rounded-sm p-0"
                                     title="Measure area (A)"
-                                >
-                                    <Pentagon className="h-3.5 w-3.5" />
-                                    <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                        A
-                                    </kbd>
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
+                                    icon={<Pentagon className="h-3.5 w-3.5" />}
+                                    shortcut="A"
+                                />
+                                <ToolButton
+                                    isActive={viewMode === 'measure_rectangle'}
                                     onClick={() => toggleMode('measure_rectangle')}
-                                    className="relative h-7 w-7 rounded-sm p-0"
                                     title="Measure rectangle (R)"
-                                >
-                                    <Square className="h-3.5 w-3.5" />
-                                    <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                        R
-                                    </kbd>
-                                </Button>
+                                    icon={<Square className="h-3.5 w-3.5" />}
+                                    shortcut="R"
+                                />
                             </>
                         )}
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
+                        <ToolButton
+                            isActive={viewMode === 'measure_count'}
                             onClick={() => toggleMode('measure_count')}
-                            className="relative h-7 w-7 rounded-sm p-0"
                             title="Count items (C)"
-                        >
-                            <Hash className="h-3.5 w-3.5" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                C
-                            </kbd>
-                        </Button>
+                            icon={<Hash className="h-3.5 w-3.5" />}
+                            shortcut="C"
+                        />
                     </div>
 
                     <div className="bg-border h-px w-5" />
 
                     {/* Snap toggle */}
                     <div className="bg-background flex flex-col items-center rounded-sm border p-px">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={snapEnabled ? 'secondary' : 'ghost'}
+                        <ToolButton
+                            isActive={snapEnabled}
                             onClick={onSnapToggle}
-                            className="relative h-7 w-7 rounded-sm p-0"
                             title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
-                        >
-                            <Magnet className="h-3.5 w-3.5" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[8px] leading-none font-mono text-muted-foreground/70">
-                                N
-                            </kbd>
-                        </Button>
+                            icon={<Magnet className="h-3.5 w-3.5" />}
+                            shortcut="N"
+                        />
                     </div>
                 </>
             )}

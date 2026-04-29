@@ -26,6 +26,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
+import { measurementIntersectsRect } from '@/lib/drawing-geometry';
 import { usePage } from '@inertiajs/react';
 import { ArrowRight, FileText, GitBranch, Loader2, Lock, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -128,6 +129,10 @@ export default function DrawingVariations() {
     const [draftNameInput, setDraftNameInput] = useState('');
     const [showConditionManager, setShowConditionManager] = useState(false);
     const [sidebarTab, setSidebarTab] = useState<'measures' | 'conditions' | 'pricing'>('conditions');
+
+    // Drag-select multi-selection (set when viewMode === 'select')
+    const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<Set<number>>(new Set());
+    const [bulkDeleting, setBulkDeleting] = useState(false);
 
     const { confirm, dialogProps: confirmDialogProps } = useConfirm();
 
@@ -327,6 +332,79 @@ export default function DrawingVariations() {
         }
     };
 
+    // Drag-select: collect variation measurements whose geometry intersects the dragged rectangle
+    const handleBoxSelect = useCallback(
+        (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => {
+            const next = new Set<number>();
+            for (const m of visibleMeasurements) {
+                if (measurementIntersectsRect(m, bounds)) next.add(m.id);
+            }
+            setSelectedMeasurementIds(next);
+        },
+        [visibleMeasurements],
+    );
+
+    const handleClearMultiSelection = useCallback(() => {
+        setSelectedMeasurementIds(new Set());
+    }, []);
+
+    const handleBulkDelete = useCallback(async () => {
+        if (selectedMeasurementIds.size === 0) return;
+        const confirmed = await confirm({
+            title: `Delete ${selectedMeasurementIds.size} measurement${selectedMeasurementIds.size > 1 ? 's' : ''}?`,
+            description: 'This cannot be undone from this dialog. Use Ctrl+Z afterwards if you change your mind.',
+            confirmLabel: 'Delete',
+            variant: 'destructive',
+        });
+        if (!confirmed) return;
+
+        setBulkDeleting(true);
+        const ids = Array.from(selectedMeasurementIds);
+        const deleted: MeasurementData[] = [];
+        const failed: number[] = [];
+
+        for (const id of ids) {
+            try {
+                const data = await api.delete<{ measurement: MeasurementData }>(
+                    `/drawings/${drawing.id}/measurements/${id}`,
+                );
+                deleted.push(data.measurement);
+            } catch {
+                failed.push(id);
+            }
+        }
+
+        if (deleted.length > 0) {
+            setMeasurements((prev) => prev.filter((m) => !deleted.some((d) => d.id === m.id)));
+            for (const m of deleted) {
+                pushUndo({ type: 'delete', measurement: m, drawingId: drawing.id });
+            }
+            if (selectedMeasurementId !== null && deleted.some((m) => m.id === selectedMeasurementId)) {
+                setSelectedMeasurementId(null);
+            }
+        }
+
+        setSelectedMeasurementIds(new Set());
+        setBulkDeleting(false);
+
+        if (failed.length > 0) {
+            toast.error(`Deleted ${deleted.length}, failed ${failed.length}.`);
+        } else {
+            toast.success(`Deleted ${deleted.length} measurement${deleted.length !== 1 ? 's' : ''}.`);
+        }
+    }, [selectedMeasurementIds, drawing.id, confirm, pushUndo, selectedMeasurementId]);
+
+    // Clear multi-selection when leaving drag-select mode or switching variations
+    useEffect(() => {
+        if (viewMode !== 'select' && selectedMeasurementIds.size > 0) {
+            setSelectedMeasurementIds(new Set());
+        }
+    }, [viewMode, selectedMeasurementIds.size]);
+
+    useEffect(() => {
+        setSelectedMeasurementIds(new Set());
+    }, [selectedVariationId]);
+
     const handleGeneratePremier = async (variationId: number) => {
         setGeneratingPremier(true);
         try {
@@ -502,8 +580,51 @@ export default function DrawingVariations() {
                     onSnapToggle={() => setSnapEnabled((prev) => !prev)}
                     canEdit={canMeasure}
                     hasCalibration={!!calibration}
+                    showSelectMode={!!selectedVariationId && !isVariationLocked}
+                    selectModeTitle="Drag select"
                     activeCondition={activeConditionDisplay}
                 />
+            }
+            statusBar={
+                selectedMeasurementIds.size > 0 || viewMode === 'select' ? (
+                    <>
+                        <span className="font-medium">
+                            {viewMode === 'select' ? 'Drag select' : 'Pan'}
+                        </span>
+                        <div className="flex-1" />
+                        {viewMode === 'select' && selectedMeasurementIds.size === 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                                Drag a rectangle to select measurements
+                            </span>
+                        )}
+                        {selectedMeasurementIds.size > 0 && (
+                            <>
+                                <span className="rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                    {selectedMeasurementIds.size} selected
+                                </span>
+                                {canMeasure && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-4 gap-0.5 rounded-sm px-1 text-[10px] text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                                        onClick={handleBulkDelete}
+                                        disabled={bulkDeleting}
+                                    >
+                                        <Trash2 className="h-2.5 w-2.5" />
+                                        {bulkDeleting ? '...' : 'Delete'}
+                                    </Button>
+                                )}
+                                <button
+                                    className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
+                                    onClick={handleClearMultiSelection}
+                                    title="Clear selection"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </>
+                        )}
+                    </>
+                ) : undefined
             }
             toolbar={
                 <>
@@ -689,6 +810,7 @@ export default function DrawingVariations() {
                         viewMode={viewMode}
                         measurements={visibleMeasurements}
                         selectedMeasurementId={selectedMeasurementId}
+                        selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
                         calibration={calibration}
                         conditionOpacities={conditionOpacities}
                         snapEnabled={snapEnabled}
@@ -697,6 +819,9 @@ export default function DrawingVariations() {
                         onMeasurementClick={(m) =>
                             setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)
                         }
+                        boxSelectMode={viewMode === 'select'}
+                        onBoxSelectComplete={handleBoxSelect}
+                        activeColor={activeCondition?.color ?? null}
                         className="absolute inset-0"
                     />
                 </div>
