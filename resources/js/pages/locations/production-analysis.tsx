@@ -7,8 +7,9 @@ import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useHttp } from '@inertiajs/react';
-import { AlertTriangle, ChevronDown, Columns, Info, Search, Settings2, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Info, Search, Settings2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -63,6 +64,42 @@ const fmt = (val: number) => val.toLocaleString('en-AU', { minimumFractionDigits
 const fmtDollar = (val: number) => '$' + Math.abs(val).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDollarSigned = (val: number) => (val < 0 ? '-' : '') + fmtDollar(val);
 
+function HeaderWithInfo({
+    label,
+    tooltip,
+    align = 'right',
+    className,
+}: {
+    label: string;
+    tooltip: React.ReactNode;
+    align?: 'left' | 'right';
+    className?: string;
+}) {
+    return (
+        <TableHead className={cn('text-xs font-semibold', align === 'right' ? 'text-right' : 'text-left', className)}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span
+                        className={cn(
+                            'inline-flex items-center gap-1 cursor-help',
+                            align === 'right' ? 'justify-end' : 'justify-start',
+                        )}
+                    >
+                        {label}
+                        <Info className="h-3 w-3 text-muted-foreground/70" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent
+                    side="top"
+                    className="flex max-w-[280px] flex-col items-start gap-1 border border-border bg-secondary px-3 py-2 text-xs leading-relaxed text-left text-secondary-foreground shadow-md whitespace-normal [&>span:last-child]:!bg-secondary [&>span:last-child]:!fill-secondary"
+                >
+                    {tooltip}
+                </TooltipContent>
+            </Tooltip>
+        </TableHead>
+    );
+}
+
 function CodePicker({
     label,
     settingKey,
@@ -104,37 +141,37 @@ function CodePicker({
     };
 
     return (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-md border overflow-hidden">
             {/* Header */}
             <button
                 type="button"
                 onClick={() => setExpanded((p) => !p)}
-                className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between w-full px-2.5 py-1.5 hover:bg-muted/50 transition-colors"
             >
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{label}</span>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium">{label}</span>
                     {selectedCodes.length > 0 && (
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">
                             {selectedCodes.length} mapped
                         </Badge>
                     )}
                     {http.processing && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
                 </div>
-                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
+                <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
             </button>
 
             {/* Selected badges (always visible when codes are mapped) */}
             {selectedCodes.length > 0 && !expanded && (
-                <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
+                <div className="flex flex-wrap gap-1 px-2.5 pb-1.5">
                     {selectedCodes.map((code) => (
-                        <Badge key={code} variant="secondary" className="text-xs h-6 gap-1 px-2 font-mono">
+                        <Badge key={code} variant="secondary" className="text-[11px] h-5 gap-1 px-1.5 font-mono">
                             {code}
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); toggleCode(code); }}
                                 className="rounded-full hover:bg-muted-foreground/20 p-0.5 -mr-0.5"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="h-2.5 w-2.5" />
                             </button>
                         </Badge>
                     ))}
@@ -144,36 +181,36 @@ function CodePicker({
             {/* Expanded checklist */}
             {expanded && (
                 <div className="border-t">
-                    <div className="p-2">
+                    <div className="p-1.5">
                         <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                             <Input
                                 placeholder="Search cost codes..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="h-8 pl-8 text-xs"
+                                className="h-7 pl-7 text-xs"
                             />
                         </div>
                     </div>
-                    <ScrollArea className="h-[180px]">
+                    <ScrollArea className="h-[160px]">
                         <div className="px-1 pb-1">
                             {filtered.length === 0 && (
-                                <p className="text-xs text-muted-foreground text-center py-4">No matches</p>
+                                <p className="text-[11px] text-muted-foreground text-center py-3">No matches</p>
                             )}
                             {filtered.map((cc) => {
                                 const checked = selectedCodes.includes(cc.cost_code);
                                 return (
                                     <label
                                         key={cc.cost_code}
-                                        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50 cursor-pointer"
                                     >
                                         <Checkbox
                                             checked={checked}
                                             onCheckedChange={() => toggleCode(cc.cost_code)}
-                                            className="h-4 w-4"
+                                            className="h-3.5 w-3.5"
                                         />
-                                        <span className="font-mono text-xs shrink-0">{cc.cost_code}</span>
-                                        <span className="text-xs text-muted-foreground truncate">{cc.code_description}</span>
+                                        <span className="font-mono text-[11px] shrink-0">{cc.cost_code}</span>
+                                        <span className="text-[11px] text-muted-foreground truncate">{cc.code_description}</span>
                                     </label>
                                 );
                             })}
@@ -224,35 +261,35 @@ function WorktypePicker({
     };
 
     return (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-md border overflow-hidden">
             <button
                 type="button"
                 onClick={() => setExpanded((p) => !p)}
-                className="flex items-center justify-between w-full px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between w-full px-2.5 py-1.5 hover:bg-muted/50 transition-colors"
             >
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{label}</span>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium">{label}</span>
                     {selectedWorktypes.length > 0 && (
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">
                             {selectedWorktypes.length} mapped
                         </Badge>
                     )}
                     {http.processing && <span className="text-[10px] text-muted-foreground animate-pulse">saving...</span>}
                 </div>
-                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
+                <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
             </button>
 
             {selectedWorktypes.length > 0 && !expanded && (
-                <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
+                <div className="flex flex-wrap gap-1 px-2.5 pb-1.5">
                     {selectedWorktypes.map((wt) => (
-                        <Badge key={wt} variant="secondary" className="text-xs h-6 gap-1 px-2">
+                        <Badge key={wt} variant="secondary" className="text-[11px] h-5 gap-1 px-1.5">
                             {wt}
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); toggleWorktype(wt); }}
                                 className="rounded-full hover:bg-muted-foreground/20 p-0.5 -mr-0.5"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="h-2.5 w-2.5" />
                             </button>
                         </Badge>
                     ))}
@@ -261,35 +298,35 @@ function WorktypePicker({
 
             {expanded && (
                 <div className="border-t">
-                    <div className="p-2">
+                    <div className="p-1.5">
                         <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                             <Input
                                 placeholder="Search worktypes..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="h-8 pl-8 text-xs"
+                                className="h-7 pl-7 text-xs"
                             />
                         </div>
                     </div>
-                    <ScrollArea className="h-[180px]">
+                    <ScrollArea className="h-[160px]">
                         <div className="px-1 pb-1">
                             {filtered.length === 0 && (
-                                <p className="text-xs text-muted-foreground text-center py-4">No matches</p>
+                                <p className="text-[11px] text-muted-foreground text-center py-3">No matches</p>
                             )}
                             {filtered.map((wt) => {
                                 const checked = selectedWorktypes.includes(wt);
                                 return (
                                     <label
                                         key={wt}
-                                        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50 cursor-pointer"
                                     >
                                         <Checkbox
                                             checked={checked}
                                             onCheckedChange={() => toggleWorktype(wt)}
-                                            className="h-4 w-4"
+                                            className="h-3.5 w-3.5"
                                         />
-                                        <span className="text-xs">{wt}</span>
+                                        <span className="text-[11px]">{wt}</span>
                                     </label>
                                 );
                             })}
@@ -320,7 +357,6 @@ export default function ProductionAnalysis({
     const [foremanWorktypes, setForemanWorktypes] = useState<string[]>(settings.analysis_foreman_worktypes ?? []);
     const [leadingHandsWorktypes, setLeadingHandsWorktypes] = useState<string[]>(settings.analysis_leading_hands_worktypes ?? []);
     const [labourerWorktypes, setLabourerWorktypes] = useState<string[]>(settings.analysis_labourer_worktypes ?? []);
-    const [showPayrollColumns, setShowPayrollColumns] = useState(false);
 
     const availableWorktypeNames = useMemo(
         () => Object.keys(payrollHoursByWorktype).sort(),
@@ -484,15 +520,6 @@ export default function ProductionAnalysis({
             <div className="flex items-center justify-between shrink-0">
                 <span className="text-xs font-semibold">DPC Analysis</span>
                 <div className="flex items-center gap-1.5">
-                <Button
-                    variant={showPayrollColumns ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    onClick={() => setShowPayrollColumns((p) => !p)}
-                >
-                    <Columns className="h-3.5 w-3.5" />
-                    Payroll Comparison
-                </Button>
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
@@ -500,20 +527,20 @@ export default function ProductionAnalysis({
                             Settings
                         </Button>
                     </SheetTrigger>
-                    <SheetContent side="right" className="w-[360px] sm:w-[420px] overflow-y-auto">
-                        <SheetHeader className="pb-2">
-                            <SheetTitle className="text-base">Analysis Settings</SheetTitle>
-                            <SheetDescription>
+                    <SheetContent side="right" className="w-[340px] sm:w-[380px] overflow-y-auto text-xs">
+                        <SheetHeader className="pb-1.5 px-3 pt-3">
+                            <SheetTitle className="text-sm">Analysis Settings</SheetTitle>
+                            <SheetDescription className="text-xs">
                                 Configure cost code mapping and hourly rates. Changes save automatically.
                             </SheetDescription>
                         </SheetHeader>
 
-                        <div className="px-4 pb-6 space-y-6">
+                        <div className="px-3 pb-4 space-y-4">
                             {/* Cost code mapping */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <div>
-                                    <h4 className="text-sm font-semibold">Cost Code Mapping</h4>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                    <h4 className="text-xs font-medium">Cost Code Mapping</h4>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">
                                         Assign DPC cost codes to each category. Unmapped codes count as Wages.
                                     </p>
                                 </div>
@@ -546,15 +573,15 @@ export default function ProductionAnalysis({
                             <Separator />
 
                             {/* Worktype Mapping (for payroll hours) */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <div>
-                                    <h4 className="text-sm font-semibold">Worktype Mapping</h4>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        Assign payroll worktypes to each category for the Payroll Comparison columns. Unmapped worktypes are excluded (e.g. leaves).
+                                    <h4 className="text-xs font-medium">Worktype Mapping</h4>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                                        Assign payroll worktypes to each category for the Hours (Payroll System) columns. Unmapped worktypes are excluded (e.g. leaves).
                                     </p>
                                 </div>
                                 {availableWorktypeNames.length === 0 ? (
-                                    <p className="text-xs text-muted-foreground italic">No payroll clock data available for this project.</p>
+                                    <p className="text-[11px] text-muted-foreground italic">No payroll clock data available for this project.</p>
                                 ) : (
                                     <>
                                         <WorktypePicker
@@ -596,25 +623,25 @@ export default function ProductionAnalysis({
                             <Separator />
 
                             {/* DPC Hourly Rates */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <div>
-                                    <h4 className="text-sm font-semibold">DPC Hourly Rates</h4>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                    <h4 className="text-xs font-medium">DPC Hourly Rates</h4>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">
                                         Set the DPC hourly rate for each category. Used to calculate DPC Spent.
                                     </p>
                                 </div>
-                                <div className="rounded-lg border divide-y">
+                                <div className="rounded-md border divide-y">
                                     {CATEGORIES.map(({ key, label }) => (
-                                        <div key={key} className="flex items-center justify-between px-3 py-2.5">
-                                            <Label htmlFor={`dpc-rate-${key}`} className="text-sm">
+                                        <div key={key} className="flex items-center justify-between px-2.5 py-1.5">
+                                            <Label htmlFor={`dpc-rate-${key}`} className="text-xs">
                                                 {label}
                                             </Label>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5">
                                                 {savingRateKey === key && (
                                                     <span className="text-[10px] text-muted-foreground animate-pulse w-8">saving</span>
                                                 )}
                                                 <div className="relative">
-                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">$</span>
                                                     <Input
                                                         id={`dpc-rate-${key}`}
                                                         type="number"
@@ -624,7 +651,7 @@ export default function ProductionAnalysis({
                                                         onChange={(e) => updateDpcRate(key, e.target.value)}
                                                         onBlur={() => saveDpcRate(key)}
                                                         onKeyDown={(e) => e.key === 'Enter' && saveDpcRate(key)}
-                                                        className="h-8 w-28 pl-6 text-sm tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        className="h-7 w-24 pl-5 text-xs tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
@@ -676,28 +703,127 @@ export default function ProductionAnalysis({
                 </div>
             ) : (
                 <ScrollArea className="min-h-0 rounded-md border">
+                    <TooltipProvider delay={150}>
                     <table className="w-full caption-bottom text-sm">
                         <TableHeader className="sticky top-0 z-10 bg-background">
                             <TableRow>
-                                <TableHead className="text-xs font-semibold min-w-[120px]">DPC Analysis</TableHead>
-                                <TableHead className="text-right text-xs font-semibold min-w-[100px]">Paid DPC Hours</TableHead>
-                                {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[120px] bg-amber-50 dark:bg-amber-950/30">Paid Payroll Hours</TableHead>
-                                )}
-                                {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[100px] bg-amber-50 dark:bg-amber-950/30">Diff Hours</TableHead>
-                                )}
-                                <TableHead className="text-right text-xs font-semibold min-w-[120px]">Premier Cost $</TableHead>
-                                <TableHead className="text-right text-xs font-semibold min-w-[120px]">Actual Hourly Rate</TableHead>
-                                {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[120px] bg-amber-50 dark:bg-amber-950/30">Payroll Hourly Rate</TableHead>
-                                )}
-                                {showPayrollColumns && (
-                                    <TableHead className="text-right text-xs font-semibold min-w-[100px] bg-amber-50 dark:bg-amber-950/30">Rate Diff</TableHead>
-                                )}
-                                <TableHead className="text-right text-xs font-semibold min-w-[120px]">DPC Hourly Rate</TableHead>
-                                <TableHead className="text-right text-xs font-semibold min-w-[120px]">DPC Spent ($)</TableHead>
-                                <TableHead className="text-right text-xs font-semibold min-w-[120px]">Variance ($)</TableHead>
+                                <HeaderWithInfo
+                                    label="DPC Analysis"
+                                    align="left"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Source: Cost Code Mapping (Settings)</p>
+                                            <p>Rows are grouped by category. Each DPC cost code is assigned to Foreman, Leading Hands, or Labourer in Analysis Settings; any unmapped code rolls up to Wages.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Paid DPC Hours"
+                                    className="min-w-[100px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Source: DPC Production data (uploaded CSV)</p>
+                                            <p>Timesheet data is downloaded from the Payroll System and loaded into DPC; this column sums the Used Hours from those DPC production lines for the selected report, grouped by the cost-code-to-category mapping above.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Hours (Payroll System)"
+                                    className="min-w-[120px] bg-amber-50 dark:bg-amber-950/30"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Source: Hours as per Payroll System</p>
+                                            <p>Same underlying timesheet data, but read directly from the Payroll System (not via DPC). Sum of hours per worktype for this project, grouped using the Worktype Mapping in Settings. Unmapped worktypes (e.g. leaves) are excluded.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Diff Hours"
+                                    className="min-w-[100px] bg-amber-50 dark:bg-amber-950/30"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>Paid DPC Hours − Hours (Payroll System).</p>
+                                            <p>Positive (green) means more hours were booked to DPC than recorded in the Payroll System; negative (red) means Payroll System hours exceed DPC.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Premier Cost $"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Source: Premier accounting</p>
+                                            <p>Actual labour cost posted to Premier for this project, broken down by category. Includes accruals for leave, allowances, and similar on-costs. Reflects payroll posted up to the date shown in the banner above.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Actual Hourly Rate"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>Premier Cost ÷ Paid DPC Hours.</p>
+                                            <p>Effective $ per hour using DPC-reported hours.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Timesheet Hourly Rate"
+                                    className="min-w-[120px] bg-amber-50 dark:bg-amber-950/30"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>Premier Cost ÷ Hours (Payroll System).</p>
+                                            <p>Effective $ per hour using timesheet hours from the Payroll System.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Rate Diff"
+                                    className="min-w-[100px] bg-amber-50 dark:bg-amber-950/30"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>Timesheet Hourly Rate − Actual Hourly Rate.</p>
+                                            <p>Gap between the two effective rates. A large gap typically indicates an hours mismatch between DPC and timesheets.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="DPC Hourly Rate"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Source: DPC Hourly Rates (Settings)</p>
+                                            <p>The hourly rate you configured per category in Analysis Settings. Used to calculate DPC Spent.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="DPC Spent ($)"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>DPC Hourly Rate × Paid DPC Hours.</p>
+                                            <p>Estimated labour cost based on configured DPC rates.</p>
+                                        </>
+                                    }
+                                />
+                                <HeaderWithInfo
+                                    label="Variance ($)"
+                                    className="min-w-[120px]"
+                                    tooltip={
+                                        <>
+                                            <p className="font-medium">Calculation</p>
+                                            <p>DPC Spent − Premier Cost.</p>
+                                            <p>Negative (red) means actual Premier cost exceeded the DPC-rate estimate.</p>
+                                        </>
+                                    }
+                                />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -709,16 +835,12 @@ export default function ProductionAnalysis({
                                         <TableCell className="text-right tabular-nums text-xs">
                                             {isBlankHours ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidDpcHours)}
                                         </TableCell>
-                                        {showPayrollColumns && (
-                                            <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
-                                                {row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidPayrollHours)}
-                                            </TableCell>
-                                        )}
-                                        {showPayrollColumns && (
-                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
-                                                {isBlankHours && row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.diffHours)}
-                                            </TableCell>
-                                        )}
+                                        <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
+                                            {row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidPayrollHours)}
+                                        </TableCell>
+                                        <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                            {isBlankHours && row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.diffHours)}
+                                        </TableCell>
                                         <TableCell className="text-right tabular-nums text-xs">
                                             {row.premierCost === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmtDollar(row.premierCost)}
                                         </TableCell>
@@ -729,24 +851,20 @@ export default function ProductionAnalysis({
                                                 fmtDollar(row.actualHourlyRate)
                                             )}
                                         </TableCell>
-                                        {showPayrollColumns && (
-                                            <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
-                                                {row.paidPayrollHours === 0 || row.premierCost === 0 ? (
-                                                    <span className="text-muted-foreground">(Blank)</span>
-                                                ) : (
-                                                    fmtDollar(row.payrollHourlyRate)
-                                                )}
-                                            </TableCell>
-                                        )}
-                                        {showPayrollColumns && (
-                                            <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.rateDiff < 0 ? 'text-destructive' : row.rateDiff > 0 ? 'text-emerald-600' : '')}>
-                                                {(isBlankHours && row.paidPayrollHours === 0) || row.premierCost === 0 ? (
-                                                    <span className="text-muted-foreground">(Blank)</span>
-                                                ) : (
-                                                    fmtDollarSigned(row.rateDiff)
-                                                )}
-                                            </TableCell>
-                                        )}
+                                        <TableCell className="text-right tabular-nums text-xs bg-amber-50/50 dark:bg-amber-950/20">
+                                            {row.paidPayrollHours === 0 || row.premierCost === 0 ? (
+                                                <span className="text-muted-foreground">(Blank)</span>
+                                            ) : (
+                                                fmtDollar(row.payrollHourlyRate)
+                                            )}
+                                        </TableCell>
+                                        <TableCell className={cn('text-right tabular-nums text-xs font-medium bg-amber-50/50 dark:bg-amber-950/20', row.rateDiff < 0 ? 'text-destructive' : row.rateDiff > 0 ? 'text-emerald-600' : '')}>
+                                            {(isBlankHours && row.paidPayrollHours === 0) || row.premierCost === 0 ? (
+                                                <span className="text-muted-foreground">(Blank)</span>
+                                            ) : (
+                                                fmtDollarSigned(row.rateDiff)
+                                            )}
+                                        </TableCell>
                                         <TableCell className="text-right tabular-nums text-xs">
                                             {isBlankHours || row.dpcHourlyRate === 0 ? (
                                                 <span className="text-muted-foreground">(Blank)</span>
@@ -781,28 +899,20 @@ export default function ProductionAnalysis({
                             <TableRow className="font-semibold">
                                 <TableCell className="text-xs">Total</TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidDpcHours)}</TableCell>
-                                {showPayrollColumns && (
-                                    <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">{fmt(totals.paidPayrollHours)}</TableCell>
-                                )}
-                                {showPayrollColumns && (
-                                    <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
-                                        {fmt(totals.diffHours)}
-                                    </TableCell>
-                                )}
+                                <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">{fmt(totals.paidPayrollHours)}</TableCell>
+                                <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
+                                    {fmt(totals.diffHours)}
+                                </TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">{fmtDollar(totals.premierCost)}</TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">
                                     {totals.paidDpcHours > 0 ? fmtDollar(totals.actualHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
-                                {showPayrollColumns && (
-                                    <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">
-                                        {totals.paidPayrollHours > 0 && totals.premierCost > 0 ? fmtDollar(totals.payrollHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
-                                    </TableCell>
-                                )}
-                                {showPayrollColumns && (
-                                    <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.rateDiff < 0 ? 'text-destructive' : totals.rateDiff > 0 ? 'text-emerald-600' : '')}>
-                                        {totals.paidDpcHours > 0 || totals.paidPayrollHours > 0 ? fmtDollarSigned(totals.rateDiff) : <span className="text-muted-foreground">(Blank)</span>}
-                                    </TableCell>
-                                )}
+                                <TableCell className="text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30">
+                                    {totals.paidPayrollHours > 0 && totals.premierCost > 0 ? fmtDollar(totals.payrollHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
+                                </TableCell>
+                                <TableCell className={cn('text-right tabular-nums text-xs bg-amber-100/60 dark:bg-amber-950/30', totals.rateDiff < 0 ? 'text-destructive' : totals.rateDiff > 0 ? 'text-emerald-600' : '')}>
+                                    {totals.paidDpcHours > 0 || totals.paidPayrollHours > 0 ? fmtDollarSigned(totals.rateDiff) : <span className="text-muted-foreground">(Blank)</span>}
+                                </TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">
                                     {totals.paidDpcHours > 0 && totals.dpcSpent > 0 ? fmtDollar(totals.dpcHourlyRate) : <span className="text-muted-foreground">(Blank)</span>}
                                 </TableCell>
@@ -813,6 +923,7 @@ export default function ProductionAnalysis({
                             </TableRow>
                         </TableFooter>
                     </table>
+                    </TooltipProvider>
                     <ScrollBar orientation="horizontal" />
                 </ScrollArea>
             )}

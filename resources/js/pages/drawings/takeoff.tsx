@@ -31,12 +31,22 @@ import {
     GitCompare,
     Hash,
     Minus,
-    Pencil,
     Pentagon,
     Plus,
+    Search,
+    Settings,
     Trash2,
     X,
 } from 'lucide-react';
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxTrigger,
+} from '@/components/ui/combobox';
+import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -166,6 +176,8 @@ export default function DrawingTakeoff() {
     // Bid Areas state
     const [bidAreas, setBidAreas] = useState<BidArea[]>([]);
     const [showBidAreaManager, setShowBidAreaManager] = useState(false);
+    const [bidAreaComboOpen, setBidAreaComboOpen] = useState(false);
+    const [bidAreaComboInput, setBidAreaComboInput] = useState('');
     const [activeBidAreaId, setActiveBidAreaId] = useState<number | null>(null);
 
     // Undo/redo system
@@ -617,35 +629,127 @@ export default function DrawingTakeoff() {
 
                     {/* Bid Area Selector */}
                     <div className="flex items-center gap-1">
-                        <FolderTree className="h-3 w-3 text-muted-foreground" />
-                        <Select
-                            value={activeBidAreaId ? String(activeBidAreaId) : 'all'}
-                            onValueChange={(v) => setActiveBidAreaId(v === 'all' ? null : Number(v))}
+                        <Combobox<BidArea & { depth: number }>
+                            items={flatBidAreas}
+                            value={flatBidAreas.find((a) => a.id === activeBidAreaId) ?? null}
+                            open={bidAreaComboOpen}
+                            inputValue={bidAreaComboInput}
+                            itemToStringLabel={(item) => item.name}
+                            itemToStringValue={(item) => String(item.id)}
+                            isItemEqualToValue={(a, b) => a.id === b.id}
+                            onOpenChange={(next) => {
+                                setBidAreaComboOpen(next);
+                                if (!next) setBidAreaComboInput('');
+                            }}
+                            onInputValueChange={setBidAreaComboInput}
+                            onValueChange={(value) => {
+                                setActiveBidAreaId(value ? value.id : null);
+                                setBidAreaComboOpen(false);
+                                setBidAreaComboInput('');
+                            }}
                         >
-                            <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-xs shadow-none">
-                                <SelectValue placeholder="All Areas" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">
-                                    <span className="text-muted-foreground">All Areas</span>
-                                </SelectItem>
-                                {flatBidAreas.map((area) => (
-                                    <SelectItem key={area.id} value={String(area.id)}>
-                                        <span style={{ paddingLeft: area.depth * 12 }}>{area.name}</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            <ComboboxTrigger
+                                render={
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-[160px] justify-between gap-1.5 rounded-sm px-1.5 text-xs font-normal"
+                                    />
+                                }
+                                aria-label="Filter by bid area"
+                            >
+                                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                                    <FolderTree className="size-3 shrink-0 text-muted-foreground" />
+                                    {activeBidAreaId
+                                        ? (
+                                            <span className="truncate">
+                                                {flatBidAreas.find((a) => a.id === activeBidAreaId)?.name ?? 'Unknown area'}
+                                            </span>
+                                        )
+                                        : <span className="text-muted-foreground">All areas</span>}
+                                </span>
+                                {activeBidAreaId && (
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label="Clear filter"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveBidAreaId(null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setActiveBidAreaId(null);
+                                            }
+                                        }}
+                                        className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    >
+                                        <X className="size-3" />
+                                    </span>
+                                )}
+                            </ComboboxTrigger>
+
+                            <ComboboxContent className="w-[280px] p-0 overflow-hidden">
+                                <div className="flex h-8 items-center gap-1.5 border-b px-2">
+                                    <Search className="size-3 shrink-0 text-muted-foreground" />
+                                    <ComboboxPrimitive.Input
+                                        placeholder="Search areas..."
+                                        className="h-full flex-1 bg-transparent text-xs outline-none placeholder:text-xs placeholder:text-muted-foreground"
+                                    />
+                                </div>
+
+                                <ComboboxEmpty className="flex-col items-center gap-1 px-4 py-6 text-center">
+                                    <FolderTree className="size-4 text-muted-foreground/40" />
+                                    <span className="text-xs text-muted-foreground">
+                                        {flatBidAreas.length === 0 ? 'No areas yet' : 'No matches'}
+                                    </span>
+                                    {canEditTakeoff && flatBidAreas.length === 0 && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="mt-1 h-6 gap-1 rounded-sm text-xs"
+                                            onClick={() => {
+                                                setBidAreaComboOpen(false);
+                                                setShowBidAreaManager(true);
+                                            }}
+                                        >
+                                            <Plus className="size-3" />
+                                            New area
+                                        </Button>
+                                    )}
+                                </ComboboxEmpty>
+
+                                <ComboboxList className="max-h-[280px] p-0">
+                                    {(area: BidArea & { depth: number }) => (
+                                        <ComboboxItem
+                                            key={area.id}
+                                            value={area}
+                                            className="rounded-none border-b border-border/50 px-2 py-1.5 text-xs last:border-b-0"
+                                        >
+                                            <span
+                                                className="truncate"
+                                                style={{ paddingLeft: area.depth * 10 }}
+                                            >
+                                                {area.name}
+                                            </span>
+                                        </ComboboxItem>
+                                    )}
+                                </ComboboxList>
+                            </ComboboxContent>
+                        </Combobox>
                         {canEditTakeoff && (
                             <Button
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0"
+                                className="h-6 w-6 rounded-sm p-0"
                                 title="Manage bid areas"
                                 onClick={() => setShowBidAreaManager(true)}
                             >
-                                <Pencil className="h-2.5 w-2.5" />
+                                <Settings className="size-3" />
                             </Button>
                         )}
                     </div>

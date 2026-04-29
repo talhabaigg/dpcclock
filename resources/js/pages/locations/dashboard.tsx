@@ -18,7 +18,7 @@ import { JobSummary, Location, type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Eye, EyeOff, Pencil, Printer, RotateCcw, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, Tooltip as RechartsTooltip, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import ProductionAnalysis from './production-analysis';
 import { productionColumns, type GroupByMode, type ProductionRow } from './production-data-columns';
@@ -156,7 +156,17 @@ export default function Dashboard({
     allLayouts,
 }: DashboardProps) {
     const [date, setDate] = useState<Date | undefined>(asOfDate ? new Date(asOfDate) : new Date());
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const TAB_STORAGE_KEY = 'project-dashboard-active-tab';
+    const [activeTab, setActiveTab] = useState<string>(() => {
+        if (typeof window === 'undefined') return 'dashboard';
+        const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+        return stored === 'production-data' || stored === 'analysis' ? stored : 'dashboard';
+    });
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+        }
+    }, [activeTab]);
     const [groupBy, setGroupBy] = useState<GroupByMode>('area');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
     const [reportOpen, setReportOpen] = useState(false);

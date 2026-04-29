@@ -1148,8 +1148,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/locations/{location}/takeoff-conditions/{condition}/line-items/batch', [TakeoffConditionController::class, 'batchLineItems'])->name('condition-line-items.batch');
         // Bid areas (write)
         Route::post('/locations/{location}/bid-areas', [BidAreaController::class, 'store'])->name('bid-areas.store');
+        Route::post('/locations/{location}/bid-areas/bulk', [BidAreaController::class, 'bulkStore'])->name('bid-areas.bulk-store');
+        Route::post('/locations/{location}/bid-areas/reorder', [BidAreaController::class, 'reorder'])->name('bid-areas.reorder');
         Route::put('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'update'])->name('bid-areas.update');
         Route::delete('/locations/{location}/bid-areas/{bidArea}', [BidAreaController::class, 'destroy'])->name('bid-areas.destroy');
+        Route::post('/locations/{location}/bid-areas/bulk-delete', [BidAreaController::class, 'bulkDestroy'])->name('bid-areas.bulk-destroy');
     });
 
     // --------------------------------------------
