@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -54,7 +55,7 @@ function fmtInt(val: number): string {
 function ColorSwatch({ color }: { color: string }) {
     return (
         <span
-            className="inline-block h-3.5 w-3.5 shrink-0 rounded-[2px] border border-black/20"
+            className="inline-block h-3 w-3 shrink-0 rounded-[2px] border border-black/20"
             style={{ backgroundColor: color }}
         />
     );
@@ -117,27 +118,13 @@ export default function EstimatePage() {
             activeTab={activeTab}
         >
             <div className="flex flex-1 flex-col overflow-hidden">
-                {/* Toolbar */}
-                <div className="flex shrink-0 items-center gap-3 border-b px-3 py-1.5">
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Checkbox
-                            checked={hideEmpty}
-                            onCheckedChange={(v) => setHideEmpty(v === true)}
-                            className="h-3.5 w-3.5"
-                        />
-                        Hide conditions with no Quantities
-                    </label>
-                </div>
-
-                {filteredRows.length === 0 ? (
+                {filteredRows.length === 0 && estimateRows.length === 0 ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
                             <Calculator className="h-6 w-6 text-muted-foreground/40" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">
-                                {hideEmpty ? 'No conditions with quantities' : 'No conditions'}
-                            </p>
+                            <p className="text-xs font-medium text-muted-foreground">No conditions</p>
                             <p className="mt-1 text-xs text-muted-foreground/70">
                                 Create conditions and take measurements to see the estimate here.
                             </p>
@@ -145,67 +132,93 @@ export default function EstimatePage() {
                     </div>
                 ) : (
                     <ScrollArea className="flex-1">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-background">
-                                <TableRow>
-                                    <TableHead className="w-[70px]">No.</TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead className="w-[90px] text-right">Qty1</TableHead>
-                                    <TableHead className="w-[45px]">UOM</TableHead>
-                                    <TableHead className="w-[90px] text-right">Qty2</TableHead>
-                                    <TableHead className="w-[45px]">UOM</TableHead>
-                                    <TableHead className="w-[100px] text-right">Mat. ($)</TableHead>
-                                    <TableHead className="w-[100px] text-right">Labor ($)</TableHead>
-                                    <TableHead className="w-[100px] text-right">Sub ($)</TableHead>
-                                    <TableHead className="w-[110px] text-right">Total ($)</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                            {/* Toolbar */}
+                            <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Checkbox
+                                        checked={hideEmpty}
+                                        onCheckedChange={(v) => setHideEmpty(v === true)}
+                                        className="h-3.5 w-3.5"
+                                    />
+                                    Hide conditions with no quantities
+                                </label>
+                            </div>
 
-                            <TableBody>
-                                {typeNames.map((typeName) => {
-                                    const rows = grouped[typeName];
-                                    const isOpen = !collapsedGroups.has(typeName);
-                                    const gMat = rows.reduce((s, r) => s + r.material_cost, 0);
-                                    const gLab = rows.reduce((s, r) => s + r.labour_cost, 0);
-                                    const gSub = rows.reduce((s, r) => s + r.sub_cost, 0);
-                                    const gTot = rows.reduce((s, r) => s + r.total_cost, 0);
+                            <Card className="overflow-clip !p-0 !gap-0">
+                                <Table className="text-xs [&>tbody>tr:last-child]:border-b-0">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                        <TableRow>
+                                            <TableHead className="h-8 w-[70px] text-xs">No.</TableHead>
+                                            <TableHead className="h-8 text-xs">Name</TableHead>
+                                            <TableHead className="h-8 w-[90px] text-right text-xs">Qty1</TableHead>
+                                            <TableHead className="h-8 w-[45px] text-xs">UOM</TableHead>
+                                            <TableHead className="h-8 w-[90px] text-right text-xs">Qty2</TableHead>
+                                            <TableHead className="h-8 w-[45px] text-xs">UOM</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Mat. ($)</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Labor ($)</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Sub ($)</TableHead>
+                                            <TableHead className="h-8 w-[110px] text-right text-xs">Total ($)</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
 
-                                    return (
-                                        <GroupSection
-                                            key={typeName}
-                                            typeName={typeName}
-                                            rows={rows}
-                                            isOpen={isOpen}
-                                            groupMat={gMat}
-                                            groupLab={gLab}
-                                            groupSub={gSub}
-                                            groupTotal={gTot}
-                                            onToggle={() => toggleGroup(typeName)}
-                                        />
-                                    );
-                                })}
-                            </TableBody>
+                                    <TableBody>
+                                        {filteredRows.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={10} className="py-8 text-center text-xs text-muted-foreground">
+                                                    No conditions with quantities.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            typeNames.map((typeName) => {
+                                                const rows = grouped[typeName];
+                                                const isOpen = !collapsedGroups.has(typeName);
+                                                const gMat = rows.reduce((s, r) => s + r.material_cost, 0);
+                                                const gLab = rows.reduce((s, r) => s + r.labour_cost, 0);
+                                                const gSub = rows.reduce((s, r) => s + r.sub_cost, 0);
+                                                const gTot = rows.reduce((s, r) => s + r.total_cost, 0);
 
-                            <TableFooter>
-                                <TableRow className="bg-muted/50 border-t-2">
-                                    <TableCell colSpan={6} className="text-right text-xs font-bold">
-                                        Grand Total
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandMat)}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandLab)}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandSub)}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandTotal)}
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
+                                                return (
+                                                    <GroupSection
+                                                        key={typeName}
+                                                        typeName={typeName}
+                                                        rows={rows}
+                                                        isOpen={isOpen}
+                                                        groupMat={gMat}
+                                                        groupLab={gLab}
+                                                        groupSub={gSub}
+                                                        groupTotal={gTot}
+                                                        onToggle={() => toggleGroup(typeName)}
+                                                    />
+                                                );
+                                            })
+                                        )}
+                                    </TableBody>
+
+                                    {filteredRows.length > 0 && (
+                                        <TableFooter>
+                                            <TableRow className="bg-muted/50 border-t-2">
+                                                <TableCell colSpan={6} className="py-1.5 text-right text-xs font-semibold">
+                                                    Grand Total
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(grandMat)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(grandLab)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(grandSub)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(grandTotal)}
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableFooter>
+                                    )}
+                                </Table>
+                            </Card>
+                        </div>
                     </ScrollArea>
                 )}
             </div>
@@ -244,26 +257,26 @@ function GroupSection({
                 <TableCell colSpan={6} className="py-1.5">
                     <div className="flex items-center gap-1.5">
                         {isOpen
-                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                            : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                        <span className="text-xs font-semibold text-muted-foreground">
                             {typeName}
                         </span>
-                        <span className="rounded-sm bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+                        <span className="rounded-sm bg-muted px-1 py-px text-xs text-muted-foreground tabular-nums">
                             {rows.length}
                         </span>
                     </div>
                 </TableCell>
-                <TableCell className="py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
                     {fmtNum(groupMat)}
                 </TableCell>
-                <TableCell className="py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
                     {fmtNum(groupLab)}
                 </TableCell>
-                <TableCell className="py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
                     {fmtNum(groupSub)}
                 </TableCell>
-                <TableCell className="py-1.5 text-right font-mono text-xs font-semibold tabular-nums">
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
                     {fmtNum(groupTotal)}
                 </TableCell>
             </TableRow>
@@ -271,37 +284,37 @@ function GroupSection({
             {/* Condition rows */}
             {isOpen && rows.map((r) => (
                 <TableRow key={r.condition_id}>
-                    <TableCell className="py-1">
+                    <TableCell className="py-1.5">
                         <div className="flex items-center gap-1.5">
                             <ColorSwatch color={r.color} />
-                            <span className="font-mono text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground tabular-nums">
                                 {r.condition_number ?? ''}
                             </span>
                         </div>
                     </TableCell>
-                    <TableCell className="py-1 text-sm">{r.name}</TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm tabular-nums">
+                    <TableCell className="py-1.5 text-xs">{r.name}</TableCell>
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums">
                         {r.qty1 > 0 ? fmtInt(r.qty1) : ''}
                     </TableCell>
-                    <TableCell className="py-1 text-xs text-muted-foreground">
+                    <TableCell className="py-1.5 text-xs text-muted-foreground">
                         {r.qty1 > 0 ? r.uom1 : ''}
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm tabular-nums">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums">
                         {r.qty2 != null && r.qty2 > 0 ? fmtInt(r.qty2) : ''}
                     </TableCell>
-                    <TableCell className="py-1 text-xs text-muted-foreground">
+                    <TableCell className="py-1.5 text-xs text-muted-foreground">
                         {r.qty2 != null && r.qty2 > 0 ? r.uom2 : ''}
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm tabular-nums">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums">
                         {fmtNum(r.material_cost)}
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm tabular-nums">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums">
                         {fmtNum(r.labour_cost)}
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm tabular-nums">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums">
                         {fmtNum(r.sub_cost)}
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-sm font-semibold tabular-nums">
+                    <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
                         {fmtNum(r.total_cost)}
                     </TableCell>
                 </TableRow>

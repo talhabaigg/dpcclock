@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ObservationDialog } from '@/components/observation-dialog';
 import CalibrationDialog from '@/components/calibration-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
+import { ScaleChip } from '@/components/scale-chip';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { api } from '@/lib/api';
@@ -604,6 +605,16 @@ export default function DrawingTakeoff() {
             }
             toolbar={
                 <>
+                    <ScaleChip
+                        calibration={calibration}
+                        canEdit={canEditTakeoff}
+                        onOpenPreset={() => cal.handleOpenDialog('preset')}
+                        onOpenManual={() => cal.handleOpenDialog('manual')}
+                        onDelete={cal.handleDelete}
+                    />
+
+                    <div className="bg-border h-4 w-px" />
+
                     {/* Bid Area Selector */}
                     <div className="flex items-center gap-1">
                         <FolderTree className="h-3 w-3 text-muted-foreground" />
@@ -611,7 +622,7 @@ export default function DrawingTakeoff() {
                             value={activeBidAreaId ? String(activeBidAreaId) : 'all'}
                             onValueChange={(v) => setActiveBidAreaId(v === 'all' ? null : Number(v))}
                         >
-                            <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-[11px] shadow-none">
+                            <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-xs shadow-none">
                                 <SelectValue placeholder="All Areas" />
                             </SelectTrigger>
                             <SelectContent>
@@ -790,14 +801,11 @@ export default function DrawingTakeoff() {
                             </div>
                         </div>
                         <TakeoffPanel
-                            viewMode={viewMode}
                             calibration={calibration}
-                            measurements={measurements}
+                            measurements={measurements.filter((m) => !m.scope || m.scope === 'takeoff')}
                             selectedMeasurementId={selectedMeasurementId}
                             conditions={conditions}
                             activeConditionId={activeConditionId}
-                            onOpenCalibrationDialog={cal.handleOpenDialog}
-                            onDeleteCalibration={cal.handleDelete}
                             onMeasurementSelect={setSelectedMeasurementId}
                             onMeasurementEdit={handleEditMeasurement}
                             onMeasurementDelete={handleDeleteMeasurement}

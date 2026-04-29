@@ -3,6 +3,7 @@ import CalibrationDialog from '@/components/calibration-dialog';
 import { ConditionsList } from '@/components/conditions-list';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
+import { ScaleChip } from '@/components/scale-chip';
 import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { Badge } from '@/components/ui/badge';
@@ -505,23 +506,32 @@ export default function DrawingVariations() {
                 />
             }
             toolbar={
-                selectableVariations.length === 0 ? (
-                    /* Empty state — no variations yet, push the user toward starting a draft */
-                    canEdit ? (
-                        <Button
-                            type="button"
-                            size="sm"
-                            className="h-6 gap-1 rounded-sm px-2 text-xs"
-                            onClick={handleCreateDraft}
-                            disabled={creatingDraft}
-                        >
-                            {creatingDraft ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                            Start a new variation
-                        </Button>
+                <>
+                    <ScaleChip
+                        calibration={calibration}
+                        canEdit={canMeasure}
+                        onOpenPreset={() => cal.handleOpenDialog('preset')}
+                        onOpenManual={() => cal.handleOpenDialog('manual')}
+                        onDelete={cal.handleDelete}
+                    />
+                    <div className="bg-border h-4 w-px" />
+                    {selectableVariations.length === 0 ? (
+                        /* Empty state — no variations yet, push the user toward starting a draft */
+                        canEdit ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                className="h-6 gap-1 rounded-sm px-2 text-xs"
+                                onClick={handleCreateDraft}
+                                disabled={creatingDraft}
+                            >
+                                {creatingDraft ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                                Start a new variation
+                            </Button>
+                        ) : (
+                            <span className="text-xs text-muted-foreground">No variations on this drawing.</span>
+                        )
                     ) : (
-                        <span className="text-xs text-muted-foreground">No variations on this drawing.</span>
-                    )
-                ) : (
                     <div className="flex items-center gap-1.5">
                         <Combobox<VariationSummary>
                             items={selectableVariations}
@@ -667,7 +677,8 @@ export default function DrawingVariations() {
                             </Button>
                         )}
                     </div>
-                )
+                    )}
+                </>
             }
         >
             <div className="relative flex flex-1 overflow-hidden">

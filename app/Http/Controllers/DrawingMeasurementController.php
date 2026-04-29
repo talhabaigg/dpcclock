@@ -116,12 +116,44 @@ class DrawingMeasurementController extends Controller
 
     public function index(Drawing $drawing)
     {
+        $measurements = $drawing->measurements()
+            ->with([
+                'variation:id,co_number,description',
+                'deductions',
+                'bidArea:id,name',
+                'condition.conditionLabourCodes.labourCostCode',
+                'condition.lineItems.materialItem',
+                'condition.materials.materialItem',
+                'condition.costCodes',
+            ])
+            ->whereNull('parent_measurement_id')
+            ->orderBy('created_at')
+            ->get();
+
+        // Compute costs live so the in-panel Costs tab stays in sync with the
+        // Estimate sub-tab even if the stored cost columns are stale.
+        $calculator = new TakeoffCostCalculator;
+        foreach ($measurements as $m) {
+            if ($m->takeoff_condition_id && $m->condition) {
+                $costs = $calculator->compute($m);
+                $m->material_cost = $costs['material_cost'];
+                $m->labour_cost = $costs['labour_cost'];
+                $m->total_cost = $costs['total_cost'];
+            }
+            foreach ($m->deductions as $d) {
+                if ($d->takeoff_condition_id) {
+                    // Deductions inherit the parent's condition for cost calc
+                    $d->setRelation('condition', $m->condition);
+                    $dCosts = $calculator->compute($d);
+                    $d->material_cost = $dCosts['material_cost'];
+                    $d->labour_cost = $dCosts['labour_cost'];
+                    $d->total_cost = $dCosts['total_cost'];
+                }
+            }
+        }
+
         return response()->json([
-            'measurements' => $drawing->measurements()
-                ->with(['variation:id,co_number,description', 'deductions', 'bidArea:id,name'])
-                ->whereNull('parent_measurement_id')
-                ->orderBy('created_at')
-                ->get(),
+            'measurements' => $measurements,
             'calibration' => $drawing->scaleCalibration,
         ]);
     }

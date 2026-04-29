@@ -23,7 +23,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Ruler, TableProperties } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, TableProperties } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
@@ -226,10 +226,20 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                         }
                                         aria-label="Select drawing"
                                     >
-                                        <span className="flex flex-1 items-center gap-1.5 min-w-0">
-                                            {drawings.find((d) => d.id === drawing.id)?.has_takeoff && (
-                                                <Ruler className="h-3 w-3 shrink-0 text-blue-500" />
-                                            )}
+                                        <span className="flex flex-1 items-center gap-2 min-w-0">
+                                            <span
+                                                aria-hidden="true"
+                                                className={`size-1.5 shrink-0 rounded-full ${
+                                                    drawings.find((d) => d.id === drawing.id)?.has_takeoff
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-muted-foreground/25'
+                                                }`}
+                                                title={
+                                                    drawings.find((d) => d.id === drawing.id)?.has_takeoff
+                                                        ? 'Has takeoff'
+                                                        : 'No takeoff'
+                                                }
+                                            />
                                             <ComboboxValue placeholder="Select drawing" />
                                         </span>
                                     </ComboboxTrigger>
@@ -239,12 +249,14 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                         <ComboboxList>
                                             {(d: ProjectDrawing) => (
                                                 <ComboboxItem key={d.id} value={d} className="text-xs">
-                                                    <div className="flex items-start gap-1.5 py-0.5">
-                                                        {d.has_takeoff ? (
-                                                            <Ruler className="mt-0.5 h-3 w-3 shrink-0 text-blue-500" />
-                                                        ) : (
-                                                            <span className="mt-0.5 h-3 w-3 shrink-0" />
-                                                        )}
+                                                    <div className="flex items-start gap-2 py-0.5">
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className={`mt-1 size-1.5 shrink-0 rounded-full ${
+                                                                d.has_takeoff ? 'bg-emerald-500' : 'bg-muted-foreground/25'
+                                                            }`}
+                                                            title={d.has_takeoff ? 'Has takeoff' : 'No takeoff'}
+                                                        />
                                                         <span className="whitespace-normal break-words leading-snug">
                                                             {d.display_name}
                                                         </span>

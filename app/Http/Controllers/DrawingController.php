@@ -13,6 +13,7 @@ use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
 use App\Models\TakeoffCondition;
 use App\Models\Variation;
+use App\Services\TakeoffCostCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -212,18 +213,26 @@ class DrawingController extends Controller
         $conditions = TakeoffCondition::where('location_id', $project->id)
             ->with([
                 'conditionType',
-                'lineItems',
+                'lineItems.materialItem',
+                'materials.materialItem',
+                'costCodes',
+                'conditionLabourCodes.labourCostCode',
             ])
             ->orderBy('condition_number')
             ->orderBy('name')
             ->get();
 
-        // Aggregate measurements across all drawings for this project
+        // Aggregate base-bid measurements (excludes variation change-orders)
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->where('scope', 'takeoff')
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
             ->with(['bidArea:id,name', 'deductions', 'drawing:id'])
             ->get();
+
+        // Compute costs live so the conditions tab matches Labour/Estimate,
+        // even if the stored cost columns on measurements are stale.
+        $calculator = new TakeoffCostCalculator;
 
         $conditionSummaries = [];
 
@@ -240,17 +249,21 @@ class DrawingController extends Controller
             $areaNames = [];
 
             foreach ($condMeasurements as $m) {
-                $mul = 1.0;
-                $netQty += ($m->computed_value ?? 0) * $mul;
-                $materialCost += ($m->material_cost ?? 0) * $mul;
-                $labourCost += ($m->labour_cost ?? 0) * $mul;
-                $totalCost += ($m->total_cost ?? 0) * $mul;
+                $netQty += $m->computed_value ?? 0;
+
+                $m->setRelation('condition', $condition);
+                $costs = $calculator->compute($m);
+                $materialCost += $costs['material_cost'];
+                $labourCost += $costs['labour_cost'];
+                $totalCost += $costs['total_cost'];
 
                 foreach ($m->deductions as $d) {
-                    $netQty -= ($d->computed_value ?? 0) * $mul;
-                    $materialCost -= ($d->material_cost ?? 0) * $mul;
-                    $labourCost -= ($d->labour_cost ?? 0) * $mul;
-                    $totalCost -= ($d->total_cost ?? 0) * $mul;
+                    $netQty -= $d->computed_value ?? 0;
+                    $d->setRelation('condition', $condition);
+                    $dCosts = $calculator->compute($d);
+                    $materialCost -= $dCosts['material_cost'];
+                    $labourCost -= $dCosts['labour_cost'];
+                    $totalCost -= $dCosts['total_cost'];
                 }
 
                 if ($m->bidArea) {
@@ -333,8 +346,9 @@ class DrawingController extends Controller
             ])
             ->get();
 
-        // Aggregate measurements across all drawings for this project
+        // Aggregate base-bid measurements (excludes variation change-orders)
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->where('scope', 'takeoff')
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
             ->with(['deductions', 'drawing:id'])
@@ -359,16 +373,6 @@ class DrawingController extends Controller
 
         // Build one row per condition × LCC pair
         $labourRows = [];
-
-        // Load wage type names from pay rate templates (keyed by hourly rate)
-        $payRateTemplates = \App\Models\LocationPayRateTemplate::where('location_id', $project->id)
-            ->where('is_active', true)
-            ->with('payRateTemplate:id,name')
-            ->get();
-        $wageTypeByRate = [];
-        foreach ($payRateTemplates as $t) {
-            $wageTypeByRate[(string) round((float) $t->hourly_rate, 2)] = $t->display_label;
-        }
 
         foreach ($conditions as $condition) {
             $data = $condQtyMap[$condition->id] ?? null;
@@ -397,7 +401,7 @@ class DrawingController extends Controller
                     }
                     $costPerUnit = $hr / $pr;
                     $total = $netQty * $costPerUnit;
-                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+                    $hours = $netQty / $pr;
 
                     $labourRows[] = [
                         'code' => $lcc->code,
@@ -405,8 +409,8 @@ class DrawingController extends Controller
                         'qty' => round($netQty, 2),
                         'unit' => $condUnit,
                         'cost' => round($costPerUnit, 2),
-                        'wage_type' => $wageType,
                         'qty_per_hr' => round($pr, 2),
+                        'hours' => round($hours, 2),
                         'total_cost' => round($total, 2),
                     ];
                 }
@@ -423,7 +427,7 @@ class DrawingController extends Controller
                     }
                     $costPerUnit = $hr / $pr;
                     $total = $netQty * $costPerUnit;
-                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+                    $hours = $netQty / $pr;
 
                     $labourRows[] = [
                         'code' => $lcc->code,
@@ -431,8 +435,8 @@ class DrawingController extends Controller
                         'qty' => round($netQty, 2),
                         'unit' => $condUnit,
                         'cost' => round($costPerUnit, 2),
-                        'wage_type' => $wageType,
                         'qty_per_hr' => round($pr, 2),
+                        'hours' => round($hours, 2),
                         'total_cost' => round($total, 2),
                     ];
                 }
@@ -449,7 +453,7 @@ class DrawingController extends Controller
                     }
                     $costPerUnit = $hr / $pr;
                     $total = $netQty * $costPerUnit;
-                    $wageType = $wageTypeByRate[(string) round($hr, 2)] ?? null;
+                    $hours = $netQty / $pr;
 
                     $labourRows[] = [
                         'code' => $lcc->code,
@@ -457,8 +461,8 @@ class DrawingController extends Controller
                         'qty' => round($netQty, 2),
                         'unit' => $condUnit,
                         'cost' => round($costPerUnit, 2),
-                        'wage_type' => $wageType,
                         'qty_per_hr' => round($pr, 2),
+                        'hours' => round($hours, 2),
                         'total_cost' => round($total, 2),
                     ];
                 }
@@ -502,8 +506,9 @@ class DrawingController extends Controller
             ])
             ->get();
 
-        // Aggregate measurements across all drawings for this project
+        // Aggregate base-bid measurements (excludes variation change-orders)
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->where('scope', 'takeoff')
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
             ->with(['deductions', 'drawing:id'])
@@ -664,38 +669,60 @@ class DrawingController extends Controller
         $project = $drawing->project;
 
         $conditions = TakeoffCondition::where('location_id', $project->id)
-            ->with('conditionType')
+            ->with([
+                'conditionType',
+                'lineItems.materialItem',
+                'materials.materialItem',
+                'costCodes',
+                'conditionLabourCodes.labourCostCode',
+            ])
             ->orderBy('condition_number')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->keyBy('id');
 
-        // Aggregate measurements across all drawings for this project
+        // Aggregate base-bid measurements (excludes variation change-orders)
         $measurements = DrawingMeasurement::whereHas('drawing', fn ($q) => $q->where('project_id', $project->id))
+            ->where('scope', 'takeoff')
             ->whereNotNull('takeoff_condition_id')
             ->whereNull('parent_measurement_id')
             ->with(['deductions', 'drawing:id'])
             ->get();
 
-        // Build condition_id → {qty, material_cost, labour_cost, total_cost}
+        // Compute costs live so the estimate always matches the Labour tab,
+        // even if the stored cost columns on measurements are stale.
+        $calculator = new TakeoffCostCalculator;
+
         $condAgg = [];
         foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+            $condition = $conditions->get($conditionId);
             $netQty = 0;
             $matCost = 0;
             $labCost = 0;
             $totCost = 0;
 
             foreach ($condMeasurements as $m) {
-                $mul = 1.0;
-                $netQty += ($m->computed_value ?? 0) * $mul;
-                $matCost += ($m->material_cost ?? 0) * $mul;
-                $labCost += ($m->labour_cost ?? 0) * $mul;
-                $totCost += ($m->total_cost ?? 0) * $mul;
+                $netQty += $m->computed_value ?? 0;
+
+                if ($condition) {
+                    // Re-bind the condition (already eager-loaded with pricing relations)
+                    // so the calculator doesn't re-query inside the loop.
+                    $m->setRelation('condition', $condition);
+                    $costs = $calculator->compute($m);
+                    $matCost += $costs['material_cost'];
+                    $labCost += $costs['labour_cost'];
+                    $totCost += $costs['total_cost'];
+                }
 
                 foreach ($m->deductions as $d) {
-                    $netQty -= ($d->computed_value ?? 0) * $mul;
-                    $matCost -= ($d->material_cost ?? 0) * $mul;
-                    $labCost -= ($d->labour_cost ?? 0) * $mul;
-                    $totCost -= ($d->total_cost ?? 0) * $mul;
+                    $netQty -= $d->computed_value ?? 0;
+                    if ($condition) {
+                        $d->setRelation('condition', $condition);
+                        $dCosts = $calculator->compute($d);
+                        $matCost -= $dCosts['material_cost'];
+                        $labCost -= $dCosts['labour_cost'];
+                        $totCost -= $dCosts['total_cost'];
+                    }
                 }
             }
 

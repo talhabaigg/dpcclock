@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
@@ -12,8 +13,8 @@ type LabourSummary = {
     qty: number;
     unit: string;
     cost: number;
-    wage_type: string | null;
     qty_per_hr: number;
+    hours: number;
     total_cost: number;
 };
 
@@ -56,6 +57,7 @@ export default function LabourPage() {
     }>().props;
 
     const grandTotal = labourSummaries.reduce((s, r) => s + r.total_cost, 0);
+    const grandHours = labourSummaries.reduce((s, r) => s + (r.hours ?? 0), 0);
 
     return (
         <DrawingWorkspaceLayout
@@ -71,7 +73,7 @@ export default function LabourPage() {
                             <HardHat className="h-6 w-6 text-muted-foreground/40" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">No labour data</p>
+                            <p className="text-xs font-medium text-muted-foreground">No labour data</p>
                             <p className="mt-1 text-xs text-muted-foreground/70">
                                 Add labour cost codes to conditions and take measurements to see the labour summary here.
                             </p>
@@ -79,62 +81,69 @@ export default function LabourPage() {
                     </div>
                 ) : (
                     <ScrollArea className="flex-1">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-background">
-                                <TableRow>
-                                    <TableHead className="w-[160px]">Cost Code</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead className="w-[110px] text-right">Quantity</TableHead>
-                                    <TableHead className="w-[60px]">UOM</TableHead>
-                                    <TableHead className="w-[100px] text-right">Cost</TableHead>
-                                    <TableHead className="w-[110px]">Wage Type</TableHead>
-                                    <TableHead className="w-[80px] text-right">Qty/Hr</TableHead>
-                                    <TableHead className="w-[120px] text-right">Total Cost</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                            <Card className="overflow-clip !p-0 !gap-0">
+                                <Table className="text-xs [&>tbody>tr:last-child]:border-b-0">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                        <TableRow>
+                                            <TableHead className="h-8 w-[160px] text-xs">Cost Code</TableHead>
+                                            <TableHead className="h-8 text-xs">Description</TableHead>
+                                            <TableHead className="h-8 w-[110px] text-right text-xs">Quantity</TableHead>
+                                            <TableHead className="h-8 w-[60px] text-xs">UOM</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Cost</TableHead>
+                                            <TableHead className="h-8 w-[80px] text-right text-xs">Qty/Hr</TableHead>
+                                            <TableHead className="h-8 w-[90px] text-right text-xs">Hours</TableHead>
+                                            <TableHead className="h-8 w-[120px] text-right text-xs">Total Cost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
 
-                            <TableBody>
-                                {labourSummaries.map((row, idx) => (
-                                    <TableRow key={idx}>
-                                        <TableCell className="font-mono text-xs">
-                                            {row.code}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {row.name}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtInt(row.qty)}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.unit}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtNum(row.cost)}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.wage_type ?? '—'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtInt(row.qty_per_hr)}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
-                                            {fmtNum(row.total_cost)}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
+                                    <TableBody>
+                                        {labourSummaries.map((row, idx) => (
+                                            <TableRow key={idx}>
+                                                <TableCell className="py-1.5 text-xs tabular-nums">
+                                                    {row.code}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs">
+                                                    {row.name}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtInt(row.qty)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs text-muted-foreground">
+                                                    {row.unit}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtNum(row.cost)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtInt(row.qty_per_hr)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtNum(row.hours ?? 0)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(row.total_cost)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
 
-                            <TableFooter>
-                                <TableRow className="bg-muted/50 border-t-2">
-                                    <TableCell colSpan={7} className="text-right text-xs font-bold">
-                                        Grand Total
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandTotal)}
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
+                                    <TableFooter>
+                                        <TableRow className="bg-muted/50 border-t-2">
+                                            <TableCell colSpan={6} className="py-1.5 text-right text-xs font-semibold">
+                                                Grand Total
+                                            </TableCell>
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                {fmtNum(grandHours)}
+                                            </TableCell>
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                {fmtNum(grandTotal)}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </Card>
+                        </div>
                     </ScrollArea>
                 )}
             </div>

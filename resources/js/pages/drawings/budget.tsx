@@ -818,7 +818,7 @@ function GroupRows({
             </tr>
 
             {/* Detail rows */}
-            {!isCollapsed && group.rows.map((row, idx) => (
+            {!isCollapsed && group.rows.map((row) => (
                 <DataRow
                     key={row.usedHoursKey}
                     row={row}
@@ -832,7 +832,6 @@ function GroupRows({
                     }
                     isSelected={selectedRowKey === row.usedHoursKey}
                     onSelect={() => onRowSelect(row.usedHoursKey)}
-                    isEven={idx % 2 === 0}
                     readOnly={readOnly}
                 />
             ))}

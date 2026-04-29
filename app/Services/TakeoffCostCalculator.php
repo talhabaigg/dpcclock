@@ -43,18 +43,34 @@ class TakeoffCostCalculator
      *
      * effective_qty = computed_value * height (if linear) or computed_value
      * material_cost = effective_qty * sum(cost_code unit_rates)
-     * labour_cost   = effective_qty * labour_unit_rate
+     * labour_cost   = sum over conditionLabourCodes of (computed_value / pr) * hr
+     *                 (matches the Labour tab; falls back to labour_unit_rate
+     *                  on the condition if no LCCs attached)
      */
     private function computeUnitRate(TakeoffCondition $condition, DrawingMeasurement $measurement): array
     {
-        $condition->loadMissing('costCodes');
+        $condition->loadMissing(['costCodes', 'conditionLabourCodes.labourCostCode']);
 
-        $effectiveQty = $measurement->computed_value * $condition->unit_rate_multiplier;
+        $qty = $measurement->computed_value ?? 0;
+        $effectiveQty = $qty * $condition->unit_rate_multiplier;
 
         $totalCostCodeRate = $condition->costCodes->sum('unit_rate');
-
         $materialCost = $effectiveQty * $totalCostCodeRate;
-        $labourCost = $effectiveQty * ($condition->labour_unit_rate ?? 0);
+
+        $labourCost = 0.0;
+        if ($qty > 0) {
+            if ($condition->conditionLabourCodes->isNotEmpty()) {
+                foreach ($condition->conditionLabourCodes as $clc) {
+                    $pr = $clc->effective_production_rate ?? 0;
+                    $hr = $clc->effective_hourly_rate ?? 0;
+                    if ($pr > 0 && $hr > 0) {
+                        $labourCost += ($qty / $pr) * $hr;
+                    }
+                }
+            } else {
+                $labourCost = $effectiveQty * ($condition->labour_unit_rate ?? 0);
+            }
+        }
 
         return [
             'material_cost' => round($materialCost, 2),
@@ -93,25 +109,46 @@ class TakeoffCostCalculator
     }
 
     /**
-     * Compute labour cost for a measurement.
+     * Compute labour cost for a build_up measurement.
      *
-     * labour_cost = (computed_value / production_rate) * effective_labour_rate
+     * Sums one cost per ConditionLabourCode (each LCC has its own production
+     * rate and hourly rate, with fallback to the LCC defaults). This matches
+     * how the Labour tab computes labour for build_up conditions.
+     *
+     * labour_cost = sum_over_lcc( (computed_value / production_rate) * hourly_rate )
      */
     private function computeLabourCost(TakeoffCondition $condition, DrawingMeasurement $measurement): float
     {
+        $qty = $measurement->computed_value ?? 0;
+        if ($qty <= 0) {
+            return 0;
+        }
+
+        $condition->loadMissing('conditionLabourCodes.labourCostCode');
+
+        $total = 0.0;
+
+        if ($condition->conditionLabourCodes->isNotEmpty()) {
+            foreach ($condition->conditionLabourCodes as $clc) {
+                $pr = $clc->effective_production_rate ?? 0;
+                $hr = $clc->effective_hourly_rate ?? 0;
+                if ($pr > 0 && $hr > 0) {
+                    $total += ($qty / $pr) * $hr;
+                }
+            }
+
+            return $total;
+        }
+
+        // Fallback: single condition-level production rate + effective rate
         $productionRate = $condition->production_rate;
-        if (! $productionRate || $productionRate <= 0) {
-            return 0;
-        }
-
         $effectiveRate = $condition->effective_labour_rate;
-        if (! $effectiveRate || $effectiveRate <= 0) {
-            return 0;
+
+        if ($productionRate && $productionRate > 0 && $effectiveRate && $effectiveRate > 0) {
+            $total = ($qty / $productionRate) * $effectiveRate;
         }
 
-        $hours = $measurement->computed_value / $productionRate;
-
-        return $hours * $effectiveRate;
+        return $total;
     }
 
     /**

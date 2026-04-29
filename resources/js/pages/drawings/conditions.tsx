@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
@@ -155,7 +156,7 @@ export default function ConditionsPage() {
                             <TableProperties className="h-6 w-6 text-muted-foreground/40" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">No conditions with measurements</p>
+                            <p className="text-xs font-medium text-muted-foreground">No conditions with measurements</p>
                             <p className="mt-1 text-xs text-muted-foreground/70">
                                 Take off measurements on drawings to see the condition summary here.
                             </p>
@@ -163,69 +164,73 @@ export default function ConditionsPage() {
                     </div>
                 ) : (
                     <ScrollArea className="flex-1">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-background">
-                                <TableRow>
-                                    <TableHead className="w-[60px]">No.</TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead className="w-[70px]">Type</TableHead>
-                                    <TableHead className="w-[120px]">Area</TableHead>
-                                    <TableHead className="w-[80px] text-right">Height</TableHead>
-                                    <TableHead className="w-[110px] text-right">Qty</TableHead>
-                                    <TableHead className="w-[100px] text-right">Unit Price</TableHead>
-                                    <TableHead className="w-[110px] text-right">Total</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                            <Card className="overflow-clip !p-0 !gap-0">
+                                <Table className="text-xs [&>tbody>tr:last-child]:border-b-0">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                        <TableRow>
+                                            <TableHead className="h-8 w-[60px] text-xs">No.</TableHead>
+                                            <TableHead className="h-8 text-xs">Name</TableHead>
+                                            <TableHead className="h-8 w-[70px] text-xs">Type</TableHead>
+                                            <TableHead className="h-8 w-[120px] text-xs">Area</TableHead>
+                                            <TableHead className="h-8 w-[80px] text-right text-xs">Height</TableHead>
+                                            <TableHead className="h-8 w-[110px] text-right text-xs">Qty</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Unit Price</TableHead>
+                                            <TableHead className="h-8 w-[110px] text-right text-xs">Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
 
-                            <TableBody>
-                                {typeNames.map((typeName) => {
-                                    const rows = grouped[typeName];
-                                    const isOpen = !collapsedGroups.has(typeName);
-                                    const groupTotal = rows.reduce((s, c) => s + c.total_cost, 0);
+                                    <TableBody>
+                                        {typeNames.map((typeName) => {
+                                            const rows = grouped[typeName];
+                                            const isOpen = !collapsedGroups.has(typeName);
+                                            const groupTotal = rows.reduce((s, c) => s + c.total_cost, 0);
 
-                                    return (
-                                        <GroupRows
-                                            key={typeName}
-                                            typeName={typeName}
-                                            rows={rows}
-                                            isOpen={isOpen}
-                                            groupTotal={groupTotal}
-                                            onToggle={() => toggleGroup(typeName)}
-                                        />
-                                    );
-                                })}
-                            </TableBody>
+                                            return (
+                                                <GroupRows
+                                                    key={typeName}
+                                                    typeName={typeName}
+                                                    rows={rows}
+                                                    isOpen={isOpen}
+                                                    groupTotal={groupTotal}
+                                                    onToggle={() => toggleGroup(typeName)}
+                                                />
+                                            );
+                                        })}
+                                    </TableBody>
 
-                            <TableFooter>
-                                <TableRow className="bg-muted/30">
-                                    <TableCell colSpan={5} className="text-right text-xs font-medium text-muted-foreground">
-                                        Materials
-                                    </TableCell>
-                                    <TableCell colSpan={2} />
-                                    <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
-                                        ${fmtNum(grandMaterial)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow className="bg-muted/30">
-                                    <TableCell colSpan={5} className="text-right text-xs font-medium text-muted-foreground">
-                                        Labour
-                                    </TableCell>
-                                    <TableCell colSpan={2} />
-                                    <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
-                                        ${fmtNum(grandLabour)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow className="bg-muted/50 border-t-2">
-                                    <TableCell colSpan={5} className="text-right text-xs font-bold">
-                                        Grand Total
-                                    </TableCell>
-                                    <TableCell colSpan={2} />
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        ${fmtNum(grandTotal)}
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
+                                    <TableFooter>
+                                        <TableRow className="bg-muted/30">
+                                            <TableCell colSpan={5} className="py-1.5 text-right text-xs text-muted-foreground">
+                                                Materials
+                                            </TableCell>
+                                            <TableCell colSpan={2} />
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                ${fmtNum(grandMaterial)}
+                                            </TableCell>
+                                        </TableRow>
+                                        <TableRow className="bg-muted/30">
+                                            <TableCell colSpan={5} className="py-1.5 text-right text-xs text-muted-foreground">
+                                                Labour
+                                            </TableCell>
+                                            <TableCell colSpan={2} />
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                ${fmtNum(grandLabour)}
+                                            </TableCell>
+                                        </TableRow>
+                                        <TableRow className="bg-muted/50 border-t-2">
+                                            <TableCell colSpan={5} className="py-1.5 text-right text-xs font-semibold">
+                                                Grand Total
+                                            </TableCell>
+                                            <TableCell colSpan={2} />
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                ${fmtNum(grandTotal)}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </Card>
+                        </div>
                     </ScrollArea>
                 )}
             </div>
@@ -258,17 +263,17 @@ function GroupRows({
                 <TableCell colSpan={7} className="py-1.5">
                     <div className="flex items-center gap-1.5">
                         {isOpen
-                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                            : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                        <span className="text-xs font-semibold text-muted-foreground">
                             {typeName}
                         </span>
-                        <span className="rounded-sm bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+                        <span className="rounded-sm bg-muted px-1 py-px text-xs text-muted-foreground tabular-nums">
                             {rows.length}
                         </span>
                     </div>
                 </TableCell>
-                <TableCell className="py-1.5 text-right font-mono text-xs font-semibold tabular-nums">
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
                     ${fmtNum(groupTotal)}
                 </TableCell>
             </TableRow>
@@ -287,29 +292,29 @@ function GroupRows({
 
                 return (
                     <TableRow key={c.condition_id} style={{ borderLeftWidth: 3, borderLeftColor: c.color }}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
+                        <TableCell className="py-1.5 text-xs text-muted-foreground tabular-nums">
                             {c.condition_number ?? ''}
                         </TableCell>
-                        <TableCell className="text-sm">{c.condition_name}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell className="py-1.5 text-xs">{c.condition_name}</TableCell>
+                        <TableCell className="py-1.5 text-xs text-muted-foreground">
                             {TYPE_LABELS[c.type] ?? c.type}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground" title={c.areas.join(', ')}>
+                        <TableCell className="py-1.5 text-xs text-muted-foreground" title={c.areas.join(', ')}>
                             {areaLabel}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">
                             {c.type === 'linear' && c.height ? `${c.height}m` : ''}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm tabular-nums">
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">
                             {c.type === 'count'
                                 ? Math.round(c.qty)
                                 : fmtNum(c.qty)}
-                            <span className="ml-1 text-[10px] text-muted-foreground">{c.unit}</span>
+                            <span className="ml-1 text-xs text-muted-foreground">{c.unit}</span>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm tabular-nums">
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">
                             ${fmtNum(unitPrice)}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
+                        <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
                             ${fmtNum(c.total_cost)}
                         </TableCell>
                     </TableRow>
@@ -322,7 +327,7 @@ function GroupRows({
                     <TableCell colSpan={7} className="py-1 text-right text-xs font-semibold text-muted-foreground">
                         Subtotal
                     </TableCell>
-                    <TableCell className="py-1 text-right font-mono text-xs font-bold tabular-nums">
+                    <TableCell className="py-1 text-right text-xs font-semibold tabular-nums">
                         ${fmtNum(groupTotal)}
                     </TableCell>
                 </TableRow>
