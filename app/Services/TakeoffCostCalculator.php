@@ -39,38 +39,24 @@ class TakeoffCostCalculator
     }
 
     /**
-     * Compute costs using the Unit Rate method.
+     * Compute costs using the Bill of Quantities (unit_rate) method.
      *
-     * effective_qty = computed_value * height (if linear) or computed_value
-     * material_cost = effective_qty * sum(cost_code unit_rates)
-     * labour_cost   = sum over conditionLabourCodes of (computed_value / pr) * hr
-     *                 (matches the Labour tab; falls back to labour_unit_rate
-     *                  on the condition if no LCCs attached)
+     * effective_qty = computed_value * height (if linear+height) or computed_value
+     * material_cost = effective_qty * sum(boq_items where kind='material').unit_rate
+     * labour_cost   = effective_qty * sum(boq_items where kind='labour').unit_rate
+     *
+     * The 26-code labour fan-out (direct wages + oncosts) happens at billing time
+     * on the variation/quote layer, not here.
      */
     private function computeUnitRate(TakeoffCondition $condition, DrawingMeasurement $measurement): array
     {
-        $condition->loadMissing(['costCodes', 'conditionLabourCodes.labourCostCode']);
+        $condition->loadMissing(['boqItems']);
 
         $qty = $measurement->computed_value ?? 0;
         $effectiveQty = $qty * $condition->unit_rate_multiplier;
 
-        $totalCostCodeRate = $condition->costCodes->sum('unit_rate');
-        $materialCost = $effectiveQty * $totalCostCodeRate;
-
-        $labourCost = 0.0;
-        if ($qty > 0) {
-            if ($condition->conditionLabourCodes->isNotEmpty()) {
-                foreach ($condition->conditionLabourCodes as $clc) {
-                    $pr = $clc->effective_production_rate ?? 0;
-                    $hr = $clc->effective_hourly_rate ?? 0;
-                    if ($pr > 0 && $hr > 0) {
-                        $labourCost += ($qty / $pr) * $hr;
-                    }
-                }
-            } else {
-                $labourCost = $effectiveQty * ($condition->labour_unit_rate ?? 0);
-            }
-        }
+        $materialCost = $effectiveQty * $condition->boqUnitRate('material');
+        $labourCost = $effectiveQty * $condition->boqUnitRate('labour');
 
         return [
             'material_cost' => round($materialCost, 2),

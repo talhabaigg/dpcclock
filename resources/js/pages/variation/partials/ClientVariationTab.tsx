@@ -152,26 +152,49 @@ export default function ClientVariationTab({
     const overallMarginPercent = totalSell > 0 ? (totalMargin / totalSell) * 100 : 0;
 
     const handleSaveSellRates = async () => {
-        if (!variationId) {
-            const updated = pricingItems.map((item, idx) => {
-                const key = itemKey(item, idx);
-                const rate = parseFloat(sellRates[key] || '0') || 0;
-                return { ...item, sell_rate: rate, sell_total: round2(item.qty * rate) };
-            });
-            onPricingItemsChange(updated);
-            toast.success('Sell rates applied');
+        // Always apply rates locally first so the UI reflects user intent regardless
+        // of whether each row has been persisted to the server yet. Unsaved rows
+        // (no `id`) carry their sell_rate through the global Save Variation flow,
+        // which includes sell_rate in the pricing-item create payload.
+        const updatedLocal = pricingItems.map((item, idx) => {
+            const key = itemKey(item, idx);
+            if (sellRates[key] === undefined) return item;
+            const rate = parseFloat(sellRates[key] || '0') || 0;
+            return { ...item, sell_rate: rate, sell_total: round2(item.qty * rate) };
+        });
+        onPricingItemsChange(updatedLocal);
+
+        // For saved rows on a saved variation, persist via the batch endpoint.
+        const savedRowRates = Object.entries(sellRates)
+            .filter(([, val]) => val !== '' && val !== undefined)
+            .map(([id, sellRate]) => ({ id: parseInt(id), sell_rate: parseFloat(sellRate) || 0 }))
+            .filter((r) => Number.isFinite(r.id));
+
+        if (!variationId || savedRowRates.length === 0) {
+            const unsavedCount = pricingItems.filter((it) => !it.id).length;
+            toast.success(unsavedCount > 0
+                ? 'Sell rates applied. Save the variation to persist them.'
+                : 'Sell rates applied');
             return;
         }
+
         setSaving(true);
         try {
-            const rates = Object.entries(sellRates)
-                .filter(([, val]) => val !== '' && val !== undefined)
-                .map(([id, sellRate]) => ({ id: parseInt(id), sell_rate: parseFloat(sellRate) || 0 }));
-            const data = await api.post<{ pricing_items: PricingItem[] }>(`/variations/${variationId}/sell-rates`, { rates });
-            onPricingItemsChange(data.pricing_items);
-            toast.success('Sell rates saved');
-        } catch {
-            toast.error('Failed to save sell rates');
+            const data = await api.post<{ pricing_items: PricingItem[] }>(`/variations/${variationId}/sell-rates`, { rates: savedRowRates });
+            // Merge server response (which only covers saved rows) back into the array
+            // without dropping any locally-modified unsaved rows.
+            const byId = new Map<number, PricingItem>(data.pricing_items.map((p) => [p.id as number, p]));
+            const merged = updatedLocal.map((it) => (it.id && byId.has(it.id) ? byId.get(it.id)! : it));
+            onPricingItemsChange(merged);
+            const unsavedCount = pricingItems.filter((it) => !it.id).length;
+            toast.success(unsavedCount > 0
+                ? `Saved ${savedRowRates.length} rate(s). Save the variation to persist the new rows.`
+                : 'Sell rates saved');
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to save sell rates';
+            toast.error(msg);
+            // eslint-disable-next-line no-console
+            console.error('[sell-rates]', err);
         } finally {
             setSaving(false);
         }

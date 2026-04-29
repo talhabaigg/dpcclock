@@ -21,30 +21,49 @@ class VariationCostCalculator
     }
 
     /**
-     * Unit Rate method:
+     * Bill of Quantities (unit_rate) method:
      * - effective_qty = qty * height (if linear) or qty
-     * - labour_base = effective_qty * labour_unit_rate
-     * - material_base = effective_qty * sum(cost_code unit_rates)
+     * - labour_base   = effective_qty * sum(boq_items where kind='labour').unit_rate
+     * - material_base = effective_qty * sum(boq_items where kind='material').unit_rate
      */
     private function computeUnitRate(TakeoffCondition $condition, float $qty): array
     {
-        $condition->loadMissing('costCodes.costCode');
+        $condition->loadMissing(['boqItems.costCode', 'boqItems.labourCostCode']);
 
         $effectiveQty = $qty * $condition->unit_rate_multiplier;
-        $labourBase = $effectiveQty * ($condition->labour_unit_rate ?? 0);
 
-        $materialBreakdown = [];
+        $labourBase = 0;
         $materialBase = 0;
-        foreach ($condition->costCodes as $cc) {
-            $lineCost = $effectiveQty * ($cc->unit_rate ?? 0);
-            $materialBase += $lineCost;
-            $materialBreakdown[] = [
-                'cost_code_id' => $cc->cost_code_id,
-                'cost_code' => $cc->costCode?->code,
-                'description' => $cc->costCode?->description,
-                'unit_rate' => (float) $cc->unit_rate,
-                'line_cost' => round($lineCost, 2),
-            ];
+        $materialBreakdown = [];
+        $labourBreakdown = [];
+        $labourTotalRate = 0;
+
+        foreach ($condition->boqItems as $item) {
+            $rate = (float) ($item->unit_rate ?? 0);
+            $lineCost = $effectiveQty * $rate;
+
+            if ($item->kind === 'material') {
+                $materialBase += $lineCost;
+                $materialBreakdown[] = [
+                    'cost_code_id' => $item->cost_code_id,
+                    'cost_code' => $item->costCode?->code,
+                    'description' => $item->costCode?->description,
+                    'unit_rate' => $rate,
+                    'line_cost' => round($lineCost, 2),
+                ];
+            } elseif ($item->kind === 'labour') {
+                $labourBase += $lineCost;
+                $labourTotalRate += $rate;
+                $labourBreakdown[] = [
+                    'labour_cost_code_id' => $item->labour_cost_code_id,
+                    'code' => $item->labourCostCode?->code,
+                    'name' => $item->labourCostCode?->name,
+                    'unit_rate' => $rate,
+                    'production_rate' => $item->production_rate !== null ? (float) $item->production_rate : null,
+                    'line_cost' => round($lineCost, 2),
+                    'legacy_unmapped' => $item->labour_cost_code_id === null,
+                ];
+            }
         }
 
         return [
@@ -54,7 +73,8 @@ class VariationCostCalculator
             'effective_qty' => $effectiveQty,
             'breakdown' => [
                 'method' => 'unit_rate',
-                'labour_unit_rate' => (float) ($condition->labour_unit_rate ?? 0),
+                'labour_unit_rate' => round($labourTotalRate, 4),
+                'labour_items' => $labourBreakdown,
                 'cost_codes' => $materialBreakdown,
             ],
         ];

@@ -229,6 +229,8 @@ class ChangeOrderGenerator
             // Re-compute condition to get cost code breakdown
             $condition = TakeoffCondition::with([
                 'costCodes.costCode',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
                 'materials.materialItem.costCode',
             ])->find($item->takeoff_condition_id);
 
@@ -292,6 +294,7 @@ class ChangeOrderGenerator
         $lineNumber = 1;
 
         // ── Step 2: Labour lines (Quick Gen logic) ──
+        $labourLinesEmitted = 0;
         if ($totalLabour > 0) {
             foreach ($locationCostCodes as $costCode) {
                 $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
@@ -312,6 +315,26 @@ class ChangeOrderGenerator
                     'cost_type' => $costCode->costType?->code ?? '',
                     'revenue' => 0,
                     'cost_code_id' => $costCode->id,
+                ];
+                $labourLinesEmitted++;
+            }
+
+            // Fallback: if no LAB cost codes are configured for this location's
+            // variation_ratio fan-out, the labour total would otherwise be silently
+            // dropped. Emit a single consolidated line using the first available
+            // LAB-prelim cost code (or no cost_code mapping if none exists).
+            if ($labourLinesEmitted === 0) {
+                $fallback = $this->findFallbackLabourCostCode($locationCostCodes);
+                $lineItems[] = [
+                    'line_number' => $lineNumber++,
+                    'description' => $fallback?->description ?? 'Labour',
+                    'qty' => 1,
+                    'unit_cost' => round($totalLabour, 2),
+                    'total_cost' => round($totalLabour, 2),
+                    'cost_item' => $fallback?->code ?? 'LAB',
+                    'cost_type' => $fallback?->costType?->code ?? 'LAB',
+                    'revenue' => 0,
+                    'cost_code_id' => $fallback?->id,
                 ];
             }
         }
@@ -402,6 +425,8 @@ class ChangeOrderGenerator
 
             $condition = TakeoffCondition::with([
                 'costCodes.costCode',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
                 'materials.materialItem.costCode',
             ])->find($conditionId);
 
@@ -559,5 +584,25 @@ class ChangeOrderGenerator
         });
 
         return $match?->id;
+    }
+
+    /**
+     * Pick a cost code to attach to the consolidated labour fallback line when
+     * the location has no LAB cost codes configured for variation_ratio fan-out.
+     * Prefers any prelim_type starting with 'LAB' (regardless of variation_ratio),
+     * then falls back to the standard wages code 01-01 if present, else null.
+     */
+    private function findFallbackLabourCostCode($costCodes)
+    {
+        $labMatch = $costCodes->first(function ($cc) {
+            $prelim = strtoupper(trim($cc->pivot->prelim_type ?? ''));
+
+            return str_starts_with($prelim, 'LAB');
+        });
+        if ($labMatch) {
+            return $labMatch;
+        }
+
+        return $costCodes->firstWhere('code', '01-01');
     }
 }

@@ -20,6 +20,8 @@ class TakeoffConditionController extends Controller
                 'materials.materialItem',
                 'payRateTemplate',
                 'costCodes.costCode',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
                 'conditionType',
                 'conditionLabourCodes.labourCostCode',
                 'lineItems.materialItem',
@@ -37,39 +39,7 @@ class TakeoffConditionController extends Controller
 
     public function store(Request $request, Location $location)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'required|string|in:linear,area,count',
-            'condition_type_id' => 'nullable|integer|exists:condition_types,id',
-            'color' => 'required|string|regex:/^#[0-9a-fA-F]{6}$/',
-            'opacity' => 'nullable|integer|min:0|max:100',
-            'description' => 'nullable|string|max:2000',
-            'height' => 'nullable|numeric|min:0.0001|max:100',
-            'thickness' => 'nullable|numeric|min:0.0001|max:100',
-            'pricing_method' => 'required|string|in:unit_rate,build_up,detailed',
-
-            // Unit Rate fields
-            'labour_unit_rate' => 'nullable|numeric|min:0',
-            'cost_codes' => 'nullable|array',
-            'cost_codes.*.cost_code_id' => 'required|integer|exists:cost_codes,id',
-            'cost_codes.*.unit_rate' => 'required|numeric|min:0',
-
-            // Build-Up fields
-            'labour_rate_source' => 'required_if:pricing_method,build_up|string|in:manual,template',
-            'manual_labour_rate' => 'nullable|numeric|min:0',
-            'pay_rate_template_id' => 'nullable|integer|exists:location_pay_rate_templates,id',
-            'production_rate' => 'nullable|numeric|min:0',
-            'materials' => 'nullable|array',
-            'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
-            'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
-            'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
-
-            // Labour Cost Codes (for production tracking)
-            'labour_cost_codes' => 'nullable|array',
-            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
-            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
-            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->validationRules(false));
 
         $pricingMethod = $validated['pricing_method'];
 
@@ -84,20 +54,16 @@ class TakeoffConditionController extends Controller
             'height' => $validated['height'] ?? null,
             'thickness' => $validated['thickness'] ?? null,
             'pricing_method' => $pricingMethod,
-            'labour_unit_rate' => $pricingMethod === 'unit_rate' ? ($validated['labour_unit_rate'] ?? null) : null,
+            'labour_unit_rate' => null, // legacy column, no longer written
             'labour_rate_source' => $pricingMethod === 'build_up' ? ($validated['labour_rate_source'] ?? 'manual') : 'manual',
             'manual_labour_rate' => $pricingMethod === 'build_up' ? ($validated['manual_labour_rate'] ?? null) : null,
             'pay_rate_template_id' => $pricingMethod === 'build_up' ? ($validated['pay_rate_template_id'] ?? null) : null,
             'production_rate' => $pricingMethod === 'build_up' ? ($validated['production_rate'] ?? null) : null,
         ]);
 
-        if ($pricingMethod === 'unit_rate' && ! empty($validated['cost_codes'])) {
-            foreach ($validated['cost_codes'] as $cc) {
-                $condition->costCodes()->create([
-                    'cost_code_id' => $cc['cost_code_id'],
-                    'unit_rate' => $cc['unit_rate'],
-                ]);
-            }
+        if ($pricingMethod === 'unit_rate') {
+            $this->syncBoqItems($condition, $validated['boq_items'] ?? []);
+            $this->syncLabourCodesFromBoqItems($condition);
         }
 
         if ($pricingMethod === 'build_up' && ! empty($validated['materials'])) {
@@ -110,8 +76,10 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        // Sync Labour Cost Codes (independent of pricing method)
-        if (! empty($validated['labour_cost_codes'])) {
+        // Standalone Labour Cost Codes payload only applies to build_up.
+        // For unit_rate it's auto-synced from boq_items (kind='labour') above.
+        // For detailed it's auto-synced from line items in batchLineItems().
+        if ($pricingMethod === 'build_up' && ! empty($validated['labour_cost_codes'])) {
             foreach ($validated['labour_cost_codes'] as $lcc) {
                 $condition->conditionLabourCodes()->create([
                     'labour_cost_code_id' => $lcc['labour_cost_code_id'],
@@ -121,15 +89,7 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load([
-            'materials.materialItem',
-            'payRateTemplate',
-            'costCodes.costCode',
-            'conditionType',
-            'conditionLabourCodes.labourCostCode',
-            'lineItems.materialItem',
-            'lineItems.labourCostCode',
-        ]);
+        $condition->load($this->withRelations());
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
         $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
@@ -142,56 +102,22 @@ class TakeoffConditionController extends Controller
             abort(404);
         }
 
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'type' => 'sometimes|required|string|in:linear,area,count',
-            'condition_type_id' => 'nullable|integer|exists:condition_types,id',
-            'color' => 'sometimes|required|string|regex:/^#[0-9a-fA-F]{6}$/',
-            'opacity' => 'nullable|integer|min:0|max:100',
-            'description' => 'nullable|string|max:2000',
-            'height' => 'nullable|numeric|min:0.0001|max:100',
-            'thickness' => 'nullable|numeric|min:0.0001|max:100',
-            'pricing_method' => 'sometimes|required|string|in:unit_rate,build_up,detailed',
-
-            // Unit Rate fields
-            'labour_unit_rate' => 'nullable|numeric|min:0',
-            'cost_codes' => 'nullable|array',
-            'cost_codes.*.cost_code_id' => 'required|integer|exists:cost_codes,id',
-            'cost_codes.*.unit_rate' => 'required|numeric|min:0',
-
-            // Build-Up fields
-            'labour_rate_source' => 'sometimes|required|string|in:manual,template',
-            'manual_labour_rate' => 'nullable|numeric|min:0',
-            'pay_rate_template_id' => 'nullable|integer|exists:location_pay_rate_templates,id',
-            'production_rate' => 'nullable|numeric|min:0',
-            'materials' => 'nullable|array',
-            'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
-            'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
-            'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
-
-            // Labour Cost Codes (for production tracking)
-            'labour_cost_codes' => 'nullable|array',
-            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
-            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
-            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->validationRules(true));
 
         $materialData = $validated['materials'] ?? null;
-        $costCodeData = $validated['cost_codes'] ?? null;
+        $boqItemData = array_key_exists('boq_items', $validated) ? $validated['boq_items'] : null;
         $labourCostCodeData = $validated['labour_cost_codes'] ?? null;
-        unset($validated['materials'], $validated['cost_codes'], $validated['labour_cost_codes']);
+        unset($validated['materials'], $validated['boq_items'], $validated['labour_cost_codes']);
 
         $pricingMethod = $validated['pricing_method'] ?? $condition->pricing_method;
 
-        // Clean up irrelevant fields when switching pricing method
+        // Clean up irrelevant scalar fields when switching pricing method.
+        // labour_unit_rate is legacy and never written; it's only read for backfill.
         if ($pricingMethod === 'unit_rate') {
             $validated['manual_labour_rate'] = null;
             $validated['pay_rate_template_id'] = null;
             $validated['production_rate'] = null;
-        } elseif ($pricingMethod === 'build_up') {
-            $validated['labour_unit_rate'] = null;
         } elseif ($pricingMethod === 'detailed') {
-            $validated['labour_unit_rate'] = null;
             $validated['manual_labour_rate'] = null;
             $validated['pay_rate_template_id'] = null;
             $validated['production_rate'] = null;
@@ -199,24 +125,20 @@ class TakeoffConditionController extends Controller
 
         $condition->update($validated);
 
-        // Sync cost codes for unit_rate method
         if ($pricingMethod === 'unit_rate') {
+            // Drop other-method baggage so the condition reads cleanly.
             $condition->materials()->delete();
             $condition->lineItems()->delete();
+            $condition->costCodes()->delete(); // legacy table — fully replaced by boq_items
 
-            if ($costCodeData !== null) {
-                $condition->costCodes()->delete();
-                foreach ($costCodeData as $cc) {
-                    $condition->costCodes()->create([
-                        'cost_code_id' => $cc['cost_code_id'],
-                        'unit_rate' => $cc['unit_rate'],
-                    ]);
-                }
+            if ($boqItemData !== null) {
+                $this->syncBoqItems($condition, $boqItemData);
+                $this->syncLabourCodesFromBoqItems($condition);
             }
         }
 
-        // Sync materials for build_up method
         if ($pricingMethod === 'build_up') {
+            $condition->boqItems()->delete();
             $condition->costCodes()->delete();
             $condition->lineItems()->delete();
 
@@ -232,16 +154,15 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        // Clean up old tables when switching to detailed
         if ($pricingMethod === 'detailed') {
             $condition->materials()->delete();
             $condition->costCodes()->delete();
+            $condition->boqItems()->delete();
         }
 
-        // Sync Labour Cost Codes (for production tracking)
-        // For detailed pricing, LCCs are auto-synced from line items via batchLineItems,
-        // but also allow explicit LCC updates from the condition form.
-        if ($labourCostCodeData !== null) {
+        // Standalone production-tracking LCCs only apply to build_up.
+        // unit_rate auto-syncs from boq_items above; detailed auto-syncs in batchLineItems.
+        if ($pricingMethod === 'build_up' && $labourCostCodeData !== null) {
             $condition->conditionLabourCodes()->delete();
             foreach ($labourCostCodeData as $lcc) {
                 $condition->conditionLabourCodes()->create([
@@ -252,19 +173,133 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        $condition->load([
-            'materials.materialItem',
-            'payRateTemplate',
-            'costCodes.costCode',
-            'conditionType',
-            'conditionLabourCodes.labourCostCode',
-            'lineItems.materialItem',
-            'lineItems.labourCostCode',
-        ]);
+        $condition->load($this->withRelations());
         $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
         $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
+    }
+
+    /**
+     * Validation rules shared between store/update.
+     * `$partial` makes scalar fields optional for PATCH-style updates.
+     */
+    private function validationRules(bool $partial): array
+    {
+        $sometimes = $partial ? 'sometimes|' : '';
+
+        return [
+            'name' => $sometimes.'required|string|max:255',
+            'type' => $sometimes.'required|string|in:linear,area,count',
+            'condition_type_id' => 'nullable|integer|exists:condition_types,id',
+            'color' => $sometimes.'required|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'opacity' => 'nullable|integer|min:0|max:100',
+            'description' => 'nullable|string|max:2000',
+            'height' => 'nullable|numeric|min:0.0001|max:100',
+            'thickness' => 'nullable|numeric|min:0.0001|max:100',
+            'pricing_method' => $sometimes.'required|string|in:unit_rate,build_up,detailed',
+
+            // BoQ items (replaces legacy `cost_codes` + `labour_unit_rate` for unit_rate)
+            'boq_items' => 'nullable|array',
+            'boq_items.*.kind' => 'required|string|in:labour,material',
+            'boq_items.*.cost_code_id' => 'nullable|integer|exists:cost_codes,id',
+            'boq_items.*.labour_cost_code_id' => 'nullable|integer|exists:labour_cost_codes,id',
+            'boq_items.*.unit_rate' => 'required|numeric|min:0',
+            'boq_items.*.production_rate' => 'nullable|numeric|min:0',
+            'boq_items.*.notes' => 'nullable|string|max:500',
+            'boq_items.*.sort_order' => 'nullable|integer|min:0',
+
+            // Build-Up fields
+            'labour_rate_source' => 'sometimes|required|string|in:manual,template',
+            'manual_labour_rate' => 'nullable|numeric|min:0',
+            'pay_rate_template_id' => 'nullable|integer|exists:location_pay_rate_templates,id',
+            'production_rate' => 'nullable|numeric|min:0',
+            'materials' => 'nullable|array',
+            'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
+            'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
+            'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
+
+            // Standalone labour cost codes (build_up production tracking only)
+            'labour_cost_codes' => 'nullable|array',
+            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
+            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
+            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
+        ];
+    }
+
+    /**
+     * Eager-load list used by index/store/update responses.
+     */
+    private function withRelations(): array
+    {
+        return [
+            'materials.materialItem',
+            'payRateTemplate',
+            'costCodes.costCode',
+            'boqItems.costCode',
+            'boqItems.labourCostCode',
+            'conditionType',
+            'conditionLabourCodes.labourCostCode',
+            'lineItems.materialItem',
+            'lineItems.labourCostCode',
+        ];
+    }
+
+    /**
+     * Replace this condition's BoQ items with the provided list. Each item must
+     * have `kind` (labour|material) and a `unit_rate`. Labour items reference a
+     * `labour_cost_code_id` (nullable for legacy/unmapped); material items
+     * reference a `cost_code_id`.
+     */
+    private function syncBoqItems(TakeoffCondition $condition, array $items): void
+    {
+        $condition->boqItems()->delete();
+
+        foreach ($items as $idx => $item) {
+            $kind = $item['kind'];
+
+            $condition->boqItems()->create([
+                'kind' => $kind,
+                'cost_code_id' => $kind === 'material' ? ($item['cost_code_id'] ?? null) : null,
+                'labour_cost_code_id' => $kind === 'labour' ? ($item['labour_cost_code_id'] ?? null) : null,
+                'unit_rate' => $item['unit_rate'],
+                'production_rate' => $kind === 'labour' ? ($item['production_rate'] ?? null) : null,
+                'notes' => $item['notes'] ?? null,
+                'sort_order' => $item['sort_order'] ?? $idx,
+            ]);
+        }
+    }
+
+    /**
+     * Mirror BoQ labour items into condition_labour_codes so the existing
+     * production-tracking pipeline (ProductionStatusTrait, sync controllers,
+     * drawing labour summaries) keeps working unchanged. Skips legacy/unmapped
+     * labour rows that haven't been linked to an LCC yet.
+     */
+    private function syncLabourCodesFromBoqItems(TakeoffCondition $condition): void
+    {
+        $labourItems = $condition->boqItems()
+            ->where('kind', 'labour')
+            ->whereNotNull('labour_cost_code_id')
+            ->get();
+
+        // De-dupe by labour_cost_code_id (first row wins for production_rate)
+        $byLcc = [];
+        foreach ($labourItems as $item) {
+            $lccId = $item->labour_cost_code_id;
+            if (! isset($byLcc[$lccId])) {
+                $byLcc[$lccId] = $item;
+            }
+        }
+
+        $condition->conditionLabourCodes()->delete();
+        foreach ($byLcc as $lccId => $item) {
+            $condition->conditionLabourCodes()->create([
+                'labour_cost_code_id' => $lccId,
+                'production_rate' => $item->production_rate,
+                'hourly_rate' => null,
+            ]);
+        }
     }
 
     public function destroy(Location $location, TakeoffCondition $condition)
@@ -307,13 +342,28 @@ class TakeoffConditionController extends Controller
     public function searchCostCodes(Request $request, Location $location)
     {
         $query = $request->input('q', '');
+        // Optional "min,max" filter on the leading numeric segment of the code
+        // (e.g. "20,98" matches codes like "44-20" where 20 ≤ 44 ≤ 98).
+        // Used by the BoQ material picker to scope to direct-cost codes only.
+        $range = $request->input('prefix_range');
 
-        $items = CostCode::query()
+        $builder = CostCode::query()
             ->where(function ($q) use ($query) {
                 $q->where('code', 'like', "%{$query}%")
                     ->orWhere('description', 'like', "%{$query}%");
-            })
-            ->select('id', 'code', 'description')
+            });
+
+        if (is_string($range) && preg_match('/^(\d+),(\d+)$/', $range, $m)) {
+            $min = (int) $m[1];
+            $max = (int) $m[2];
+            $builder->whereRaw(
+                "CAST(SUBSTRING_INDEX(code, '-', 1) AS UNSIGNED) BETWEEN ? AND ?",
+                [$min, $max]
+            );
+        }
+
+        $items = $builder->select('id', 'code', 'description')
+            ->orderBy('code')
             ->limit(30)
             ->get();
 

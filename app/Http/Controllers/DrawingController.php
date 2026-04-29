@@ -216,6 +216,8 @@ class DrawingController extends Controller
                 'lineItems.materialItem',
                 'materials.materialItem',
                 'costCodes',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
                 'conditionLabourCodes.labourCostCode',
             ])
             ->orderBy('condition_number')
@@ -340,6 +342,7 @@ class DrawingController extends Controller
         $conditions = TakeoffCondition::where('location_id', $project->id)
             ->with([
                 'conditionLabourCodes.labourCostCode',
+                'boqItems.labourCostCode',
                 'lineItems' => fn ($q) => $q->where('entry_type', 'labour'),
                 'lineItems.labourCostCode',
                 'payRateTemplate',
@@ -441,26 +444,25 @@ class DrawingController extends Controller
                     ];
                 }
             } elseif ($condition->pricing_method === 'unit_rate') {
-                foreach ($condition->conditionLabourCodes as $clc) {
-                    $lcc = $clc->labourCostCode;
-                    if (! $lcc) {
+                // BoQ: each labour item has a direct unit_rate (cost per measured unit)
+                // and an optional production_rate for hours/status reporting.
+                foreach ($condition->boqItems->where('kind', 'labour') as $item) {
+                    $lcc = $item->labourCostCode;
+                    $rate = (float) ($item->unit_rate ?? 0);
+                    if ($rate <= 0) {
                         continue;
                     }
-                    $pr = $clc->effective_production_rate ?? 0;
-                    $hr = $clc->effective_hourly_rate ?? 0;
-                    if ($pr <= 0 || $hr <= 0) {
-                        continue;
-                    }
-                    $costPerUnit = $hr / $pr;
-                    $total = $netQty * $costPerUnit;
-                    $hours = $netQty / $pr;
+
+                    $pr = (float) ($item->production_rate ?? $lcc?->default_production_rate ?? 0);
+                    $hours = $pr > 0 ? $netQty / $pr : 0;
+                    $total = $netQty * $rate;
 
                     $labourRows[] = [
-                        'code' => $lcc->code,
-                        'name' => $lcc->name,
+                        'code' => $lcc?->code ?? '—',
+                        'name' => $lcc?->name ?? 'Legacy rate',
                         'qty' => round($netQty, 2),
                         'unit' => $condUnit,
-                        'cost' => round($costPerUnit, 2),
+                        'cost' => round($rate, 2),
                         'qty_per_hr' => round($pr, 2),
                         'hours' => round($hours, 2),
                         'total_cost' => round($total, 2),
@@ -674,6 +676,8 @@ class DrawingController extends Controller
                 'lineItems.materialItem',
                 'materials.materialItem',
                 'costCodes',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
                 'conditionLabourCodes.labourCostCode',
             ])
             ->orderBy('condition_number')

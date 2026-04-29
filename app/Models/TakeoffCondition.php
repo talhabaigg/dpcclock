@@ -106,6 +106,24 @@ class TakeoffCondition extends Model
         return $this->hasMany(ConditionLineItem::class)->orderBy('sort_order');
     }
 
+    public function boqItems(): HasMany
+    {
+        return $this->hasMany(TakeoffConditionBoqItem::class)
+            ->orderBy('kind')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
+     * Sum of unit rates across all BoQ items of a given kind.
+     */
+    public function boqUnitRate(string $kind): float
+    {
+        return (float) $this->boqItems
+            ->where('kind', $kind)
+            ->sum(fn ($item) => (float) $item->unit_rate);
+    }
+
     /**
      * Get the multiplier for converting measured quantity to pricing quantity.
      * For unit_rate + linear type with height, converts lm to m2.
