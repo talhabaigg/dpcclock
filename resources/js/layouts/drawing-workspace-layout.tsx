@@ -9,23 +9,31 @@ import {
     MenubarTrigger,
 } from '@/components/ui/menubar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxTrigger,
+    ComboboxValue,
+} from '@/components/ui/combobox';
 import AppLayout from '@/layouts/app-layout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { type MapControls } from '@/components/leaflet-drawing-viewer';
-import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Maximize, Minus, Plus, Printer, Ruler, TableProperties } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Download, FileSpreadsheet, History, Keyboard, Ruler, TableProperties } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ReplicateFloorsDialog } from '@/components/replicate-floors-dialog';
 
-export type DrawingTab = 'takeoff' | 'conditions' | 'labour' | 'material' | 'estimate' | 'variations' | 'production' | 'budget' | 'qa';
+export type DrawingTab = 'takeoff' | 'conditions' | 'labour' | 'material' | 'estimate' | 'variations' | 'production' | 'budget';
 
 const TABS: { key: DrawingTab; label: string; permission: string }[] = [
     { key: 'takeoff', label: 'Takeoff', permission: 'takeoff.view' },
     { key: 'variations', label: 'Variations', permission: 'variations.view' },
     { key: 'production', label: 'DPC', permission: 'production.view' },
     { key: 'budget', label: 'Budget', permission: 'budget.view' },
-    { key: 'qa', label: 'QA', permission: 'qa.view' },
 ];
 
 /** Sub-tabs within the Takeoff section */
@@ -60,7 +68,7 @@ interface DrawingWorkspaceLayoutProps {
     project?: { id: number; name: string } | null;
     activeTab: DrawingTab;
     toolbar?: ReactNode;
-    mapControls?: MapControls | null;
+    leftToolbar?: ReactNode;
     children: ReactNode;
     statusBar?: ReactNode;
 }
@@ -72,13 +80,15 @@ type ProjectDrawing = {
     has_takeoff: boolean;
 };
 
-export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, mapControls, children, statusBar }: DrawingWorkspaceLayoutProps) {
+export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab, toolbar, leftToolbar, children, statusBar }: DrawingWorkspaceLayoutProps) {
     const { projectDrawings, auth } = usePage<{ projectDrawings?: ProjectDrawing[]; auth?: { permissions?: string[] } }>().props;
     const drawings = projectDrawings ?? [];
     const permissions = auth?.permissions ?? [];
     const visibleTabs = useMemo(() => TABS.filter((tab) => permissions.includes(tab.permission)), [permissions]);
     const [showHelpDialog, setShowHelpDialog] = useState(false);
     const [showReplicateDialog, setShowReplicateDialog] = useState(false);
+    const [drawingComboOpen, setDrawingComboOpen] = useState(false);
+    const [drawingComboInput, setDrawingComboInput] = useState('');
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -121,118 +131,138 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                 {/* Row 1 — Context: file menu, drawing navigation, workspace tabs, version */}
                 <div className="bg-background flex shrink-0 items-center gap-2 border-b px-2 py-0.5">
                     <Menubar className="h-auto rounded-none border-none bg-transparent p-0 shadow-none">
+                        {/* File — drawing + project-wide actions */}
                         <MenubarMenu>
-                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">File</MenubarTrigger>
-                            <MenubarContent>
-                                <MenubarItem asChild>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-xs">File</MenubarTrigger>
+                            <MenubarContent className="min-w-42">
+                                <MenubarItem asChild className="text-xs">
                                     <a href={`/drawings/${drawing.id}/download`} download className="flex items-center gap-2">
-                                        <Download className="h-3.5 w-3.5" />
+                                        <Download className="h-3 w-3" />
                                         Download Drawing
                                     </a>
                                 </MenubarItem>
-                                <MenubarSeparator />
-                                <MenubarItem
-                                    onClick={() => (window.location.href = `/projects/${projectId}/takeoff-summary/export`)}
-                                    className="flex items-center gap-2"
-                                >
-                                    <FileSpreadsheet className="h-3.5 w-3.5" />
-                                    Export Takeoff (Excel)
-                                </MenubarItem>
-                                <MenubarSeparator />
-                                <MenubarItem onClick={() => window.print()} className="flex items-center gap-2">
-                                    <Printer className="h-3.5 w-3.5" />
-                                    Print
-                                </MenubarItem>
-                            </MenubarContent>
-                        </MenubarMenu>
-                        <MenubarMenu>
-                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Reports</MenubarTrigger>
-                            <MenubarContent>
-                                <MenubarItem
-                                    onClick={() => router.visit(`/projects/${projectId}/takeoff-summary`)}
-                                    className="flex items-center gap-2"
-                                >
-                                    <TableProperties className="h-3.5 w-3.5" />
-                                    Takeoff Summary
-                                </MenubarItem>
-                            </MenubarContent>
-                        </MenubarMenu>
-                        <MenubarMenu>
-                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Drawing</MenubarTrigger>
-                            <MenubarContent>
                                 <MenubarItem
                                     onClick={() => setShowReplicateDialog(true)}
-                                    className="flex items-center gap-2"
+                                    className="flex items-center gap-2 text-xs"
                                 >
-                                    <Copy className="h-3.5 w-3.5" />
-                                    Replicate to Floors...
+                                    <Copy className="h-3 w-3" />
+                                    Replicate to Floors…
+                                </MenubarItem>
+                                <MenubarSeparator />
+                                <MenubarItem
+                                    onClick={() => router.visit(`/projects/${projectId}/takeoff-summary`)}
+                                    className="flex items-center gap-2 text-xs"
+                                >
+                                    <TableProperties className="h-3 w-3" />
+                                    Takeoff Summary
+                                </MenubarItem>
+                                <MenubarItem
+                                    onClick={() => (window.location.href = `/projects/${projectId}/takeoff-summary/export`)}
+                                    className="flex items-center gap-2 text-xs"
+                                >
+                                    <FileSpreadsheet className="h-3 w-3" />
+                                    Export Takeoff (Excel)
                                 </MenubarItem>
                             </MenubarContent>
                         </MenubarMenu>
+
+                        {/* Help */}
                         <MenubarMenu>
-                            <MenubarTrigger className="h-6 px-2 py-1 text-[11px]">Help</MenubarTrigger>
-                            <MenubarContent>
+                            <MenubarTrigger className="h-6 px-2 py-1 text-xs">Help</MenubarTrigger>
+                            <MenubarContent className="min-w-42">
                                 <MenubarItem
                                     onClick={() => setShowHelpDialog(true)}
-                                    className="flex items-center gap-2"
+                                    className="flex items-center gap-2 text-xs"
                                 >
-                                    <Keyboard className="h-3.5 w-3.5" />
-                                    Shortcut Keys
+                                    <Keyboard className="h-3 w-3" />
+                                    Keyboard Shortcuts
                                 </MenubarItem>
                             </MenubarContent>
                         </MenubarMenu>
                     </Menubar>
 
-                    <div className="bg-border h-4 w-px" />
+                    <div className="flex-1" />
 
-                    {/* Drawing navigation group */}
+                    {/* Drawing navigation group — centered */}
                     <div className="flex items-center gap-0.5">
-                        <Link href={`/projects/${projectId}/drawings`}>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0" title="Back to drawings">
-                                <ArrowLeft className="h-3.5 w-3.5" />
-                            </Button>
-                        </Link>
                         {drawings.length > 1 ? (
                             <>
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 w-6 rounded-sm p-0"
+                                    className="h-7 w-7 rounded-sm p-0"
                                     disabled={!prevDrawing}
                                     onClick={() => prevDrawing && navigateToDrawing(prevDrawing.id)}
                                     title={prevDrawing ? `Previous: ${prevDrawing.display_name}` : 'No previous drawing'}
                                 >
-                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                    <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <Select
-                                    value={String(drawing.id)}
-                                    onValueChange={(value) => navigateToDrawing(Number(value))}
+                                <Combobox<ProjectDrawing>
+                                    items={drawings}
+                                    value={drawings.find((d) => d.id === drawing.id) ?? null}
+                                    open={drawingComboOpen}
+                                    inputValue={drawingComboInput}
+                                    itemToStringLabel={(item) => item.display_name}
+                                    itemToStringValue={(item) => String(item.id)}
+                                    isItemEqualToValue={(a, b) => a.id === b.id}
+                                    onOpenChange={(next) => {
+                                        setDrawingComboOpen(next);
+                                        if (!next) setDrawingComboInput('');
+                                    }}
+                                    onInputValueChange={setDrawingComboInput}
+                                    onValueChange={(value) => {
+                                        if (value) navigateToDrawing(value.id);
+                                        setDrawingComboOpen(false);
+                                        setDrawingComboInput('');
+                                    }}
                                 >
-                                    <SelectTrigger className="h-6 w-[160px] rounded-sm text-[11px] font-semibold">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {drawings.map((d) => (
-                                            <SelectItem key={d.id} value={String(d.id)}>
-                                                <div className="flex items-center gap-1.5">
-                                                    {d.has_takeoff && (
-                                                        <Ruler className="h-3 w-3 shrink-0 text-blue-500" />
-                                                    )}
-                                                    <span className="truncate">{d.display_name}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    <ComboboxTrigger
+                                        render={
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-auto min-h-7 w-[480px] justify-between rounded-sm px-2 py-1 text-[11px] font-semibold whitespace-normal text-left"
+                                            />
+                                        }
+                                        aria-label="Select drawing"
+                                    >
+                                        <span className="flex flex-1 items-center gap-1.5 min-w-0">
+                                            {drawings.find((d) => d.id === drawing.id)?.has_takeoff && (
+                                                <Ruler className="h-3 w-3 shrink-0 text-blue-500" />
+                                            )}
+                                            <ComboboxValue placeholder="Select drawing" />
+                                        </span>
+                                    </ComboboxTrigger>
+                                    <ComboboxContent className="w-[560px] p-0">
+                                        <ComboboxInput placeholder="Search drawings..." className="h-8 text-xs placeholder:text-xs" showTrigger={false} />
+                                        <ComboboxEmpty className="text-xs">No drawings found.</ComboboxEmpty>
+                                        <ComboboxList>
+                                            {(d: ProjectDrawing) => (
+                                                <ComboboxItem key={d.id} value={d} className="text-xs">
+                                                    <div className="flex items-start gap-1.5 py-0.5">
+                                                        {d.has_takeoff ? (
+                                                            <Ruler className="mt-0.5 h-3 w-3 shrink-0 text-blue-500" />
+                                                        ) : (
+                                                            <span className="mt-0.5 h-3 w-3 shrink-0" />
+                                                        )}
+                                                        <span className="whitespace-normal break-words leading-snug">
+                                                            {d.display_name}
+                                                        </span>
+                                                    </div>
+                                                </ComboboxItem>
+                                            )}
+                                        </ComboboxList>
+                                    </ComboboxContent>
+                                </Combobox>
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 w-6 rounded-sm p-0"
+                                    className="h-7 w-7 rounded-sm p-0"
                                     disabled={!nextDrawing}
                                     onClick={() => nextDrawing && navigateToDrawing(nextDrawing.id)}
                                     title={nextDrawing ? `Next: ${nextDrawing.display_name}` : 'No next drawing'}
                                 >
-                                    <ChevronRight className="h-3.5 w-3.5" />
+                                    <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </>
                         ) : (
@@ -303,45 +333,9 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                     )}
                 </div>
 
-                {/* Row 2 — Tools: map controls + page-specific toolbar */}
-                {(mapControls || toolbar) && (
+                {/* Row 2 — Tools: page-specific toolbar */}
+                {toolbar && (
                     <div className="bg-muted/30 flex shrink-0 min-h-[30px] items-center gap-2 border-b px-2 py-0.5">
-                        {mapControls && (
-                            <>
-                                <div className="bg-background flex items-center rounded-sm border p-px">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 rounded-sm p-0"
-                                        onClick={mapControls.zoomIn}
-                                        title="Zoom in"
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 rounded-sm p-0"
-                                        onClick={mapControls.zoomOut}
-                                        title="Zoom out"
-                                    >
-                                        <Minus className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 rounded-sm p-0"
-                                        onClick={mapControls.fitToScreen}
-                                        title="Fit to screen"
-                                    >
-                                        <Maximize className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                                {toolbar && <div className="bg-border h-4 w-px" />}
-                            </>
-                        )}
-
-                        {/* Page-specific toolbar (measurement tools, bid context, compare) */}
                         {toolbar}
                     </div>
                 )}
@@ -366,8 +360,17 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                     </div>
                 )}
 
-                {/* Page-specific content (toolbar, viewer, panels, dialogs) */}
-                {children}
+                {/* Page-specific content (left toolbar + viewer, panels, dialogs) */}
+                <div className="flex flex-1 overflow-hidden">
+                    {leftToolbar && (
+                        <div className="bg-muted/30 flex shrink-0 flex-col items-center gap-1 border-r px-1 py-1.5">
+                            {leftToolbar}
+                        </div>
+                    )}
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        {children}
+                    </div>
+                </div>
 
                 {/* Status Bar */}
                 {statusBar && (

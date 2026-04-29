@@ -75,6 +75,8 @@ type MeasurementLayerProps = {
     // Segment statusing: "measId-segIdx" → percent_complete
     segmentStatuses?: Record<string, number>;
     onSegmentClick?: (measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => void;
+    // Segment-level hide: keys "measId-segIdx" — these segments will not render at all
+    hiddenSegments?: Set<string>;
     // Selection highlighting
     selectedSegments?: Set<string>;
     selectedMeasurementIds?: Set<number>;
@@ -182,6 +184,7 @@ export function MeasurementLayer({
     onMeasurementClick,
     productionLabels,
     segmentStatuses,
+    hiddenSegments,
     onSegmentClick,
     selectedSegments,
     selectedMeasurementIds,
@@ -433,6 +436,8 @@ export function MeasurementLayer({
                     // Render each segment as a separate polyline for individual statusing
                     for (let si = 0; si < m.points.length - 1; si++) {
                         const segKey = `${m.id}-${si}`;
+                        // Skip segments explicitly hidden (e.g., 100% complete when "Hide done" is on)
+                        if (hiddenSegments?.has(segKey)) continue;
                         const segPercent = segmentStatuses[segKey] ?? 0;
                         const segColor = getSegmentColor(segPercent);
                         const segSelected = selectedSegments?.has(segKey) ?? false;
@@ -649,7 +654,7 @@ export function MeasurementLayer({
                 badge.addTo(group);
             }
         });
-    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionOpacities, productionLabels, segmentStatuses, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
+    }, [map, measurements, selectedMeasurementId, imageWidth, imageHeight, onMeasurementClick, conditionOpacities, productionLabels, segmentStatuses, hiddenSegments, onSegmentClick, selectedSegments, selectedMeasurementIds, boxSelectMode, isMeasuring, calibration, pixelWidth, pixelHeight]);
 
     // Lightweight hover highlight (separate from main render to avoid full rebuild)
     useEffect(() => {

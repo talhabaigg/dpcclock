@@ -126,7 +126,7 @@ export function ObservationDialog({
                                 {editingObservation.potential_change_order && (
                                     <div className="col-span-2">
                                         <Badge variant="destructive" className="text-[10px]">
-                                            Potential Change Order
+                                            Potential Variation
                                         </Badge>
                                     </div>
                                 )}

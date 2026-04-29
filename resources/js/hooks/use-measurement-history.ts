@@ -38,7 +38,7 @@ export function useMeasurementHistory(callbacks: Callbacks) {
 
             try {
                 if (action.type === 'create' && isUndo) {
-                    await http.destroy(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
+                    await http.delete(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
                         onSuccess: () => {
                             callbacks.onMeasurementRemoved(action.measurement.id);
                             toast.success('Undo: measurement removed');
@@ -65,7 +65,7 @@ export function useMeasurementHistory(callbacks: Callbacks) {
                         },
                     );
                 } else if (action.type === 'delete' && !isUndo) {
-                    await http.destroy(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
+                    await http.delete(`/drawings/${action.drawingId}/measurements/${action.measurement.id}`, {
                         onSuccess: () => {
                             callbacks.onMeasurementRemoved(action.measurement.id);
                             toast.success('Redo: measurement removed');

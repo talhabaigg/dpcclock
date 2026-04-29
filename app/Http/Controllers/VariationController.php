@@ -572,6 +572,105 @@ class VariationController extends Controller
         return response()->json(['variation' => $variation], 201);
     }
 
+    /**
+     * Create a draft variation with an auto-generated CO number.
+     * Drafts are real variation rows with status='draft' that can be measured into
+     * and later formalised by setting a real CO number.
+     */
+    public function quickDraft(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'location_id' => 'required|exists:locations,id',
+            'drawing_id' => 'nullable|exists:drawings,id',
+        ]);
+
+        // Find the next DRAFT-N number for this location
+        $existing = Variation::where('location_id', $validated['location_id'])
+            ->where('status', 'draft')
+            ->where('co_number', 'like', 'DRAFT-%')
+            ->pluck('co_number')
+            ->map(fn ($n) => (int) preg_replace('/[^0-9]/', '', $n))
+            ->filter()
+            ->all();
+        $nextNumber = empty($existing) ? 1 : max($existing) + 1;
+        $coNumber = 'DRAFT-' . $nextNumber;
+
+        $variation = Variation::create([
+            'location_id' => $validated['location_id'],
+            'drawing_id' => $validated['drawing_id'] ?? null,
+            'type' => 'extra',
+            'co_number' => $coNumber,
+            'description' => 'Untitled draft',
+            'created_by' => auth()->user()->name ?? null,
+            'co_date' => now()->toDateString(),
+            'status' => 'draft',
+        ]);
+
+        return response()->json(['variation' => $variation], 201);
+    }
+
+    /**
+     * Discard a draft variation. Soft-deletes the row and any measurements
+     * still attached to it (which were added during the draft phase).
+     */
+    public function discardDraft(Variation $variation): JsonResponse
+    {
+        if ($variation->status !== 'draft') {
+            abort(409, 'Only draft variations can be discarded this way.');
+        }
+
+        \App\Models\DrawingMeasurement::where('variation_id', $variation->id)->delete();
+        $variation->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Rename a draft variation (description-only). Only works while status is 'draft'.
+     */
+    public function renameDraft(Request $request, Variation $variation): JsonResponse
+    {
+        if ($variation->status !== 'draft') {
+            abort(409, 'Only draft variations can be renamed this way.');
+        }
+
+        $validated = $request->validate([
+            'description' => 'required|string|max:255',
+        ]);
+
+        $variation->update([
+            'description' => $validated['description'],
+            'updated_by' => auth()->user()->name ?? null,
+        ]);
+
+        return response()->json(['variation' => $variation->fresh()]);
+    }
+
+    /**
+     * Formalise a draft variation by setting its CO number and description,
+     * and bumping status from 'draft' to 'pending'.
+     */
+    public function formalise(Request $request, Variation $variation): JsonResponse
+    {
+        if ($variation->status !== 'draft') {
+            abort(409, 'Variation is already formalised.');
+        }
+
+        $validated = $request->validate([
+            'co_number' => 'required|string|max:50',
+            'description' => 'required|string|max:255',
+        ]);
+
+        $variation->update([
+            'co_number' => $validated['co_number'],
+            'description' => $validated['description'],
+            'status' => 'pending',
+            'updated_by' => auth()->user()->name ?? null,
+        ]);
+
+        return response()->json(['variation' => $variation->fresh()]);
+    }
+
     // ---- Drawing Variation API endpoints ----
 
     /**

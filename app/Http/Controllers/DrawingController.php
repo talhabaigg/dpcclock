@@ -1337,22 +1337,6 @@ class DrawingController extends Controller
     }
 
     /**
-     * QA workspace — observations and defect tracking on a drawing.
-     */
-    public function qa(Drawing $drawing): Response
-    {
-        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
-
-        return Inertia::render('drawings/qa', [
-            'drawing' => $drawing,
-            'revisions' => $revisions,
-            'project' => $drawing->project,
-            'activeTab' => 'qa',
-            'projectDrawings' => $projectDrawings,
-        ]);
-    }
-
-    /**
      * Load a drawing with its project, revisions, and observations.
      *
      * @return array{0: Drawing, 1: \Illuminate\Support\Collection, 2: \Illuminate\Support\Collection}

@@ -107,7 +107,10 @@
       "Bash(npx impeccable *)",
       "mcp__a91a8eb0-c95f-48b8-8566-bf1d9e19df9d__create_item",
       "mcp__a91a8eb0-c95f-48b8-8566-bf1d9e19df9d__create_update",
-      "Bash(xargs basename *)"
+      "Bash(xargs basename *)",
+      "Bash(lsof -iTCP:3306 -sTCP:LISTEN)",
+      "Bash(brew services *)",
+      "Bash(nc -zv 127.0.0.1 3306)"
     ]
   }
 }

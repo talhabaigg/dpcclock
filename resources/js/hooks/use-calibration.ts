@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useHttp } from '@inertiajs/react';
 import type { Point, CalibrationData, MeasurementData, ViewMode } from '@/components/measurement-layer';
+import { api, ApiError } from '@/lib/api';
 import { toast } from 'sonner';
 
 type UseCalibrationParams = {
@@ -9,7 +9,6 @@ type UseCalibrationParams = {
     onCalibrationSaved: (calibration: CalibrationData, measurements: MeasurementData[]) => void;
     onCalibrationDeleted: () => void;
     setViewMode: (mode: ViewMode) => void;
-    setShowTakeoffPanel: (show: boolean) => void;
 };
 
 export function useCalibration({
@@ -18,7 +17,6 @@ export function useCalibration({
     onCalibrationSaved,
     onCalibrationDeleted,
     setViewMode,
-    setShowTakeoffPanel,
 }: UseCalibrationParams) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [method, setMethod] = useState<'manual' | 'preset'>('preset');
@@ -28,9 +26,7 @@ export function useCalibration({
     const [paperSize, setPaperSize] = useState('A1');
     const [scale, setScale] = useState('1:50');
     const [customScale, setCustomScale] = useState('');
-
-    const saveHttp = useHttp({});
-    const deleteHttp = useHttp({});
+    const [saving, setSaving] = useState(false);
 
     const handleCalibrationComplete = (pointA: Point, pointB: Point) => {
         setPendingPoints({ a: pointA, b: pointB });
@@ -65,18 +61,22 @@ export function useCalibration({
             };
         }
 
-        saveHttp.setData(body);
-        saveHttp.post(`/drawings/${drawingId}/calibration`, {
-            onSuccess: (data: { calibration: CalibrationData; measurements: MeasurementData[] }) => {
-                onCalibrationSaved(data.calibration, data.measurements || []);
-                setDialogOpen(false);
-                setPendingPoints(null);
-                toast.success('Scale calibration saved.');
-            },
-            onError: () => {
-                toast.error('Failed to save calibration.');
-            },
-        });
+        setSaving(true);
+        try {
+            const data = await api.post<{ calibration: CalibrationData; measurements: MeasurementData[] }>(
+                `/drawings/${drawingId}/calibration`,
+                body,
+            );
+            onCalibrationSaved(data.calibration, data.measurements || []);
+            setDialogOpen(false);
+            setPendingPoints(null);
+            toast.success('Scale calibration saved.');
+        } catch (err) {
+            const msg = err instanceof ApiError ? err.message : 'Failed to save calibration.';
+            toast.error(msg);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleDelete = async () => {
@@ -88,21 +88,19 @@ export function useCalibration({
         });
         if (!confirmed) return;
 
-        deleteHttp.destroy(`/drawings/${drawingId}/calibration`, {
-            onSuccess: () => {
-                onCalibrationDeleted();
-                toast.success('Calibration deleted.');
-            },
-            onError: () => {
-                toast.error('Failed to delete calibration.');
-            },
-        });
+        try {
+            await api.delete(`/drawings/${drawingId}/calibration`);
+            onCalibrationDeleted();
+            toast.success('Calibration deleted.');
+        } catch (err) {
+            const msg = err instanceof ApiError ? err.message : 'Failed to delete calibration.';
+            toast.error(msg);
+        }
     };
 
     const handleOpenDialog = (m: 'manual' | 'preset') => {
         if (m === 'manual') {
             setViewMode('calibrate');
-            setShowTakeoffPanel(true);
         } else {
             setMethod('preset');
             setDialogOpen(true);
@@ -125,7 +123,7 @@ export function useCalibration({
         setScale,
         customScale,
         setCustomScale,
-        saving: saveHttp.processing,
+        saving,
         handleCalibrationComplete,
         handleSave,
         handleDelete,

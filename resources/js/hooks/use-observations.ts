@@ -142,7 +142,7 @@ export function useObservations({ drawingId, initialObservations, confirm }: Use
         });
         if (!confirmed) return;
 
-        deleteHttp.destroy(`/drawings/${drawingId}/observations/${editingObservation.id}`, {
+        deleteHttp.delete(`/drawings/${drawingId}/observations/${editingObservation.id}`, {
             onSuccess: () => {
                 setServerObservations((prev) => prev.filter((obs) => obs.id !== editingObservation.id));
                 setDialogOpen(false);

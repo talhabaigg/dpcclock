@@ -1029,6 +1029,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:variations.create')->group(function () {
         Route::post('/locations/{location}/variation-generate', [VariationController::class, 'generateFromCondition'])->name('variations.generate');
         Route::post('/variations/quick-store', [VariationController::class, 'quickStore'])->name('variations.quick-store');
+        Route::post('/variations/quick-draft', [VariationController::class, 'quickDraft'])->name('variations.quick-draft');
+        Route::patch('/variations/{variation}/rename-draft', [VariationController::class, 'renameDraft'])->name('variations.rename-draft');
+        Route::delete('/variations/{variation}/discard-draft', [VariationController::class, 'discardDraft'])->name('variations.discard-draft');
+        Route::patch('/variations/{variation}/formalise', [VariationController::class, 'formalise'])->name('variations.formalise');
     });
 
     // Variation Pricing Items (JSON API)
@@ -1082,9 +1086,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             }
             if ($user && $user->can('budget.view')) {
                 return redirect()->route('drawings.budget', $drawing);
-            }
-            if ($user && $user->can('qa.view')) {
-                return redirect()->route('drawings.qa', $drawing);
             }
             return redirect()->route('drawings.takeoff', $drawing);
         })->name('drawings.show');
@@ -1178,10 +1179,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // --------------------------------------------
-    // QA (observations, alignment, comparisons)
+    // Drawing observations (used by the takeoff workspace)
     // --------------------------------------------
     Route::middleware('permission:qa.view')->group(function () {
-        Route::get('/drawings/{drawing}/qa', [DrawingController::class, 'qa'])->name('drawings.qa');
         // Drawing Observations
         Route::post('/drawings/{drawing}/observations', [DrawingObservationController::class, 'store'])->name('drawings.observations.store');
         Route::post('/drawings/{drawing}/observations/{observation}', [DrawingObservationController::class, 'update'])->name('drawings.observations.update');

@@ -620,6 +620,16 @@ class SigningRequestController extends Controller
         $employeeIds = $validated['employee_ids'] ?? [];
         $isBulk = ! empty($employeeIds);
 
+        \Illuminate\Support\Facades\Log::info('[storeCombined:debug] request received', [
+            'raw_employee_ids_input' => $request->input('employee_ids'),
+            'validated_employee_ids' => $employeeIds,
+            'validated_employee_ids_count' => is_array($employeeIds) ? count($employeeIds) : 'not-array',
+            'is_bulk' => $isBulk,
+            'has_internal_signer' => ! empty($validated['internal_signer_user_id']),
+            'template_ids' => $templateIds,
+            'has_written' => $hasWritten,
+        ]);
+
         if (empty($templateIds) && ! $hasWritten && empty($attachments)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'documents' => 'Please select a template, write a document, or upload an attachment.',
@@ -677,6 +687,12 @@ class SigningRequestController extends Controller
                 }
             }
 
+            \Illuminate\Support\Facades\Log::info('[storeCombined:debug] resolved employees from DB', [
+                'requested_ids' => $employeeIds,
+                'fetched_count' => $employees->count(),
+                'fetched_ids' => $employees->pluck('id')->all(),
+            ]);
+
             foreach ($employees as $emp) {
                 \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $emp);
                 $recipients[] = [
@@ -686,6 +702,11 @@ class SigningRequestController extends Controller
                     'employee_id' => $emp->id,
                 ];
             }
+
+            \Illuminate\Support\Facades\Log::info('[storeCombined:debug] recipients built', [
+                'recipients_count' => count($recipients),
+                'recipient_employee_ids' => array_column($recipients, 'employee_id'),
+            ]);
         } else {
             $signable = null;
             if (! empty($validated['signable_type']) && ! empty($validated['signable_id'])) {
@@ -707,7 +728,14 @@ class SigningRequestController extends Controller
         $batchId = ($isBulk && $internalSigner) ? (string) \Illuminate\Support\Str::uuid() : null;
 
         $created = 0;
-        foreach ($recipients as $recipient) {
+        foreach ($recipients as $recipientIndex => $recipient) {
+            \Illuminate\Support\Facades\Log::info('[storeCombined:debug] entering recipient loop iteration', [
+                'iteration' => $recipientIndex,
+                'employee_id' => $recipient['employee_id'] ?? null,
+                'recipient_name' => $recipient['name'] ?? null,
+                'recipient_email' => $recipient['email'] ?? null,
+            ]);
+
             // Resolve custom fields: per-employee (mail merge) or shared
             $recipientCustomFields = $validated['custom_fields'] ?? [];
             if (! empty($recipient['employee_id']) && ! empty($employeeCustomFields[$recipient['employee_id']])) {
@@ -717,19 +745,37 @@ class SigningRequestController extends Controller
             // 1. Templates
             foreach ($templates as $template) {
                 if ($requiresSig && $internalSigner) {
-                    $this->signingService->createWithInternalSigner(
-                        template: $template,
-                        deliveryMethod: $validated['delivery_method'],
-                        admin: $request->user(),
-                        recipientName: $recipient['name'],
-                        recipientEmail: $recipient['email'],
-                        internalSigner: $internalSigner,
-                        customFields: $recipientCustomFields,
-                        signable: $recipient['signable'],
-                        senderFullName: $validated['sender_full_name'] ?? null,
-                        senderPosition: $validated['sender_position'] ?? null,
-                        batchId: $batchId,
-                    );
+                    \Illuminate\Support\Facades\Log::info('[storeCombined:debug] calling createWithInternalSigner', [
+                        'employee_id' => $recipient['employee_id'] ?? null,
+                        'template_id' => $template->id,
+                        'batch_id' => $batchId,
+                    ]);
+                    try {
+                        $createdReq = $this->signingService->createWithInternalSigner(
+                            template: $template,
+                            deliveryMethod: $validated['delivery_method'],
+                            admin: $request->user(),
+                            recipientName: $recipient['name'],
+                            recipientEmail: $recipient['email'],
+                            internalSigner: $internalSigner,
+                            customFields: $recipientCustomFields,
+                            signable: $recipient['signable'],
+                            senderFullName: $validated['sender_full_name'] ?? null,
+                            senderPosition: $validated['sender_position'] ?? null,
+                            batchId: $batchId,
+                        );
+                        \Illuminate\Support\Facades\Log::info('[storeCombined:debug] createWithInternalSigner returned', [
+                            'employee_id' => $recipient['employee_id'] ?? null,
+                            'created_signing_request_id' => $createdReq->id,
+                        ]);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::error('[storeCombined:debug] createWithInternalSigner threw', [
+                            'employee_id' => $recipient['employee_id'] ?? null,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                        throw $e;
+                    }
                 } elseif ($requiresSig) {
                     $this->signingService->createAndSend(
                         template: $template,

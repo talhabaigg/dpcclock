@@ -1,12 +1,17 @@
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { cn } from '@/lib/utils';
-import { useHttp, usePage } from '@inertiajs/react';
-import { BarChart3, Calendar, ChevronDown, ChevronRight, Layers, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { api, ApiError } from '@/lib/api';
+import { usePage } from '@inertiajs/react';
+import { addDays, format, parseISO } from 'date-fns';
+import { CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, PanelLeftOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
@@ -186,14 +191,7 @@ export default function DrawingBudget() {
 
     const projectId = project?.id || drawing.project_id;
 
-    // HTTP instances
-    const budgetEntryHttp = useHttp({});
-    const workDateHttp = useHttp({});
-    const lccHistoryHttp = useHttp({});
-    const projectHistoryHttp = useHttp({});
-
     // State
-    const [showBidViewPanel, setShowBidViewPanel] = useState(true);
     const [bidViewLayers, setBidViewLayers] = useState<{
         baseBid: boolean;
         variations: Record<number, boolean>;
@@ -203,7 +201,6 @@ export default function DrawingBudget() {
     const [usedHoursMap, setUsedHoursMap] = useState<Record<string, number>>(initialUsedHoursMap || {});
     const [percentCompleteMap, setPercentCompleteMap] = useState<Record<string, number>>(initialPercentCompleteMap || {});
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-    const [showChart, setShowChart] = useState(true);
     const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
     const [lccHistory, setLccHistory] = useState<Array<{ work_date: string; used_hours: number; percent_complete?: number | null }>>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -341,7 +338,7 @@ export default function DrawingBudget() {
 
         // Debounce save
         saveTimers.current[timerKey] = setTimeout(() => {
-            budgetEntryHttp.setData({
+            api.post(`/locations/${projectId}/budget-hours`, {
                 bid_area_id: bidAreaId,
                 labour_cost_code_id: lccId,
                 work_date: workDate,
@@ -349,23 +346,25 @@ export default function DrawingBudget() {
                 percent_complete: payload.percent_complete !== undefined
                     ? payload.percent_complete
                     : (percentCompleteMap[key] ?? null),
-            });
-            budgetEntryHttp.post(`/locations/${projectId}/budget-hours`, {
-                onError: () => toast.error('Failed to save budget entry'),
+            }).catch((err) => {
+                const msg = err instanceof ApiError ? err.message : 'Failed to save budget entry';
+                toast.error(msg);
             });
         }, 600);
-    }, [projectId, workDate, usedHoursMap, percentCompleteMap]);
+    }, [projectId, workDate, usedHoursMap, percentCompleteMap, canEditBudget]);
 
     // ─── Work date change ───────────────────────────────────────────────────
-    const handleWorkDateChange = useCallback((newDate: string) => {
+    const handleWorkDateChange = useCallback(async (newDate: string) => {
         setWorkDate(newDate);
-        workDateHttp.get(`/locations/${projectId}/budget-hours?work_date=${newDate}`, {
-            onSuccess: (data: any) => {
-                setUsedHoursMap(data.usedHoursMap || {});
-                setPercentCompleteMap(data.percentCompleteMap || {});
-            },
-            onError: () => toast.error('Failed to load hours for date'),
-        });
+        try {
+            const data = await api.get<{ usedHoursMap?: Record<string, number>; percentCompleteMap?: Record<string, number> }>(
+                `/locations/${projectId}/budget-hours?work_date=${newDate}`,
+            );
+            setUsedHoursMap(data.usedHoursMap || {});
+            setPercentCompleteMap(data.percentCompleteMap || {});
+        } catch {
+            toast.error('Failed to load hours for date');
+        }
     }, [projectId]);
 
     // Toggle group collapse
@@ -395,22 +394,21 @@ export default function DrawingBudget() {
             return;
         }
         setLoadingHistory(true);
-        lccHistoryHttp.get(
+        api.get<{ history?: Array<{ work_date: string; used_hours: number; percent_complete?: number | null }> }>(
             `/locations/${projectId}/budget-hours-history?bid_area_id=${selectedGridRow.bid_area_id ?? 0}&labour_cost_code_id=${selectedGridRow.labour_cost_code_id}`,
-            {
-                onSuccess: (data: any) => setLccHistory(data.history || []),
-                onError: () => setLccHistory([]),
-                onFinish: () => setLoadingHistory(false),
-            },
-        );
+        )
+            .then((data) => setLccHistory(data.history || []))
+            .catch(() => setLccHistory([]))
+            .finally(() => setLoadingHistory(false));
     }, [selectedGridRow?.bid_area_id, selectedGridRow?.labour_cost_code_id, projectId]);
 
     // Fetch project-level history for overview chart
     useEffect(() => {
-        projectHistoryHttp.get(`/locations/${projectId}/budget-hours-history`, {
-            onSuccess: (data: any) => setProjectHistory(data.history || []),
-            onError: () => setProjectHistory([]),
-        });
+        api.get<{ history?: Array<{ work_date: string; used_hours: number }> }>(
+            `/locations/${projectId}/budget-hours-history`,
+        )
+            .then((data) => setProjectHistory(data.history || []))
+            .catch(() => setProjectHistory([]));
     }, [projectId]);
 
     const today = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -448,200 +446,248 @@ export default function DrawingBudget() {
             activeTab={activeTab}
             statusBar={
                 <>
-                    <span>Est: <span className="font-mono font-medium tabular-nums">{grandTotals.est_hours.toFixed(1)}h</span></span>
+                    <span>Est: <span className="font-medium tabular-nums">{grandTotals.est_hours.toFixed(1)}h</span></span>
                     <div className="bg-border h-3 w-px" />
-                    <span>Earned: <span className="font-mono font-medium tabular-nums">{grandTotals.earned_hours.toFixed(1)}h</span></span>
+                    <span>Earned: <span className="font-medium tabular-nums">{grandTotals.earned_hours.toFixed(1)}h</span></span>
                     <div className="bg-border h-3 w-px" />
-                    <span>Used: <span className="font-mono font-medium tabular-nums">{grandTotals.used_hours.toFixed(1)}h</span></span>
+                    <span>Used: <span className="font-medium tabular-nums">{grandTotals.used_hours.toFixed(1)}h</span></span>
                     <div className="bg-border h-3 w-px" />
                     <span className="font-medium">
-                        Variance: <span className="font-mono tabular-nums">{grandTotals.variance >= 0 ? '+' : ''}{grandTotals.variance.toFixed(1)}h</span>
+                        Variance: <span className="tabular-nums">{grandTotals.variance >= 0 ? '+' : ''}{grandTotals.variance.toFixed(1)}h</span>
                     </span>
                     <div className="flex-1" />
                     <span>{gridRows.length} cost code{gridRows.length !== 1 ? 's' : ''}</span>
                 </>
             }
-            toolbar={
-                <>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={showBidViewPanel ? 'secondary' : 'ghost'}
-                        className="h-6 w-6 rounded-sm p-0"
-                        onClick={() => setShowBidViewPanel(!showBidViewPanel)}
-                        title={showBidViewPanel ? 'Hide bid view' : 'Show bid view'}
-                    >
-                        {showBidViewPanel ? <PanelLeftClose className="h-3 w-3" /> : <PanelLeftOpen className="h-3 w-3" />}
-                    </Button>
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Work Date */}
-                    <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <input
-                            type="date"
-                            value={workDate}
-                            onChange={(e) => handleWorkDateChange(e.target.value)}
-                            className="h-6 w-[130px] rounded-sm border border-border bg-background px-1.5 text-[11px]"
-                        />
-                    </div>
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Grouping */}
-                    <div className="flex items-center gap-1">
-                        <Layers className="h-3 w-3 text-muted-foreground" />
-                        <Select value={groupMode} onValueChange={(v) => setGroupMode(v as GroupMode)}>
-                            <SelectTrigger className="h-6 w-[120px] rounded-sm text-[11px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="area-lcc">Area → LCC</SelectItem>
-                                <SelectItem value="lcc-area">LCC → Area</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Chart toggle */}
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={showChart ? 'secondary' : 'ghost'}
-                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                        onClick={() => setShowChart(!showChart)}
-                    >
-                        <BarChart3 className="h-3 w-3" />
-                        Chart
-                    </Button>
-                </>
-            }
         >
             <div className="relative flex flex-1 overflow-hidden">
-                {/* Bid View Left Panel */}
-                {showBidViewPanel && (
-                    <div className="bg-background flex w-44 shrink-0 flex-col overflow-hidden border-r text-[11px]">
-                        <div className="flex items-center border-b bg-muted/30 px-1 py-px">
-                            <button
-                                className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                onClick={() => setBidViewLayers({
-                                    baseBid: true,
-                                    variations: Object.fromEntries(variations.map((v) => [v.id, true])),
-                                })}
-                            >
-                                All
-                            </button>
-                            <span className="text-muted-foreground/40">|</span>
-                            <button
-                                className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                onClick={() => setBidViewLayers({ baseBid: true, variations: {} })}
-                            >
-                                Base
-                            </button>
-                            <span className="text-muted-foreground/40">|</span>
-                            <button
-                                className="px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-                                onClick={() => setBidViewLayers({
-                                    baseBid: false,
-                                    variations: Object.fromEntries(variations.map((v) => [v.id, true])),
-                                })}
-                            >
-                                Var
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto">
-                            <div className="flex items-center gap-1 px-1 py-px hover:bg-muted/50">
-                                <Checkbox
-                                    checked={bidViewLayers.baseBid}
-                                    onCheckedChange={(checked) =>
-                                        setBidViewLayers((prev) => ({ ...prev, baseBid: !!checked }))
-                                    }
-                                    className="h-3 w-3 rounded-sm"
-                                />
-                                <span className="leading-tight font-semibold">Base Bid</span>
-                            </div>
-                            {variations.length > 0 && (
-                                <>
-                                    <div className="border-t border-dashed" />
-                                    {variations.map((v) => (
-                                        <div key={v.id} className="flex items-center gap-1 px-1 py-px hover:bg-muted/50">
-                                            <Checkbox
-                                                checked={bidViewLayers.variations[v.id] === true}
-                                                onCheckedChange={(checked) =>
-                                                    setBidViewLayers((prev) => ({
-                                                        ...prev,
-                                                        variations: { ...prev.variations, [v.id]: !!checked },
-                                                    }))
-                                                }
-                                                className="h-3 w-3 rounded-sm"
-                                            />
-                                            <span className="truncate leading-tight">{v.co_number}</span>
-                                            {v.description && (
-                                                <span className="ml-auto truncate pl-1 text-[9px] text-muted-foreground">
-                                                    {v.description.length > 12 ? v.description.slice(0, 12) + '\u2026' : v.description}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Budget Spreadsheet Grid + Chart */}
+                {/* Budget Chart + Grid */}
                 <div className="flex flex-1 flex-col overflow-hidden">
-                    {/* Variance Chart — above the table */}
-                    {showChart && gridRows.length > 0 && (
-                        <div className="shrink-0 border-b">
-                            <VarianceChart
-                                overviewData={overviewChartData}
-                                drillDownData={drillDownChartData}
-                                selectedRow={selectedGridRow ?? null}
-                                loading={loadingHistory}
-                                onClearSelection={() => setSelectedRowKey(null)}
-                                today={today}
-                                chartRange={chartRange}
-                                onChartRangeChange={setChartRange}
-                            />
-                        </div>
-                    )}
-
                     <ScrollArea className="flex-1">
-                        <table className="w-full table-fixed border-collapse text-[11px]">
-                            <thead className="sticky top-0 z-10">
-                                {/* Column group headers */}
-                                <tr className="bg-muted/50">
-                                    <th className="border border-border px-2 py-1 text-left font-semibold w-[200px]" rowSpan={2}>
-                                        Cost Code
-                                    </th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium" rowSpan={2}>
-                                        Total Qty
-                                    </th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium" rowSpan={2}>
-                                        Inst. Qty
-                                    </th>
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold" colSpan={6}>
-                                        Actual
-                                    </th>
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-semibold" colSpan={3}>
-                                        Projected
-                                    </th>
-                                </tr>
-                                <tr className="bg-muted/30 text-[9px] uppercase tracking-wider text-muted-foreground">
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-medium">Est. Hrs</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">% Comp</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">Earned</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">Used Hrs</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">+(-)</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">Remain</th>
-                                    <th className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center font-medium">% +(-)</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">Hours</th>
-                                    <th className="border border-border px-1 py-0.5 text-center font-medium">+(-)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* Grand Total Row */}
-                                <TotalRow label="TOTAL" data={grandTotals} className="bg-muted/40 font-semibold" />
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                            {/* Variance Chart card */}
+                            {gridRows.length > 0 && (
+                                <Card className="overflow-clip !p-0 !pb-3 !gap-0">
+                                    <VarianceChart
+                                        overviewData={overviewChartData}
+                                        drillDownData={drillDownChartData}
+                                        selectedRow={selectedGridRow ?? null}
+                                        loading={loadingHistory}
+                                        onClearSelection={() => setSelectedRowKey(null)}
+                                        today={today}
+                                        chartRange={chartRange}
+                                        onChartRangeChange={setChartRange}
+                                    />
+                                </Card>
+                            )}
+
+                            {/* Date + Grouping controls — above the table */}
+                            <div className="flex items-center gap-2 px-1">
+                                {/* Work date — prev / popover / next */}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 rounded-sm p-0"
+                                    onClick={() => workDate && handleWorkDateChange(format(addDays(parseISO(workDate), -1), 'yyyy-MM-dd'))}
+                                    title="Previous day"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 gap-1.5 rounded-sm px-2 text-xs font-normal"
+                                        >
+                                            <CalendarIcon className="h-3 w-3" />
+                                            {workDate ? format(parseISO(workDate), 'd MMM yyyy') : 'Pick a date'}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={workDate ? parseISO(workDate) : undefined}
+                                            onSelect={(d) => {
+                                                if (d) handleWorkDateChange(format(d, 'yyyy-MM-dd'));
+                                            }}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 rounded-sm p-0"
+                                    onClick={() => workDate && handleWorkDateChange(format(addDays(parseISO(workDate), 1), 'yyyy-MM-dd'))}
+                                    title="Next day"
+                                >
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Group by</span>
+                                    <div className="flex items-center rounded-sm border border-border bg-background p-px">
+                                        {([
+                                            { value: 'area-lcc', label: 'Area' },
+                                            { value: 'lcc-area', label: 'LCC' },
+                                        ] as const).map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setGroupMode(opt.value)}
+                                                className={cn(
+                                                    'rounded-sm px-2 py-0.5 text-xs font-medium transition-colors',
+                                                    groupMode === opt.value
+                                                        ? 'bg-muted text-foreground'
+                                                        : 'text-muted-foreground hover:text-foreground',
+                                                )}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Bid view sheet trigger */}
+                                    <Sheet>
+                                        <SheetTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 gap-1.5 rounded-sm px-2 text-xs"
+                                            >
+                                                <PanelLeftOpen className="h-3 w-3" />
+                                                Bid view
+                                            </Button>
+                                        </SheetTrigger>
+                                        <SheetContent side="right" className="w-[320px] sm:max-w-[320px]">
+                                            <SheetHeader>
+                                                <SheetTitle className="text-sm">Bid view</SheetTitle>
+                                            </SheetHeader>
+                                            <div className="flex flex-col gap-2 px-4 pb-4">
+                                                <div className="flex items-center gap-0.5 rounded-sm border border-border bg-background p-px">
+                                                    {(['All', 'Base', 'Var'] as const).map((label) => {
+                                                        const allVarOn = variations.length > 0 && variations.every((v) => bidViewLayers.variations[v.id] === true);
+                                                        const anyVarOn = Object.values(bidViewLayers.variations).some(Boolean);
+                                                        const isActive =
+                                                            (label === 'All' && bidViewLayers.baseBid && allVarOn) ||
+                                                            (label === 'Base' && bidViewLayers.baseBid && !anyVarOn) ||
+                                                            (label === 'Var' && !bidViewLayers.baseBid && allVarOn);
+                                                        return (
+                                                            <button
+                                                                key={label}
+                                                                type="button"
+                                                                className={cn(
+                                                                    'flex flex-1 items-center justify-center rounded-sm px-2 py-1 text-xs font-medium transition-colors',
+                                                                    isActive
+                                                                        ? 'bg-muted text-foreground'
+                                                                        : 'text-muted-foreground hover:text-foreground',
+                                                                )}
+                                                                onClick={() => {
+                                                                    if (label === 'All') {
+                                                                        setBidViewLayers({
+                                                                            baseBid: true,
+                                                                            variations: Object.fromEntries(variations.map((v) => [v.id, true])),
+                                                                        });
+                                                                    } else if (label === 'Base') {
+                                                                        setBidViewLayers({ baseBid: true, variations: {} });
+                                                                    } else {
+                                                                        setBidViewLayers({
+                                                                            baseBid: false,
+                                                                            variations: Object.fromEntries(variations.map((v) => [v.id, true])),
+                                                                        });
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <div className="flex flex-col">
+                                                    <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50">
+                                                        <Checkbox
+                                                            checked={bidViewLayers.baseBid}
+                                                            onCheckedChange={(checked) =>
+                                                                setBidViewLayers((prev) => ({ ...prev, baseBid: !!checked }))
+                                                            }
+                                                            className="h-3.5 w-3.5 rounded-sm"
+                                                        />
+                                                        <span className="text-xs font-medium">Base bid</span>
+                                                    </label>
+                                                    {variations.length > 0 &&
+                                                        variations.map((v) => (
+                                                            <label
+                                                                key={v.id}
+                                                                className="flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={bidViewLayers.variations[v.id] === true}
+                                                                    onCheckedChange={(checked) =>
+                                                                        setBidViewLayers((prev) => ({
+                                                                            ...prev,
+                                                                            variations: { ...prev.variations, [v.id]: !!checked },
+                                                                        }))
+                                                                    }
+                                                                    className="mt-0.5 h-3.5 w-3.5 rounded-sm"
+                                                                />
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="truncate text-xs font-medium tabular-nums">{v.co_number}</div>
+                                                                    {v.description && (
+                                                                        <div className="truncate text-xs leading-tight text-muted-foreground">
+                                                                            {v.description}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </label>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        </SheetContent>
+                                    </Sheet>
+                                </div>
+                            </div>
+
+                            {/* Budget Grid card — table sits flush */}
+                            <Card className="overflow-clip !p-0 !gap-0">
+                                <table className="w-full table-fixed border-collapse text-xs [&>tbody>tr:last-child]:border-b-0">
+                                        <thead className="sticky top-0 z-10 bg-muted/50">
+                                            {/* Column group headers */}
+                                            <tr className="border-b">
+                                                <th className="px-3 py-2 text-left font-medium w-[200px]" rowSpan={2}>
+                                                    Cost code
+                                                </th>
+                                                <th className="px-2 py-1 text-center font-medium text-muted-foreground" rowSpan={2}>
+                                                    Total qty
+                                                </th>
+                                                <th className="px-2 py-1 text-center font-medium text-muted-foreground" rowSpan={2}>
+                                                    Inst. qty
+                                                </th>
+                                                <th className="border-l border-border px-2 py-1 text-center font-medium" colSpan={6}>
+                                                    Actual
+                                                </th>
+                                                <th className="border-l border-border px-2 py-1 text-center font-medium" colSpan={3}>
+                                                    Projected
+                                                </th>
+                                            </tr>
+                                            <tr className="border-b text-xs text-muted-foreground">
+                                                <th className="border-l border-border px-2 py-1 text-center font-normal">Est. hrs</th>
+                                                <th className="px-2 py-1 text-center font-normal">% comp</th>
+                                                <th className="px-2 py-1 text-center font-normal">Earned</th>
+                                                <th className="px-2 py-1 text-center font-normal">Used hrs</th>
+                                                <th className="px-2 py-1 text-center font-normal">+(-)</th>
+                                                <th className="px-2 py-1 text-center font-normal">Remain</th>
+                                                <th className="border-l border-border px-2 py-1 text-center font-normal">% +(-)</th>
+                                                <th className="px-2 py-1 text-center font-normal">Hours</th>
+                                                <th className="px-2 py-1 text-center font-normal">+(-)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {/* Grand Total Row */}
+                                            <TotalRow label="Total" data={grandTotals} className="bg-muted/30 font-medium" />
 
                                 {gridRows.length === 0 && (
                                     <tr>
@@ -651,25 +697,27 @@ export default function DrawingBudget() {
                                     </tr>
                                 )}
 
-                                {groupedData.map((group) => {
-                                    const isCollapsed = collapsedGroups.has(group.key);
-                                    return (
-                                        <GroupRows
-                                            key={group.key}
-                                            group={group}
-                                            isCollapsed={isCollapsed}
-                                            onToggle={() => toggleGroup(group.key)}
-                                            groupMode={groupMode}
-                                            usedHoursMap={usedHoursMap}
-                                            onBudgetEntryChange={saveBudgetEntry}
-                                            selectedRowKey={selectedRowKey}
-                                            onRowSelect={handleRowSelect}
-                                            readOnly={!canEditBudget}
-                                        />
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                            {groupedData.map((group) => {
+                                                const isCollapsed = collapsedGroups.has(group.key);
+                                                return (
+                                                    <GroupRows
+                                                        key={group.key}
+                                                        group={group}
+                                                        isCollapsed={isCollapsed}
+                                                        onToggle={() => toggleGroup(group.key)}
+                                                        groupMode={groupMode}
+                                                        usedHoursMap={usedHoursMap}
+                                                        onBudgetEntryChange={saveBudgetEntry}
+                                                        selectedRowKey={selectedRowKey}
+                                                        onRowSelect={handleRowSelect}
+                                                        readOnly={!canEditBudget}
+                                                    />
+                                                );
+                                            })}
+                                </tbody>
+                            </table>
+                            </Card>
+                        </div>
                     </ScrollArea>
                 </div>
             </div>
@@ -682,26 +730,26 @@ export default function DrawingBudget() {
 function TotalRow({ label, data, className }: { label: string; data: GridRow; className?: string }) {
     return (
         <tr className={cn('border-b', className)}>
-            <td className="border border-border px-2 py-1 font-semibold">{label}</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.total_qty)}</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.installed_qty)}</td>
-            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">{fmtVal(data.est_hours)}</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">{Math.round(data.percent_complete)}%</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.earned_hours)}</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.used_hours)}</td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">
+            <td className=" px-2 py-1 font-semibold">{label}</td>
+            <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(data.total_qty)}</td>
+            <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(data.installed_qty)}</td>
+            <td className="border-l border-border px-1 py-1 text-center tabular-nums">{fmtVal(data.est_hours)}</td>
+            <td className=" px-1 py-1 text-center tabular-nums">{Math.round(data.percent_complete)}%</td>
+            <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(data.earned_hours)}</td>
+            <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(data.used_hours)}</td>
+            <td className=" px-1 py-1 text-center tabular-nums">
                 {fmtVal(data.variance)}
             </td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">
+            <td className=" px-1 py-1 text-center tabular-nums">
                 {fmtVal(data.remaining)}
             </td>
-            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">
+            <td className="border-l border-border px-1 py-1 text-center tabular-nums">
                 {fmtPct(data.projected_pct)}
             </td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">
+            <td className=" px-1 py-1 text-center tabular-nums">
                 {data.projected_hours !== null ? fmtVal(data.projected_hours) : '\u2014'}
             </td>
-            <td className="border border-border px-1 py-1 text-center tabular-nums">
+            <td className=" px-1 py-1 text-center tabular-nums">
                 {data.projected_variance !== null ? fmtVal(data.projected_variance) : '\u2014'}
             </td>
         </tr>
@@ -736,7 +784,7 @@ function GroupRows({
                 className="cursor-pointer border-b bg-muted/20 hover:bg-muted/40"
                 onClick={onToggle}
             >
-                <td className="border border-border px-2 py-1 font-semibold">
+                <td className=" px-2 py-1 font-semibold">
                     <span className="inline-flex items-center gap-1">
                         {isCollapsed ? (
                             <ChevronRight className="h-3 w-3 shrink-0" />
@@ -746,25 +794,25 @@ function GroupRows({
                         {group.label}
                     </span>
                 </td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.total_qty)}</td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.installed_qty)}</td>
-                <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.est_hours)}</td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">{Math.round(group.totals.percent_complete)}%</td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.earned_hours)}</td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.used_hours)}</td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">
+                <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.total_qty)}</td>
+                <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.installed_qty)}</td>
+                <td className="border-l border-border px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.est_hours)}</td>
+                <td className=" px-1 py-1 text-center tabular-nums">{Math.round(group.totals.percent_complete)}%</td>
+                <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.earned_hours)}</td>
+                <td className=" px-1 py-1 text-center tabular-nums">{fmtVal(group.totals.used_hours)}</td>
+                <td className=" px-1 py-1 text-center tabular-nums">
                     {fmtVal(group.totals.variance)}
                 </td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">
+                <td className=" px-1 py-1 text-center tabular-nums">
                     {fmtVal(group.totals.remaining)}
                 </td>
-                <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-1 text-center tabular-nums">
+                <td className="border-l border-border px-1 py-1 text-center tabular-nums">
                     {fmtPct(group.totals.projected_pct)}
                 </td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">
+                <td className=" px-1 py-1 text-center tabular-nums">
                     {group.totals.projected_hours !== null ? fmtVal(group.totals.projected_hours) : '\u2014'}
                 </td>
-                <td className="border border-border px-1 py-1 text-center tabular-nums">
+                <td className=" px-1 py-1 text-center tabular-nums">
                     {group.totals.projected_variance !== null ? fmtVal(group.totals.projected_variance) : '\u2014'}
                 </td>
             </tr>
@@ -800,7 +848,6 @@ function DataRow({
     onPercentCompleteChange,
     isSelected,
     onSelect,
-    isEven,
     readOnly = false,
 }: {
     row: GridRow;
@@ -810,7 +857,6 @@ function DataRow({
     onPercentCompleteChange: (pct: number | null) => void;
     isSelected: boolean;
     onSelect: () => void;
-    isEven?: boolean;
     readOnly?: boolean;
 }) {
     const label = groupMode === 'area-lcc'
@@ -819,19 +865,21 @@ function DataRow({
 
     return (
         <tr
-            className={cn('border-b cursor-pointer', isSelected ? 'bg-accent' : isEven ? 'bg-muted/15 hover:bg-accent/30' : 'hover:bg-accent/30')}
+            className={cn('cursor-pointer border-b transition-colors duration-150', isSelected ? 'bg-primary/8' : 'hover:bg-muted/40')}
             onClick={onSelect}
         >
-            <td className="border border-border py-0.5 pl-7 pr-2">
-                <span className="font-mono">{label}</span>
-                {groupMode === 'area-lcc' && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground">{row.lcc_name}</span>
-                )}
+            <td className="py-0.5 pl-7 pr-2">
+                <span
+                    className="font-medium tabular-nums"
+                    title={groupMode === 'area-lcc' ? row.lcc_name : undefined}
+                >
+                    {label}
+                </span>
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.total_qty)}</td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.installed_qty)}</td>
-            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums">{fmtVal(row.est_hours)}</td>
-            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
+            <td className=" px-1 py-0.5 text-center tabular-nums">{fmtVal(row.total_qty)}</td>
+            <td className=" px-1 py-0.5 text-center tabular-nums">{fmtVal(row.installed_qty)}</td>
+            <td className="border-l border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.est_hours)}</td>
+            <td className=" p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
                 <input
                     type="number"
                     min={0}
@@ -843,12 +891,12 @@ function DataRow({
                         onPercentCompleteChange(val);
                     }}
                     readOnly={readOnly}
-                    className="h-full w-full bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="h-full w-full bg-transparent px-1 py-0.5 text-center text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onClick={(e) => e.stopPropagation()}
                 />
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">{fmtVal(row.earned_hours)}</td>
-            <td className="border border-border p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
+            <td className=" px-1 py-0.5 text-center tabular-nums">{fmtVal(row.earned_hours)}</td>
+            <td className=" p-0 text-center [&:focus-within]:ring-2 [&:focus-within]:ring-ring [&:focus-within]:ring-inset">
                 <input
                     type="number"
                     min={0}
@@ -859,23 +907,23 @@ function DataRow({
                         onUsedHoursChange(val);
                     }}
                     readOnly={readOnly}
-                    className="h-full w-full bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="h-full w-full bg-transparent px-1 py-0.5 text-center text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onClick={(e) => e.stopPropagation()}
                 />
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
+            <td className=" px-1 py-0.5 text-center tabular-nums">
                 {fmtVal(row.variance)}
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
+            <td className=" px-1 py-0.5 text-center tabular-nums">
                 {fmtVal(row.remaining)}
             </td>
-            <td className="border border-border border-l-2 border-l-foreground/20 px-1 py-0.5 text-center tabular-nums">
+            <td className="border-l border-border px-1 py-0.5 text-center tabular-nums">
                 {fmtPct(row.projected_pct)}
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
+            <td className=" px-1 py-0.5 text-center tabular-nums">
                 {row.projected_hours !== null ? fmtVal(row.projected_hours) : '\u2014'}
             </td>
-            <td className="border border-border px-1 py-0.5 text-center tabular-nums">
+            <td className=" px-1 py-0.5 text-center tabular-nums">
                 {row.projected_variance !== null ? fmtVal(row.projected_variance) : '\u2014'}
             </td>
         </tr>
@@ -887,7 +935,7 @@ function DataRow({
 type ChartDataPoint = { date: string; variance: number };
 
 const chartConfig: ChartConfig = {
-    variance: { label: 'Variance (hrs)', color: 'hsl(var(--foreground))' },
+    variance: { label: 'Variance (hrs)', color: 'var(--foreground)' },
 };
 
 const CHART_RANGES: { key: ChartRange; label: string }[] = [
@@ -918,106 +966,65 @@ function VarianceChart({
     const isDrillDown = selectedRow && drillDownData.length > 0;
     const chartData = isDrillDown ? drillDownData : overviewData;
 
-    // Detect month boundaries for labels (must be before early return to respect hooks rules)
-    const monthLabels = useMemo(() => {
-        const labels: Array<{ date: string; label: string }> = [];
-        let lastMonth = -1;
-        for (const d of chartData) {
-            const dt = new Date(d.date + 'T00:00:00');
-            const m = dt.getMonth();
-            if (m !== lastMonth) {
-                labels.push({
-                    date: d.date,
-                    label: dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                });
-                lastMonth = m;
-            }
-        }
-        return labels;
-    }, [chartData]);
-
-    if (chartData.length === 0 && !loading) {
-        return (
-            <div className="relative flex h-[120px] items-center justify-center text-[11px] text-muted-foreground">
-                <div className="absolute right-3 top-1 flex items-center rounded-sm border border-border bg-background text-[9px]">
-                    {CHART_RANGES.map((r) => (
-                        <button
-                            key={r.key}
-                            onClick={() => onChartRangeChange(r.key)}
-                            className={cn(
-                                'px-1.5 py-0.5 font-medium transition-colors',
-                                chartRange === r.key
-                                    ? 'bg-muted text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground',
-                            )}
-                        >
-                            {r.label}
-                        </button>
-                    ))}
-                </div>
-                {selectedRow
-                    ? 'No history for this LCC. Enter used hours on different dates to see trends.'
-                    : 'No used hours recorded yet. Enter hours to see the variance trend.'}
-            </div>
-        );
-    }
+    const RangeSelector = (
+        <div className="flex items-center rounded-sm border border-border bg-background p-px">
+            {CHART_RANGES.map((r) => (
+                <button
+                    key={r.key}
+                    onClick={() => onChartRangeChange(r.key)}
+                    className={cn(
+                        'rounded-sm px-2 py-0.5 text-xs font-medium transition-colors',
+                        chartRange === r.key
+                            ? 'bg-muted text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
+                    )}
+                >
+                    {r.label}
+                </button>
+            ))}
+        </div>
+    );
 
     return (
-        <div className="relative">
+        <div className="flex flex-col">
             {/* Header */}
-            <div className="flex items-center gap-2 px-3 py-1 text-[10px]">
+            <div className="flex items-center gap-2 px-3 py-2">
                 {isDrillDown ? (
                     <>
-                        <span className="font-semibold text-foreground">
-                            {selectedRow.lcc_code} ({selectedRow.area_name})
-                        </span>
-                        <span className="text-muted-foreground">Variance trend</span>
-                        <button
+                        <span className="text-xs font-semibold tabular-nums">{selectedRow.lcc_code}</span>
+                        <span className="text-xs text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground">{selectedRow.area_name}</span>
+                        <span className="text-xs text-muted-foreground">— variance trend</span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
                             onClick={onClearSelection}
-                            className="ml-auto flex items-center gap-0.5 text-muted-foreground hover:text-foreground"
                         >
                             <X className="h-3 w-3" />
                             Clear
-                        </button>
+                        </Button>
                     </>
                 ) : (
                     <>
-                        <span className="text-muted-foreground">Project variance trend</span>
-                        <span className="text-muted-foreground/60">— click a row to drill down</span>
+                        <span className="text-xs font-semibold">Project variance trend</span>
+                        <span className="text-xs text-muted-foreground">— click a row to drill down</span>
+                        <div className="ml-auto">{RangeSelector}</div>
                     </>
                 )}
-
-                {/* Range selector */}
-                <div className={cn('flex items-center rounded-sm border border-border bg-background text-[9px]', !isDrillDown && 'ml-auto')}>
-                    {CHART_RANGES.map((r) => (
-                        <button
-                            key={r.key}
-                            onClick={() => onChartRangeChange(r.key)}
-                            className={cn(
-                                'px-1.5 py-0.5 font-medium transition-colors',
-                                chartRange === r.key
-                                    ? 'bg-muted text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground',
-                            )}
-                        >
-                            {r.label}
-                        </button>
-                    ))}
-                </div>
+                {isDrillDown && <div className="ml-2">{RangeSelector}</div>}
             </div>
 
-            {/* Month labels row — PlanSwift-inspired */}
-            {monthLabels.length > 0 && (
-                <div className="flex items-center gap-0 px-[52px] text-[9px] font-semibold text-muted-foreground">
-                    {monthLabels.map((m) => (
-                        <span key={m.date} className="mr-4">{m.label}</span>
-                    ))}
+            {/* Chart body */}
+            {chartData.length === 0 && !loading ? (
+                <div className="flex h-[160px] items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                    {selectedRow
+                        ? 'No history for this LCC yet. Enter used hours on different dates to see trends.'
+                        : 'No used hours recorded yet. Enter hours to see the variance trend.'}
                 </div>
-            )}
-
-            {loading ? (
-                <div className="flex h-[120px] items-center justify-center text-[11px] text-muted-foreground">
-                    Loading...
+            ) : loading ? (
+                <div className="flex h-[160px] items-center justify-center text-xs text-muted-foreground">
+                    Loading…
                 </div>
             ) : (
                 <VarianceChartInner chartData={chartData} today={today} />
@@ -1027,24 +1034,48 @@ function VarianceChart({
 }
 
 function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[]; today: string }) {
-
+    // Compute the "zero" Y in chart-space coords so the gradient can split positive (green) from negative (red).
+    // We compute as a fraction of (max → min) since recharts gradient y-coords are 0..1 from top to bottom.
+    const { gradientZero } = useMemo(() => {
+        const values = chartData.map((d) => d.variance);
+        const max = Math.max(0, ...values);
+        const min = Math.min(0, ...values);
+        const range = max - min;
+        const zero = range > 0 ? max / range : 0.5;
+        return { gradientZero: Math.min(1, Math.max(0, zero)) };
+    }, [chartData]);
 
     return (
-        <ChartContainer config={chartConfig} className="h-[140px] w-full">
-            <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
+        <ChartContainer config={chartConfig} className="h-[180px] w-full">
+            <ComposedChart data={chartData} margin={{ top: 12, right: 16, bottom: 8, left: 12 }}>
                 <defs>
                     <linearGradient id="varianceFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
-                        <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity={0.03} />
+                        {/* Green above zero, red below — so the area's color tells the story */}
+                        <stop offset="0%" stopColor="#16a34a" stopOpacity={0.25} />
+                        <stop offset={`${gradientZero * 100}%`} stopColor="#16a34a" stopOpacity={0.04} />
+                        <stop offset={`${gradientZero * 100}%`} stopColor="#dc2626" stopOpacity={0.04} />
+                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.25} />
+                    </linearGradient>
+                    <linearGradient id="varianceStroke" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#16a34a" />
+                        <stop offset={`${gradientZero * 100}%`} stopColor="#16a34a" />
+                        <stop offset={`${gradientZero * 100}%`} stopColor="#dc2626" />
+                        <stop offset="100%" stopColor="#dc2626" />
                     </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                     dataKey="date"
                     tick={(props: any) => {
                         const { x, y, payload } = props;
                         const d = new Date(payload.value + 'T00:00:00');
-                        const day = d.getDate();
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const currentYear = new Date().getFullYear();
+                        const isSameYear = d.getFullYear() === currentYear;
+                        const label = isSameYear
+                            ? `${day}/${month}`
+                            : `${day}/${month}/${String(d.getFullYear()).slice(-2)}`;
                         const dow = d.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isToday = payload.value === today;
@@ -1053,31 +1084,33 @@ function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[];
                                 x={x}
                                 y={y + 12}
                                 textAnchor="middle"
-                                fontSize={9}
-                                fontWeight={isToday ? 700 : 400}
+                                fontSize={10}
+                                fontWeight={isToday ? 600 : 400}
                                 fill="currentColor"
-                                opacity={isWeekend ? 0.4 : isToday ? 1 : 0.7}
+                                opacity={isWeekend ? 0.4 : isToday ? 1 : 0.65}
                             >
-                                {day}
+                                {label}
                             </text>
                         );
                     }}
                     tickLine={false}
-                    axisLine={false}
-                    height={20}
-                    interval={chartData.length > 30 ? Math.floor(chartData.length / 20) : 0}
+                    axisLine={{ stroke: 'var(--border)', strokeWidth: 1 }}
+                    height={22}
+                    interval={chartData.length > 12 ? Math.floor(chartData.length / 8) : 0}
+                    minTickGap={28}
                 />
                 <YAxis
-                    tick={{ fontSize: 9 }}
+                    tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.65 }}
                     tickLine={false}
-                    axisLine={false}
-                    width={35}
+                    axisLine={{ stroke: 'var(--border)', strokeWidth: 1 }}
+                    width={38}
+                    tickFormatter={(v) => `${v}h`}
                 />
                 {/* Baseline at 0 */}
-                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1.5} />
+                <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1} />
                 {/* Today marker */}
                 {chartData.some((d) => d.date === today) && (
-                    <ReferenceLine x={today} stroke="hsl(var(--foreground))" strokeWidth={1.5} strokeOpacity={0.3} strokeDasharray="4 2" />
+                    <ReferenceLine x={today} stroke="var(--foreground)" strokeWidth={1} strokeOpacity={0.3} strokeDasharray="4 2" />
                 )}
                 <ChartTooltip
                     content={
@@ -1092,18 +1125,22 @@ function VarianceChartInner({ chartData, today }: { chartData: ChartDataPoint[];
                                     year: 'numeric',
                                 });
                             }}
+                            formatter={(value) => {
+                                const v = Number(value);
+                                return [`${v >= 0 ? '+' : ''}${v.toFixed(1)}h`, 'Variance'];
+                            }}
                         />
                     }
                 />
                 <Area
                     type="monotone"
                     dataKey="variance"
-                    stroke="hsl(var(--foreground))"
-                    strokeWidth={1.5}
+                    stroke="url(#varianceStroke)"
+                    strokeWidth={2}
                     fill="url(#varianceFill)"
                     connectNulls
-                    dot={{ r: 3, fill: 'hsl(var(--muted-foreground))', stroke: 'hsl(var(--background))', strokeWidth: 1 }}
-                    activeDot={{ r: 5, strokeWidth: 2 }}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--background)' }}
                 />
             </ComposedChart>
         </ChartContainer>

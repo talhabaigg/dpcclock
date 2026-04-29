@@ -1,11 +1,9 @@
 import { BidAreaManager, type BidArea } from '@/components/bid-area-manager';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
-import { LeafletDrawingViewer, Observation as LeafletObservation, type MapControls } from '@/components/leaflet-drawing-viewer';
+import { LeafletDrawingViewer, Observation as LeafletObservation } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { TakeoffPanel } from '@/components/takeoff-panel';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ObservationDialog } from '@/components/observation-dialog';
 import CalibrationDialog from '@/components/calibration-dialog';
+import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { api } from '@/lib/api';
@@ -23,25 +22,17 @@ import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useObservations } from '@/hooks/use-observations';
 import { useCalibration } from '@/hooks/use-calibration';
-import { useBidView } from '@/hooks/use-bid-view';
 import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } from '@/lib/constants';
 import type { Project, Observation, Revision, Drawing } from '@/types/takeoff';
 import { usePage } from '@inertiajs/react';
 import {
     FolderTree,
     GitCompare,
-    Hand,
     Hash,
-    Layers,
-    Magnet,
     Minus,
-    MousePointer,
     Pencil,
     Pentagon,
     Plus,
-    Ruler,
-    Scale,
-    Square,
     Trash2,
     X,
 } from 'lucide-react';
@@ -91,11 +82,7 @@ export default function DrawingTakeoff() {
     // View mode
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
 
-    // Map controls
-    const [mapControls, setMapControls] = useState<MapControls | null>(null);
-
     // Takeoff state
-    const [showTakeoffPanel, setShowTakeoffPanel] = useState(false);
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -159,7 +146,6 @@ export default function DrawingTakeoff() {
             setMeasurements((prev) => prev.map((m) => ({ ...m, computed_value: null, unit: null })));
         },
         setViewMode,
-        setShowTakeoffPanel,
     });
 
     // Measurement dialog state
@@ -180,9 +166,6 @@ export default function DrawingTakeoff() {
     const [bidAreas, setBidAreas] = useState<BidArea[]>([]);
     const [showBidAreaManager, setShowBidAreaManager] = useState(false);
     const [activeBidAreaId, setActiveBidAreaId] = useState<number | null>(null);
-
-    // Bid View hook
-    const bidView = useBidView({ drawingId: drawing.id, projectId });
 
     // Undo/redo system
     const { pushUndo, undo, redo } = useMeasurementHistory({
@@ -274,22 +257,11 @@ export default function DrawingTakeoff() {
             .catch(() => {});
     }, [projectId]);
 
-    // Filter measurements based on bid view layer visibility
-    const visibleMeasurements = useMemo(() => {
-        const anyVariationOn = Object.values(bidView.bidViewLayers.variations).some(Boolean);
-        if (bidView.bidViewLayers.baseBid && !anyVariationOn) {
-            return allMeasurements.filter((m) => !m.scope || m.scope === 'takeoff');
-        }
-        return allMeasurements.filter((m) => {
-            if (!m.scope || m.scope === 'takeoff') {
-                return bidView.bidViewLayers.baseBid;
-            }
-            if (m.scope === 'variation' && m.variation_id) {
-                return bidView.bidViewLayers.variations[m.variation_id] === true;
-            }
-            return bidView.bidViewLayers.baseBid;
-        });
-    }, [allMeasurements, bidView.bidViewLayers]);
+    // Takeoff page only shows base-bid measurements
+    const visibleMeasurements = useMemo(
+        () => allMeasurements.filter((m) => !m.scope || m.scope === 'takeoff'),
+        [allMeasurements],
+    );
 
     const existingCategories = [...new Set(measurements.map((m) => m.category).filter(Boolean))] as string[];
 
@@ -364,21 +336,11 @@ export default function DrawingTakeoff() {
                 points,
                 takeoff_condition_id: currentCondition?.id || null,
                 bid_area_id: activeBidAreaId || null,
-                scope: bidView.activeVariationId ? 'variation' : 'takeoff',
-                variation_id: bidView.activeVariationId || null,
+                scope: 'takeoff',
             });
             setMeasurements((prev) => [...prev, saved]);
             pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
             toast.success(`Saved: ${name}`);
-
-            if (bidView.activeVariationId && currentCondition?.id && saved.computed_value) {
-                api.post(`/variations/${bidView.activeVariationId}/pricing-items`, {
-                    takeoff_condition_id: currentCondition.id,
-                    description: name,
-                    qty: saved.computed_value,
-                    unit: saved.unit || 'EA',
-                }).catch(() => {});
-            }
         } catch (err) {
             const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : 'Unknown error';
             toast.error(`Failed to save measurement. ${msg}`);
@@ -465,8 +427,8 @@ export default function DrawingTakeoff() {
     };
 
     useEffect(() => {
-        setEditableVertices(viewMode === 'pan' && showTakeoffPanel && selectedMeasurementId !== null);
-    }, [viewMode, showTakeoffPanel, selectedMeasurementId]);
+        setEditableVertices(viewMode === 'pan' && selectedMeasurementId !== null);
+    }, [viewMode, selectedMeasurementId]);
 
     const handleVertexDragEnd = async (measurementId: number, pointIndex: number, newPoint: Point) => {
         const measurement = allMeasurements.find((m) => m.id === measurementId);
@@ -541,25 +503,24 @@ export default function DrawingTakeoff() {
     // Keyboard shortcuts
     const shortcuts = useMemo(
         () => [
-            { key: 't', handler: () => setShowTakeoffPanel(v => !v) },
             { key: 'p', handler: () => setViewMode('pan') },
             { key: 'Escape', handler: () => setViewMode('pan') },
-            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canEditTakeoff && showTakeoffPanel },
-            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
-            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
-            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: canEditTakeoff && showTakeoffPanel && !!calibration },
-            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canEditTakeoff && showTakeoffPanel },
+            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canEditTakeoff },
+            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canEditTakeoff && !!calibration },
+            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canEditTakeoff && !!calibration },
+            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: canEditTakeoff && !!calibration },
+            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canEditTakeoff },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
-                enabled: canEditTakeoff && showTakeoffPanel,
+                enabled: canEditTakeoff,
             })),
-            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: canEditTakeoff && showTakeoffPanel },
+            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: canEditTakeoff },
             { key: 'z', ctrl: true, handler: undo, enabled: canEditTakeoff },
             { key: 'z', ctrl: true, shift: true, handler: redo, enabled: canEditTakeoff },
             { key: 'y', ctrl: true, handler: redo, enabled: canEditTakeoff },
         ],
-        [viewMode, showTakeoffPanel, calibration, conditions, activeConditionId, handleActivateCondition, undo, redo, canEditTakeoff],
+        [viewMode, calibration, conditions, activeConditionId, handleActivateCondition, undo, redo, canEditTakeoff],
     );
     useKeyboardShortcuts(shortcuts);
 
@@ -569,7 +530,6 @@ export default function DrawingTakeoff() {
             revisions={revisions}
             project={project}
             activeTab={activeTab}
-            mapControls={mapControls}
             statusBar={
                 <>
                     <span className="font-medium">
@@ -629,199 +589,55 @@ export default function DrawingTakeoff() {
                     )}
                 </>
             }
+            leftToolbar={
+                <DrawingToolsToolbar
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    snapEnabled={snapEnabled}
+                    onSnapToggle={() => setSnapEnabled((prev) => !prev)}
+                    canEdit={canEditTakeoff}
+                    hasCalibration={!!calibration}
+                    showSelectMode
+                    selectModeTitle="Add observation (O)"
+                    activeCondition={activeConditionDisplay}
+                />
+            }
             toolbar={
                 <>
-                    {/* View Mode */}
-                    <div className="bg-background flex items-center rounded-sm border p-px">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'pan' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode('pan')}
-                            className="relative h-6 w-6 rounded-sm p-0"
-                            title="Pan mode (P)"
-                        >
-                            <Hand className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">P</kbd>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'select' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode('select')}
-                            className="relative h-6 w-6 rounded-sm p-0"
-                            title="Add observation (O)"
-                        >
-                            <MousePointer className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">O</kbd>
-                        </Button>
-                    </div>
-
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Takeoff Toggle */}
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={showTakeoffPanel ? 'secondary' : 'ghost'}
-                        onClick={() => setShowTakeoffPanel(!showTakeoffPanel)}
-                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                    >
-                        <Ruler className="h-3 w-3" />
-                        Takeoff
-                    </Button>
-
-                    {/* Measurement tools — always rendered, disabled when panel closed */}
-                    <div className={`bg-background flex items-center rounded-sm border p-px${!showTakeoffPanel || !canEditTakeoff ? ' opacity-40 pointer-events-none' : ''}`}>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'calibrate' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate')}
-                            className="relative h-6 w-6 rounded-sm p-0"
-                            title="Calibrate scale (S)"
-                            disabled={!showTakeoffPanel || !canEditTakeoff}
-                        >
-                            <Scale className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">S</kbd>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'measure_line' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line')}
-                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                            title={!calibration ? 'Set scale first' : 'Measure line (L)'}
-                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
-                        >
-                            <Minus className="h-3 w-3" />
-                            Line
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'measure_area' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area')}
-                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                            title={!calibration ? 'Set scale first' : 'Measure area (A)'}
-                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
-                        >
-                            <Pentagon className="h-3 w-3" />
-                            Area
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'measure_rectangle' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle')}
-                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                            title={!calibration ? 'Set scale first' : 'Measure rectangle (R)'}
-                            disabled={!showTakeoffPanel || !canEditTakeoff || !calibration}
-                        >
-                            <Square className="h-3 w-3" />
-                            Rect
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={viewMode === 'measure_count' ? 'secondary' : 'ghost'}
-                            onClick={() => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count')}
-                            className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                            title="Count items (C)"
-                            disabled={!showTakeoffPanel || !canEditTakeoff}
-                        >
-                            <Hash className="h-3 w-3" />
-                            Count
-                        </Button>
-                        <div className="bg-border mx-px h-4 w-px" />
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={snapEnabled ? 'secondary' : 'ghost'}
-                            onClick={() => setSnapEnabled(prev => !prev)}
-                            className="relative h-6 w-6 rounded-sm p-0"
-                            title={`Snap to endpoint (N) — ${snapEnabled ? 'ON' : 'OFF'}`}
-                            disabled={!showTakeoffPanel || !canEditTakeoff}
-                        >
-                            <Magnet className="h-3 w-3" />
-                            <kbd className="pointer-events-none absolute bottom-0 right-0.5 rounded-[2px] px-0.5 text-[9px] leading-none font-mono text-muted-foreground/70">N</kbd>
-                        </Button>
-                    </div>
-
-                    {/* Active Condition Indicator — compact inline */}
-                    {activeConditionDisplay && (
-                        <>
-                            <div className="bg-border h-4 w-px" />
-                            <div
-                                className="flex items-center gap-1.5 rounded-sm px-1.5 py-0.5"
-                                style={{ backgroundColor: activeConditionDisplay.color + '18', borderLeft: `2px solid ${activeConditionDisplay.color}` }}
-                            >
-                                <div className="h-2 w-2 shrink-0 rounded-full animate-pulse" style={{ backgroundColor: activeConditionDisplay.color }} />
-                                <span className="text-[11px] font-semibold max-w-[100px] truncate">{activeConditionDisplay.name}</span>
-                                <span className="rounded-[2px] bg-muted px-1 py-px text-[9px] text-muted-foreground">
-                                    {activeConditionDisplay.type === 'linear' ? 'Line' : activeConditionDisplay.type === 'area' ? 'Area' : 'Count'}
-                                </span>
-                            </div>
-                        </>
-                    )}
-
                     {/* Bid Area Selector */}
-                    {showTakeoffPanel && (
-                        <>
-                            <div className="bg-border h-4 w-px" />
-                            <div className="flex items-center gap-1">
-                                <FolderTree className="h-3 w-3 text-muted-foreground" />
-                                <Select
-                                    value={activeBidAreaId ? String(activeBidAreaId) : 'all'}
-                                    onValueChange={(v) => setActiveBidAreaId(v === 'all' ? null : Number(v))}
-                                >
-                                    <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-[11px] shadow-none">
-                                        <SelectValue placeholder="All Areas" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">
-                                            <span className="text-muted-foreground">All Areas</span>
-                                        </SelectItem>
-                                        {flatBidAreas.map((area) => (
-                                            <SelectItem key={area.id} value={String(area.id)}>
-                                                <span style={{ paddingLeft: area.depth * 12 }}>{area.name}</span>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {canEditTakeoff && (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-5 w-5 p-0"
-                                        title="Manage bid areas"
-                                        onClick={() => setShowBidAreaManager(true)}
-                                    >
-                                        <Pencil className="h-2.5 w-2.5" />
-                                    </Button>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {/* Bid View Toggle */}
-                    <div className="bg-border h-4 w-px" />
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant={bidView.showBidViewPanel ? 'secondary' : 'ghost'}
-                        onClick={() => bidView.setShowBidViewPanel(!bidView.showBidViewPanel)}
-                        className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
-                    >
-                        <Layers className="h-3 w-3" />
-                        Bid View
-                    </Button>
-                    {bidView.activeVariation && (
-                        <Badge variant="outline" className="h-5 gap-0.5 rounded px-1.5 text-[10px] font-semibold text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800">
-                            {bidView.activeVariation.co_number}
-                        </Badge>
-                    )}
+                    <div className="flex items-center gap-1">
+                        <FolderTree className="h-3 w-3 text-muted-foreground" />
+                        <Select
+                            value={activeBidAreaId ? String(activeBidAreaId) : 'all'}
+                            onValueChange={(v) => setActiveBidAreaId(v === 'all' ? null : Number(v))}
+                        >
+                            <SelectTrigger className="h-6 w-[120px] rounded-sm border-none bg-transparent px-1 text-[11px] shadow-none">
+                                <SelectValue placeholder="All Areas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">
+                                    <span className="text-muted-foreground">All Areas</span>
+                                </SelectItem>
+                                {flatBidAreas.map((area) => (
+                                    <SelectItem key={area.id} value={String(area.id)}>
+                                        <span style={{ paddingLeft: area.depth * 12 }}>{area.name}</span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {canEditTakeoff && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0"
+                                title="Manage bid areas"
+                                onClick={() => setShowBidAreaManager(true)}
+                            >
+                                <Pencil className="h-2.5 w-2.5" />
+                            </Button>
+                        )}
+                    </div>
 
                     {/* Compare Popover */}
                     {canCompare && (
@@ -916,117 +732,6 @@ export default function DrawingTakeoff() {
         >
                 {/* Main Viewer + Panels */}
                 <div className="relative flex flex-1 overflow-hidden">
-                    {/* Bid View Left Panel */}
-                    {bidView.showBidViewPanel && (
-                        <div className="bg-background flex w-48 shrink-0 flex-col overflow-hidden border-r text-[11px]">
-                            <div className="flex items-center gap-px border-b bg-muted/30 px-1.5 py-1">
-                                {(['All', 'Base', 'Var'] as const).map((label) => {
-                                    const allVarOn = bidView.projectVariations.length > 0 && bidView.projectVariations.every((v) => bidView.bidViewLayers.variations[v.id] === true);
-                                    const anyVarOn = Object.values(bidView.bidViewLayers.variations).some(Boolean);
-                                    const isActive =
-                                        (label === 'All' && bidView.bidViewLayers.baseBid && allVarOn) ||
-                                        (label === 'Base' && bidView.bidViewLayers.baseBid && !anyVarOn) ||
-                                        (label === 'Var' && !bidView.bidViewLayers.baseBid && allVarOn);
-                                    return (
-                                        <button
-                                            key={label}
-                                            className={`rounded-sm px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                                                isActive
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                            }`}
-                                            onClick={() => {
-                                                if (label === 'All') {
-                                                    bidView.setBidViewLayers({
-                                                        baseBid: true,
-                                                        variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
-                                                    });
-                                                    bidView.setActiveVariationId(null);
-                                                } else if (label === 'Base') {
-                                                    bidView.setBidViewLayers({ baseBid: true, variations: {} });
-                                                    bidView.setActiveVariationId(null);
-                                                } else {
-                                                    bidView.setBidViewLayers({
-                                                        baseBid: false,
-                                                        variations: Object.fromEntries(bidView.projectVariations.map((v) => [v.id, true])),
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            {label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto">
-                                <div
-                                    className={`flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-muted/50 ${!bidView.activeVariationId ? 'bg-primary/10 font-semibold' : ''}`}
-                                    onClick={() => bidView.setActiveVariationId(null)}
-                                >
-                                    <Checkbox
-                                        checked={bidView.bidViewLayers.baseBid}
-                                        onCheckedChange={(checked) => {
-                                            bidView.setBidViewLayers((prev) => ({ ...prev, baseBid: !!checked }));
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="h-4 w-4 rounded-sm"
-                                    />
-                                    <span>Base Bid</span>
-                                </div>
-
-                                {bidView.projectVariations.length > 0 && (
-                                    <>
-                                        <div className="border-t border-dashed" />
-                                        {bidView.projectVariations.map((v) => (
-                                            <div
-                                                key={v.id}
-                                                className={`flex cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-muted/50 ${bidView.activeVariationId === v.id ? 'bg-primary/10 font-semibold' : ''}`}
-                                                onClick={() => {
-                                                    bidView.setActiveVariationId(bidView.activeVariationId === v.id ? null : v.id);
-                                                    if (bidView.activeVariationId !== v.id) {
-                                                        bidView.setBidViewLayers((prev) => ({
-                                                            ...prev,
-                                                            variations: { ...prev.variations, [v.id]: true },
-                                                        }));
-                                                    }
-                                                }}
-                                            >
-                                                <Checkbox
-                                                    checked={bidView.bidViewLayers.variations[v.id] === true}
-                                                    onCheckedChange={(checked) =>
-                                                        bidView.setBidViewLayers((prev) => ({
-                                                            ...prev,
-                                                            variations: { ...prev.variations, [v.id]: !!checked },
-                                                        }))
-                                                    }
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="h-4 w-4 rounded-sm"
-                                                />
-                                                <span className="truncate">{v.co_number}</span>
-                                                {v.description && (
-                                                    <span className="ml-auto truncate pl-1 text-[9px] text-muted-foreground">
-                                                        {v.description.length > 15 ? v.description.slice(0, 15) + '\u2026' : v.description}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="border-t">
-                                <button
-                                    className="flex w-full items-center gap-1.5 px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                                    onClick={() => bidView.setShowNewVariationForm(true)}
-                                >
-                                    <Plus className="h-3 w-3" />
-                                    Variation
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="relative isolate flex-1 overflow-hidden">
                         <LeafletDrawingViewer
                             tiles={drawing.tiles_info || undefined}
@@ -1056,59 +761,54 @@ export default function DrawingTakeoff() {
                             onVertexDelete={handleVertexDelete}
                             snapEnabled={snapEnabled}
                             hoveredMeasurementId={hoveredMeasurementId}
-                            onMapReady={setMapControls}
                             className="absolute inset-0"
                         />
                     </div>
 
                     {/* Takeoff Side Panel */}
                     <div
-                        className="relative shrink-0 overflow-hidden bg-background transition-[width,border-width] duration-200 ease-in-out"
-                        style={{ width: showTakeoffPanel ? panelWidth : 0, borderLeftWidth: showTakeoffPanel ? 1 : 0 }}
+                        className="relative shrink-0 overflow-hidden border-l bg-background"
+                        style={{ width: panelWidth }}
                     >
-                        {showTakeoffPanel && (
-                            <>
-                                <div
-                                    className="absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        panelResizing.current = true;
-                                        panelStartX.current = e.clientX;
-                                        panelStartW.current = panelWidth;
-                                        document.body.style.cursor = 'col-resize';
-                                        document.body.style.userSelect = 'none';
-                                    }}
-                                >
-                                    <div className="flex flex-col gap-0.5 opacity-30 group-hover/handle:opacity-60 transition-opacity">
-                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                        <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                    </div>
-                                </div>
-                                <TakeoffPanel
-                                    viewMode={viewMode}
-                                    calibration={calibration}
-                                    measurements={measurements}
-                                    selectedMeasurementId={selectedMeasurementId}
-                                    conditions={conditions}
-                                    activeConditionId={activeConditionId}
-                                    onOpenCalibrationDialog={cal.handleOpenDialog}
-                                    onDeleteCalibration={cal.handleDelete}
-                                    onMeasurementSelect={setSelectedMeasurementId}
-                                    onMeasurementEdit={handleEditMeasurement}
-                                    onMeasurementDelete={handleDeleteMeasurement}
-                                    onOpenConditionManager={() => setShowConditionManager(true)}
-                                    onActivateCondition={handleActivateCondition}
-                                    onAddDeduction={handleAddDeduction}
-                                    onMeasurementHover={setHoveredMeasurementId}
-                                    drawingId={drawing.id}
-                                    quantityMultiplier={1}
-                                    readOnly={!canEditTakeoff}
-                                />
-                            </>
-                        )}
+                        <div
+                            className="absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                panelResizing.current = true;
+                                panelStartX.current = e.clientX;
+                                panelStartW.current = panelWidth;
+                                document.body.style.cursor = 'col-resize';
+                                document.body.style.userSelect = 'none';
+                            }}
+                        >
+                            <div className="flex flex-col gap-0.5 opacity-30 group-hover/handle:opacity-60 transition-opacity">
+                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
+                            </div>
+                        </div>
+                        <TakeoffPanel
+                            viewMode={viewMode}
+                            calibration={calibration}
+                            measurements={measurements}
+                            selectedMeasurementId={selectedMeasurementId}
+                            conditions={conditions}
+                            activeConditionId={activeConditionId}
+                            onOpenCalibrationDialog={cal.handleOpenDialog}
+                            onDeleteCalibration={cal.handleDelete}
+                            onMeasurementSelect={setSelectedMeasurementId}
+                            onMeasurementEdit={handleEditMeasurement}
+                            onMeasurementDelete={handleDeleteMeasurement}
+                            onOpenConditionManager={() => setShowConditionManager(true)}
+                            onActivateCondition={handleActivateCondition}
+                            onAddDeduction={handleAddDeduction}
+                            onMeasurementHover={setHoveredMeasurementId}
+                            drawingId={drawing.id}
+                            quantityMultiplier={1}
+                            readOnly={!canEditTakeoff}
+                        />
                     </div>
                 </div>
 
@@ -1273,61 +973,6 @@ export default function DrawingTakeoff() {
                 bidAreas={bidAreas}
                 onBidAreasChange={setBidAreas}
             />
-
-            {/* New Variation Dialog */}
-            <Dialog
-                open={bidView.showNewVariationForm}
-                onOpenChange={(open) => {
-                    if (!open) bidView.resetVariationForm();
-                    else bidView.setShowNewVariationForm(open);
-                }}
-            >
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>New Variation</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-3">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="var-co">CO Number</Label>
-                            <Input
-                                id="var-co"
-                                value={bidView.newVarCoNumber}
-                                onChange={(e) => bidView.setNewVarCoNumber(e.target.value)}
-                                placeholder="e.g. CO-001"
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="var-desc">Description</Label>
-                            <Input
-                                id="var-desc"
-                                value={bidView.newVarDescription}
-                                onChange={(e) => bidView.setNewVarDescription(e.target.value)}
-                                placeholder="Brief description of the variation"
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="var-type">Type</Label>
-                            <Select value={bidView.newVarType} onValueChange={(v) => bidView.setNewVarType(v as 'extra' | 'credit')}>
-                                <SelectTrigger id="var-type">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="extra">Extra</SelectItem>
-                                    <SelectItem value="credit">Credit</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => bidView.resetVariationForm()}>
-                            Cancel
-                        </Button>
-                        <Button onClick={bidView.handleCreateVariation} disabled={bidView.creatingVariation}>
-                            {bidView.creatingVariation ? 'Creating...' : 'Create'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* Confirmation Dialog (replaces native confirm()) */}
             <ConfirmDialog {...confirmDialogProps} />

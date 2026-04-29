@@ -1,8 +1,9 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Maximize, Minus, Plus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOverlay, MapContainer, Rectangle, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { Button } from '@/components/ui/button';
 import { MeasurementLayer, type CalibrationData, type MeasurementData, type Point, type ViewMode } from './measurement-layer';
 
 export type Observation = {
@@ -60,6 +61,7 @@ type LeafletDrawingViewerProps = {
     productionLabels?: Record<number, number>;
     // Segment statusing
     segmentStatuses?: Record<string, number>;
+    hiddenSegments?: Set<string>;
     onSegmentClick?: (measurement: MeasurementData, segmentIndex: number, event?: { clientX: number; clientY: number }) => void;
     selectedSegments?: Set<string>;
     selectedMeasurementIds?: Set<number>;
@@ -254,7 +256,8 @@ function MapEventHandler({
     return null;
 }
 
-// Internal component that exposes map controls to the parent via onMapReady callback
+// Internal component that exposes map controls to the parent via onMapReady callback,
+// and clamps the minZoom to the "fit-to-screen" zoom so users can't zoom out further.
 function MapControlsBridge({
     bounds,
     onMapReady,
@@ -277,6 +280,27 @@ function MapControlsBridge({
             onMapReady(controls);
         }
     }, [onMapReady, controls]);
+
+    // Clamp minZoom to whatever zoom would fit the bounds in the current viewport.
+    // Recompute on resize so it stays correct when the side panel toggles, etc.
+    useEffect(() => {
+        if (!map) return;
+        const updateMinZoom = () => {
+            // inside=false → largest zoom where the WHOLE drawing fits inside the viewport
+            const fitZoom = map.getBoundsZoom(bounds, false);
+            map.setMinZoom(fitZoom);
+            if (map.getZoom() < fitZoom) {
+                map.setZoom(fitZoom);
+            }
+        };
+        // Defer initial run to next frame so the container has its real size
+        const handle = window.requestAnimationFrame(updateMinZoom);
+        map.on('resize', updateMinZoom);
+        return () => {
+            window.cancelAnimationFrame(handle);
+            map.off('resize', updateMinZoom);
+        };
+    }, [map, bounds]);
 
     return null;
 }
@@ -301,6 +325,7 @@ export function LeafletDrawingViewer({
     onMeasurementClick,
     productionLabels,
     segmentStatuses,
+    hiddenSegments,
     onSegmentClick,
     selectedSegments,
     selectedMeasurementIds,
@@ -315,6 +340,15 @@ export function LeafletDrawingViewer({
 }: LeafletDrawingViewerProps) {
     const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
     const previewPinRef = useRef<HTMLDivElement>(null);
+    const [internalControls, setInternalControls] = useState<MapControls | null>(null);
+
+    const handleMapReady = useCallback(
+        (controls: MapControls) => {
+            setInternalControls(controls);
+            onMapReady?.(controls);
+        },
+        [onMapReady],
+    );
 
     // Preload image to get dimensions when using image mode (no tiles)
     useEffect(() => {
@@ -404,6 +438,8 @@ export function LeafletDrawingViewer({
                 maxZoom={maxZoom}
                 zoomSnap={0.25}
                 zoomDelta={0.5}
+                zoomControl={false}
+                attributionControl={false}
                 className="w-full h-full"
                 style={{ background: '#ffffff' }}
             >
@@ -465,7 +501,7 @@ export function LeafletDrawingViewer({
 
                 <MapControlsBridge
                     bounds={imageBounds}
-                    onMapReady={onMapReady}
+                    onMapReady={handleMapReady}
                 />
 
                 <MeasurementLayer
@@ -483,6 +519,7 @@ export function LeafletDrawingViewer({
                     onMeasurementClick={onMeasurementClick}
                     productionLabels={productionLabels}
                     segmentStatuses={segmentStatuses}
+                    hiddenSegments={hiddenSegments}
                     onSegmentClick={onSegmentClick}
                     selectedSegments={selectedSegments}
                     selectedMeasurementIds={selectedMeasurementIds}
@@ -495,6 +532,44 @@ export function LeafletDrawingViewer({
                     hoveredMeasurementId={hoveredMeasurementId}
                 />
             </MapContainer>
+
+            {/* Floating zoom controls — bottom-right of the viewer */}
+            {internalControls && (
+                <div className="absolute bottom-3 right-3 z-[400] flex flex-col rounded-md border bg-background/90 shadow-sm backdrop-blur">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none rounded-t-md p-0"
+                        onClick={internalControls.zoomIn}
+                        title="Zoom in"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                    <div className="h-px bg-border" />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none p-0"
+                        onClick={internalControls.zoomOut}
+                        title="Zoom out"
+                    >
+                        <Minus className="h-3.5 w-3.5" />
+                    </Button>
+                    <div className="h-px bg-border" />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none rounded-b-md p-0"
+                        onClick={internalControls.fitToScreen}
+                        title="Fit to screen"
+                    >
+                        <Maximize className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+            )}
 
             {/* Preview pin overlay — positioned via ref, no React re-renders on mousemove */}
             <div

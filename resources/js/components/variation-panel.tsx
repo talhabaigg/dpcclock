@@ -157,11 +157,11 @@ export function VariationPanel({ drawingId, locationId, conditions }: VariationP
             if (!res.ok) throw new Error('Generate failed');
             const data = await res.json();
             const totalCost = data.summary?.total_cost;
-            toast.success(`Generated CO line items${totalCost ? ` — ${fmt(totalCost)} total cost` : ''}.`);
+            toast.success(`Generated variation line items${totalCost ? ` — ${fmt(totalCost)} total cost` : ''}.`);
             await loadVariations();
             setPreview(null);
         } catch {
-            toast.error('Failed to generate change order.');
+            toast.error('Failed to generate variation.');
         } finally {
             setGenerating(false);
         }
@@ -404,7 +404,7 @@ export function VariationPanel({ drawingId, locationId, conditions }: VariationP
                     onClick={handleGenerate}
                 >
                     {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                    Generate Change Order
+                    Generate Variation
                 </Button>
             </div>
 

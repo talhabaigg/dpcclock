@@ -1,12 +1,14 @@
-import { LeafletDrawingViewer, type MapControls } from '@/components/leaflet-drawing-viewer';
-import type { CalibrationData, MeasurementData } from '@/components/measurement-layer';
+import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
+import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
+import type { CalibrationData, MeasurementData, ViewMode } from '@/components/measurement-layer';
 import { getSegmentColor } from '@/components/measurement-layer';
-import { ProductionPanel, getPercentColor, type LccSummary } from '@/components/production-panel';
+import { ProductionPanel, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
-import { usePage, useHttp } from '@inertiajs/react';
-import { Calendar, ChevronRight, Hand, MousePointer2, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
+import { api, ApiError } from '@/lib/api';
+import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -111,7 +113,7 @@ function PercentDropdown({
             className="fixed z-[9999] border border-border bg-popover shadow-lg"
             style={{ left, top }}
         >
-            <div className="px-2 py-0.5 text-[9px] text-muted-foreground border-b border-border bg-muted/30">
+            <div className="px-2 py-0.5 text-xs text-muted-foreground border-b border-border bg-muted/30">
                 %{dropdown.segmentIndex !== undefined ? ` Seg ${dropdown.segmentIndex + 1}` : ''}
             </div>
             {PERCENT_OPTIONS.map((p) => (
@@ -119,7 +121,7 @@ function PercentDropdown({
                     key={p}
                     type="button"
                     onClick={() => onSelect(p)}
-                    className={`flex w-full items-center gap-1.5 px-2 py-[3px] text-left text-[11px] transition-colors ${
+                    className={`flex w-full items-center gap-1.5 px-2 py-[3px] text-left text-xs transition-colors ${
                         currentPercent === p
                             ? 'bg-accent text-accent-foreground font-semibold'
                             : 'text-popover-foreground hover:bg-accent/50'
@@ -141,7 +143,7 @@ function PercentDropdown({
                     value={customValue}
                     onChange={(e) => setCustomValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
-                    className="h-5 px-1 text-[10px]"
+                    className="h-5 px-1 text-xs"
                 />
             </div>
         </div>
@@ -190,8 +192,6 @@ export default function DrawingProduction() {
     const imageUrl = drawing.file_url || null;
 
     // State
-    const [mapControls, setMapControls] = useState<MapControls | null>(null);
-    const [showPanel, setShowPanel] = useState(true);
     const [selectedLccId, setSelectedLccId] = useState<number | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
     const [statuses, setStatuses] = useState<Record<string, number>>(initialStatuses || {});
@@ -199,9 +199,8 @@ export default function DrawingProduction() {
     const [lccSummary, setLccSummary] = useState<LccSummary[]>(initialSummary || []);
     const [percentDropdown, setPercentDropdown] = useState<{ measurementId: number; segmentIndex?: number; x: number; y: number } | null>(null);
     const [workDate, setWorkDate] = useState(initialWorkDate || new Date().toISOString().split('T')[0]);
+    const [loadingDate, setLoadingDate] = useState(false);
 
-    const segmentStatusHttp = useHttp({});
-    const measurementStatusHttp = useHttp({});
 
     // F2: Multi-select state — keys: "m-{id}" for whole measurements, "s-{measId}-{segIdx}" for segments
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -223,28 +222,38 @@ export default function DrawingProduction() {
     // Filter measurements to those that have the selected LCC, apply hideComplete
     const visibleMeasurements = useMemo(() => {
         if (!initialMeasurements) return [];
+        // No LCC selected → show nothing (forces the user to pick one first)
+        if (!selectedLccId) return [];
 
         return initialMeasurements
             .filter((m) => {
-                if (!selectedLccId) return true;
                 if (!m.condition?.condition_labour_codes?.some((clc) => clc.labour_cost_code_id === selectedLccId)) return false;
 
                 // F3: Hide 100% completed
                 if (hideComplete && selectedLccId) {
+                    // Resolve the measurement-level percent for the selected LCC.
+                    // Live record (after updates) takes precedence over server-supplied initial state.
+                    const key = `${m.id}-${selectedLccId}`;
+                    const livePercent = statuses[key];
+                    const fallback = m.statuses?.find((s) => s.labour_cost_code_id === selectedLccId)?.percent_complete ?? 0;
+                    const measurementPercent = livePercent !== undefined ? livePercent : fallback;
+
                     if (isSegmentable(m)) {
-                        // Hide only if ALL segments are 100%
+                        // For segmentable: hide if measurement-level is 100% OR all segments are 100%.
+                        if (measurementPercent >= 100) return false;
                         const segCount = m.points.length - 1;
-                        let allComplete = true;
-                        for (let i = 0; i < segCount; i++) {
-                            if ((segmentStatuses[`${m.id}-${i}`] ?? 0) < 100) {
-                                allComplete = false;
-                                break;
+                        if (segCount > 0) {
+                            let allSegmentsComplete = true;
+                            for (let i = 0; i < segCount; i++) {
+                                if ((segmentStatuses[`${m.id}-${i}`] ?? 0) < 100) {
+                                    allSegmentsComplete = false;
+                                    break;
+                                }
                             }
+                            if (allSegmentsComplete) return false;
                         }
-                        if (allComplete) return false;
                     } else {
-                        const key = `${m.id}-${selectedLccId}`;
-                        if ((statuses[key] ?? 0) >= 100) return false;
+                        if (measurementPercent >= 100) return false;
                     }
                 }
 
@@ -274,6 +283,24 @@ export default function DrawingProduction() {
         }
         return map;
     }, [initialMeasurements]);
+
+    // Set of segment keys to hide visually when "Hide done" is on (segments at 100%).
+    // Used in addition to the visibleMeasurements filter, which only hides whole rows.
+    const hiddenSegments = useMemo(() => {
+        if (!hideComplete || !selectedLccId) return undefined;
+        const set = new Set<string>();
+        for (const m of (initialMeasurements || [])) {
+            if (!isSegmentable(m)) continue;
+            if (!m.condition?.condition_labour_codes?.some((clc) => clc.labour_cost_code_id === selectedLccId)) continue;
+            const segCount = m.points.length - 1;
+            for (let i = 0; i < segCount; i++) {
+                if ((segmentStatuses[`${m.id}-${i}`] ?? 0) >= 100) {
+                    set.add(`${m.id}-${i}`);
+                }
+            }
+        }
+        return set;
+    }, [hideComplete, selectedLccId, initialMeasurements, segmentStatuses]);
 
     // Production status labels for measurements (percent badges) — only for non-segmented
     const productionLabels = useMemo(() => {
@@ -369,7 +396,7 @@ export default function DrawingProduction() {
     }, [selectedLccId, selectedItems.size]);
 
     // Update status for a single measurement or segment
-    const updateStatus = useCallback((measurementId: number, percent: number, segmentIndex?: number) => {
+    const updateStatus = useCallback(async (measurementId: number, percent: number, segmentIndex?: number) => {
         if (!selectedLccId) return;
 
         setPercentDropdown(null);
@@ -379,52 +406,54 @@ export default function DrawingProduction() {
             const segKey = `${measurementId}-${segmentIndex}`;
             setSegmentStatuses(prev => ({ ...prev, [segKey]: percent }));
 
-            segmentStatusHttp.setData({
-                measurement_id: measurementId,
-                labour_cost_code_id: selectedLccId,
-                segment_index: segmentIndex,
-                percent_complete: percent,
-                work_date: workDate,
-            });
-            segmentStatusHttp.post(`/drawings/${drawing.id}/segment-status`, {
-                onSuccess: (data: { statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }) => {
-                    if (data.statuses) setStatuses(data.statuses);
-                    if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
-                    if (data.lccSummary) setLccSummary(data.lccSummary);
-                },
-                onError: () => {
-                    setSegmentStatuses(prev => {
-                        const next = { ...prev };
-                        delete next[segKey];
-                        return next;
-                    });
-                    toast.error('Failed to update status');
-                },
-            });
+            try {
+                const data = await api.post<{ statuses?: Record<string, number>; segmentStatuses?: Record<string, number>; lccSummary?: LccSummary[] }>(
+                    `/drawings/${drawing.id}/segment-status`,
+                    {
+                        measurement_id: measurementId,
+                        labour_cost_code_id: selectedLccId,
+                        segment_index: segmentIndex,
+                        percent_complete: percent,
+                        work_date: workDate,
+                    },
+                );
+                if (data.statuses) setStatuses(data.statuses);
+                if (data.segmentStatuses) setSegmentStatuses(data.segmentStatuses);
+                if (data.lccSummary) setLccSummary(data.lccSummary);
+            } catch (err) {
+                setSegmentStatuses(prev => {
+                    const next = { ...prev };
+                    delete next[segKey];
+                    return next;
+                });
+                const msg = err instanceof ApiError ? err.message : 'Failed to update status';
+                toast.error(msg);
+            }
         } else {
             // Measurement-level update
             const key = `${measurementId}-${selectedLccId}`;
             setStatuses(prev => ({ ...prev, [key]: percent }));
 
-            measurementStatusHttp.setData({
-                measurement_id: measurementId,
-                labour_cost_code_id: selectedLccId,
-                percent_complete: percent,
-                work_date: workDate,
-            });
-            measurementStatusHttp.post(`/drawings/${drawing.id}/measurement-status`, {
-                onSuccess: (data: { lccSummary?: LccSummary[] }) => {
-                    if (data.lccSummary) setLccSummary(data.lccSummary);
-                },
-                onError: () => {
-                    setStatuses(prev => {
-                        const next = { ...prev };
-                        delete next[key];
-                        return next;
-                    });
-                    toast.error('Failed to update status');
-                },
-            });
+            try {
+                const data = await api.post<{ lccSummary?: LccSummary[] }>(
+                    `/drawings/${drawing.id}/measurement-status`,
+                    {
+                        measurement_id: measurementId,
+                        labour_cost_code_id: selectedLccId,
+                        percent_complete: percent,
+                        work_date: workDate,
+                    },
+                );
+                if (data.lccSummary) setLccSummary(data.lccSummary);
+            } catch (err) {
+                setStatuses(prev => {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                });
+                const msg = err instanceof ApiError ? err.message : 'Failed to update status';
+                toast.error(msg);
+            }
         }
     }, [drawing.id, selectedLccId, workDate]);
 
@@ -604,7 +633,18 @@ export default function DrawingProduction() {
             revisions={revisions}
             project={project}
             activeTab={activeTab}
-            mapControls={mapControls}
+            leftToolbar={
+                <DrawingToolsToolbar
+                    viewMode={selectorMode ? ('select' as ViewMode) : ('pan' as ViewMode)}
+                    onViewModeChange={(mode) => setSelectorMode(mode === 'select')}
+                    snapEnabled={false}
+                    onSnapToggle={() => {}}
+                    canEdit={false}
+                    hasCalibration={false}
+                    showSelectMode={canEditProduction && !!selectedLccId}
+                    selectModeTitle="Box select — drag to mark items complete"
+                />
+            }
             statusBar={(() => {
                 const totalBudget = lccSummary.reduce((s, c) => s + c.budget_hours, 0);
                 const totalEarned = lccSummary.reduce((s, c) => s + c.earned_hours, 0);
@@ -615,108 +655,20 @@ export default function DrawingProduction() {
                 const itemCount = lccSummary.reduce((s, c) => s + c.measurement_count, 0);
                 return (
                     <>
-                        <span>Work Date: <span className="font-mono font-medium tabular-nums">{workDate}</span></span>
+                        <span>Work Date: <span className="font-medium tabular-nums">{workDate}</span></span>
                         <div className="bg-border h-3 w-px" />
-                        <span>Budget: <span className="font-mono font-medium tabular-nums">{totalBudget.toFixed(1)}h</span></span>
+                        <span>Budget: <span className="font-medium tabular-nums">{totalBudget.toFixed(1)}h</span></span>
                         <div className="bg-border h-3 w-px" />
-                        <span>Earned: <span className="font-mono font-medium tabular-nums">{totalEarned.toFixed(1)}h</span></span>
+                        <span>Earned: <span className="font-medium tabular-nums">{totalEarned.toFixed(1)}h</span></span>
                         <div className="bg-border h-3 w-px" />
                         <span className={overallPct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}>
-                            Overall: <span className="font-mono tabular-nums">{Math.round(overallPct)}%</span>
+                            Overall: <span className="tabular-nums">{Math.round(overallPct)}%</span>
                         </span>
                         <div className="flex-1" />
                         <span>{itemCount} item{itemCount !== 1 ? 's' : ''} across {lccSummary.length} LCC{lccSummary.length !== 1 ? 's' : ''}</span>
                     </>
                 );
             })()}
-            toolbar={
-                <>
-                    {/* Pan / Selector mode toggle */}
-                    <div className="bg-background flex items-center rounded-sm border p-px">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={!selectorMode ? 'secondary' : 'ghost'}
-                            className="h-6 w-6 rounded-sm p-0"
-                            title="Pan mode"
-                            onClick={() => setSelectorMode(false)}
-                        >
-                            <Hand className="h-3 w-3" />
-                        </Button>
-                        {selectedLccId && canEditProduction && (
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={selectorMode ? 'secondary' : 'ghost'}
-                                className="h-6 w-6 rounded-sm p-0"
-                                title="Box select mode — drag to select items"
-                                onClick={() => setSelectorMode(true)}
-                            >
-                                <MousePointer2 className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Work Date Selector */}
-                    <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <Input
-                            type="date"
-                            value={workDate}
-                            onChange={(e) => handleWorkDateChange(e.target.value)}
-                            className="h-6 w-[130px] px-1.5 text-[11px]"
-                        />
-                        {loadingDate && (
-                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-                        )}
-                    </div>
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Selected LCC indicator */}
-                    {selectedLccId && (
-                        <>
-                            <div className="flex items-center gap-1 rounded bg-accent px-2 py-0.5">
-                                <div
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ backgroundColor: getPercentColor(
-                                        lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.weighted_percent ?? 0
-                                    )}}
-                                />
-                                <span className="text-[11px] font-mono font-semibold text-foreground">
-                                    {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.code}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                    {lccSummary.find((c) => c.labour_cost_code_id === selectedLccId)?.name}
-                                </span>
-                            </div>
-                            <span className="text-muted-foreground text-[11px]">
-                                {!canEditProduction ? 'View only' : selectorMode ? 'Drag to select areas' : 'Click areas to set % complete'}
-                            </span>
-                        </>
-                    )}
-                    {!selectedLccId && (
-                        <span className="text-muted-foreground text-[11px]">
-                            <ChevronRight className="mr-1 inline h-3 w-3" />
-                            Select a labour cost code from the panel
-                        </span>
-                    )}
-
-                    <div className="bg-border h-4 w-px" />
-
-                    {/* Toggle panel */}
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0"
-                        onClick={() => setShowPanel(!showPanel)}
-                        title={showPanel ? 'Hide panel' : 'Show panel'}
-                    >
-                        {showPanel ? <PanelRightClose className="h-3 w-3" /> : <PanelRightOpen className="h-3 w-3" />}
-                    </Button>
-                </>
-            }
         >
             {/* Main content area */}
             <div className="relative flex flex-1 overflow-hidden">
@@ -739,12 +691,12 @@ export default function DrawingProduction() {
                         onMeasurementClick={handleMeasurementClick}
                         productionLabels={selectedLccId ? productionLabels : undefined}
                         segmentStatuses={selectedLccId ? segmentStatuses : undefined}
+                        hiddenSegments={hiddenSegments}
                         onSegmentClick={handleSegmentClick}
                         selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
                         selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
                         boxSelectMode={selectorMode && !!selectedLccId}
                         onBoxSelectComplete={handleBoxSelect}
-                        onMapReady={setMapControls}
                         className="absolute inset-0"
                     />
 
@@ -763,7 +715,7 @@ export default function DrawingProduction() {
                     {selectedItems.size > 0 && selectedLccId && (
                         <div className="fixed bottom-6 left-1/2 z-[9998] -translate-x-1/2 transform">
                             <div className="flex items-center gap-2 rounded-lg border border-border bg-popover px-3 py-2 shadow-xl">
-                                <span className="text-[12px] font-semibold text-foreground tabular-nums">
+                                <span className="text-xs font-semibold text-foreground tabular-nums">
                                     {selectedItems.size} selected
                                 </span>
                                 <div className="bg-border h-5 w-px" />
@@ -772,7 +724,7 @@ export default function DrawingProduction() {
                                         key={p}
                                         type="button"
                                         onClick={() => bulkSetPercent(p)}
-                                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors hover:bg-accent"
+                                        className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors hover:bg-accent"
                                     >
                                         <div
                                             className="h-2 w-2 rounded-full"
@@ -798,16 +750,26 @@ export default function DrawingProduction() {
                 </div>
 
                 {/* Production Panel */}
-                {showPanel && (
-                    <ProductionPanel
-                        lccSummary={lccSummary}
-                        selectedLccId={selectedLccId}
-                        onSelectLcc={setSelectedLccId}
-                        onSelectAll={selectAllVisible}
-                        hideComplete={hideComplete}
-                        onToggleHideComplete={() => setHideComplete(!hideComplete)}
-                    />
-                )}
+                <ProductionPanel
+                    lccSummary={lccSummary}
+                    selectedLccId={selectedLccId}
+                    onSelectLcc={setSelectedLccId}
+                    onSelectAll={selectAllVisible}
+                    hideComplete={hideComplete}
+                    onToggleHideComplete={() => setHideComplete(!hideComplete)}
+                    workDate={workDate}
+                    onWorkDateChange={handleWorkDateChange}
+                    loadingDate={loadingDate}
+                    statusHint={
+                        selectedLccId
+                            ? !canEditProduction
+                                ? 'View only'
+                                : selectorMode
+                                    ? 'Drag to select areas'
+                                    : 'Click areas to set %'
+                            : undefined
+                    }
+                />
             </div>
         </DrawingWorkspaceLayout>
     );

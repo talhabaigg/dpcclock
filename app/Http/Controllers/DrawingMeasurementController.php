@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Drawing;
 use App\Models\DrawingMeasurement;
 use App\Models\DrawingScaleCalibration;
+use App\Models\Variation;
 use App\Services\TakeoffCostCalculator;
 use Illuminate\Http\Request;
 
@@ -142,6 +143,9 @@ class DrawingMeasurementController extends Controller
             'variation_id' => 'nullable|integer|exists:variations,id',
         ]);
 
+        // Block writes to a variation that's already locked in Premier
+        $this->assertVariationEditable($validated['variation_id'] ?? null);
+
         // Validate parent belongs to same drawing and is top-level (area or linear)
         if (!empty($validated['parent_measurement_id'])) {
             $parent = DrawingMeasurement::where('id', $validated['parent_measurement_id'])
@@ -217,6 +221,9 @@ class DrawingMeasurementController extends Controller
             abort(404);
         }
 
+        // Block edits to measurements on a locked variation
+        $this->assertVariationEditable($measurement->variation_id);
+
         $minPoints = $measurement->type === 'count' ? 1 : 2;
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -278,6 +285,9 @@ class DrawingMeasurementController extends Controller
             abort(404);
         }
 
+        // Block deletes on a locked variation
+        $this->assertVariationEditable($measurement->variation_id);
+
         $measurement->load('variation:id,co_number,description');
         $data = $measurement->toArray();
         $measurement->delete();
@@ -319,6 +329,21 @@ class DrawingMeasurementController extends Controller
                 ->orderBy('created_at')
                 ->get(),
         ]);
+    }
+
+    /**
+     * Variations already pushed to Premier (premier_co_id set) are immutable —
+     * aborts with 423 (Locked) if a write is attempted on one.
+     */
+    private function assertVariationEditable(?int $variationId): void
+    {
+        if (! $variationId) {
+            return;
+        }
+        $v = Variation::find($variationId);
+        if ($v && $v->premier_co_id) {
+            abort(423, 'Variation is locked in Premier and cannot be modified.');
+        }
     }
 
     // ---- Private computation helpers ----
