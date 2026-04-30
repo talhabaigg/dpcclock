@@ -11,17 +11,50 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employee File Types', href: '/employee-file-types' }];
 
 type Level = 'mandatory' | 'preferred' | 'optional' | 'none';
 
+type Operator = 'is' | 'is_not' | 'contains' | 'not_contains' | 'in' | 'not_in';
+
 interface ConditionRule {
     field: string;
-    operator: string;
-    value: string;
+    operator: Operator | string;
+    value: string | string[];
+}
+
+const TEXT_FIELDS = new Set(['employment_type', 'employment_agreement']);
+const RELATION_FIELDS = new Set(['worktype', 'location']);
+
+const OPERATOR_LABELS: Record<Operator, string> = {
+    is: 'is',
+    is_not: 'is not',
+    contains: 'contains',
+    not_contains: 'does not contain',
+    in: 'is one of',
+    not_in: 'is not one of',
+};
+
+function operatorsForField(field: string): Operator[] {
+    if (TEXT_FIELDS.has(field)) {
+        return ['is', 'is_not', 'contains', 'not_contains', 'in', 'not_in'];
+    }
+    if (RELATION_FIELDS.has(field)) {
+        return ['is', 'is_not', 'in', 'not_in'];
+    }
+    return ['is', 'is_not'];
+}
+
+function isMultiOperator(op: string): boolean {
+    return op === 'in' || op === 'not_in';
+}
+
+function isFreeTextOperator(op: string): boolean {
+    return op === 'contains' || op === 'not_contains';
 }
 
 interface RuleGroup {
@@ -126,11 +159,94 @@ function fieldLabel(field: string): string {
 }
 
 function ruleSummary(rule: ConditionRule, worktypes: { id: number; name: string }[], locations: { id: number; name: string }[]): string {
-    const op = rule.operator === 'is' ? 'is' : 'is not';
-    let valueLabel = rule.value;
-    if (rule.field === 'worktype') valueLabel = worktypes.find((w) => String(w.id) === rule.value)?.name ?? rule.value;
-    if (rule.field === 'location') valueLabel = locations.find((l) => String(l.id) === rule.value)?.name ?? rule.value;
-    return `${fieldLabel(rule.field)} ${op} ${valueLabel || '…'}`;
+    const op = OPERATOR_LABELS[rule.operator as Operator] ?? rule.operator;
+    const labelFor = (v: string) => {
+        if (rule.field === 'worktype') return worktypes.find((w) => String(w.id) === v)?.name ?? v;
+        if (rule.field === 'location') return locations.find((l) => String(l.id) === v)?.name ?? v;
+        return v;
+    };
+    const values = Array.isArray(rule.value) ? rule.value : (rule.value ? [rule.value] : []);
+    const valueLabel = values.length === 0 ? '…' : values.map(labelFor).join(', ');
+    return `${fieldLabel(rule.field)} ${op} ${valueLabel}`;
+}
+
+interface MultiSelectOption { value: string; label: string }
+
+function MultiSelect({ options, selected, onChange, placeholder }: {
+    options: MultiSelectOption[];
+    selected: string[];
+    onChange: (next: string[]) => void;
+    placeholder?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    const toggle = (v: string) => {
+        if (selected.includes(v)) onChange(selected.filter((x) => x !== v));
+        else onChange([...selected, v]);
+    };
+    const remove = (v: string) => onChange(selected.filter((x) => x !== v));
+
+    const filtered = options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()));
+    const labelFor = (v: string) => options.find((o) => o.value === v)?.label ?? v;
+
+    return (
+        <div className="flex flex-col gap-1">
+            <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-full justify-between text-xs font-normal">
+                        <span className="truncate text-muted-foreground">
+                            {selected.length === 0 ? (placeholder ?? 'Select...') : `${selected.length} selected`}
+                        </span>
+                        <ChevronDown className="ml-2 size-3 shrink-0 opacity-50" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--anchor-width)] p-0" align="start" sideOffset={4}>
+                    <div className="flex flex-col">
+                        <Input
+                            placeholder="Search..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="m-1 h-8 text-xs"
+                        />
+                        <div className="max-h-60 overflow-y-auto p-1">
+                            {filtered.length === 0 && (
+                                <p className="py-3 text-center text-xs text-muted-foreground">No results.</p>
+                            )}
+                            {filtered.map((o) => {
+                                const isSelected = selected.includes(o.value);
+                                return (
+                                    <button
+                                        key={o.value}
+                                        type="button"
+                                        onClick={() => toggle(o.value)}
+                                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
+                                    >
+                                        <span className={`flex size-3.5 shrink-0 items-center justify-center rounded-sm border ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-input'}`}>
+                                            {isSelected && <Check className="size-3" />}
+                                        </span>
+                                        <span className="truncate">{o.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </PopoverContent>
+            </Popover>
+            {selected.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                    {selected.map((v) => (
+                        <Badge key={v} variant="secondary" className="gap-1 text-[10px]">
+                            <span className="max-w-[180px] truncate">{labelFor(v)}</span>
+                            <button type="button" className="hover:text-foreground" onClick={() => remove(v)}>
+                                <X size={10} />
+                            </button>
+                        </Badge>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 function conditionSummary(
@@ -184,7 +300,11 @@ export default function EmployeeFileTypesIndex() {
     };
 
     const submit = () => {
-        const groups = (form.conditions?.rule_groups ?? []).filter((g) => g.rules.length > 0);
+        const isRuleComplete = (r: ConditionRule) =>
+            Array.isArray(r.value) ? r.value.length > 0 : (r.value ?? '').toString().trim() !== '';
+        const groups = (form.conditions?.rule_groups ?? [])
+            .map((g) => ({ ...g, rules: g.rules.filter(isRuleComplete) }))
+            .filter((g) => g.rules.length > 0);
         const conditions: Conditions | null = groups.length > 0 ? { rule_groups: groups } : null;
         const data = { ...form, conditions } as Record<string, unknown>;
 
@@ -219,8 +339,23 @@ export default function EmployeeFileTypesIndex() {
 
     const updateRule = (gi: number, ri: number, updates: Partial<ConditionRule>) => {
         const newRules = [...groups[gi].rules];
-        newRules[ri] = { ...newRules[ri], ...updates };
-        if (updates.field) newRules[ri].value = '';
+        const current = newRules[ri];
+        const next = { ...current, ...updates };
+        // When switching field, reset value and ensure operator is valid for the new field.
+        if (updates.field) {
+            const valid = operatorsForField(updates.field);
+            if (!valid.includes(next.operator as Operator)) next.operator = 'is';
+            next.value = '';
+        }
+        // When switching operator type, reset value to compatible shape.
+        if (updates.operator) {
+            const wasMulti = isMultiOperator(current.operator);
+            const nowMulti = isMultiOperator(updates.operator);
+            if (wasMulti !== nowMulti) {
+                next.value = nowMulti ? [] : '';
+            }
+        }
+        newRules[ri] = next;
         updateGroup(gi, { rules: newRules });
     };
 
@@ -517,15 +652,16 @@ export default function EmployeeFileTypesIndex() {
                                                         />
                                                     </div>
 
-                                                    <div className="flex w-[100px] flex-col gap-1">
+                                                    <div className="flex w-[140px] flex-col gap-1">
                                                         <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Operator</Label>
                                                         <Select value={rule.operator} onValueChange={(v) => updateRule(gi, ri, { operator: v })}>
                                                             <SelectTrigger className="h-8 w-full text-xs">
                                                                 <SelectValue />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                <SelectItem value="is" className="text-xs">is</SelectItem>
-                                                                <SelectItem value="is_not" className="text-xs">is not</SelectItem>
+                                                                {operatorsForField(rule.field).map((op) => (
+                                                                    <SelectItem key={op} value={op} className="text-xs">{OPERATOR_LABELS[op]}</SelectItem>
+                                                                ))}
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
@@ -537,13 +673,29 @@ export default function EmployeeFileTypesIndex() {
 
                                                 <div className="flex flex-col gap-1">
                                                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Value</Label>
-                                                    <SearchSelect
-                                                        options={getValueOptions(rule.field)}
-                                                        optionName="value"
-                                                        selectedOption={rule.value}
-                                                        onValueChange={(v) => updateRule(gi, ri, { value: v })}
-                                                        className="h-8 text-xs"
-                                                    />
+                                                    {isFreeTextOperator(rule.operator) ? (
+                                                        <Input
+                                                            value={typeof rule.value === 'string' ? rule.value : ''}
+                                                            onChange={(e) => updateRule(gi, ri, { value: e.target.value })}
+                                                            placeholder="Type a value..."
+                                                            className="h-8 text-xs"
+                                                        />
+                                                    ) : isMultiOperator(rule.operator) ? (
+                                                        <MultiSelect
+                                                            options={getValueOptions(rule.field)}
+                                                            selected={Array.isArray(rule.value) ? rule.value : (rule.value ? [rule.value] : [])}
+                                                            onChange={(next) => updateRule(gi, ri, { value: next })}
+                                                            placeholder="Select one or more..."
+                                                        />
+                                                    ) : (
+                                                        <SearchSelect
+                                                            options={getValueOptions(rule.field)}
+                                                            optionName="value"
+                                                            selectedOption={typeof rule.value === 'string' ? rule.value : ''}
+                                                            onValueChange={(v) => updateRule(gi, ri, { value: v })}
+                                                            className="h-8 text-xs"
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

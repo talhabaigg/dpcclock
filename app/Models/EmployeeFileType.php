@@ -162,17 +162,68 @@ class EmployeeFileType extends Model
     private function evaluateRule(array $rule, Employee $employee): bool
     {
         $field = $rule['field'];
-        $operator = $rule['operator'];
-        $value = $rule['value'];
+        $operator = $rule['operator'] ?? 'is';
+        $value = $rule['value'] ?? null;
 
-        $result = match ($field) {
+        $result = match ($operator) {
+            'contains' => $this->fieldContains($field, $value, $employee),
+            'not_contains' => ! $this->fieldContains($field, $value, $employee),
+            'in' => $this->fieldIsAnyOf($field, $value, $employee),
+            'not_in' => ! $this->fieldIsAnyOf($field, $value, $employee),
+            'is_not' => ! $this->fieldEquals($field, $value, $employee),
+            default => $this->fieldEquals($field, $value, $employee), // 'is'
+        };
+
+        return $result;
+    }
+
+    private function fieldEquals(string $field, mixed $value, Employee $employee): bool
+    {
+        $value = is_array($value) ? ($value[0] ?? null) : $value;
+        if ($value === null || $value === '') {
+            return false;
+        }
+
+        return match ($field) {
             'employment_type' => $employee->employment_type === $value,
             'employment_agreement' => $employee->employment_agreement === $value,
             'worktype' => $employee->worktypes->contains('id', (int) $value),
             'location' => $employee->kiosks->contains('eh_location_id', (string) $value),
             default => false,
         };
+    }
 
-        return $operator === 'is_not' ? ! $result : $result;
+    private function fieldContains(string $field, mixed $value, Employee $employee): bool
+    {
+        $needle = (string) (is_array($value) ? ($value[0] ?? '') : ($value ?? ''));
+        if ($needle === '') {
+            return false;
+        }
+        $needle = mb_strtolower($needle);
+
+        $haystack = match ($field) {
+            'employment_type' => (string) $employee->employment_type,
+            'employment_agreement' => (string) $employee->employment_agreement,
+            default => '', // contains is not meaningful for relation fields
+        };
+
+        return $haystack !== '' && str_contains(mb_strtolower($haystack), $needle);
+    }
+
+    private function fieldIsAnyOf(string $field, mixed $value, Employee $employee): bool
+    {
+        $values = is_array($value) ? $value : [$value];
+        $values = array_values(array_filter($values, fn ($v) => $v !== null && $v !== ''));
+        if ($values === []) {
+            return false;
+        }
+
+        return match ($field) {
+            'employment_type' => in_array($employee->employment_type, $values, true),
+            'employment_agreement' => in_array($employee->employment_agreement, $values, true),
+            'worktype' => $employee->worktypes->pluck('id')->intersect(array_map('intval', $values))->isNotEmpty(),
+            'location' => $employee->kiosks->pluck('eh_location_id')->map(fn ($v) => (string) $v)->intersect(array_map('strval', $values))->isNotEmpty(),
+            default => false,
+        };
     }
 }
