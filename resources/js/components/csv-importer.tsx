@@ -8,11 +8,14 @@ import Dropzone from 'shadcn-dropzone';
 import * as XLSX from 'xlsx';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 type CsvImporterDialogProps = {
     requiredColumns: string[]; // List of required columns to map
     onSubmit: (mappedData: Record<string, string>[]) => void; // Callback to handle the mapped data
+    /** Render the trigger as an icon-only button. Caller is responsible for providing a tooltip. */
+    iconOnly?: boolean;
 };
-function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps) {
+function CsvImporterDialog({ requiredColumns, onSubmit, iconOnly }: CsvImporterDialogProps) {
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
     const [mappings, setMappings] = useState<Record<string, string>>({}); // { requiredColumn: mappedCsvHeader }
@@ -118,13 +121,25 @@ function CsvImporterDialog({ requiredColumns, onSubmit }: CsvImporterDialogProps
     return (
         <div className="dialog-backdrop">
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogTrigger asChild>
-                    <Button variant="outline">
-                        {' '}
-                        <Upload />
-                        Import
-                    </Button>
-                </DialogTrigger>
+                {iconOnly ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-7 w-7 p-0" aria-label="Import">
+                                    <Upload className="h-3.5 w-3.5" />
+                                </Button>
+                            </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Import</TooltipContent>
+                    </Tooltip>
+                ) : (
+                    <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
+                            <Upload className="h-3 w-3" />
+                            Import
+                        </Button>
+                    </DialogTrigger>
+                )}
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Data Importer</DialogTitle>

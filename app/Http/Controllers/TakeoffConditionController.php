@@ -10,6 +10,7 @@ use App\Models\Location;
 use App\Models\MaterialItem;
 use App\Models\TakeoffCondition;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TakeoffConditionController extends Controller
 {
@@ -368,6 +369,270 @@ class TakeoffConditionController extends Controller
             ->get();
 
         return response()->json(['items' => $items]);
+    }
+
+    /**
+     * Stream a CSV export of every BoQ-priced condition in this location, in
+     * the exact shape that `bulkImport()` consumes — so estimators can edit
+     * the file and re-upload. One row per BoQ item; conditions with no items
+     * still emit a single placeholder row (blank kind/code) so the parent
+     * shows up and round-trips.
+     */
+    public function bulkExport(Location $location)
+    {
+        $conditions = TakeoffCondition::where('location_id', $location->id)
+            ->where('pricing_method', 'unit_rate')
+            ->with(['boqItems.costCode', 'boqItems.labourCostCode'])
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+
+        $headers = ['condition_id', 'condition_name', 'measurement_type', 'kind', 'code', 'unit_rate', 'production_rate'];
+        $filename = 'conditions-' . $location->id . '-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($conditions, $headers) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $headers);
+
+            foreach ($conditions as $condition) {
+                $items = $condition->boqItems->sortBy('sort_order')->values();
+                if ($items->isEmpty()) {
+                    fputcsv($out, [$condition->id, $condition->name, $condition->type, '', '', '', '']);
+                    continue;
+                }
+                foreach ($items as $item) {
+                    $code = $item->kind === 'labour'
+                        ? ($item->labourCostCode->code ?? '')
+                        : ($item->costCode->code ?? '');
+                    fputcsv($out, [
+                        $condition->id,
+                        $condition->name,
+                        $condition->type,
+                        $item->kind,
+                        $code,
+                        $item->unit_rate,
+                        $item->production_rate,
+                    ]);
+                }
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Bulk import: create one or many BoQ-priced conditions from a flat
+     * row list (one BoQ item per row, parent fields repeated). Rows are
+     * grouped by `condition_name`; codes are resolved against this
+     * location's labour cost codes and the project cost codes table.
+     *
+     * Skips rows whose code can't be resolved or whose parent name already
+     * exists in the location, returning a per-row report so the importer
+     * can surface what landed and what didn't.
+     */
+    public function bulkImport(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'rows' => 'required|array|min:1',
+            'rows.*.condition_id' => 'nullable|string',
+            'rows.*.condition_name' => 'required|string|max:255',
+            'rows.*.measurement_type' => 'required|string|in:linear,area,count',
+            'rows.*.kind' => 'required|string|in:labour,material',
+            'rows.*.code' => 'required|string',
+            'rows.*.unit_rate' => 'nullable|string',
+            'rows.*.production_rate' => 'nullable|string',
+        ]);
+
+        // 1) Group rows. condition_id wins as the grouping key when present
+        // (so a rename on round-trip still updates the same record); rows
+        // without an ID fall back to grouping by trimmed name.
+        $groups = [];
+        foreach ($validated['rows'] as $idx => $row) {
+            $name = trim($row['condition_name']);
+            if ($name === '') continue;
+
+            $rawId = trim((string) ($row['condition_id'] ?? ''));
+            $id = ($rawId !== '' && ctype_digit($rawId)) ? (int) $rawId : null;
+            $key = $id !== null ? "id:{$id}" : "name:{$name}";
+
+            $groups[$key] ??= [
+                'condition_id' => $id,
+                'name' => $name,
+                'type' => strtolower(trim($row['measurement_type'])),
+                'rows' => [],
+            ];
+            $groups[$key]['rows'][] = ['_idx' => $idx] + $row;
+        }
+
+        if (empty($groups)) {
+            return response()->json([
+                'created' => 0, 'updated' => 0,
+                'skipped_existing' => [], 'skipped_invalid_id' => [],
+                'unmatched_codes' => [], 'message' => 'No usable rows.',
+            ], 422);
+        }
+
+        // 2) Resolve provided condition_ids in this location. Anything not
+        // found here, in another location, or not BoQ-priced is invalid for
+        // upsert and gets skipped with a warning rather than silently
+        // converted or accidentally clobbered.
+        $providedIds = array_values(array_filter(array_map(fn ($g) => $g['condition_id'], $groups)));
+        $existingById = $providedIds
+            ? TakeoffCondition::where('location_id', $location->id)
+                ->whereIn('id', $providedIds)
+                ->where('pricing_method', 'unit_rate')
+                ->get()
+                ->keyBy('id')
+            : collect();
+
+        // 3) For create-only groups (no ID), look up by name to skip dupes.
+        $createNames = [];
+        foreach ($groups as $g) {
+            if ($g['condition_id'] === null) $createNames[] = $g['name'];
+        }
+        $existingNamesSet = $createNames
+            ? array_flip(
+                TakeoffCondition::where('location_id', $location->id)
+                    ->whereIn('name', $createNames)
+                    ->pluck('name')
+                    ->all()
+            )
+            : [];
+
+        // 4) Resolve every code in two queries.
+        $labourCodes = [];
+        $materialCodes = [];
+        foreach ($groups as $g) {
+            // Skip rows we already know we won't process.
+            if ($g['condition_id'] !== null && ! $existingById->has($g['condition_id'])) continue;
+            if ($g['condition_id'] === null && isset($existingNamesSet[$g['name']])) continue;
+            foreach ($g['rows'] as $r) {
+                $code = trim($r['code']);
+                if ($code === '') continue;
+                if (strtolower(trim($r['kind'])) === 'labour') $labourCodes[$code] = true;
+                else $materialCodes[$code] = true;
+            }
+        }
+
+        $labourMap = $labourCodes
+            ? LabourCostCode::where('location_id', $location->id)
+                ->whereIn('code', array_keys($labourCodes))
+                ->get()
+                ->keyBy('code')
+            : collect();
+
+        $materialMap = $materialCodes
+            ? CostCode::whereIn('code', array_keys($materialCodes))
+                ->select('id', 'code', 'description')
+                ->get()
+                ->keyBy('code')
+            : collect();
+
+        // 5) Run create + update in a single transaction.
+        $createdIds = [];
+        $updatedIds = [];
+        $skippedExisting = [];
+        $skippedInvalidId = [];
+        $unmatchedCodes = [];
+
+        DB::transaction(function () use (
+            $groups, $existingById, $existingNamesSet, $labourMap, $materialMap, $location,
+            &$createdIds, &$updatedIds, &$skippedExisting, &$skippedInvalidId, &$unmatchedCodes
+        ) {
+            foreach ($groups as $g) {
+                $providedId = $g['condition_id'];
+
+                // Resolve to an action: update / create / skip.
+                if ($providedId !== null) {
+                    $condition = $existingById->get($providedId);
+                    if (! $condition) {
+                        $skippedInvalidId[] = $providedId;
+                        continue;
+                    }
+                } else {
+                    if (isset($existingNamesSet[$g['name']])) {
+                        $skippedExisting[] = $g['name'];
+                        continue;
+                    }
+                    $condition = TakeoffCondition::create([
+                        'location_id' => $location->id,
+                        'name' => $g['name'],
+                        'type' => in_array($g['type'], ['linear', 'area', 'count'], true) ? $g['type'] : 'linear',
+                        'color' => '#3b82f6',
+                        'opacity' => 50,
+                        'pricing_method' => 'unit_rate',
+                        'labour_unit_rate' => null,
+                        'labour_rate_source' => 'manual',
+                    ]);
+                }
+
+                // Build the new BoQ items list for this condition.
+                $boqItems = [];
+                $sortOrder = 0;
+                foreach ($g['rows'] as $r) {
+                    $kind = strtolower(trim($r['kind']));
+                    $code = trim($r['code']);
+                    $unitRate = is_numeric($r['unit_rate'] ?? '') ? (float) $r['unit_rate'] : 0.0;
+                    $productionRate = is_numeric($r['production_rate'] ?? '') ? (float) $r['production_rate'] : null;
+
+                    if ($kind === 'labour') {
+                        $lcc = $labourMap->get($code);
+                        if (! $lcc) { $unmatchedCodes[] = "labour:{$code}"; continue; }
+                        $boqItems[] = [
+                            'kind' => 'labour',
+                            'cost_code_id' => null,
+                            'labour_cost_code_id' => $lcc->id,
+                            'unit_rate' => $unitRate,
+                            'production_rate' => $productionRate ?? $lcc->default_production_rate,
+                            'sort_order' => $sortOrder++,
+                        ];
+                    } else {
+                        $cc = $materialMap->get($code);
+                        if (! $cc) { $unmatchedCodes[] = "material:{$code}"; continue; }
+                        $boqItems[] = [
+                            'kind' => 'material',
+                            'cost_code_id' => $cc->id,
+                            'labour_cost_code_id' => null,
+                            'unit_rate' => $unitRate,
+                            'production_rate' => null,
+                            'sort_order' => $sortOrder++,
+                        ];
+                    }
+                }
+
+                // On update, push parent-field changes from the CSV (name + type).
+                // CSV is treated as source of truth on round-trip.
+                if ($providedId !== null) {
+                    $type = in_array($g['type'], ['linear', 'area', 'count'], true) ? $g['type'] : $condition->type;
+                    $condition->update(['name' => $g['name'], 'type' => $type]);
+                    $updatedIds[] = $condition->id;
+                } else {
+                    $createdIds[] = $condition->id;
+                }
+
+                // syncBoqItems replaces in place, so it works for both paths.
+                $this->syncBoqItems($condition, $boqItems);
+                $this->syncLabourCodesFromBoqItems($condition);
+            }
+        });
+
+        // 6) Reload all conditions so the client gets fresh state.
+        $conditions = TakeoffCondition::where('location_id', $location->id)
+            ->with($this->withRelations())
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+        $this->appendEffectiveUnitCosts($conditions, $location->id);
+        $this->appendLineItemEffectiveUnitCosts($conditions, $location->id);
+
+        return response()->json([
+            'created' => count($createdIds),
+            'updated' => count($updatedIds),
+            'skipped_existing' => array_values(array_unique($skippedExisting)),
+            'skipped_invalid_id' => array_values(array_unique($skippedInvalidId)),
+            'unmatched_codes' => array_values(array_unique($unmatchedCodes)),
+            'conditions' => $conditions,
+        ]);
     }
 
     // ---- Condition Type CRUD ----

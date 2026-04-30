@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import CsvImporterDialog from '@/components/csv-importer';
 import { ConditionDetailGrid } from '@/components/condition-detail-grid';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import {
+    Download,
     Hash,
     Info,
     Loader2,
@@ -755,6 +757,75 @@ export function ConditionManager({
         )));
     };
 
+    /**
+     * Bulk import: one CSV/Excel file, one row per BoQ item, parent fields
+     * (condition_name, measurement_type) repeated across rows that belong to
+     * the same condition. Each unique condition_name becomes a new BoQ-priced
+     * condition; unresolved codes are skipped row-by-row, and names that
+     * already exist in this location are skipped wholesale.
+     */
+    const handleBulkImport = async (rows: Record<string, string>[]) => {
+        const cleaned = rows.filter((r) =>
+            (r.condition_name || '').trim() !== '' &&
+            (r.measurement_type || '').trim() !== '' &&
+            (r.kind || '').trim() !== '' &&
+            (r.code || '').trim() !== ''
+        );
+
+        if (cleaned.length === 0) {
+            toast.error('No usable rows. Each row needs a condition_name, measurement_type, kind and code.');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/locations/${locationId}/takeoff-conditions/bulk-import`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ rows: cleaned }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                throw new Error(errorData?.message || `Server returned ${res.status}`);
+            }
+            const data = await res.json() as {
+                created: number;
+                updated: number;
+                skipped_existing: string[];
+                skipped_invalid_id: number[];
+                unmatched_codes: string[];
+                conditions: TakeoffCondition[];
+            };
+
+            onConditionsChange(data.conditions || []);
+
+            const parts: string[] = [];
+            if (data.created > 0) parts.push(`${data.created} created`);
+            if (data.updated > 0) parts.push(`${data.updated} updated`);
+            if (data.skipped_existing.length) {
+                parts.push(`${data.skipped_existing.length} name${data.skipped_existing.length === 1 ? '' : 's'} already existed: ${data.skipped_existing.slice(0, 3).join(', ')}${data.skipped_existing.length > 3 ? '…' : ''}`);
+            }
+            if (data.skipped_invalid_id.length) {
+                parts.push(`${data.skipped_invalid_id.length} invalid ID${data.skipped_invalid_id.length === 1 ? '' : 's'} skipped: ${data.skipped_invalid_id.slice(0, 3).join(', ')}${data.skipped_invalid_id.length > 3 ? '…' : ''}`);
+            }
+            if (data.unmatched_codes.length) {
+                parts.push(`${data.unmatched_codes.length} unmatched code${data.unmatched_codes.length === 1 ? '' : 's'}: ${data.unmatched_codes.slice(0, 3).join(', ')}${data.unmatched_codes.length > 3 ? '…' : ''}`);
+            }
+            if (parts.length === 0) parts.push('Nothing to import.');
+
+            if (data.created + data.updated > 0) toast.success(parts.join(' • '));
+            else toast.error(parts.join(' • '));
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Bulk import failed.');
+        }
+    };
+
+
     const addLcc = (item: LccSearchResult) => {
         if (formLccs.some((l) => l.labour_cost_code_id === item.id)) {
             toast.error('Labour cost code already added.');
@@ -848,7 +919,7 @@ export function ConditionManager({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-row gap-0 p-0 [&_input]:!text-xs [&_textarea]:!text-xs [&_[data-slot=input]]:!text-xs [&_label]:!text-xs [&_[data-slot=label]]:!text-xs">
+            <DialogContent className="sm:max-w-3xl h-[80vh] max-h-[90vh] flex flex-row gap-0 p-0 [&_input]:!text-xs [&_textarea]:!text-xs [&_[data-slot=input]]:!text-xs [&_label]:!text-xs [&_[data-slot=label]]:!text-xs">
                 {/* Sidebar — full height column */}
                 <div className="w-64 shrink-0 flex flex-col border-r min-h-0">
                         <div className="flex-1 min-h-0 overflow-y-auto p-1">
@@ -910,10 +981,27 @@ export function ConditionManager({
                 <div className="flex-1 min-h-0 flex flex-col">
                     <DialogHeader className="pl-5 pr-12 py-3 flex-row items-center justify-between space-y-0 shrink-0">
                         <DialogTitle className="text-base">Conditions</DialogTitle>
-                        <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleCreate}>
-                            <Plus className="h-3 w-3" />
-                            New
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <a href={`/locations/${locationId}/takeoff-conditions/bulk-export`}>
+                                        <Button variant="outline" size="sm" className="h-7 w-7 p-0" aria-label="Export">
+                                            <Download className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </a>
+                                </TooltipTrigger>
+                                <TooltipContent>Export</TooltipContent>
+                            </Tooltip>
+                            <CsvImporterDialog
+                                iconOnly
+                                requiredColumns={['condition_id', 'condition_name', 'measurement_type', 'kind', 'code', 'unit_rate', 'production_rate']}
+                                onSubmit={handleBulkImport}
+                            />
+                            <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleCreate}>
+                                <Plus className="h-3 w-3" />
+                                New
+                            </Button>
+                        </div>
                     </DialogHeader>
                     <div className="flex-1 min-h-0 overflow-y-auto p-5">
                         {showForm ? (
