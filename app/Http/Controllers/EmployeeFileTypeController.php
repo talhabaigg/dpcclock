@@ -16,7 +16,10 @@ class EmployeeFileTypeController extends Controller
     {
         $fileTypes = EmployeeFileType::orderBy('sort_order')->orderBy('name')->get();
         $worktypes = Worktype::orderBy('name')->get(['id', 'name']);
-        $locations = Location::whereNull('eh_parent_id')->orderBy('name')->get(['id', 'name']);
+        $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
+        $locations = Location::whereIn('eh_parent_id', $jobsEhIds)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $employmentAgreements = Employee::query()
             ->whereNotNull('employment_agreement')
             ->where('employment_agreement', '!=', '')
