@@ -18,8 +18,6 @@ class TakeoffConditionController extends Controller
     {
         $conditions = TakeoffCondition::where('location_id', $location->id)
             ->with([
-                'materials.materialItem',
-                'payRateTemplate',
                 'costCodes.costCode',
                 'boqItems.costCode',
                 'boqItems.labourCostCode',
@@ -32,7 +30,6 @@ class TakeoffConditionController extends Controller
             ->orderBy('name')
             ->get();
 
-        $this->appendEffectiveUnitCosts($conditions, $location->id);
         $this->appendLineItemEffectiveUnitCosts($conditions, $location->id);
 
         return response()->json(['conditions' => $conditions]);
@@ -55,11 +52,6 @@ class TakeoffConditionController extends Controller
             'height' => $validated['height'] ?? null,
             'thickness' => $validated['thickness'] ?? null,
             'pricing_method' => $pricingMethod,
-            'labour_unit_rate' => null, // legacy column, no longer written
-            'labour_rate_source' => $pricingMethod === 'build_up' ? ($validated['labour_rate_source'] ?? 'manual') : 'manual',
-            'manual_labour_rate' => $pricingMethod === 'build_up' ? ($validated['manual_labour_rate'] ?? null) : null,
-            'pay_rate_template_id' => $pricingMethod === 'build_up' ? ($validated['pay_rate_template_id'] ?? null) : null,
-            'production_rate' => $pricingMethod === 'build_up' ? ($validated['production_rate'] ?? null) : null,
         ]);
 
         if ($pricingMethod === 'unit_rate') {
@@ -67,31 +59,9 @@ class TakeoffConditionController extends Controller
             $this->syncLabourCodesFromBoqItems($condition);
         }
 
-        if ($pricingMethod === 'build_up' && ! empty($validated['materials'])) {
-            foreach ($validated['materials'] as $mat) {
-                $condition->materials()->create([
-                    'material_item_id' => $mat['material_item_id'],
-                    'qty_per_unit' => $mat['qty_per_unit'],
-                    'waste_percentage' => $mat['waste_percentage'] ?? 0,
-                ]);
-            }
-        }
-
-        // Standalone Labour Cost Codes payload only applies to build_up.
-        // For unit_rate it's auto-synced from boq_items (kind='labour') above.
-        // For detailed it's auto-synced from line items in batchLineItems().
-        if ($pricingMethod === 'build_up' && ! empty($validated['labour_cost_codes'])) {
-            foreach ($validated['labour_cost_codes'] as $lcc) {
-                $condition->conditionLabourCodes()->create([
-                    'labour_cost_code_id' => $lcc['labour_cost_code_id'],
-                    'production_rate' => $lcc['production_rate'] ?? null,
-                    'hourly_rate' => $lcc['hourly_rate'] ?? null,
-                ]);
-            }
-        }
+        // Detailed: line items are saved via batchLineItems(); LCCs auto-sync from there.
 
         $condition->load($this->withRelations());
-        $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
         $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -105,30 +75,14 @@ class TakeoffConditionController extends Controller
 
         $validated = $request->validate($this->validationRules(true));
 
-        $materialData = $validated['materials'] ?? null;
         $boqItemData = array_key_exists('boq_items', $validated) ? $validated['boq_items'] : null;
-        $labourCostCodeData = $validated['labour_cost_codes'] ?? null;
-        unset($validated['materials'], $validated['boq_items'], $validated['labour_cost_codes']);
+        unset($validated['boq_items']);
 
         $pricingMethod = $validated['pricing_method'] ?? $condition->pricing_method;
-
-        // Clean up irrelevant scalar fields when switching pricing method.
-        // labour_unit_rate is legacy and never written; it's only read for backfill.
-        if ($pricingMethod === 'unit_rate') {
-            $validated['manual_labour_rate'] = null;
-            $validated['pay_rate_template_id'] = null;
-            $validated['production_rate'] = null;
-        } elseif ($pricingMethod === 'detailed') {
-            $validated['manual_labour_rate'] = null;
-            $validated['pay_rate_template_id'] = null;
-            $validated['production_rate'] = null;
-        }
 
         $condition->update($validated);
 
         if ($pricingMethod === 'unit_rate') {
-            // Drop other-method baggage so the condition reads cleanly.
-            $condition->materials()->delete();
             $condition->lineItems()->delete();
             $condition->costCodes()->delete(); // legacy table — fully replaced by boq_items
 
@@ -138,44 +92,13 @@ class TakeoffConditionController extends Controller
             }
         }
 
-        if ($pricingMethod === 'build_up') {
-            $condition->boqItems()->delete();
-            $condition->costCodes()->delete();
-            $condition->lineItems()->delete();
-
-            if ($materialData !== null) {
-                $condition->materials()->delete();
-                foreach ($materialData as $mat) {
-                    $condition->materials()->create([
-                        'material_item_id' => $mat['material_item_id'],
-                        'qty_per_unit' => $mat['qty_per_unit'],
-                        'waste_percentage' => $mat['waste_percentage'] ?? 0,
-                    ]);
-                }
-            }
-        }
-
         if ($pricingMethod === 'detailed') {
-            $condition->materials()->delete();
             $condition->costCodes()->delete();
             $condition->boqItems()->delete();
-        }
-
-        // Standalone production-tracking LCCs only apply to build_up.
-        // unit_rate auto-syncs from boq_items above; detailed auto-syncs in batchLineItems.
-        if ($pricingMethod === 'build_up' && $labourCostCodeData !== null) {
-            $condition->conditionLabourCodes()->delete();
-            foreach ($labourCostCodeData as $lcc) {
-                $condition->conditionLabourCodes()->create([
-                    'labour_cost_code_id' => $lcc['labour_cost_code_id'],
-                    'production_rate' => $lcc['production_rate'] ?? null,
-                    'hourly_rate' => $lcc['hourly_rate'] ?? null,
-                ]);
-            }
+            // Line items + condition_labour_codes are managed via batchLineItems().
         }
 
         $condition->load($this->withRelations());
-        $this->appendEffectiveUnitCosts(collect([$condition]), $location->id);
         $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json($condition);
@@ -198,9 +121,9 @@ class TakeoffConditionController extends Controller
             'description' => 'nullable|string|max:2000',
             'height' => 'nullable|numeric|min:0.0001|max:100',
             'thickness' => 'nullable|numeric|min:0.0001|max:100',
-            'pricing_method' => $sometimes.'required|string|in:unit_rate,build_up,detailed',
+            'pricing_method' => $sometimes.'required|string|in:unit_rate,detailed',
 
-            // BoQ items (replaces legacy `cost_codes` + `labour_unit_rate` for unit_rate)
+            // BoQ items (unit_rate)
             'boq_items' => 'nullable|array',
             'boq_items.*.kind' => 'required|string|in:labour,material',
             'boq_items.*.cost_code_id' => 'nullable|integer|exists:cost_codes,id',
@@ -209,22 +132,6 @@ class TakeoffConditionController extends Controller
             'boq_items.*.production_rate' => 'nullable|numeric|min:0',
             'boq_items.*.notes' => 'nullable|string|max:500',
             'boq_items.*.sort_order' => 'nullable|integer|min:0',
-
-            // Build-Up fields
-            'labour_rate_source' => 'sometimes|required|string|in:manual,template',
-            'manual_labour_rate' => 'nullable|numeric|min:0',
-            'pay_rate_template_id' => 'nullable|integer|exists:location_pay_rate_templates,id',
-            'production_rate' => 'nullable|numeric|min:0',
-            'materials' => 'nullable|array',
-            'materials.*.material_item_id' => 'required|integer|exists:material_items,id',
-            'materials.*.qty_per_unit' => 'required|numeric|min:0.0001',
-            'materials.*.waste_percentage' => 'nullable|numeric|min:0|max:100',
-
-            // Standalone labour cost codes (build_up production tracking only)
-            'labour_cost_codes' => 'nullable|array',
-            'labour_cost_codes.*.labour_cost_code_id' => 'required|integer|exists:labour_cost_codes,id',
-            'labour_cost_codes.*.production_rate' => 'nullable|numeric|min:0',
-            'labour_cost_codes.*.hourly_rate' => 'nullable|numeric|min:0',
         ];
     }
 
@@ -234,8 +141,6 @@ class TakeoffConditionController extends Controller
     private function withRelations(): array
     {
         return [
-            'materials.materialItem',
-            'payRateTemplate',
             'costCodes.costCode',
             'boqItems.costCode',
             'boqItems.labourCostCode',
@@ -813,41 +718,6 @@ class TakeoffConditionController extends Controller
         $this->appendLineItemEffectiveUnitCosts(collect([$condition]), $location->id);
 
         return response()->json(['line_items' => $condition->lineItems]);
-    }
-
-    /**
-     * Append effective_unit_cost to each condition material,
-     * using location-specific pricing overrides when available.
-     */
-    private function appendEffectiveUnitCosts($conditions, int $locationId): void
-    {
-        // Collect all material_item_ids across all conditions
-        $materialItemIds = $conditions->flatMap(function ($c) {
-            return $c->materials->pluck('material_item_id');
-        })->unique()->values()->all();
-
-        if (empty($materialItemIds)) {
-            return;
-        }
-
-        // Batch-load location-specific pricing
-        $overrides = \Illuminate\Support\Facades\DB::table('location_item_pricing')
-            ->where('location_id', $locationId)
-            ->whereIn('material_item_id', $materialItemIds)
-            ->pluck('unit_cost_override', 'material_item_id');
-
-        // Append effective_unit_cost to each material's materialItem
-        foreach ($conditions as $condition) {
-            foreach ($condition->materials as $mat) {
-                $materialItem = $mat->materialItem;
-                if (! $materialItem) {
-                    continue;
-                }
-                $materialItem->effective_unit_cost = isset($overrides[$materialItem->id])
-                    ? (float) $overrides[$materialItem->id]
-                    : (float) $materialItem->unit_cost;
-            }
-        }
     }
 
     /**

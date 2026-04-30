@@ -330,7 +330,7 @@ export function VariationPanel({ drawingId, locationId, conditions }: VariationP
                         <div className="rounded border bg-muted/30 px-2 py-1.5 text-[10px]">
                             <div className="font-medium">{selectedCondition.name}</div>
                             <div className="mt-0.5 text-muted-foreground">
-                                {selectedCondition.pricing_method === 'unit_rate' ? 'Unit Rate' : 'Build-Up'}
+                                {selectedCondition.pricing_method === 'unit_rate' ? 'Unit Rate' : 'Detailed'}
                                 {' | '}
                                 {selectedCondition.type}
                                 {selectedCondition.height ? ` | H: ${selectedCondition.height}m` : ''}

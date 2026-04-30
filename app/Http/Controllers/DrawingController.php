@@ -345,7 +345,6 @@ class DrawingController extends Controller
                 'boqItems.labourCostCode',
                 'lineItems' => fn ($q) => $q->where('entry_type', 'labour'),
                 'lineItems.labourCostCode',
-                'payRateTemplate',
             ])
             ->get();
 
@@ -400,32 +399,6 @@ class DrawingController extends Controller
                     $hr = $li->hourly_rate ?? 0;
                     $pr = $li->production_rate ?? 0;
                     if ($hr <= 0 || $pr <= 0) {
-                        continue;
-                    }
-                    $costPerUnit = $hr / $pr;
-                    $total = $netQty * $costPerUnit;
-                    $hours = $netQty / $pr;
-
-                    $labourRows[] = [
-                        'code' => $lcc->code,
-                        'name' => $lcc->name,
-                        'qty' => round($netQty, 2),
-                        'unit' => $condUnit,
-                        'cost' => round($costPerUnit, 2),
-                        'qty_per_hr' => round($pr, 2),
-                        'hours' => round($hours, 2),
-                        'total_cost' => round($total, 2),
-                    ];
-                }
-            } elseif ($condition->pricing_method === 'build_up') {
-                foreach ($condition->conditionLabourCodes as $clc) {
-                    $lcc = $clc->labourCostCode;
-                    if (! $lcc) {
-                        continue;
-                    }
-                    $pr = $clc->effective_production_rate ?? 0;
-                    $hr = $clc->effective_hourly_rate ?? 0;
-                    if ($pr <= 0 || $hr <= 0) {
                         continue;
                     }
                     $costPerUnit = $hr / $pr;
@@ -503,8 +476,6 @@ class DrawingController extends Controller
                 'lineItems' => fn ($q) => $q->where('entry_type', 'material'),
                 'lineItems.materialItem.costCode',
                 'lineItems.materialItem.supplier',
-                'materials.materialItem.costCode',
-                'materials.materialItem.supplier',
             ])
             ->get();
 
@@ -597,33 +568,6 @@ class DrawingController extends Controller
                         'units' => round($unitCost > 0 ? $total / $unitCost : 0, 2),
                         'price_updated' => $mat?->updated_at?->format('d/m/Y'),
                         'supplier' => $mat?->supplier?->name,
-                    ];
-                }
-            } elseif ($condition->pricing_method === 'build_up') {
-                foreach ($condition->materials as $cm) {
-                    $mat = $cm->materialItem;
-                    if (! $mat) {
-                        continue;
-                    }
-
-                    $waste = $cm->waste_percentage ?? 0;
-                    $effectiveQty = $cm->qty_per_unit * (1 + $waste / 100) * $netQty;
-                    $unitCost = (float) ($mat->unit_cost ?? 0);
-                    $total = $effectiveQty * $unitCost;
-
-                    $materialRows[] = [
-                        'item_code' => $mat->code,
-                        'cost_code' => $mat->costCode?->code ?? '',
-                        'description' => $mat->description ?? '',
-                        'qty' => round($effectiveQty, 2),
-                        'uom' => $condUnit,
-                        'mat_cost' => round($unitCost, 2),
-                        'per' => '1 '.$condUnit,
-                        'total' => round($total, 2),
-                        'waste_pct' => $waste,
-                        'units' => round($unitCost > 0 ? $total / $unitCost : 0, 2),
-                        'price_updated' => $mat->updated_at?->format('d/m/Y'),
-                        'supplier' => $mat->supplier?->name,
                     ];
                 }
             }

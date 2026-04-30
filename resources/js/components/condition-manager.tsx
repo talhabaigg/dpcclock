@@ -87,40 +87,12 @@ export type TakeoffCondition = {
     description: string | null;
     height: number | null;
     thickness: number | null;
-    pricing_method: 'unit_rate' | 'build_up' | 'detailed';
+    pricing_method: 'unit_rate' | 'detailed';
     labour_unit_rate: number | null;
     cost_codes: ConditionCostCode[];
     boq_items?: ConditionBoqItem[];
-    labour_rate_source: 'manual' | 'template';
-    manual_labour_rate: number | null;
-    pay_rate_template_id: number | null;
-    pay_rate_template?: { id: number; custom_label: string | null; hourly_rate: string | number | null; pay_rate_template?: { name: string } } | null;
-    production_rate: number | null;
-    materials: ConditionMaterial[];
     condition_labour_codes?: ConditionLabourCodeItem[];
     line_items?: import('./condition-detail-grid').ConditionLineItem[];
-};
-
-export type ConditionMaterial = {
-    id?: number;
-    material_item_id: number;
-    qty_per_unit: number;
-    waste_percentage: number;
-    material_item?: {
-        id: number;
-        code: string;
-        description: string;
-        unit_cost: number | string;
-        effective_unit_cost?: number;
-    };
-};
-
-type MaterialSearchResult = {
-    id: number;
-    code: string;
-    description: string;
-    unit_cost: number | string;
-    effective_unit_cost: number;
 };
 
 type CostCodeSearchResult = {
@@ -136,13 +108,6 @@ type LccSearchResult = {
     unit: string;
     default_production_rate: number | null;
     default_hourly_rate: number | null;
-};
-
-type PayRateTemplate = {
-    id: number;
-    custom_label: string | null;
-    hourly_rate: string | number | null;
-    pay_rate_template?: { name: string };
 };
 
 type ConditionManagerProps = {
@@ -192,7 +157,7 @@ export function ConditionManager({
     const [formOpacity, setFormOpacity] = useState(50);
     const [formDescription, setFormDescription] = useState('');
     const [formHeight, setFormHeight] = useState('');
-    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'build_up' | 'detailed'>('unit_rate');
+    const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'detailed'>('unit_rate');
 
     // BoQ form state — unified items list, distinguished by `kind`.
     // Material rows reference cost_code_id; labour rows reference labour_cost_code_id.
@@ -208,25 +173,6 @@ export function ConditionManager({
         legacy_unmapped: boolean;
     };
     const [formBoqItems, setFormBoqItems] = useState<BoqFormItem[]>([]);
-
-    // Build-Up form state
-    const [formLabourSource, setFormLabourSource] = useState<'manual' | 'template'>('manual');
-    const [formManualRate, setFormManualRate] = useState('');
-    const [formTemplateId, setFormTemplateId] = useState<string>('');
-    const [formProductionRate, setFormProductionRate] = useState('');
-    const [formMaterials, setFormMaterials] = useState<Array<{
-        material_item_id: number;
-        code: string;
-        description: string;
-        unit_cost: number;
-        qty_per_unit: string;
-        waste_percentage: string;
-    }>>([]);
-
-    // Material search
-    const [materialSearch, setMaterialSearch] = useState('');
-    const [materialResults, setMaterialResults] = useState<MaterialSearchResult[]>([]);
-    const [searchingMaterials, setSearchingMaterials] = useState(false);
 
     // Cost code search
     const [costCodeSearch, setCostCodeSearch] = useState('');
@@ -252,9 +198,6 @@ export function ConditionManager({
     const [newLccHourlyRate, setNewLccHourlyRate] = useState('');
     const [creatingLcc, setCreatingLcc] = useState(false);
 
-    // Pay rate templates
-    const [payRateTemplates, setPayRateTemplates] = useState<PayRateTemplate[]>([]);
-
     // All labour cost codes for this location (used by the combobox)
     const [allLccs, setAllLccs] = useState<LccSearchResult[]>([]);
 
@@ -268,16 +211,6 @@ export function ConditionManager({
             .then((res) => res.json())
             .then((data) => {
                 onConditionsChange(data.conditions || []);
-            })
-            .catch(() => {});
-
-        fetch(`/api/locations/${locationId}/pay-rate-templates`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.ok ? res.json() : { templates: [] })
-            .then((data) => {
-                setPayRateTemplates(data.templates || []);
             })
             .catch(() => {});
 
@@ -377,13 +310,6 @@ export function ConditionManager({
         setFormBoqItems([]);
         setCostCodeSearch('');
         setCostCodeResults([]);
-        setFormLabourSource('manual');
-        setFormManualRate('');
-        setFormTemplateId('');
-        setFormProductionRate('');
-        setFormMaterials([]);
-        setMaterialSearch('');
-        setMaterialResults([]);
         setNewTypeName('');
         setFormLccs([]);
         setLccSearch('');
@@ -402,7 +328,7 @@ export function ConditionManager({
         setFormOpacity(c.opacity ?? 50);
         setFormDescription(c.description || '');
         setFormHeight(c.height?.toString() || '');
-        setFormPricingMethod(c.pricing_method || 'build_up');
+        setFormPricingMethod(c.pricing_method || 'unit_rate');
 
         // Load BoQ items. Falls back to translating the legacy shape (cost_codes + labour_unit_rate)
         // for any condition that hasn't been migrated into boq_items yet.
@@ -444,20 +370,6 @@ export function ConditionManager({
             setFormBoqItems(boqFromServer);
         }
 
-        setFormLabourSource(c.labour_rate_source || 'manual');
-        setFormManualRate(c.manual_labour_rate?.toString() || '');
-        setFormTemplateId(c.pay_rate_template_id?.toString() || '');
-        setFormProductionRate(c.production_rate?.toString() || '');
-        setFormMaterials(
-            (c.materials || []).map((m) => ({
-                material_item_id: m.material_item_id,
-                code: m.material_item?.code || '',
-                description: m.material_item?.description || '',
-                unit_cost: m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0)),
-                qty_per_unit: m.qty_per_unit.toString(),
-                waste_percentage: m.waste_percentage.toString(),
-            }))
-        );
         setFormLccs(
             (c.condition_labour_codes || []).map((clc) => ({
                 labour_cost_code_id: clc.labour_cost_code_id,
@@ -522,27 +434,8 @@ export function ConditionManager({
                     production_rate: it.kind === 'labour' && it.production_rate ? parseFloat(it.production_rate) : null,
                     sort_order: idx,
                 }));
-                payload.labour_rate_source = 'manual';
-                payload.materials = [];
-            } else {
-                payload.labour_rate_source = formLabourSource;
-                payload.manual_labour_rate = formLabourSource === 'manual' && formManualRate ? parseFloat(formManualRate) : null;
-                payload.pay_rate_template_id = formLabourSource === 'template' && formTemplateId ? parseInt(formTemplateId) : null;
-                payload.production_rate = formProductionRate ? parseFloat(formProductionRate) : null;
-                payload.materials = formMaterials.map((m) => ({
-                    material_item_id: m.material_item_id,
-                    qty_per_unit: parseFloat(m.qty_per_unit) || 0,
-                    waste_percentage: parseFloat(m.waste_percentage) || 0,
-                }));
-                payload.cost_codes = [];
             }
-
-            // Labour Cost Codes (independent of pricing method)
-            payload.labour_cost_codes = formLccs.map((l) => ({
-                labour_cost_code_id: l.labour_cost_code_id,
-                production_rate: l.production_rate ? parseFloat(l.production_rate) : null,
-                hourly_rate: l.hourly_rate ? parseFloat(l.hourly_rate) : null,
-            }));
+            // Detailed: line items are saved via the dedicated grid endpoint, not here.
 
             const isUpdating = editing && selectedId;
             const url = isUpdating
@@ -613,26 +506,6 @@ export function ConditionManager({
         }
     };
 
-    // Material search
-    useEffect(() => {
-        if (!materialSearch.trim() || materialSearch.length < 2) {
-            setMaterialResults([]);
-            return;
-        }
-        const timeout = setTimeout(() => {
-            setSearchingMaterials(true);
-            fetch(`/locations/${locationId}/material-items/search?q=${encodeURIComponent(materialSearch)}`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            })
-                .then((res) => res.json())
-                .then((data) => setMaterialResults(data.items || []))
-                .catch(() => setMaterialResults([]))
-                .finally(() => setSearchingMaterials(false));
-        }, 300);
-        return () => clearTimeout(timeout);
-    }, [materialSearch, locationId]);
-
     // Cost code search — preloads on dialog open so the picker has a starter list,
     // then re-fetches as the estimator types (debounced).
     // Scoped to direct-cost codes (leading numeric segment 20–98) to keep the BoQ
@@ -653,34 +526,6 @@ export function ConditionManager({
         }, delay);
         return () => clearTimeout(timeout);
     }, [costCodeSearch, locationId, open]);
-
-    const addMaterial = (item: MaterialSearchResult) => {
-        if (formMaterials.some((m) => m.material_item_id === item.id)) {
-            toast.error('Material already added.');
-            return;
-        }
-        setFormMaterials((prev) => [
-            ...prev,
-            {
-                material_item_id: item.id,
-                code: item.code,
-                description: item.description,
-                unit_cost: item.effective_unit_cost,
-                qty_per_unit: '1',
-                waste_percentage: '0',
-            },
-        ]);
-        setMaterialSearch('');
-        setMaterialResults([]);
-    };
-
-    const removeMaterial = (index: number) => {
-        setFormMaterials((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    const updateMaterial = (index: number, field: 'qty_per_unit' | 'waste_percentage', value: string) => {
-        setFormMaterials((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
-    };
 
     // Add a material cost code to the BoQ items list.
     const addBoqMaterial = (item: CostCodeSearchResult) => {
@@ -859,7 +704,7 @@ export function ConditionManager({
      * Create a new labour cost code in this location's library and add it to the
      * appropriate destination depending on which pricing method is active:
      * - BoQ (unit_rate): append as a labour BoQ item
-     * - Build-up: append to the standalone production-tracking list (formLccs)
+     * - Detailed: append to the standalone production-tracking list (formLccs)
      */
     const handleCreateLcc = async () => {
         if (!newLccCode.trim() || !newLccName.trim()) {
@@ -1042,10 +887,7 @@ export function ConditionManager({
                                         <TabsList className="w-full">
                                             <TabsTrigger value="unit_rate" className="flex-1 text-xs">Bill of Qty</TabsTrigger>
                                             {!import.meta.env.PROD && (
-                                                <>
-                                                    <TabsTrigger value="build_up" className="flex-1 text-xs">Build-up</TabsTrigger>
-                                                    <TabsTrigger value="detailed" className="flex-1 text-xs">Detailed</TabsTrigger>
-                                                </>
+                                                <TabsTrigger value="detailed" className="flex-1 text-xs">Detailed</TabsTrigger>
                                             )}
                                         </TabsList>
                                     </Tabs>
@@ -1056,7 +898,7 @@ export function ConditionManager({
                                     <div className="rounded-md bg-muted/40 px-4 py-4 text-xs text-muted-foreground">
                                         Save the condition first. You'll then be able to add line items — grouped into sections, with layers and per-line costs — from the detail grid.
                                     </div>
-                                ) : formPricingMethod === 'unit_rate' ? (
+                                ) : (
                                     (() => {
                                         const labourItems = formBoqItems
                                             .map((it, idx) => ({ it, idx }))
@@ -1446,153 +1288,9 @@ export function ConditionManager({
                                             </div>
                                         );
                                     })()
-                                ) : (
-                                    <div className="space-y-5">
-                                        <div className="space-y-3">
-                                            <Label>Labour</Label>
-                                            <Tabs value={formLabourSource} onValueChange={(v) => setFormLabourSource(v as 'manual' | 'template')}>
-                                                <TabsList>
-                                                    <TabsTrigger value="manual" className="text-xs">Manual rate</TabsTrigger>
-                                                    <TabsTrigger value="template" className="text-xs">Pay rate template</TabsTrigger>
-                                                </TabsList>
-                                            </Tabs>
-
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                {formLabourSource === 'manual' ? (
-                                                    <div className="space-y-1.5">
-                                                        <Label className="font-normal text-muted-foreground">Hourly rate</Label>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                                                            <Input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                value={formManualRate}
-                                                                onChange={(e) => setFormManualRate(e.target.value)}
-                                                                placeholder="85.00"
-                                                                className="pl-6 pr-12"
-                                                            />
-                                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">/ hr</span>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-1.5">
-                                                        <Label className="font-normal text-muted-foreground">Template</Label>
-                                                        <Select value={formTemplateId} onValueChange={setFormTemplateId}>
-                                                            <SelectTrigger><SelectValue placeholder="Choose a template…" /></SelectTrigger>
-                                                            <SelectContent className="text-xs">
-                                                                {payRateTemplates.map((t) => (
-                                                                    <SelectItem key={t.id} value={t.id.toString()}>
-                                                                        {t.custom_label || t.pay_rate_template?.name || `Template #${t.id}`}
-                                                                        {t.hourly_rate ? ` — $${parseFloat(String(t.hourly_rate)).toFixed(2)}/hr` : ''}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                )}
-                                                <div className="space-y-1.5">
-                                                    <Label className="font-normal text-muted-foreground">Production rate</Label>
-                                                    <div className="relative">
-                                                        <Input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            value={formProductionRate}
-                                                            onChange={(e) => setFormProductionRate(e.target.value)}
-                                                            placeholder="5.0"
-                                                            className="pr-24"
-                                                        />
-                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{formUnit} / hr</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>Materials</Label>
-                                            <div className="relative">
-                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                                                <Input
-                                                    value={materialSearch}
-                                                    onChange={(e) => setMaterialSearch(e.target.value)}
-                                                    placeholder="Search materials to add…"
-                                                    className="pl-8"
-                                                />
-                                                {searchingMaterials && (
-                                                    <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                                                )}
-                                                {materialResults.length > 0 && (
-                                                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
-                                                        {materialResults.map((item) => (
-                                                            <button
-                                                                key={item.id}
-                                                                type="button"
-                                                                className="flex w-full items-start gap-3 px-3 py-2 text-xs hover:bg-accent text-left"
-                                                                onClick={() => addMaterial(item)}
-                                                            >
-                                                                <div className="min-w-0 flex-1">
-                                                                    <div className="truncate">{item.description}</div>
-                                                                    <div className="font-mono text-xs text-muted-foreground">{item.code}</div>
-                                                                </div>
-                                                                <span className="shrink-0 tabular-nums text-muted-foreground">${item.effective_unit_cost.toFixed(2)} each</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {formMaterials.length > 0 ? (
-                                                <div className="divide-y">
-                                                    {formMaterials.map((m, idx) => (
-                                                        <div key={idx} className="py-2.5 space-y-1.5">
-                                                            <div className="flex items-start gap-3">
-                                                                <div className="min-w-0 flex-1">
-                                                                    <div className="text-xs truncate">{m.description}</div>
-                                                                    <div className="font-mono text-xs text-muted-foreground mt-0.5">{m.code}</div>
-                                                                </div>
-                                                                <div className="text-xs tabular-nums text-muted-foreground shrink-0 pt-0.5">${m.unit_cost.toFixed(2)} each</div>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 -mt-0.5 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeMaterial(idx)}>
-                                                                    <X className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 pl-0">
-                                                                <Input
-                                                                    type="number"
-                                                                    step="0.01"
-                                                                    min="0"
-                                                                    value={m.qty_per_unit}
-                                                                    onChange={(e) => updateMaterial(idx, 'qty_per_unit', e.target.value)}
-                                                                    className="h-8 w-20 text-right tabular-nums"
-                                                                    aria-label="Quantity per unit"
-                                                                />
-                                                                <span className="text-xs text-muted-foreground">per {formUnit}</span>
-                                                                <span className="text-xs text-muted-foreground mx-1">·</span>
-                                                                <div className="relative">
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        max="100"
-                                                                        value={m.waste_percentage}
-                                                                        onChange={(e) => updateMaterial(idx, 'waste_percentage', e.target.value)}
-                                                                        className="h-8 w-20 pr-6 text-right tabular-nums"
-                                                                        aria-label="Waste percentage"
-                                                                    />
-                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                                                                </div>
-                                                                <span className="text-xs text-muted-foreground">waste</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-muted-foreground">Search above to add materials.</p>
-                                            )}
-                                        </div>
-                                    </div>
                                 )}
 
-                                {formPricingMethod !== 'unit_rate' && (
+                                {formPricingMethod === 'detailed' && (
                                     <>
                                         <Separator />
 
@@ -1986,7 +1684,7 @@ export function ConditionManager({
                             (() => {
                                 const c = selectedCondition;
                                 const unit = c.type === 'count' ? 'each' : (c.type === 'area' || (c.type === 'linear' && c.height)) ? 'm²' : 'lm';
-                                const methodLabel = c.pricing_method === 'unit_rate' ? 'Bill of Qty' : c.pricing_method === 'detailed' ? 'Detailed' : 'Build-up';
+                                const methodLabel = c.pricing_method === 'detailed' ? 'Detailed' : 'Bill of Qty';
                                 const fmt = (n: number | string | null | undefined, d = 2) => n == null ? '—' : Number(n).toFixed(d);
                                 const specRows: Array<[string, React.ReactNode]> = [
                                     ['Measurement', STYLE_LABELS[c.type]],
@@ -2124,57 +1822,14 @@ export function ConditionManager({
                                                 </>
                                             );
                                         })() : (
-                                            <>
-                                                <div className="space-y-2">
-                                                    <div className="text-xs font-medium">Labour</div>
-                                                    <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-                                                        <dt className="text-muted-foreground">Rate type</dt>
-                                                        <dd>{c.labour_rate_source === 'manual' ? 'Manual hourly rate' : 'Pay rate template'}</dd>
-
-                                                        <dt className="text-muted-foreground">Hourly rate</dt>
-                                                        <dd className="tabular-nums">
-                                                            {c.labour_rate_source === 'manual'
-                                                                ? c.manual_labour_rate != null ? `$${fmt(c.manual_labour_rate)} / hr` : '—'
-                                                                : c.pay_rate_template?.hourly_rate != null ? `$${fmt(c.pay_rate_template.hourly_rate)} / hr` : '—'}
-                                                        </dd>
-
-                                                        <dt className="text-muted-foreground">Production rate</dt>
-                                                        <dd className="tabular-nums">
-                                                            {c.production_rate != null
-                                                                ? <>{c.production_rate} <span className="text-muted-foreground">{unit} per hour</span></>
-                                                                : '—'}
-                                                        </dd>
-                                                    </dl>
+                                            <div className="space-y-2">
+                                                <div className="text-xs font-medium">
+                                                    Line items <span className="text-muted-foreground font-normal">· {(c.line_items || []).length}</span>
                                                 </div>
-
-                                                <div className="space-y-2">
-                                                    <div className="text-xs font-medium">
-                                                        Materials <span className="text-muted-foreground font-normal">· {c.materials.length}</span>
-                                                    </div>
-                                                    {c.materials.length > 0 ? (
-                                                        <div className="divide-y">
-                                                            {c.materials.map((m, idx) => {
-                                                                const unitCost = m.material_item?.effective_unit_cost ?? parseFloat(String(m.material_item?.unit_cost || 0));
-                                                                return (
-                                                                    <div key={idx} className="py-2 text-xs">
-                                                                        <div className="flex items-baseline gap-3">
-                                                                            <span className="min-w-0 flex-1 truncate">{m.material_item?.description}</span>
-                                                                            <span className="shrink-0 tabular-nums text-muted-foreground">
-                                                                                {m.qty_per_unit} per {unit}
-                                                                                {m.waste_percentage > 0 && <> · +{m.waste_percentage}% waste</>}
-                                                                                {' '}· ${fmt(unitCost)} each
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="font-mono text-xs text-muted-foreground mt-0.5">{m.material_item?.code}</div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-xs text-muted-foreground">No materials added.</p>
-                                                    )}
-                                                </div>
-                                            </>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Use the detail grid to add or edit line items.
+                                                </p>
+                                            </div>
                                         )}
 
                                         {(c.condition_labour_codes || []).length > 0 && (

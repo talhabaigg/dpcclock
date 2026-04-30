@@ -65,8 +65,8 @@ Location (= Project)
   |                        pivot: variation_ratio, prelim_type (LAB/MAT)
   |
   |-- has many --> TakeoffCondition
-                    |-- has many --> TakeoffConditionCostCode (unit_rate method)
-                    |-- has many --> TakeoffConditionMaterial (build_up method)
+                    |-- has many --> TakeoffConditionBoqItem (unit_rate method)
+                    |-- has many --> ConditionLineItem (detailed method)
                     |-- has many --> ConditionLabourCode
                     |-- belongs to --> ConditionType
 ```
@@ -140,22 +140,16 @@ Project-scoped pricing template. Defines how to compute cost for a measured quan
 | `location_id` | FK | Project scope |
 | `name` | string | e.g. "External Wall Cladding" |
 | `type` | enum | `linear`, `area`, `count` |
-| `pricing_method` | enum | `unit_rate` or `build_up` |
+| `pricing_method` | enum | `unit_rate` or `detailed` |
 | `height` | decimal nullable | For linear: converts LM to m2 (multiplier) |
-| `labour_unit_rate` | decimal nullable | Unit rate method: $/unit for labour |
-| `labour_rate_source` | enum | Build-up: `manual` or `template` |
-| `manual_labour_rate` | decimal nullable | Build-up, manual: hourly rate |
-| `production_rate` | decimal nullable | Build-up: units/hour |
-| `pay_rate_template_id` | FK nullable | Build-up, template: hourly rate source |
 | `color` | string(7) | Hex colour for map overlay |
-| `pattern` | enum | `solid`, `dashed`, `dotted`, `dashdot` |
 | `condition_type_id` | FK nullable | Category/type grouping |
 
 **Sub-tables:**
 
-- **`takeoff_condition_cost_codes`** (unit_rate method): `{condition_id, cost_code_id, unit_rate}` - maps material cost codes to per-unit rates
-- **`takeoff_condition_materials`** (build_up method): `{condition_id, material_item_id, qty_per_unit, waste_percentage}` - material consumption per unit
-- **`condition_labour_codes`**: `{condition_id, labour_cost_code_id, production_rate, hourly_rate}` - labour code overrides
+- **`takeoff_condition_boq_items`** (unit_rate method): `{condition_id, kind, cost_code_id|labour_cost_code_id, unit_rate, production_rate}` - per-unit BoQ lines
+- **`condition_line_items`** (detailed method): per-line material/labour rows with OC spacing, layers, waste, pack size, hourly + production rate
+- **`condition_labour_codes`**: `{condition_id, labour_cost_code_id, production_rate, hourly_rate}` - auto-synced from BoQ/line items for production tracking
 
 ### location_cost_codes Pivot
 
@@ -205,28 +199,12 @@ For each cost code on the condition:
 - material_base = 135 x $12 = $1,620
 - total = $2,970
 
-### Build-Up Method
+### Detailed Method
 
-```
-hours         = qty / production_rate
-labour_base   = hours x effective_labour_rate
-               (rate from manual_labour_rate OR payRateTemplate.hourly_rate)
-
-For each material:
-    effective_qty_per_unit = qty_per_unit x (1 + waste_percentage / 100)
-    unit_cost = location override or material_item.unit_cost
-    line_cost = effective_qty_per_unit x unit_cost x qty
-    material_base += line_cost
-```
-
-**Example:** Condition "Plasterboard" (area, production_rate=5 m2/hr, manual_labour_rate=$45/hr)
-- Material: Plaster sheet, 1.2 per m2, 5% waste, $8/sheet
-- Qty: 100 m2
-- hours = 100 / 5 = 20 hrs
-- labour_base = 20 x $45 = $900
-- effective_qty = 1.2 x 1.05 = 1.26 per m2
-- material_base = 1.26 x $8 x 100 = $1,008
-- total = $1,908
+Variation pricing for `pricing_method = 'detailed'` is not yet implemented.
+`VariationCostCalculator::compute()` throws a `RuntimeException` for detailed
+conditions. The takeoff side does support detailed pricing (see
+[detailed-pricing.md](detailed-pricing.md)) — variation support is planned next.
 
 ---
 
@@ -335,7 +313,7 @@ Add scope items that define what work is being varied. Two modes:
 
 Items can be reordered, edited inline, or deleted. Condition items auto-recalculate when qty changes.
 
-**Condition Manager:** Opens a full CRUD dialog for managing the project's TakeoffConditions directly from this step. Supports both `unit_rate` and `build_up` pricing methods.
+**Condition Manager:** Opens a full CRUD dialog for managing the project's TakeoffConditions directly from this step. Supports both `unit_rate` and `detailed` pricing methods. (Note: variation pricing for `detailed` conditions is not yet implemented — the calculator currently throws on detailed conditions.)
 
 #### Step 3 - Client
 
