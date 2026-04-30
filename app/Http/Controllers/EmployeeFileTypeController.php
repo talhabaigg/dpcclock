@@ -21,9 +21,11 @@ class EmployeeFileTypeController extends Controller
             ->whereIn('eh_parent_id', $companyEhIds)
             ->pluck('eh_location_id')
             ->all();
+        // Surface eh_location_id as the dropdown value so it matches Kiosk.eh_location_id
+        // when the rule is evaluated (Kiosk has no location_id column).
         $locations = Location::whereIn('eh_parent_id', $jobsEhIds)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['eh_location_id as id', 'name']);
         $employmentAgreements = Employee::query()
             ->whereNotNull('employment_agreement')
             ->where('employment_agreement', '!=', '')
