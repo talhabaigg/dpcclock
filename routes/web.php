@@ -1115,6 +1115,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------
     Route::middleware('permission:takeoff.view')->group(function () {
         Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
+        Route::get('/drawings/{drawing}/konva', [DrawingController::class, 'konva'])->name('drawings.konva');
+        Route::get('/drawings/{drawing}/pixi', [DrawingController::class, 'pixi'])->name('drawings.pixi');
         Route::get('/drawings/{drawing}/conditions', [DrawingController::class, 'conditions'])->name('drawings.conditions');
         Route::get('/drawings/{drawing}/labour', [DrawingController::class, 'labour'])->name('drawings.labour');
         Route::get('/drawings/{drawing}/material', [DrawingController::class, 'material'])->name('drawings.material');
