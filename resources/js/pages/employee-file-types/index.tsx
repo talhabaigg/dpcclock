@@ -333,7 +333,7 @@ export default function EmployeeFileTypesIndex() {
 
             {/* Create / Edit Dialog */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-5xl flex-col gap-0 p-0 sm:w-auto">
+                <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col gap-0 p-0 sm:w-auto sm:max-w-2xl">
                     <DialogHeader className="border-b p-4">
                         <DialogTitle>{editingId ? 'Edit File Type' : 'Create File Type'}</DialogTitle>
                     </DialogHeader>
@@ -496,45 +496,56 @@ export default function EmployeeFileTypesIndex() {
                                                     </Badge>
                                                 </div>
                                             )}
-                                            <div className="flex items-center gap-2">
-                                                <Select value={rule.field} onValueChange={(v) => updateRule(gi, ri, { field: v })}>
-                                                    <SelectTrigger className="h-8 w-[160px] text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="employment_type" className="whitespace-normal text-xs">Employment Type</SelectItem>
-                                                        <SelectItem value="employment_agreement" className="whitespace-normal text-xs">Employment Agreement</SelectItem>
-                                                        <SelectItem value="worktype" className="whitespace-normal text-xs">Work Type</SelectItem>
-                                                        <SelectItem value="location" className="whitespace-normal text-xs">Location</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="bg-background flex flex-col gap-2 rounded-md border p-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex flex-1 flex-col gap-1">
+                                                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Field</Label>
+                                                        <Select value={rule.field} onValueChange={(v) => updateRule(gi, ri, { field: v })}>
+                                                            <SelectTrigger className="h-8 w-full text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="employment_type" className="whitespace-normal text-xs">Employment Type</SelectItem>
+                                                                <SelectItem value="employment_agreement" className="whitespace-normal text-xs">Employment Agreement</SelectItem>
+                                                                <SelectItem value="worktype" className="whitespace-normal text-xs">Work Type</SelectItem>
+                                                                <SelectItem value="location" className="whitespace-normal text-xs">Location</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
 
-                                                <Select value={rule.operator} onValueChange={(v) => updateRule(gi, ri, { operator: v })}>
-                                                    <SelectTrigger className="h-8 w-[80px] text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="is" className="text-xs">is</SelectItem>
-                                                        <SelectItem value="is_not" className="text-xs">is not</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                    <div className="flex w-[100px] flex-col gap-1">
+                                                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Operator</Label>
+                                                        <Select value={rule.operator} onValueChange={(v) => updateRule(gi, ri, { operator: v })}>
+                                                            <SelectTrigger className="h-8 w-full text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="is" className="text-xs">is</SelectItem>
+                                                                <SelectItem value="is_not" className="text-xs">is not</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
 
-                                                <Select value={rule.value} onValueChange={(v) => updateRule(gi, ri, { value: v })}>
-                                                    <SelectTrigger className="h-8 min-w-0 flex-1 text-xs">
-                                                        <SelectValue placeholder="Select..." className="truncate" />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="max-w-[420px]">
-                                                        {getValueOptions(rule.field).map((opt) => (
-                                                            <SelectItem key={opt.value} value={opt.value} className="whitespace-normal text-xs">
-                                                                {opt.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                    <Button variant="ghost" size="sm" className="mt-5 h-8 w-8 shrink-0 p-0 text-red-500" onClick={() => removeRule(gi, ri)}>
+                                                        <X size={14} />
+                                                    </Button>
+                                                </div>
 
-                                                <Button variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" onClick={() => removeRule(gi, ri)}>
-                                                    <X size={14} />
-                                                </Button>
+                                                <div className="flex flex-col gap-1">
+                                                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Value</Label>
+                                                    <Select value={rule.value} onValueChange={(v) => updateRule(gi, ri, { value: v })}>
+                                                        <SelectTrigger className="h-8 w-full min-w-0 text-xs">
+                                                            <SelectValue placeholder="Select..." className="truncate" />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="max-w-[520px]">
+                                                            {getValueOptions(rule.field).map((opt) => (
+                                                                <SelectItem key={opt.value} value={opt.value} className="whitespace-normal text-xs">
+                                                                    {opt.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
