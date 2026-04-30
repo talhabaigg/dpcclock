@@ -333,7 +333,7 @@ export default function EmployeeFileTypesIndex() {
 
             {/* Create / Edit Dialog */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 p-0">
+                <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-5xl flex-col gap-0 p-0 sm:w-auto">
                     <DialogHeader className="border-b p-4">
                         <DialogTitle>{editingId ? 'Edit File Type' : 'Create File Type'}</DialogTitle>
                     </DialogHeader>
