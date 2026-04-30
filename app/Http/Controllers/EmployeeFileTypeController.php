@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
 use App\Models\EmployeeFileType;
 use App\Models\Location;
 use App\Models\Worktype;
@@ -16,12 +17,20 @@ class EmployeeFileTypeController extends Controller
         $fileTypes = EmployeeFileType::orderBy('sort_order')->orderBy('name')->get();
         $worktypes = Worktype::orderBy('name')->get(['id', 'name']);
         $locations = Location::whereNull('eh_parent_id')->orderBy('name')->get(['id', 'name']);
+        $employmentAgreements = Employee::query()
+            ->whereNotNull('employment_agreement')
+            ->where('employment_agreement', '!=', '')
+            ->distinct()
+            ->orderBy('employment_agreement')
+            ->pluck('employment_agreement')
+            ->values();
 
         return Inertia::render('employee-file-types/index', [
             'fileTypes' => $fileTypes,
             'worktypes' => $worktypes,
             'locations' => $locations,
             'employmentTypes' => ['FullTime', 'PartTime', 'Casual'],
+            'employmentAgreements' => $employmentAgreements,
         ]);
     }
 
@@ -39,6 +48,10 @@ class EmployeeFileTypeController extends Controller
             'options' => 'nullable|array',
             'options.*' => 'string|max:255',
             'conditions' => 'nullable|array',
+            'conditions.rule_groups' => 'sometimes|array',
+            'conditions.rule_groups.*.match' => 'sometimes|in:all,any',
+            'conditions.rule_groups.*.rules' => 'sometimes|array',
+            'conditions.rule_groups.*.result' => 'sometimes|in:mandatory,preferred,optional,none',
             'is_active' => 'boolean',
         ]);
 
@@ -63,6 +76,10 @@ class EmployeeFileTypeController extends Controller
             'options' => 'nullable|array',
             'options.*' => 'string|max:255',
             'conditions' => 'nullable|array',
+            'conditions.rule_groups' => 'sometimes|array',
+            'conditions.rule_groups.*.match' => 'sometimes|in:all,any',
+            'conditions.rule_groups.*.rules' => 'sometimes|array',
+            'conditions.rule_groups.*.result' => 'sometimes|in:mandatory,preferred,optional,none',
             'is_active' => 'boolean',
         ]);
 
