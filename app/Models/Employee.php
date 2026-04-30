@@ -85,7 +85,7 @@ class Employee extends Model implements ProvidesSigningPlaceholders
     }
 
     /**
-     * Get active file types whose conditions match this employee.
+     * Get active file types whose conditions match this employee (level != none).
      */
     public function requiredFileTypes()
     {
@@ -99,11 +99,23 @@ class Employee extends Model implements ProvidesSigningPlaceholders
 
     /**
      * Get compliance status for each required file type.
-     * Returns array of { file_type, file, status } where status is valid|expired|expiring_soon|missing.
+     * Returns array of { file_type, file, status, level } where:
+     *   status is valid|expired|expiring_soon|missing
+     *   level  is mandatory|preferred|optional
      */
     public function fileComplianceStatus(): array
     {
-        $required = $this->requiredFileTypes();
+        $this->loadMissing(['worktypes', 'kiosks']);
+
+        $required = EmployeeFileType::active()
+            ->orderBy('sort_order')
+            ->get()
+            ->map(fn (EmployeeFileType $type) => [
+                'type' => $type,
+                'level' => $type->requirementForEmployee($this),
+            ])
+            ->filter(fn (array $row) => $row['level'] !== EmployeeFileType::LEVEL_NONE);
+
         $latest = $this->employeeFiles()
             ->with('fileType')
             ->orderByDesc('created_at')
@@ -111,21 +123,27 @@ class Employee extends Model implements ProvidesSigningPlaceholders
             ->unique('employee_file_type_id')
             ->keyBy('employee_file_type_id');
 
-        return $required->map(fn (EmployeeFileType $type) => [
-            'file_type' => $type,
-            'file' => $latest->get($type->id),
+        return $required->map(fn (array $row) => [
+            'file_type' => $row['type'],
+            'file' => $latest->get($row['type']->id),
+            'level' => $row['level'],
             'status' => match (true) {
-                $latest->get($type->id) === null => 'missing',
-                $latest->get($type->id)->isExpired() => 'expired',
-                $latest->get($type->id)->isExpiringSoon() => 'expiring_soon',
+                $latest->get($row['type']->id) === null => 'missing',
+                $latest->get($row['type']->id)->isExpired() => 'expired',
+                $latest->get($row['type']->id)->isExpiringSoon() => 'expiring_soon',
                 default => 'valid',
             },
         ])->values()->toArray();
     }
 
+    /**
+     * Compliant when every mandatory requirement is valid.
+     * Preferred/optional gaps don't break compliance.
+     */
     public function isFileCompliant(): bool
     {
         return collect($this->fileComplianceStatus())
+            ->where('level', EmployeeFileType::LEVEL_MANDATORY)
             ->every(fn (array $item) => $item['status'] === 'valid');
     }
 

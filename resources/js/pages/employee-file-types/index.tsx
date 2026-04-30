@@ -15,15 +15,29 @@ import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employee File Types', href: '/employee-file-types' }];
 
+type Level = 'mandatory' | 'preferred' | 'optional' | 'none';
+
 interface ConditionRule {
     field: string;
     operator: string;
     value: string;
 }
 
-interface Conditions {
+interface RuleGroup {
     match: 'all' | 'any';
     rules: ConditionRule[];
+    result: Level;
+}
+
+interface Conditions {
+    rule_groups: RuleGroup[];
+}
+
+// Server may send the legacy shape: { match, rules } — normalize on read.
+interface LegacyConditions {
+    match?: 'all' | 'any';
+    rules?: ConditionRule[];
+    rule_groups?: RuleGroup[];
 }
 
 interface FileType {
@@ -37,7 +51,7 @@ interface FileType {
     requires_completed_date: boolean;
     allow_multiple: boolean;
     options: string[] | null;
-    conditions: Conditions | null;
+    conditions: LegacyConditions | null;
     is_active: boolean;
     sort_order: number;
 }
@@ -47,7 +61,22 @@ interface PageProps {
     worktypes: { id: number; name: string }[];
     locations: { id: number; name: string }[];
     employmentTypes: string[];
+    employmentAgreements: string[];
 }
+
+const LEVEL_LABELS: Record<Level, string> = {
+    mandatory: 'Mandatory',
+    preferred: 'Preferred',
+    optional: 'Optional',
+    none: 'Not Required',
+};
+
+const LEVEL_BADGE_VARIANT: Record<Level, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+    mandatory: 'destructive',
+    preferred: 'default',
+    optional: 'secondary',
+    none: 'outline',
+};
 
 const EMPTY_FORM = {
     name: '',
@@ -62,33 +91,61 @@ const EMPTY_FORM = {
     is_active: true,
 };
 
-function conditionSummary(conditions: Conditions | null, worktypes: { id: number; name: string }[], locations: { id: number; name: string }[]): string {
-    if (!conditions || !conditions.rules || conditions.rules.length === 0) return 'All employees';
+function normalizeConditions(input: LegacyConditions | null): Conditions | null {
+    if (!input) return null;
+    if (Array.isArray(input.rule_groups)) {
+        return { rule_groups: input.rule_groups.map((g) => ({ match: g.match ?? 'all', rules: [...(g.rules ?? [])], result: (g.result ?? 'mandatory') as Level })) };
+    }
+    if (Array.isArray(input.rules)) {
+        return { rule_groups: [{ match: input.match ?? 'all', rules: [...input.rules], result: 'mandatory' }] };
+    }
+    return null;
+}
 
-    const parts = conditions.rules.map((r) => {
-        const op = r.operator === 'is' ? 'is' : 'is not';
-        let fieldLabel = r.field;
-        let valueLabel = r.value;
+function fieldLabel(field: string): string {
+    switch (field) {
+        case 'employment_type':
+            return 'Employment type';
+        case 'employment_agreement':
+            return 'Employment agreement';
+        case 'worktype':
+            return 'Work type';
+        case 'location':
+            return 'Location';
+        default:
+            return field;
+    }
+}
 
-        if (r.field === 'employment_type') {
-            fieldLabel = 'Employment type';
-        } else if (r.field === 'worktype') {
-            fieldLabel = 'Work type';
-            valueLabel = worktypes.find((w) => String(w.id) === r.value)?.name ?? r.value;
-        } else if (r.field === 'location') {
-            fieldLabel = 'Location';
-            valueLabel = locations.find((l) => String(l.id) === r.value)?.name ?? r.value;
-        }
+function ruleSummary(rule: ConditionRule, worktypes: { id: number; name: string }[], locations: { id: number; name: string }[]): string {
+    const op = rule.operator === 'is' ? 'is' : 'is not';
+    let valueLabel = rule.value;
+    if (rule.field === 'worktype') valueLabel = worktypes.find((w) => String(w.id) === rule.value)?.name ?? rule.value;
+    if (rule.field === 'location') valueLabel = locations.find((l) => String(l.id) === rule.value)?.name ?? rule.value;
+    return `${fieldLabel(rule.field)} ${op} ${valueLabel || '…'}`;
+}
 
-        return `${fieldLabel} ${op} ${valueLabel}`;
-    });
+function conditionSummary(
+    conditions: LegacyConditions | null,
+    worktypes: { id: number; name: string }[],
+    locations: { id: number; name: string }[],
+): { groups: { text: string; result: Level }[]; allEmployees: boolean } {
+    const c = normalizeConditions(conditions);
+    if (!c || c.rule_groups.length === 0) return { groups: [], allEmployees: true };
 
-    const joiner = conditions.match === 'all' ? ' AND ' : ' OR ';
-    return parts.join(joiner);
+    const groups = c.rule_groups
+        .filter((g) => g.rules.length > 0)
+        .map((g) => {
+            const parts = g.rules.map((r) => ruleSummary(r, worktypes, locations));
+            const joiner = g.match === 'all' ? ' AND ' : ' OR ';
+            return { text: parts.join(joiner), result: g.result };
+        });
+
+    return { groups, allEmployees: groups.length === 0 };
 }
 
 export default function EmployeeFileTypesIndex() {
-    const { fileTypes, worktypes, locations, employmentTypes } = usePage<{ props: PageProps }>().props as unknown as PageProps;
+    const { fileTypes, worktypes, locations, employmentTypes, employmentAgreements } = usePage<{ props: PageProps }>().props as unknown as PageProps;
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props;
 
     const [showDialog, setShowDialog] = useState(false);
@@ -112,18 +169,16 @@ export default function EmployeeFileTypesIndex() {
             requires_completed_date: ft.requires_completed_date ?? false,
             allow_multiple: ft.allow_multiple ?? false,
             options: ft.options ?? [],
-            conditions: ft.conditions ? { ...ft.conditions, rules: [...ft.conditions.rules] } : null,
+            conditions: normalizeConditions(ft.conditions),
             is_active: ft.is_active,
         });
         setShowDialog(true);
     };
 
     const submit = () => {
-        const conditions = form.conditions && form.conditions.rules.length > 0 ? form.conditions : null;
-        const data = {
-            ...form,
-            conditions,
-        } as Record<string, unknown>;
+        const groups = (form.conditions?.rule_groups ?? []).filter((g) => g.rules.length > 0);
+        const conditions: Conditions | null = groups.length > 0 ? { rule_groups: groups } : null;
+        const data = { ...form, conditions } as Record<string, unknown>;
 
         if (editingId) {
             router.put(`/employee-file-types/${editingId}`, data as never, { onSuccess: () => setShowDialog(false) });
@@ -136,31 +191,41 @@ export default function EmployeeFileTypesIndex() {
         router.delete(`/employee-file-types/${id}`);
     };
 
-    // Condition builder helpers
-    const conditions = form.conditions ?? { match: 'all' as const, rules: [] };
+    // ----- Condition builder helpers -----
+    const groups: RuleGroup[] = form.conditions?.rule_groups ?? [];
 
-    const setConditions = (c: Conditions) => setForm({ ...form, conditions: c });
+    const setGroups = (next: RuleGroup[]) =>
+        setForm({ ...form, conditions: next.length > 0 ? { rule_groups: next } : null });
 
-    const addRule = () => {
-        setConditions({ ...conditions, rules: [...conditions.rules, { field: 'employment_type', operator: 'is', value: '' }] });
+    const addGroup = () => setGroups([...groups, { match: 'all', rules: [{ field: 'employment_type', operator: 'is', value: '' }], result: 'mandatory' }]);
+    const removeGroup = (gi: number) => setGroups(groups.filter((_, i) => i !== gi));
+
+    const updateGroup = (gi: number, updates: Partial<RuleGroup>) => {
+        setGroups(groups.map((g, i) => (i === gi ? { ...g, ...updates } : g)));
     };
 
-    const updateRule = (index: number, updates: Partial<ConditionRule>) => {
-        const newRules = [...conditions.rules];
-        newRules[index] = { ...newRules[index], ...updates };
-        // Reset value when field changes
-        if (updates.field) newRules[index].value = '';
-        setConditions({ ...conditions, rules: newRules });
+    const addRule = (gi: number) => {
+        const g = groups[gi];
+        updateGroup(gi, { rules: [...g.rules, { field: 'employment_type', operator: 'is', value: '' }] });
     };
 
-    const removeRule = (index: number) => {
-        setConditions({ ...conditions, rules: conditions.rules.filter((_, i) => i !== index) });
+    const updateRule = (gi: number, ri: number, updates: Partial<ConditionRule>) => {
+        const newRules = [...groups[gi].rules];
+        newRules[ri] = { ...newRules[ri], ...updates };
+        if (updates.field) newRules[ri].value = '';
+        updateGroup(gi, { rules: newRules });
+    };
+
+    const removeRule = (gi: number, ri: number) => {
+        updateGroup(gi, { rules: groups[gi].rules.filter((_, i) => i !== ri) });
     };
 
     const getValueOptions = (field: string) => {
         switch (field) {
             case 'employment_type':
                 return employmentTypes.map((t) => ({ value: t, label: t }));
+            case 'employment_agreement':
+                return employmentAgreements.map((a) => ({ value: a, label: a }));
             case 'worktype':
                 return worktypes.map((w) => ({ value: String(w.id), label: w.name }));
             case 'location':
@@ -212,39 +277,55 @@ export default function EmployeeFileTypesIndex() {
                                     </TableCell>
                                 </TableRow>
                             )}
-                            {fileTypes.map((ft) => (
-                                <TableRow key={ft.id} className={!ft.is_active ? 'opacity-50' : ''}>
-                                    <TableCell className="font-medium">{ft.name}</TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap gap-1">
-                                            {(ft.category ?? []).map((cat) => (
-                                                <Badge key={cat} variant="outline" className="text-[10px]">{cat}</Badge>
-                                            ))}
-                                            {(!ft.category || ft.category.length === 0) && <span className="text-muted-foreground text-sm">—</span>}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm capitalize">{ft.expiry_requirement ?? 'optional'}</TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
-                                    <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
-                                    <TableCell>{ft.allow_multiple ? 'Yes' : 'No'}</TableCell>
-                                    <TableCell className="max-w-[300px] text-sm">{conditionSummary(ft.conditions, worktypes, locations)}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={ft.is_active ? 'default' : 'secondary'}>{ft.is_active ? 'Active' : 'Inactive'}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex gap-1">
-                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(ft)}>
-                                                <Pencil size={14} />
-                                            </Button>
-                                            {ft.is_active && (
-                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => deactivate(ft.id)}>
-                                                    <Trash2 size={14} />
-                                                </Button>
+                            {fileTypes.map((ft) => {
+                                const summary = conditionSummary(ft.conditions, worktypes, locations);
+                                return (
+                                    <TableRow key={ft.id} className={!ft.is_active ? 'opacity-50' : ''}>
+                                        <TableCell className="font-medium">{ft.name}</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-1">
+                                                {(ft.category ?? []).map((cat) => (
+                                                    <Badge key={cat} variant="outline" className="text-[10px]">{cat}</Badge>
+                                                ))}
+                                                {(!ft.category || ft.category.length === 0) && <span className="text-muted-foreground text-sm">—</span>}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm capitalize">{ft.expiry_requirement ?? 'optional'}</TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
+                                        <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
+                                        <TableCell>{ft.allow_multiple ? 'Yes' : 'No'}</TableCell>
+                                        <TableCell className="max-w-[320px] text-sm">
+                                            {summary.allEmployees ? (
+                                                <span className="text-muted-foreground">All employees — Mandatory</span>
+                                            ) : (
+                                                <div className="flex flex-col gap-1">
+                                                    {summary.groups.map((g, idx) => (
+                                                        <div key={idx} className="flex items-start gap-2">
+                                                            <Badge variant={LEVEL_BADGE_VARIANT[g.result]} className="text-[10px] capitalize">{LEVEL_LABELS[g.result]}</Badge>
+                                                            <span className="text-muted-foreground text-xs">{g.text}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={ft.is_active ? 'default' : 'secondary'}>{ft.is_active ? 'Active' : 'Inactive'}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-1">
+                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(ft)}>
+                                                    <Pencil size={14} />
+                                                </Button>
+                                                {ft.is_active && (
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => deactivate(ft.id)}>
+                                                        <Trash2 size={14} />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>
@@ -252,12 +333,12 @@ export default function EmployeeFileTypesIndex() {
 
             {/* Create / Edit Dialog */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
+                <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 p-0">
+                    <DialogHeader className="border-b p-4">
                         <DialogTitle>{editingId ? 'Edit File Type' : 'Create File Type'}</DialogTitle>
                     </DialogHeader>
 
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 overflow-y-auto p-4">
                         <div className="flex flex-col gap-1.5">
                             <Label>Document Name</Label>
                             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. White Card" />
@@ -373,76 +454,120 @@ export default function EmployeeFileTypesIndex() {
                         </div>
 
                         {/* Condition Builder */}
-                        <div className="flex flex-col gap-2 rounded-lg border p-3">
-                            <Label className="text-sm font-semibold">Conditions</Label>
+                        <div className="flex flex-col gap-3 rounded-lg border p-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <Label className="text-sm font-semibold">Conditions</Label>
+                                    <p className="text-muted-foreground text-xs">First matching rule wins. No rules = mandatory for all.</p>
+                                </div>
+                                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={addGroup}>
+                                    <Plus size={12} />
+                                    Add Rule
+                                </Button>
+                            </div>
 
-                            {conditions.rules.length === 0 && (
-                                <p className="text-muted-foreground text-xs">No conditions — required for all employees.</p>
+                            {groups.length === 0 && (
+                                <p className="text-muted-foreground text-xs">No rules — mandatory for all employees.</p>
                             )}
 
-                            {conditions.rules.map((rule, idx) => (
-                                <div key={idx} className="flex flex-col gap-2">
-                                    {idx > 0 && (
-                                        <div className="flex justify-center">
-                                            <Badge
-                                                variant="outline"
-                                                className="cursor-pointer select-none px-3 text-[10px] font-semibold uppercase tracking-wider"
-                                                onClick={() => setConditions({ ...conditions, match: conditions.match === 'all' ? 'any' : 'all' })}
-                                            >
-                                                {conditions.match === 'all' ? 'AND' : 'OR'}
-                                            </Badge>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                        <Select value={rule.field} onValueChange={(v) => updateRule(idx, { field: v })}>
-                                            <SelectTrigger className="h-8 w-[140px] text-xs">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="employment_type">Employment Type</SelectItem>
-                                                <SelectItem value="worktype">Work Type</SelectItem>
-                                                <SelectItem value="location">Location</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-
-                                        <Select value={rule.operator} onValueChange={(v) => updateRule(idx, { operator: v })}>
-                                            <SelectTrigger className="h-8 w-[80px] text-xs">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="is">is</SelectItem>
-                                                <SelectItem value="is_not">is not</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-
-                                        <Select value={rule.value} onValueChange={(v) => updateRule(idx, { value: v })}>
-                                            <SelectTrigger className="h-8 flex-1 text-xs">
-                                                <SelectValue placeholder="Select..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {getValueOptions(rule.field).map((opt) => (
-                                                    <SelectItem key={opt.value} value={opt.value}>
-                                                        {opt.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-
-                                        <Button variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" onClick={() => removeRule(idx)}>
-                                            <X size={14} />
+                            {groups.map((group, gi) => (
+                                <div key={gi} className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rule {gi + 1}</span>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeGroup(gi)}>
+                                            <Trash2 size={12} />
                                         </Button>
+                                    </div>
+
+                                    {group.rules.length === 0 && (
+                                        <p className="text-muted-foreground text-xs">Add at least one condition.</p>
+                                    )}
+
+                                    {group.rules.map((rule, ri) => (
+                                        <div key={ri} className="flex flex-col gap-2">
+                                            {ri > 0 && (
+                                                <div className="flex justify-center">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer select-none px-3 text-[10px] font-semibold uppercase tracking-wider"
+                                                        onClick={() => updateGroup(gi, { match: group.match === 'all' ? 'any' : 'all' })}
+                                                    >
+                                                        {group.match === 'all' ? 'AND' : 'OR'}
+                                                    </Badge>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2">
+                                                <Select value={rule.field} onValueChange={(v) => updateRule(gi, ri, { field: v })}>
+                                                    <SelectTrigger className="h-8 w-[160px] text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="employment_type">Employment Type</SelectItem>
+                                                        <SelectItem value="employment_agreement">Employment Agreement</SelectItem>
+                                                        <SelectItem value="worktype">Work Type</SelectItem>
+                                                        <SelectItem value="location">Location</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select value={rule.operator} onValueChange={(v) => updateRule(gi, ri, { operator: v })}>
+                                                    <SelectTrigger className="h-8 w-[80px] text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="is">is</SelectItem>
+                                                        <SelectItem value="is_not">is not</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select value={rule.value} onValueChange={(v) => updateRule(gi, ri, { value: v })}>
+                                                    <SelectTrigger className="h-8 min-w-0 flex-1 text-xs">
+                                                        <SelectValue placeholder="Select..." className="truncate" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-w-[420px]">
+                                                        {getValueOptions(rule.field).map((opt) => (
+                                                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                                                <span className="truncate">{opt.label}</span>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Button variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" onClick={() => removeRule(gi, ri)}>
+                                                    <X size={14} />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <Button variant="outline" size="sm" className="mt-1 w-fit gap-1 text-xs" onClick={() => addRule(gi)}>
+                                        <Plus size={12} />
+                                        Add Condition
+                                    </Button>
+
+                                    <div className="mt-2 flex items-center gap-2 border-t pt-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Then result is</Label>
+                                        <Select value={group.result} onValueChange={(v: Level) => updateGroup(gi, { result: v })}>
+                                            <SelectTrigger className="h-8 w-[160px] text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="mandatory">Mandatory</SelectItem>
+                                                <SelectItem value="preferred">Preferred</SelectItem>
+                                                <SelectItem value="optional">Optional</SelectItem>
+                                                <SelectItem value="none">Not Required</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                             ))}
 
-                            <Button variant="outline" size="sm" className="mt-1 w-fit gap-1 text-xs" onClick={addRule}>
-                                <Plus size={12} />
-                                Add Condition
-                            </Button>
+                            {groups.length > 0 && (
+                                <p className="text-muted-foreground text-[11px] italic">If no rule matches, the file type is treated as Not Required.</p>
+                            )}
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="border-t p-4">
                         <Button variant="outline" onClick={() => setShowDialog(false)}>
                             Cancel
                         </Button>
