@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchSelect } from '@/components/search-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -63,6 +64,13 @@ interface PageProps {
     employmentTypes: string[];
     employmentAgreements: string[];
 }
+
+const FIELD_OPTIONS = [
+    { value: 'employment_type', label: 'Employment Type' },
+    { value: 'employment_agreement', label: 'Employment Agreement' },
+    { value: 'worktype', label: 'Work Type' },
+    { value: 'location', label: 'Location' },
+];
 
 const LEVEL_LABELS: Record<Level, string> = {
     mandatory: 'Mandatory',
@@ -497,20 +505,16 @@ export default function EmployeeFileTypesIndex() {
                                                 </div>
                                             )}
                                             <div className="bg-background flex flex-col gap-2 rounded-md border p-2">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-end gap-2">
                                                     <div className="flex flex-1 flex-col gap-1">
                                                         <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Field</Label>
-                                                        <Select value={rule.field} onValueChange={(v) => updateRule(gi, ri, { field: v })}>
-                                                            <SelectTrigger className="h-8 w-full text-xs">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="employment_type" className="whitespace-normal text-xs">Employment Type</SelectItem>
-                                                                <SelectItem value="employment_agreement" className="whitespace-normal text-xs">Employment Agreement</SelectItem>
-                                                                <SelectItem value="worktype" className="whitespace-normal text-xs">Work Type</SelectItem>
-                                                                <SelectItem value="location" className="whitespace-normal text-xs">Location</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <SearchSelect
+                                                            options={FIELD_OPTIONS}
+                                                            optionName="field"
+                                                            selectedOption={rule.field}
+                                                            onValueChange={(v) => updateRule(gi, ri, { field: v })}
+                                                            className="h-8 text-xs"
+                                                        />
                                                     </div>
 
                                                     <div className="flex w-[100px] flex-col gap-1">
@@ -526,25 +530,20 @@ export default function EmployeeFileTypesIndex() {
                                                         </Select>
                                                     </div>
 
-                                                    <Button variant="ghost" size="sm" className="mt-5 h-8 w-8 shrink-0 p-0 text-red-500" onClick={() => removeRule(gi, ri)}>
+                                                    <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 p-0 text-red-500" onClick={() => removeRule(gi, ri)}>
                                                         <X size={14} />
                                                     </Button>
                                                 </div>
 
                                                 <div className="flex flex-col gap-1">
                                                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Value</Label>
-                                                    <Select value={rule.value} onValueChange={(v) => updateRule(gi, ri, { value: v })}>
-                                                        <SelectTrigger className="h-8 w-full min-w-0 text-xs">
-                                                            <SelectValue placeholder="Select..." className="truncate" />
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-w-[520px]">
-                                                            {getValueOptions(rule.field).map((opt) => (
-                                                                <SelectItem key={opt.value} value={opt.value} className="whitespace-normal text-xs">
-                                                                    {opt.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                    <SearchSelect
+                                                        options={getValueOptions(rule.field)}
+                                                        optionName="value"
+                                                        selectedOption={rule.value}
+                                                        onValueChange={(v) => updateRule(gi, ri, { value: v })}
+                                                        className="h-8 text-xs"
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
