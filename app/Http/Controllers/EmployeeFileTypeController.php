@@ -20,6 +20,7 @@ class EmployeeFileTypeController extends Controller
         $employmentAgreements = Employee::query()
             ->whereNotNull('employment_agreement')
             ->where('employment_agreement', '!=', '')
+            ->where('employment_agreement', 'not like', 'Salary%')
             ->distinct()
             ->orderBy('employment_agreement')
             ->pluck('employment_agreement')
