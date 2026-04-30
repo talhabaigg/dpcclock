@@ -502,10 +502,10 @@ export default function EmployeeFileTypesIndex() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="employment_type">Employment Type</SelectItem>
-                                                        <SelectItem value="employment_agreement">Employment Agreement</SelectItem>
-                                                        <SelectItem value="worktype">Work Type</SelectItem>
-                                                        <SelectItem value="location">Location</SelectItem>
+                                                        <SelectItem value="employment_type" className="whitespace-normal text-xs">Employment Type</SelectItem>
+                                                        <SelectItem value="employment_agreement" className="whitespace-normal text-xs">Employment Agreement</SelectItem>
+                                                        <SelectItem value="worktype" className="whitespace-normal text-xs">Work Type</SelectItem>
+                                                        <SelectItem value="location" className="whitespace-normal text-xs">Location</SelectItem>
                                                     </SelectContent>
                                                 </Select>
 
@@ -514,8 +514,8 @@ export default function EmployeeFileTypesIndex() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="is">is</SelectItem>
-                                                        <SelectItem value="is_not">is not</SelectItem>
+                                                        <SelectItem value="is" className="text-xs">is</SelectItem>
+                                                        <SelectItem value="is_not" className="text-xs">is not</SelectItem>
                                                     </SelectContent>
                                                 </Select>
 
@@ -525,8 +525,8 @@ export default function EmployeeFileTypesIndex() {
                                                     </SelectTrigger>
                                                     <SelectContent className="max-w-[420px]">
                                                         {getValueOptions(rule.field).map((opt) => (
-                                                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                                                                <span className="truncate">{opt.label}</span>
+                                                            <SelectItem key={opt.value} value={opt.value} className="whitespace-normal text-xs">
+                                                                {opt.label}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -551,10 +551,10 @@ export default function EmployeeFileTypesIndex() {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="mandatory">Mandatory</SelectItem>
-                                                <SelectItem value="preferred">Preferred</SelectItem>
-                                                <SelectItem value="optional">Optional</SelectItem>
-                                                <SelectItem value="none">Not Required</SelectItem>
+                                                <SelectItem value="mandatory" className="text-xs">Mandatory</SelectItem>
+                                                <SelectItem value="preferred" className="text-xs">Preferred</SelectItem>
+                                                <SelectItem value="optional" className="text-xs">Optional</SelectItem>
+                                                <SelectItem value="none" className="text-xs">Not Required</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
