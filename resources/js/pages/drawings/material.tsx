@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
@@ -75,7 +76,7 @@ export default function MaterialPage() {
                             <Package className="h-6 w-6 text-muted-foreground/40" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">No material data</p>
+                            <p className="text-xs font-medium text-muted-foreground">No material data</p>
                             <p className="mt-1 text-xs text-muted-foreground/70">
                                 Add materials to conditions and take measurements to see the material summary here.
                             </p>
@@ -83,79 +84,83 @@ export default function MaterialPage() {
                     </div>
                 ) : (
                     <ScrollArea className="flex-1">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-background">
-                                <TableRow>
-                                    <TableHead className="w-[120px]">Item Code</TableHead>
-                                    <TableHead className="w-[120px]">Cost Code</TableHead>
-                                    <TableHead>Size / Style</TableHead>
-                                    <TableHead className="w-[100px] text-right">Quantity</TableHead>
-                                    <TableHead className="w-[50px]">UOM</TableHead>
-                                    <TableHead className="w-[90px] text-right">Mat. Cost</TableHead>
-                                    <TableHead className="w-[80px]">Per</TableHead>
-                                    <TableHead className="w-[110px] text-right">Total</TableHead>
-                                    <TableHead className="w-[60px] text-right">Waste%</TableHead>
-                                    <TableHead className="w-[80px] text-right">Units</TableHead>
-                                    <TableHead className="w-[90px]">Price Updated</TableHead>
-                                    <TableHead className="w-[120px]">Supplier</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                            <Card className="overflow-clip !p-0 !gap-0">
+                                <Table className="text-xs [&>tbody>tr:last-child]:border-b-0">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                        <TableRow>
+                                            <TableHead className="h-8 w-[110px] text-xs">Item Code</TableHead>
+                                            <TableHead className="h-8 w-[90px] text-xs">Cost Code</TableHead>
+                                            <TableHead className="h-8 text-xs">Description</TableHead>
+                                            <TableHead className="h-8 w-[80px] text-right text-xs">Qty</TableHead>
+                                            <TableHead className="h-8 w-[45px] text-xs">UOM</TableHead>
+                                            <TableHead className="h-8 w-[80px] text-right text-xs">Mat. Cost</TableHead>
+                                            <TableHead className="h-8 w-[70px] text-xs">Per</TableHead>
+                                            <TableHead className="h-8 w-[100px] text-right text-xs">Total ($)</TableHead>
+                                            <TableHead className="h-8 w-[60px] text-right text-xs">Waste%</TableHead>
+                                            <TableHead className="h-8 w-[70px] text-right text-xs">Units</TableHead>
+                                            <TableHead className="h-8 w-[90px] text-xs">Updated</TableHead>
+                                            <TableHead className="h-8 w-[110px] text-xs">Supplier</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
 
-                            <TableBody>
-                                {materialSummaries.map((row, idx) => (
-                                    <TableRow key={idx}>
-                                        <TableCell className="font-mono text-xs">
-                                            {row.item_code}
-                                        </TableCell>
-                                        <TableCell className="font-mono text-xs">
-                                            {row.cost_code}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {row.description}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtInt(row.qty)}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.uom}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtNum(row.mat_cost)}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.per}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
-                                            {fmtNum(row.total)}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
-                                            {row.waste_pct > 0 ? `${fmtNum(row.waste_pct, 0)}%` : '—'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-sm tabular-nums">
-                                            {fmtNum(row.units, 0)}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.price_updated ?? '—'}
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {row.supplier ?? '—'}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
+                                    <TableBody>
+                                        {materialSummaries.map((row, idx) => (
+                                            <TableRow key={idx}>
+                                                <TableCell className="py-1.5 font-mono text-xs">
+                                                    {row.item_code}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 font-mono text-xs text-muted-foreground">
+                                                    {row.cost_code}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs">
+                                                    {row.description}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtInt(row.qty)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs text-muted-foreground">
+                                                    {row.uom}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtNum(row.mat_cost)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs text-muted-foreground">
+                                                    {row.per}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                    {fmtNum(row.total)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
+                                                    {row.waste_pct > 0 ? `${fmtNum(row.waste_pct, 0)}%` : '—'}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                                    {fmtNum(row.units, 0)}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs text-muted-foreground">
+                                                    {row.price_updated ?? '—'}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 text-xs text-muted-foreground">
+                                                    {row.supplier ?? '—'}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
 
-                            <TableFooter>
-                                <TableRow className="bg-muted/50 border-t-2">
-                                    <TableCell colSpan={7} className="text-right text-xs font-bold">
-                                        Grand Total
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                                        {fmtNum(grandTotal)}
-                                    </TableCell>
-                                    <TableCell colSpan={4} />
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
+                                    <TableFooter>
+                                        <TableRow className="bg-muted/50 border-t-2">
+                                            <TableCell colSpan={7} className="py-1.5 text-right text-xs font-semibold">
+                                                Grand Total
+                                            </TableCell>
+                                            <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">
+                                                {fmtNum(grandTotal)}
+                                            </TableCell>
+                                            <TableCell colSpan={4} />
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </Card>
+                        </div>
                     </ScrollArea>
                 )}
             </div>

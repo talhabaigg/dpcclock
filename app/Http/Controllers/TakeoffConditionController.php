@@ -32,7 +32,27 @@ class TakeoffConditionController extends Controller
 
         $this->appendLineItemEffectiveUnitCosts($conditions, $location->id);
 
-        return response()->json(['conditions' => $conditions]);
+        return response()->json([
+            'conditions' => $conditions,
+            'master_hourly_rate' => $location->master_hourly_rate !== null
+                ? (float) $location->master_hourly_rate
+                : null,
+        ]);
+    }
+
+    public function updateMasterHourlyRate(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'master_hourly_rate' => 'nullable|numeric|min:0|max:9999.99',
+        ]);
+
+        $location->update(['master_hourly_rate' => $validated['master_hourly_rate']]);
+
+        return response()->json([
+            'master_hourly_rate' => $location->master_hourly_rate !== null
+                ? (float) $location->master_hourly_rate
+                : null,
+        ]);
     }
 
     public function store(Request $request, Location $location)

@@ -123,7 +123,6 @@ class DrawingMeasurementController extends Controller
                 'bidArea:id,name',
                 'condition.conditionLabourCodes.labourCostCode',
                 'condition.lineItems.materialItem',
-                'condition.materials.materialItem',
                 'condition.costCodes',
             ])
             ->whereNull('parent_measurement_id')

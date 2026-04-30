@@ -214,7 +214,6 @@ class DrawingController extends Controller
             ->with([
                 'conditionType',
                 'lineItems.materialItem',
-                'materials.materialItem',
                 'costCodes',
                 'boqItems.costCode',
                 'boqItems.labourCostCode',
@@ -392,11 +391,8 @@ class DrawingController extends Controller
 
             if ($condition->pricing_method === 'detailed') {
                 foreach ($condition->lineItems->where('entry_type', 'labour') as $li) {
-                    $lcc = $li->labourCostCode;
-                    if (! $lcc) {
-                        continue;
-                    }
-                    $hr = $li->hourly_rate ?? 0;
+                    // Master project rate takes precedence; per-line override is legacy fallback.
+                    $hr = $project->master_hourly_rate ?? $li->hourly_rate ?? 0;
                     $pr = $li->production_rate ?? 0;
                     if ($hr <= 0 || $pr <= 0) {
                         continue;
@@ -405,9 +401,10 @@ class DrawingController extends Controller
                     $total = $netQty * $costPerUnit;
                     $hours = $netQty / $pr;
 
+                    $lcc = $li->labourCostCode;
                     $labourRows[] = [
-                        'code' => $lcc->code,
-                        'name' => $lcc->name,
+                        'code' => $lcc?->code ?? $li->item_code ?? '—',
+                        'name' => $lcc?->name ?? $li->description ?? 'Unmapped labour',
                         'qty' => round($netQty, 2),
                         'unit' => $condUnit,
                         'cost' => round($costPerUnit, 2),
@@ -458,6 +455,9 @@ class DrawingController extends Controller
             'activeTab' => 'labour',
             'projectDrawings' => $projectDrawings,
             'labourSummaries' => $labourRows,
+            'masterHourlyRate' => $project->master_hourly_rate !== null
+                ? (float) $project->master_hourly_rate
+                : null,
         ]);
     }
 
@@ -618,7 +618,6 @@ class DrawingController extends Controller
             ->with([
                 'conditionType',
                 'lineItems.materialItem',
-                'materials.materialItem',
                 'costCodes',
                 'boqItems.costCode',
                 'boqItems.labourCostCode',

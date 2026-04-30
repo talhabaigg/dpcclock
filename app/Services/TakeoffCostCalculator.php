@@ -63,8 +63,9 @@ class TakeoffCostCalculator
      */
     private function computeDetailed(TakeoffCondition $condition, DrawingMeasurement $measurement): array
     {
-        $condition->loadMissing('lineItems.materialItem');
+        $condition->loadMissing('lineItems.materialItem', 'location');
         $locationId = $condition->location_id;
+        $masterRate = $condition->location?->master_hourly_rate;
         $totalMat = 0;
         $totalLab = 0;
 
@@ -105,7 +106,8 @@ class TakeoffCostCalculator
             }
 
             if ($line->entry_type === 'labour') {
-                $hourlyRate = $line->hourly_rate ?? 0;
+                // Master project rate takes precedence; fall back to per-line override (legacy data).
+                $hourlyRate = $masterRate ?? $line->hourly_rate ?? 0;
                 $productionRate = $line->production_rate ?? 0;
 
                 if ($hourlyRate > 0 && $productionRate > 0) {

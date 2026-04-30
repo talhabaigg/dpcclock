@@ -1,8 +1,13 @@
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 // Select removed — qty_source hidden from grid (QuickBid-style)
 import { Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+
+const getCsrfToken = (): string =>
+    document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
 
 // ---- Types ----
 
@@ -69,6 +74,19 @@ type ConditionDetailGridProps = {
     lineItems: ConditionLineItem[];
     onLineItemsChange: (items: ConditionLineItem[]) => void;
     aggregateQty?: { primary: number; secondary: number };
+    /**
+     * Project's master hourly rate. Drives labour $/unit display:
+     * cost_per_unit = masterHourlyRate ÷ production_rate. Editing $/unit
+     * derives + saves a new production_rate. When null, falls back to each
+     * line's stored hourly_rate (legacy data).
+     */
+    masterHourlyRate?: number | null;
+    /**
+     * Preview mode: rates shown per unit of measure (e.g. $/m²) without
+     * referencing measurements. Default UX for the condition manager — a
+     * condition is a pricing template, not a measurement.
+     */
+    previewMode?: boolean;
 };
 
 let keyCounter = 0;
@@ -110,9 +128,10 @@ function computeLineMaterialCost(item: ConditionLineItem, effectiveQty: number):
     return effectiveQty * unitCost;
 }
 
-function computeLineLabourCost(item: ConditionLineItem, effectiveQty: number): number {
+function computeLineLabourCost(item: ConditionLineItem, effectiveQty: number, masterRate?: number | null): number {
     if (item.entry_type !== 'labour') return 0;
-    const rate = item.hourly_rate ?? 0;
+    // Master project rate wins; per-line rate is the legacy fallback.
+    const rate = masterRate ?? item.hourly_rate ?? 0;
     const prod = item.production_rate ?? 0;
     if (rate <= 0 || prod <= 0) return 0;
     return (effectiveQty / prod) * rate;
@@ -127,9 +146,11 @@ const fmtDec = (n: number | null | undefined, d = 2) =>
 const fmtQty = (n: number | null | undefined) =>
     n != null && n > 0 ? n.toLocaleString('en-AU', { maximumFractionDigits: 1 }) : '';
 
-// Compact cell input — borderless by default, border on focus
+// Compact cell input — borderless by default, subtle focus ring.
+// Kept as bare <input> rather than shadcn <Input> because <Input> imposes
+// h-8 + py-1 which would break the dense spreadsheet row height.
 const cellInput =
-    'h-[20px] min-h-0 rounded-none border-0 bg-transparent px-1 py-0 text-[10px] shadow-none focus:ring-1 focus:ring-primary/40 focus:bg-white dark:focus:bg-slate-900 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+    'h-[22px] min-h-0 w-full rounded-none border-0 bg-transparent px-1 py-0 text-xs shadow-none outline-none focus:ring-1 focus:ring-ring/40 focus:bg-background [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
 // ---- Component ----
 
@@ -141,6 +162,8 @@ export function ConditionDetailGrid({
     lineItems: initialItems,
     onLineItemsChange,
     aggregateQty,
+    masterHourlyRate = null,
+    previewMode = false,
 }: ConditionDetailGridProps) {
     const [items, setItems] = useState<ConditionLineItem[]>(() =>
         initialItems.map((item) => ({ ...item, _key: item.id ? `s_${item.id}` : nextKey() })),
@@ -437,10 +460,10 @@ export function ConditionDetailGrid({
         for (const item of items) {
             const qty = computeLineQty(item, primaryQty, secondaryQty);
             matTotal += computeLineMaterialCost(item, qty);
-            labTotal += computeLineLabourCost(item, qty);
+            labTotal += computeLineLabourCost(item, qty, masterHourlyRate);
         }
         return { matTotal, labTotal, grandTotal: matTotal + labTotal };
-    }, [items, primaryQty, secondaryQty]);
+    }, [items, primaryQty, secondaryQty, masterHourlyRate]);
 
     const sectionTotals = useMemo(() => {
         const result = new Map<string, { mat: number; lab: number; total: number }>();
@@ -450,12 +473,12 @@ export function ConditionDetailGrid({
             for (const item of secItems) {
                 const qty = computeLineQty(item, primaryQty, secondaryQty);
                 mat += computeLineMaterialCost(item, qty);
-                lab += computeLineLabourCost(item, qty);
+                lab += computeLineLabourCost(item, qty, masterHourlyRate);
             }
             result.set(sec, { mat, lab, total: mat + lab });
         }
         return result;
-    }, [sections, primaryQty, secondaryQty]);
+    }, [sections, primaryQty, secondaryQty, masterHourlyRate]);
 
 
     // Row counter across sections
@@ -464,59 +487,72 @@ export function ConditionDetailGrid({
     // ---- Render ----
 
     return (
-        <div className="flex flex-col gap-1 h-full">
+        <div className="flex flex-col gap-1.5 h-full">
             {/* Header info bar */}
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground px-1">
-                {primaryQty > 0 && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
+                {previewMode ? (
                     <span>
-                        Qty1: <strong className="text-foreground">{fmtQty(primaryQty)} {conditionType === 'area' ? 'm\u00B2' : conditionType === 'linear' ? 'm' : 'ea'}</strong>
+                        Rates per <strong className="text-foreground">{conditionType === 'area' ? '1 m²' : conditionType === 'linear' ? '1 lm' : '1 each'}</strong>
+                        {conditionHeight != null && conditionHeight > 0 && (
+                            <span className="ml-2 text-muted-foreground">
+                                (H {conditionHeight} m)
+                            </span>
+                        )}
                     </span>
+                ) : (
+                    <>
+                        {primaryQty > 0 && (
+                            <span>
+                                Qty1: <strong className="text-foreground">{fmtQty(primaryQty)} {conditionType === 'area' ? 'm\u00B2' : conditionType === 'linear' ? 'm' : 'ea'}</strong>
+                            </span>
+                        )}
+                        {secondaryQty > 0 && (
+                            <span>
+                                Qty2: <strong className="text-foreground">{fmtQty(secondaryQty)} m</strong>
+                            </span>
+                        )}
+                        {conditionHeight != null && conditionHeight > 0 && (
+                            <span>
+                                H: <strong className="text-foreground">{conditionHeight}m</strong>
+                            </span>
+                        )}
+                        {!primaryQty && !secondaryQty && <span className="italic">No measurements yet</span>}
+                    </>
                 )}
-                {secondaryQty > 0 && (
-                    <span>
-                        Qty2: <strong className="text-foreground">{fmtQty(secondaryQty)} m</strong>
-                    </span>
-                )}
-                {conditionHeight != null && conditionHeight > 0 && (
-                    <span>
-                        H: <strong className="text-foreground">{conditionHeight}m</strong>
-                    </span>
-                )}
-                {!primaryQty && !secondaryQty && <span className="italic">No measurements yet</span>}
             </div>
 
             {/* Search bar */}
             {searchType && (
-                <div className="border rounded bg-muted/30 p-1.5 mx-1">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground w-8">
-                            {searchType === 'material' ? 'MAT' : 'LAB'}
+                <div className="border rounded-md bg-muted/40 p-2 mx-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-8">
+                            {searchType === 'material' ? 'Mat' : 'Lab'}
                         </span>
                         <div className="relative flex-1">
-                            <Search className="absolute left-1.5 top-1 h-3 w-3 text-muted-foreground" />
-                            <input
+                            <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input
                                 ref={searchInputRef}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder={searchType === 'material' ? 'Search materials...' : 'Search labour codes...'}
-                                className="h-5 w-full rounded border border-slate-300 bg-background text-[10px] pl-6 pr-2 py-0 outline-none focus:ring-1 focus:ring-primary/40"
+                                className="h-7 text-xs pl-7"
                             />
                         </div>
-                        <button className="text-muted-foreground hover:text-foreground" onClick={() => setSearchType(null)}>
-                            <X className="h-3 w-3" />
-                        </button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSearchType(null)}>
+                            <X className="h-3.5 w-3.5" />
+                        </Button>
                     </div>
                     {searching && (
-                        <div className="mt-1 text-[9px] text-muted-foreground flex items-center gap-1">
-                            <Loader2 className="h-2.5 w-2.5 animate-spin" /> Searching...
+                        <div className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Searching...
                         </div>
                     )}
                     {searchResults.length > 0 && (
-                        <div className="mt-1 max-h-32 overflow-y-auto border rounded bg-background">
+                        <div className="mt-1.5 max-h-32 overflow-y-auto border rounded-md bg-background">
                             {searchResults.map((r) => (
                                 <button
                                     key={r.id}
-                                    className="w-full text-left px-1.5 py-0.5 text-[10px] hover:bg-muted/50 flex justify-between"
+                                    className="w-full text-left px-2 py-1 text-xs hover:bg-muted/60 flex justify-between"
                                     onClick={() => addFromSearch(r)}
                                 >
                                     <span>
@@ -533,33 +569,34 @@ export function ConditionDetailGrid({
             )}
 
             {/* Spreadsheet grid */}
-            <div className="flex-1 overflow-auto mx-1 border border-slate-300 dark:border-slate-700">
-                <table className="w-full border-collapse text-[10px] font-sans tabular-nums">
-                    {/* Column header */}
+            <div className="flex-1 overflow-auto mx-1 border rounded-md">
+                <table className="w-full border-collapse text-xs font-sans tabular-nums">
+                    {/* Column header — quiet muted background, no per-cell borders */}
                     <thead className="sticky top-0 z-10">
-                        <tr className="bg-slate-600 text-white text-[9px] font-medium">
-                            <th className="w-[22px] px-0.5 py-[3px] text-center border-r border-slate-500">#</th>
-                            <th className="w-[52px] px-1 py-[3px] text-left border-r border-slate-500">Sect</th>
-                            <th className="w-[80px] px-1 py-[3px] text-left border-r border-slate-500">Item</th>
-                            <th className="min-w-[120px] px-1 py-[3px] text-left border-r border-slate-500">Description</th>
-                            <th className="w-[70px] px-1 py-[3px] text-left border-r border-slate-500">LCC</th>
-                            <th className="w-[40px] px-1 py-[3px] text-right border-r border-slate-500">OC</th>
-                            <th className="w-[30px] px-1 py-[3px] text-right border-r border-slate-500">Lyr</th>
-                            <th className="w-[38px] px-1 py-[3px] text-right border-r border-slate-500">Size</th>
-                            <th className="w-[56px] px-1 py-[3px] text-right border-r border-slate-500">Qty</th>
-                            <th className="w-[30px] px-0.5 py-[3px] text-center border-r border-slate-500">Per</th>
-                            <th className="w-[56px] px-1 py-[3px] text-right border-r border-slate-500">Mat Cost</th>
-                            <th className="w-[56px] px-1 py-[3px] text-right border-r border-slate-500">Lab Cost</th>
-                            <th className="w-[66px] px-1 py-[3px] text-right border-r border-slate-500 bg-green-700/80">Mat Total</th>
-                            <th className="w-[66px] px-1 py-[3px] text-right border-r border-slate-500 bg-fuchsia-700/80">Lab Total</th>
-                            <th className="w-[70px] px-1 py-[3px] text-right bg-amber-600/90">Item Total</th>
-                            <th className="w-[30px] px-0 py-[3px]"></th>
+                        <tr className="bg-muted/60 text-[11px] font-medium text-muted-foreground border-b">
+                            <th className="w-[28px] px-1 py-1.5 text-center font-medium">#</th>
+                            <th className="w-[60px] px-1.5 py-1.5 text-left font-medium">Sect</th>
+                            <th className="w-[86px] px-1.5 py-1.5 text-left font-medium">Mat Code</th>
+                            <th className="min-w-[140px] px-1.5 py-1.5 text-left font-medium">Description</th>
+                            <th className="w-[76px] px-1.5 py-1.5 text-left font-medium">Labor Code</th>
+                            <th className="w-[44px] px-1.5 py-1.5 text-right font-medium">OC</th>
+                            <th className="w-[34px] px-1.5 py-1.5 text-right font-medium">Lyr</th>
+                            <th className="w-[42px] px-1.5 py-1.5 text-right font-medium">Size</th>
+                            <th className="w-[60px] px-1.5 py-1.5 text-right font-medium">Qty</th>
+                            <th className="w-[36px] px-1 py-1.5 text-center font-medium">Per</th>
+                            <th className="w-[60px] px-1.5 py-1.5 text-right font-medium">Mat Cost</th>
+                            <th className="w-[60px] px-1.5 py-1.5 text-right font-medium">Lab Cost</th>
+                            <th className="w-[60px] px-1.5 py-1.5 text-right font-medium" title="Production rate (units per hour)">Prod</th>
+                            <th className="w-[70px] px-1.5 py-1.5 text-right font-medium">Mat Total</th>
+                            <th className="w-[70px] px-1.5 py-1.5 text-right font-medium">Lab Total</th>
+                            <th className="w-[74px] px-1.5 py-1.5 text-right font-medium text-foreground">Item Total</th>
+                            <th className="w-[36px] px-0 py-1.5"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {items.length === 0 && (
                             <tr>
-                                <td colSpan={16} className="text-center text-[10px] text-muted-foreground py-6">
+                                <td colSpan={17} className="text-center text-xs text-muted-foreground py-8">
                                     No line items. Add materials or labour codes below.
                                 </td>
                             </tr>
@@ -568,35 +605,35 @@ export function ConditionDetailGrid({
                             const secTot = sectionTotals.get(section);
                             return (
                                 <Fragment key={`sec_${section}`}>
-                                    {/* Section header row */}
+                                    {/* Section header row — quiet muted bar */}
                                     {section !== 'Unsectioned' && (
-                                        <tr className="bg-amber-50 dark:bg-amber-950/30 border-b border-slate-300 dark:border-slate-600">
-                                            <td colSpan={12} className="px-1 py-[2px] text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                                                <div className="flex items-center gap-2">
+                                        <tr className="bg-muted/40 border-b">
+                                            <td colSpan={13} className="px-2 py-1 text-xs font-semibold text-foreground">
+                                                <div className="flex items-center gap-3">
                                                     <span>{section}</span>
                                                     <button
-                                                        className="text-[8px] text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200 font-medium opacity-50 hover:opacity-100"
+                                                        className="text-[11px] text-muted-foreground hover:text-foreground font-medium transition-colors"
                                                         onClick={() => addBlankRow('material', section)}
                                                         title="Add material row to this section"
                                                     >
-                                                        +Mat
+                                                        + Mat
                                                     </button>
                                                     <button
-                                                        className="text-[8px] text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium opacity-50 hover:opacity-100"
+                                                        className="text-[11px] text-muted-foreground hover:text-foreground font-medium transition-colors"
                                                         onClick={() => addBlankRow('labour', section)}
                                                         title="Add labour row to this section"
                                                     >
-                                                        +Lab
+                                                        + Lab
                                                     </button>
                                                 </div>
                                             </td>
-                                            <td className="px-1 py-[2px] text-right text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-50/50 dark:bg-green-950/20">
+                                            <td className="px-1.5 py-1 text-right text-xs font-medium text-muted-foreground">
                                                 {secTot && secTot.mat > 0 ? fmt(secTot.mat) : ''}
                                             </td>
-                                            <td className="px-1 py-[2px] text-right text-[10px] font-semibold text-fuchsia-700 dark:text-fuchsia-400 bg-fuchsia-50/50 dark:bg-fuchsia-950/20">
+                                            <td className="px-1.5 py-1 text-right text-xs font-medium text-muted-foreground">
                                                 {secTot && secTot.lab > 0 ? fmt(secTot.lab) : ''}
                                             </td>
-                                            <td className="px-1 py-[2px] text-right text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+                                            <td className="px-1.5 py-1 text-right text-xs font-semibold text-foreground">
                                                 {secTot ? fmt(secTot.total) : ''}
                                             </td>
                                             <td></td>
@@ -607,82 +644,76 @@ export function ConditionDetailGrid({
                                         rowNum++;
                                         const qty = computeLineQty(item, primaryQty, secondaryQty);
                                         const matCost = computeLineMaterialCost(item, qty);
-                                        const labCost = computeLineLabourCost(item, qty);
+                                        const labCost = computeLineLabourCost(item, qty, masterHourlyRate);
                                         const lineCost = matCost + labCost;
                                         const isMat = item.entry_type === 'material';
 
-                                        const rowBg = isMat
-                                            ? 'bg-white dark:bg-slate-900'
-                                            : 'bg-blue-50/60 dark:bg-blue-950/30';
-
                                         return (
                                             <Fragment key={item._key}>
-                                            <tr
-                                                className={`${rowBg} border-b border-slate-200 dark:border-slate-700 hover:bg-slate-100/60 dark:hover:bg-slate-800/40`}
-                                            >
+                                            <tr className="border-b border-border/60 hover:bg-muted/30 transition-colors">
                                                 {/* # */}
-                                                <td className="px-0.5 py-0 text-center text-[9px] text-slate-400 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-1 py-0 text-center text-[11px] text-muted-foreground/70">
                                                     {rowNum}
                                                 </td>
                                                 {/* Section */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-0 py-0">
                                                     <input
                                                         value={item.section ?? ''}
                                                         onChange={(e) => updateItem(item._key!, { section: e.target.value || null })}
-                                                        className={`${cellInput} w-full text-left`}
+                                                        className={`${cellInput} text-left`}
                                                     />
                                                 </td>
                                                 {/* Item code */}
-                                                <td className="px-1 py-0 font-mono text-[9px] border-r border-slate-200 dark:border-slate-700 truncate max-w-[80px]" title={item.item_code ?? ''}>
+                                                <td className="px-1.5 py-0 font-mono text-[11px] truncate max-w-[86px]" title={item.item_code ?? ''}>
                                                     {item.item_code ?? ''}
                                                 </td>
                                                 {/* Description */}
-                                                <td className="px-1 py-0 border-r border-slate-200 dark:border-slate-700 truncate max-w-[180px]" title={item.description ?? ''}>
+                                                <td className="px-1.5 py-0 truncate max-w-[200px]" title={item.description ?? ''}>
                                                     {item.description ?? ''}
                                                 </td>
-                                                {/* Labour Cost Code */}
-                                                <td className="px-1 py-0 font-mono text-[9px] border-r border-slate-200 dark:border-slate-700 truncate max-w-[70px] text-blue-700 dark:text-blue-400" title={item.labour_cost_code?.code ?? ''}>
+                                                {/* Labour Cost Code — keep blue color as semantic indicator for labour vs material distinction */}
+                                                <td className="px-1.5 py-0 font-mono text-[11px] truncate max-w-[76px] text-muted-foreground" title={item.labour_cost_code?.code ?? ''}>
                                                     {!isMat ? (item.labour_cost_code?.code ?? '') : ''}
                                                 </td>
                                                 {/* OC spacing */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-0 py-0">
                                                     <input
                                                         type="number"
                                                         step="0.001"
                                                         value={item.oc_spacing ?? ''}
                                                         onChange={(e) => updateItem(item._key!, { oc_spacing: e.target.value ? Number(e.target.value) : null })}
-                                                        className={`${cellInput} w-full text-right`}
+                                                        className={`${cellInput} text-right`}
                                                     />
                                                 </td>
                                                 {/* Layers */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-0 py-0">
                                                     <input
                                                         type="number"
                                                         min={1}
                                                         max={99}
                                                         value={item.layers}
                                                         onChange={(e) => updateItem(item._key!, { layers: Math.max(1, Number(e.target.value) || 1) })}
-                                                        className={`${cellInput} w-full text-right`}
+                                                        className={`${cellInput} text-right`}
                                                     />
                                                 </td>
                                                 {/* Size (condition height) */}
-                                                <td className="px-1 py-0 text-right text-[10px] text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-1.5 py-0 text-right text-xs text-muted-foreground">
                                                     {conditionHeight != null && conditionHeight > 0 ? fmtDec(conditionHeight, 1) : ''}
                                                 </td>
                                                 {/* Qty (computed) */}
-                                                <td className="px-1 py-0 text-right font-mono text-[10px] border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-1.5 py-0 text-right font-mono text-xs">
                                                     {fmtQty(qty)}
                                                 </td>
                                                 {/* Per (UOM) */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-0 py-0">
                                                     <input
                                                         value={item.uom ?? ''}
                                                         onChange={(e) => updateItem(item._key!, { uom: e.target.value || null })}
-                                                        className={`${cellInput} w-full text-center`}
+                                                        className={`${cellInput} text-center`}
                                                     />
                                                 </td>
                                                 {/* Mat Cost (unit cost for materials) */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                <td className="px-0 py-0">
                                                     {isMat ? (
                                                         <input
                                                             type="number"
@@ -691,140 +722,169 @@ export function ConditionDetailGrid({
                                                             onChange={(e) =>
                                                                 updateItem(item._key!, { unit_cost: e.target.value ? Number(e.target.value) : null, cost_source: 'manual' })
                                                             }
-                                                            className={`${cellInput} w-full text-right`}
+                                                            className={`${cellInput} text-right`}
                                                         />
                                                     ) : (
                                                         <span></span>
                                                     )}
                                                 </td>
-                                                {/* Lab Cost (hourly_rate / production_rate) */}
-                                                <td className="px-0 py-0 border-r border-slate-200 dark:border-slate-700">
+                                                {/* Lab Cost — derived from masterRate ÷ production_rate.
+                                                    Editing this cell derives + saves a new production_rate. */}
+                                                <td className="px-0 py-0">
                                                     {!isMat ? (
                                                         <input
                                                             type="number"
                                                             step="0.01"
-                                                            value={
-                                                                item.hourly_rate && item.production_rate && item.production_rate > 0
-                                                                    ? Math.round((item.hourly_rate / item.production_rate) * 100) / 100
-                                                                    : ''
-                                                            }
+                                                            value={(() => {
+                                                                const rate = masterHourlyRate ?? item.hourly_rate;
+                                                                if (rate && item.production_rate && item.production_rate > 0) {
+                                                                    return Math.round((rate / item.production_rate) * 100) / 100;
+                                                                }
+                                                                return '';
+                                                            })()}
                                                             onChange={(e) => {
                                                                 const labCostPerUnit = e.target.value ? Number(e.target.value) : null;
-                                                                if (labCostPerUnit != null && item.production_rate && item.production_rate > 0) {
-                                                                    updateItem(item._key!, { hourly_rate: labCostPerUnit * item.production_rate });
-                                                                } else if (labCostPerUnit != null) {
-                                                                    updateItem(item._key!, { hourly_rate: labCostPerUnit, production_rate: 1 });
+                                                                const rate = masterHourlyRate ?? item.hourly_rate;
+                                                                if (labCostPerUnit != null && labCostPerUnit > 0 && rate && rate > 0) {
+                                                                    // Derive production_rate from $/unit at current crew rate.
+                                                                    updateItem(item._key!, { production_rate: rate / labCostPerUnit });
+                                                                } else if (labCostPerUnit == null) {
+                                                                    updateItem(item._key!, { production_rate: null });
                                                                 }
                                                             }}
-                                                            className={`${cellInput} w-full text-right`}
+                                                            disabled={!masterHourlyRate && !item.hourly_rate}
+                                                            title={!masterHourlyRate && !item.hourly_rate ? 'Set the project crew rate first.' : undefined}
+                                                            className={`${cellInput} text-right`}
                                                         />
                                                     ) : (
                                                         <span></span>
                                                     )}
                                                 </td>
-                                                {/* Mat Total */}
-                                                <td className="px-1 py-0 text-right font-mono text-[10px] border-r border-slate-200 dark:border-slate-700 bg-green-50/40 dark:bg-green-950/10 text-green-800 dark:text-green-300">
+                                                {/* Prod rate — labour only, editable; persistent atom for the line. */}
+                                                <td className="px-0 py-0">
+                                                    {!isMat ? (
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={item.production_rate ?? ''}
+                                                            onChange={(e) =>
+                                                                updateItem(item._key!, { production_rate: e.target.value ? Number(e.target.value) : null })
+                                                            }
+                                                            className={`${cellInput} text-right`}
+                                                            placeholder="—"
+                                                            title="Units per hour"
+                                                        />
+                                                    ) : (
+                                                        <span></span>
+                                                    )}
+                                                </td>
+                                                {/* Mat Total — hierarchy via font weight, not color panel */}
+                                                <td className="px-1.5 py-0 text-right font-mono text-xs text-muted-foreground">
                                                     {isMat && matCost > 0 ? fmt(matCost) : ''}
                                                 </td>
                                                 {/* Lab Total */}
-                                                <td className="px-1 py-0 text-right font-mono text-[10px] border-r border-slate-200 dark:border-slate-700 bg-fuchsia-50/40 dark:bg-fuchsia-950/10 text-fuchsia-800 dark:text-fuchsia-300">
+                                                <td className="px-1.5 py-0 text-right font-mono text-xs text-muted-foreground">
                                                     {!isMat && labCost > 0 ? fmt(labCost) : ''}
                                                 </td>
-                                                {/* Item Total */}
-                                                <td className="px-1 py-0 text-right font-mono text-[10px] font-semibold bg-amber-50/40 dark:bg-amber-950/10 text-amber-900 dark:text-amber-200">
+                                                {/* Item Total — semibold for primary emphasis */}
+                                                <td className="px-1.5 py-0 text-right font-mono text-xs font-semibold text-foreground">
                                                     {lineCost > 0 ? fmt(lineCost) : ''}
                                                 </td>
                                                 {/* Actions */}
                                                 <td className="px-0 py-0 text-center">
-                                                    <div className="flex items-center justify-center gap-0">
+                                                    <div className="flex items-center justify-center gap-0.5">
                                                         <button
-                                                            className="text-slate-300 hover:text-blue-500 dark:text-slate-600 dark:hover:text-blue-400 transition-colors"
+                                                            className="text-muted-foreground/60 hover:text-foreground p-0.5 transition-colors"
                                                             onClick={() => setEditingKey(editingKey === item._key ? null : item._key!)}
                                                             title="Edit"
                                                         >
-                                                            <Pencil className="h-2.5 w-2.5" />
+                                                            <Pencil className="h-3 w-3" />
                                                         </button>
                                                         <button
-                                                            className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors"
+                                                            className="text-muted-foreground/60 hover:text-destructive p-0.5 transition-colors"
                                                             onClick={() => removeItem(item._key!)}
                                                             title="Remove"
                                                         >
-                                                            <Trash2 className="h-2.5 w-2.5" />
+                                                            <Trash2 className="h-3 w-3" />
                                                         </button>
                                                     </div>
                                                 </td>
                                             </tr>
-                                            {/* Inline edit panel */}
+                                            {/* Inline edit panel — quieter bg, lighter labels, less density */}
                                             {editingKey === item._key && (
-                                                <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600">
-                                                    <td colSpan={16} className="px-3 py-2">
-                                                        <div className="flex gap-6 text-[10px]">
+                                                <tr className="bg-muted/20 border-b">
+                                                    <td colSpan={17} className="px-3 py-3">
+                                                        <div className="flex gap-6 text-xs">
                                                             {/* Left column — identity & linked items */}
-                                                            <div className="flex-1 min-w-0 space-y-2">
-                                                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
-                                                                    {isMat ? 'Material' : 'Labour'} Line
+                                                            <div className="flex-1 min-w-0 space-y-2.5">
+                                                                <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                                                                    {isMat ? 'Material' : 'Labour'} line
                                                                 </div>
                                                                 {/* Material picker */}
                                                                 {isMat && (
                                                                     <div>
-                                                                        <label className="text-slate-500 dark:text-slate-400 text-[9px]">Material Item</label>
-                                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                                            <span className="text-[10px] font-mono truncate flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
-                                                                                {item.material_item ? <><strong>{item.material_item.code}</strong> {item.material_item.description}</> : <span className="text-slate-400 italic">None</span>}
+                                                                        <label className="text-muted-foreground text-[11px]">Material item</label>
+                                                                        <div className="flex items-center gap-2 mt-1">
+                                                                            <span className="text-xs font-mono truncate flex-1 bg-background border rounded-md px-2 py-1">
+                                                                                {item.material_item ? <><strong>{item.material_item.code}</strong> {item.material_item.description}</> : <span className="text-muted-foreground italic">None</span>}
                                                                             </span>
-                                                                            <button
-                                                                                className="text-[9px] text-blue-600 hover:text-blue-800 dark:text-blue-400 font-medium whitespace-nowrap"
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-7 px-2 text-xs"
                                                                                 onClick={() => openEditSearch('material')}
                                                                             >
                                                                                 {item.material_item ? 'Change' : 'Pick'}
-                                                                            </button>
+                                                                            </Button>
                                                                         </div>
                                                                     </div>
                                                                 )}
                                                                 {/* LCC picker */}
                                                                 {!isMat && (
                                                                     <div>
-                                                                        <label className="text-slate-500 dark:text-slate-400 text-[9px]">Labour Cost Code</label>
-                                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                                            <span className="text-[10px] font-mono truncate flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
-                                                                                {item.labour_cost_code ? <><strong>{item.labour_cost_code.code}</strong> {item.labour_cost_code.name}</> : <span className="text-slate-400 italic">None</span>}
+                                                                        <label className="text-muted-foreground text-[11px]">Labour cost code</label>
+                                                                        <div className="flex items-center gap-2 mt-1">
+                                                                            <span className="text-xs font-mono truncate flex-1 bg-background border rounded-md px-2 py-1">
+                                                                                {item.labour_cost_code ? <><strong>{item.labour_cost_code.code}</strong> {item.labour_cost_code.name}</> : <span className="text-muted-foreground italic">None</span>}
                                                                             </span>
-                                                                            <button
-                                                                                className="text-[9px] text-blue-600 hover:text-blue-800 dark:text-blue-400 font-medium whitespace-nowrap"
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-7 px-2 text-xs"
                                                                                 onClick={() => openEditSearch('lcc')}
                                                                             >
                                                                                 {item.labour_cost_code ? 'Change' : 'Pick'}
-                                                                            </button>
+                                                                            </Button>
                                                                         </div>
                                                                     </div>
                                                                 )}
                                                                 {/* Inline search for edit panel */}
                                                                 {editSearchField && (
-                                                                    <div className="border rounded bg-muted/30 p-1.5">
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Search className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                                            <input
+                                                                    <div className="border rounded-md bg-background p-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                                            <Input
                                                                                 ref={editSearchInputRef}
                                                                                 value={editSearchQuery}
                                                                                 onChange={(e) => setEditSearchQuery(e.target.value)}
                                                                                 placeholder={editSearchField === 'material' ? 'Search materials...' : 'Search labour codes...'}
-                                                                                className="h-5 flex-1 rounded border border-slate-300 bg-background text-[10px] px-1.5 py-0 outline-none focus:ring-1 focus:ring-primary/40"
+                                                                                className="h-7 text-xs"
                                                                             />
-                                                                            <button className="text-muted-foreground hover:text-foreground" onClick={() => setEditSearchField(null)}>
-                                                                                <X className="h-3 w-3" />
-                                                                            </button>
+                                                                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setEditSearchField(null)}>
+                                                                                <X className="h-3.5 w-3.5" />
+                                                                            </Button>
                                                                         </div>
                                                                         {editSearching && (
-                                                                            <div className="mt-1 text-[9px] text-muted-foreground flex items-center gap-1">
-                                                                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Searching...
+                                                                            <div className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1">
+                                                                                <Loader2 className="h-3 w-3 animate-spin" /> Searching...
                                                                             </div>
                                                                         )}
                                                                         {editSearchResults.length > 0 && (
-                                                                            <div className="mt-1 max-h-28 overflow-y-auto border rounded bg-background">
+                                                                            <div className="mt-1.5 max-h-28 overflow-y-auto border rounded-md bg-background">
                                                                                 {editSearchResults.map((r) => (
                                                                                     <button
                                                                                         key={r.id}
-                                                                                        className="w-full text-left px-1.5 py-0.5 text-[10px] hover:bg-muted/50 flex justify-between"
+                                                                                        className="w-full text-left px-2 py-1 text-xs hover:bg-muted/60 flex justify-between"
                                                                                         onClick={() => pickEditResult(item._key!, r)}
                                                                                     >
                                                                                         <span>
@@ -843,158 +903,178 @@ export function ConditionDetailGrid({
                                                                     </div>
                                                                 )}
                                                                 {/* Item Code + Description */}
-                                                                <div className="grid grid-cols-[60px_1fr] gap-x-2 gap-y-1">
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Code</label>
-                                                                    <input
+                                                                <div className="grid grid-cols-[64px_1fr] gap-x-2 gap-y-1.5 items-center">
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Code</label>
+                                                                    <Input
                                                                         value={item.item_code ?? ''}
                                                                         onChange={(e) => updateItem(item._key!, { item_code: e.target.value || null })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
+                                                                        className="h-7 text-xs"
                                                                     />
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Desc</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Desc</label>
+                                                                    <Input
                                                                         value={item.description ?? ''}
                                                                         onChange={(e) => updateItem(item._key!, { description: e.target.value || null })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
+                                                                        className="h-7 text-xs"
                                                                     />
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Section</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Section</label>
+                                                                    <Input
                                                                         value={item.section ?? ''}
                                                                         onChange={(e) => updateItem(item._key!, { section: e.target.value || null })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
+                                                                        className="h-7 text-xs"
                                                                     />
                                                                 </div>
                                                             </div>
                                                             {/* Right column — quantity & cost parameters */}
-                                                            <div className="w-64 shrink-0 space-y-2">
-                                                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">Quantity</div>
-                                                                <div className="grid grid-cols-[70px_1fr] gap-x-2 gap-y-1">
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Qty Source</label>
-                                                                    <select
+                                                            <div className="w-72 shrink-0 space-y-2.5">
+                                                                <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Quantity</div>
+                                                                <div className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 items-center">
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Qty source</label>
+                                                                    <NativeSelect
+                                                                        size="sm"
+                                                                        className="w-full [&>select]:text-xs"
                                                                         value={item.qty_source}
                                                                         onChange={(e) => updateItem(item._key!, { qty_source: e.target.value as ConditionLineItem['qty_source'] })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
                                                                     >
-                                                                        <option value="primary">{conditionType === 'area' ? 'Area (Q1)' : conditionType === 'linear' ? 'Length (Q1)' : 'Count (Q1)'}</option>
-                                                                        {conditionType === 'area' && <option value="secondary">Perimeter (Q2)</option>}
-                                                                        <option value="fixed">Fixed</option>
-                                                                    </select>
+                                                                        <NativeSelectOption value="primary">{conditionType === 'area' ? 'Area (Q1)' : conditionType === 'linear' ? 'Length (Q1)' : 'Count (Q1)'}</NativeSelectOption>
+                                                                        {conditionType === 'area' && <NativeSelectOption value="secondary">Perimeter (Q2)</NativeSelectOption>}
+                                                                        <NativeSelectOption value="fixed">Fixed</NativeSelectOption>
+                                                                    </NativeSelect>
                                                                     {item.qty_source === 'fixed' && (
                                                                         <>
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Fixed Qty</label>
-                                                                            <input
+                                                                            <label className="text-muted-foreground text-[11px] text-right">Fixed qty</label>
+                                                                            <Input
                                                                                 type="number"
                                                                                 step="0.01"
                                                                                 value={item.fixed_qty ?? ''}
                                                                                 onChange={(e) => updateItem(item._key!, { fixed_qty: e.target.value ? Number(e.target.value) : null })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                className="h-7 text-xs"
                                                                             />
                                                                         </>
                                                                     )}
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">OC</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">OC</label>
+                                                                    <Input
                                                                         type="number"
                                                                         step="0.001"
                                                                         value={item.oc_spacing ?? ''}
                                                                         onChange={(e) => updateItem(item._key!, { oc_spacing: e.target.value ? Number(e.target.value) : null })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                        className="h-7 text-xs"
                                                                         placeholder="metres"
                                                                     />
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Layers</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Layers</label>
+                                                                    <Input
                                                                         type="number"
                                                                         min={1}
                                                                         max={99}
                                                                         value={item.layers}
                                                                         onChange={(e) => updateItem(item._key!, { layers: Math.max(1, Number(e.target.value) || 1) })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                        className="h-7 text-xs"
                                                                     />
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Waste %</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">Waste %</label>
+                                                                    <Input
                                                                         type="number"
                                                                         step="0.1"
                                                                         min={0}
                                                                         max={100}
                                                                         value={item.waste_percentage || ''}
                                                                         onChange={(e) => updateItem(item._key!, { waste_percentage: Number(e.target.value) || 0 })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                        className="h-7 text-xs"
                                                                     />
-                                                                    <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">UOM</label>
-                                                                    <input
+                                                                    <label className="text-muted-foreground text-[11px] text-right">UOM</label>
+                                                                    <Input
                                                                         value={item.uom ?? ''}
                                                                         onChange={(e) => updateItem(item._key!, { uom: e.target.value || null })}
-                                                                        className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
+                                                                        className="h-7 text-xs"
                                                                         placeholder="m, m2, EA"
                                                                     />
                                                                 </div>
                                                                 {/* Cost fields */}
-                                                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-2 mb-1">Cost</div>
-                                                                <div className="grid grid-cols-[70px_1fr] gap-x-2 gap-y-1">
+                                                                <div className="text-[11px] font-medium text-muted-foreground mt-3 mb-1.5">Cost</div>
+                                                                <div className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 items-center">
                                                                     {isMat ? (
                                                                         <>
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Unit Cost</label>
-                                                                            <input
+                                                                            <label className="text-muted-foreground text-[11px] text-right">Unit cost</label>
+                                                                            <Input
                                                                                 type="number"
                                                                                 step="0.01"
                                                                                 value={item.cost_source === 'material' ? (item.material_item?.effective_unit_cost ?? item.unit_cost ?? '') : (item.unit_cost ?? '')}
                                                                                 onChange={(e) => updateItem(item._key!, { unit_cost: e.target.value ? Number(e.target.value) : null, cost_source: 'manual' })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                className="h-7 text-xs"
                                                                             />
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Cost Src</label>
-                                                                            <select
+                                                                            <label className="text-muted-foreground text-[11px] text-right">Cost src</label>
+                                                                            <NativeSelect
+                                                                                size="sm"
+                                                                                className="w-full [&>select]:text-xs"
                                                                                 value={item.cost_source}
                                                                                 onChange={(e) => updateItem(item._key!, { cost_source: e.target.value as 'material' | 'manual' })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40"
                                                                             >
-                                                                                <option value="material">From Material</option>
-                                                                                <option value="manual">Manual</option>
-                                                                            </select>
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Pack Size</label>
-                                                                            <input
+                                                                                <NativeSelectOption value="material">From Material</NativeSelectOption>
+                                                                                <NativeSelectOption value="manual">Manual</NativeSelectOption>
+                                                                            </NativeSelect>
+                                                                            <label className="text-muted-foreground text-[11px] text-right">Pack size</label>
+                                                                            <Input
                                                                                 type="number"
                                                                                 step="1"
                                                                                 value={item.pack_size ?? ''}
                                                                                 onChange={(e) => updateItem(item._key!, { pack_size: e.target.value ? Number(e.target.value) : null })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                className="h-7 text-xs"
                                                                                 placeholder="none"
                                                                             />
                                                                         </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">$/hr</label>
-                                                                            <input
-                                                                                type="number"
-                                                                                step="0.01"
-                                                                                value={item.hourly_rate ?? ''}
-                                                                                onChange={(e) => updateItem(item._key!, { hourly_rate: e.target.value ? Number(e.target.value) : null })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                                                            />
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Prod Rate</label>
-                                                                            <input
-                                                                                type="number"
-                                                                                step="0.01"
-                                                                                value={item.production_rate ?? ''}
-                                                                                onChange={(e) => updateItem(item._key!, { production_rate: e.target.value ? Number(e.target.value) : null })}
-                                                                                className="h-6 rounded border border-slate-300 dark:border-slate-600 bg-background px-1.5 py-0 text-[10px] outline-none focus:ring-1 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                                                                                placeholder="units/hr"
-                                                                            />
-                                                                            <label className="text-slate-500 dark:text-slate-400 text-right pt-0.5">Lab Cost</label>
-                                                                            <span className="text-[10px] font-mono pt-0.5">
-                                                                                {item.hourly_rate && item.production_rate && item.production_rate > 0
-                                                                                    ? `$${fmtDec(item.hourly_rate / item.production_rate)} / ${item.uom || 'unit'}`
-                                                                                    : '—'}
-                                                                            </span>
-                                                                        </>
-                                                                    )}
+                                                                    ) : (() => {
+                                                                        // Effective crew rate: master wins; per-line is legacy fallback.
+                                                                        const effectiveRate = masterHourlyRate ?? item.hourly_rate;
+                                                                        const labCostPerUnit = effectiveRate && item.production_rate && item.production_rate > 0
+                                                                            ? effectiveRate / item.production_rate
+                                                                            : null;
+                                                                        const onCostChange = (raw: string) => {
+                                                                            const v = raw ? Number(raw) : null;
+                                                                            if (v != null && v > 0 && effectiveRate && effectiveRate > 0) {
+                                                                                updateItem(item._key!, { production_rate: effectiveRate / v });
+                                                                            } else if (v == null) {
+                                                                                updateItem(item._key!, { production_rate: null });
+                                                                            }
+                                                                        };
+                                                                        return (
+                                                                            <>
+                                                                                <label className="text-muted-foreground text-[11px] text-right">Crew rate</label>
+                                                                                <span className="text-xs font-mono text-muted-foreground">
+                                                                                    {effectiveRate ? `$${fmtDec(effectiveRate)} / hr (project)` : 'Set project crew rate'}
+                                                                                </span>
+                                                                                <label className="text-muted-foreground text-[11px] text-right">Prod rate</label>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    step="0.01"
+                                                                                    value={item.production_rate ?? ''}
+                                                                                    onChange={(e) => updateItem(item._key!, { production_rate: e.target.value ? Number(e.target.value) : null })}
+                                                                                    className="h-7 text-xs"
+                                                                                    placeholder="units/hr"
+                                                                                />
+                                                                                <label className="text-muted-foreground text-[11px] text-right">$/{item.uom || 'unit'}</label>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    step="0.01"
+                                                                                    value={labCostPerUnit != null ? Math.round(labCostPerUnit * 100) / 100 : ''}
+                                                                                    onChange={(e) => onCostChange(e.target.value)}
+                                                                                    disabled={!effectiveRate}
+                                                                                    title={!effectiveRate ? 'Set the project crew rate first.' : undefined}
+                                                                                    className="h-7 text-xs"
+                                                                                    placeholder={effectiveRate ? '0.00' : '—'}
+                                                                                />
+                                                                            </>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="mt-2 flex justify-end">
-                                                            <button
-                                                                className="text-[9px] text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-medium px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                                        <div className="mt-3 flex justify-end">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 px-3 text-xs"
                                                                 onClick={() => { setEditingKey(null); setEditSearchField(null); }}
                                                             >
                                                                 Close
-                                                            </button>
+                                                            </Button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1006,36 +1086,36 @@ export function ConditionDetailGrid({
                             );
                         })}
                     </tbody>
-                    {/* Footer totals */}
+                    {/* Footer totals — quiet muted bar, font-weight conveys hierarchy */}
                     {items.length > 0 && (
                         <tfoot className="sticky bottom-0 z-10">
-                            <tr className="bg-slate-100 dark:bg-slate-800 border-t-2 border-slate-400 dark:border-slate-500 text-[10px] font-bold">
-                                <td colSpan={12} className="px-1 py-[3px] text-right text-slate-600 dark:text-slate-300">
+                            <tr className="bg-muted/60 border-t text-xs font-semibold">
+                                <td colSpan={13} className="px-2 py-1.5 text-right text-muted-foreground">
                                     Total
                                 </td>
-                                <td className="px-1 py-[3px] text-right font-mono text-green-800 dark:text-green-300 bg-green-100/60 dark:bg-green-950/30">
+                                <td className="px-1.5 py-1.5 text-right font-mono text-foreground">
                                     {fmt(totals.matTotal)}
                                 </td>
-                                <td className="px-1 py-[3px] text-right font-mono text-fuchsia-800 dark:text-fuchsia-300 bg-fuchsia-100/60 dark:bg-fuchsia-950/30">
+                                <td className="px-1.5 py-1.5 text-right font-mono text-foreground">
                                     {fmt(totals.labTotal)}
                                 </td>
-                                <td className="px-1 py-[3px] text-right font-mono text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/30">
+                                <td className="px-1.5 py-1.5 text-right font-mono text-foreground">
                                     {fmt(totals.grandTotal)}
                                 </td>
                                 <td></td>
                             </tr>
-                            {primaryQty > 0 && (
-                                <tr className="bg-slate-50 dark:bg-slate-850 text-[9px] text-slate-500 dark:text-slate-400">
-                                    <td colSpan={12} className="px-1 py-[2px] text-right">
+                            {primaryQty > 0 && !previewMode && (
+                                <tr className="bg-muted/30 text-[11px] text-muted-foreground border-t border-border/40">
+                                    <td colSpan={13} className="px-2 py-1 text-right">
                                         per {conditionType === 'area' ? 'm\u00B2' : conditionType === 'linear' ? 'm' : 'ea'}
                                     </td>
-                                    <td className="px-1 py-[2px] text-right font-mono bg-green-50/30 dark:bg-green-950/10">
+                                    <td className="px-1.5 py-1 text-right font-mono">
                                         {fmtDec(totals.matTotal / primaryQty)}
                                     </td>
-                                    <td className="px-1 py-[2px] text-right font-mono bg-fuchsia-50/30 dark:bg-fuchsia-950/10">
+                                    <td className="px-1.5 py-1 text-right font-mono">
                                         {fmtDec(totals.labTotal / primaryQty)}
                                     </td>
-                                    <td className="px-1 py-[2px] text-right font-mono bg-amber-50/30 dark:bg-amber-950/10">
+                                    <td className="px-1.5 py-1 text-right font-mono">
                                         {fmtDec(totals.grandTotal / primaryQty)}
                                     </td>
                                     <td></td>
@@ -1048,21 +1128,21 @@ export function ConditionDetailGrid({
 
             {/* Action bar */}
             <div className="flex items-center justify-between px-1 pb-1">
-                <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2" onClick={() => addBlankRow('material', null)}>
-                        <Plus className="h-2.5 w-2.5" /> Material
+                <div className="flex items-center gap-1.5">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2.5" onClick={() => addBlankRow('material', null)}>
+                        <Plus className="h-3 w-3" /> Material
                     </Button>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2" onClick={() => addBlankRow('labour', null)}>
-                        <Plus className="h-2.5 w-2.5" /> Labour
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2.5" onClick={() => addBlankRow('labour', null)}>
+                        <Plus className="h-3 w-3" /> Labour
                     </Button>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2" onClick={addSection}>
-                        <Plus className="h-2.5 w-2.5" /> Section
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2.5" onClick={addSection}>
+                        <Plus className="h-3 w-3" /> Section
                     </Button>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    {isDirty && <span className="text-[9px] text-amber-600">Unsaved</span>}
-                    <Button size="sm" className="h-6 text-[10px] gap-0.5 px-2" onClick={handleSave} disabled={saving || !isDirty}>
-                        {saving ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Save className="h-2.5 w-2.5" />}
+                <div className="flex items-center gap-2">
+                    {isDirty && <span className="text-[11px] text-muted-foreground">Unsaved</span>}
+                    <Button size="sm" className="h-7 text-xs gap-1 px-2.5" onClick={handleSave} disabled={saving || !isDirty}>
+                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                         Save
                     </Button>
                 </div>

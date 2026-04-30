@@ -31,6 +31,7 @@ class Location extends Model
         'zip_code',
         'latitude',
         'longitude',
+        'master_hourly_rate',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class Location extends Model
         'closed_at' => 'datetime',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
+        'master_hourly_rate' => 'float',
     ];
 
     /** JS day-of-week indices (0=Sun..6=Sat) considered working. Defaults to Mon-Fri. */

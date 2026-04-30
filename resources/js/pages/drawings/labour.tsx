@@ -1,9 +1,13 @@
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { usePage } from '@inertiajs/react';
 import { HardHat } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 // ---------- types ----------
 
@@ -45,19 +49,63 @@ function fmtInt(val: number): string {
     return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+const getCsrfToken = (): string =>
+    document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+
+const getXsrfToken = (): string => {
+    const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+};
+
 // ---------- component ----------
 
 export default function LabourPage() {
-    const { drawing, revisions, project, activeTab, labourSummaries } = usePage<{
+    const { drawing, revisions, project, activeTab, labourSummaries, masterHourlyRate } = usePage<{
         drawing: Drawing;
         revisions: Revision[];
         project?: { id: number; name: string };
         activeTab: DrawingTab;
         labourSummaries: LabourSummary[];
+        masterHourlyRate: number | null;
     }>().props;
+
+    const [rate, setRate] = useState<number | null>(masterHourlyRate);
+    const [rateInput, setRateInput] = useState(masterHourlyRate != null ? String(masterHourlyRate) : '');
+    const [savingRate, setSavingRate] = useState(false);
 
     const grandTotal = labourSummaries.reduce((s, r) => s + r.total_cost, 0);
     const grandHours = labourSummaries.reduce((s, r) => s + (r.hours ?? 0), 0);
+
+    const saveRate = async () => {
+        const trimmed = rateInput.trim();
+        const parsed = trimmed === '' ? null : parseFloat(trimmed);
+        if (parsed != null && (Number.isNaN(parsed) || parsed < 0)) return;
+        if (parsed === rate) return;
+        if (!project?.id) return;
+        setSavingRate(true);
+        try {
+            const res = await fetch(`/locations/${project.id}/master-hourly-rate`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ master_hourly_rate: parsed }),
+            });
+            if (!res.ok) throw new Error(`Server error (${res.status})`);
+            const data = await res.json();
+            setRate(data.master_hourly_rate ?? null);
+            toast.success('Crew rate updated. Refresh totals to see new labour costs.');
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Failed to save crew rate.');
+            setRateInput(rate != null ? String(rate) : '');
+        } finally {
+            setSavingRate(false);
+        }
+    };
 
     return (
         <DrawingWorkspaceLayout
@@ -67,21 +115,48 @@ export default function LabourPage() {
             activeTab={activeTab}
         >
             <div className="flex flex-1 flex-col overflow-hidden">
-                {labourSummaries.length === 0 ? (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
-                            <HardHat className="h-6 w-6 text-muted-foreground/40" />
+                <ScrollArea className="flex-1">
+                    <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+                        {/* Toolbar — project crew rate. Lives here because labour cost is what it drives. */}
+                        <div className="flex items-center gap-3">
+                            <Label htmlFor="crew-rate" className="text-xs text-muted-foreground whitespace-nowrap">
+                                Project crew rate
+                            </Label>
+                            <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>
+                                <Input
+                                    id="crew-rate"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={rateInput}
+                                    onChange={(e) => setRateInput(e.target.value)}
+                                    onBlur={saveRate}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    placeholder="0.00"
+                                    className="h-7 w-28 pl-5 pr-10 tabular-nums text-xs"
+                                    disabled={savingRate}
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">/hr</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                                Drives all labour line $/unit costs across the project.
+                            </span>
                         </div>
-                        <div>
-                            <p className="text-xs font-medium text-muted-foreground">No labour data</p>
-                            <p className="mt-1 text-xs text-muted-foreground/70">
-                                Add labour cost codes to conditions and take measurements to see the labour summary here.
-                            </p>
-                        </div>
-                    </div>
-                ) : (
-                    <ScrollArea className="flex-1">
-                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
+
+                        {labourSummaries.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-3 text-center py-16">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+                                    <HardHat className="h-6 w-6 text-muted-foreground/40" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground">No labour data</p>
+                                    <p className="mt-1 text-xs text-muted-foreground/70">
+                                        Add labour cost codes to conditions and take measurements to see the labour summary here.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
                             <Card className="overflow-clip !p-0 !gap-0">
                                 <Table className="text-xs [&>tbody>tr:last-child]:border-b-0">
                                     <TableHeader className="sticky top-0 z-10 bg-background">
@@ -143,9 +218,9 @@ export default function LabourPage() {
                                     </TableFooter>
                                 </Table>
                             </Card>
-                        </div>
-                    </ScrollArea>
-                )}
+                        )}
+                    </div>
+                </ScrollArea>
             </div>
         </DrawingWorkspaceLayout>
     );

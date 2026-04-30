@@ -342,6 +342,27 @@ class Drawing extends Model implements HasMedia
         $newDrawing->revision_number = $revisionNumber;
         $newDrawing->status = self::STATUS_ACTIVE;
         $newDrawing->save();
+
+        // Carry the previous revision's scale calibration forward so the
+        // estimator doesn't have to re-calibrate on every revision upload.
+        if ($currentActive && $newDrawing->scaleCalibration === null) {
+            $prev = $currentActive->scaleCalibration;
+            if ($prev) {
+                $newDrawing->scaleCalibration()->create([
+                    'method' => $prev->method,
+                    'point_a_x' => $prev->point_a_x,
+                    'point_a_y' => $prev->point_a_y,
+                    'point_b_x' => $prev->point_b_x,
+                    'point_b_y' => $prev->point_b_y,
+                    'real_distance' => $prev->real_distance,
+                    'paper_size' => $prev->paper_size,
+                    'drawing_scale' => $prev->drawing_scale,
+                    'unit' => $prev->unit,
+                    'pixels_per_unit' => $prev->pixels_per_unit,
+                    'created_by' => auth()->id(),
+                ]);
+            }
+        }
     }
 
     /**

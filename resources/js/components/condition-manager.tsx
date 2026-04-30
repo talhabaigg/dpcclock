@@ -29,6 +29,29 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+const getCsrfToken = (): string =>
+    document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+
+const getXsrfToken = (): string => {
+    const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+};
+
+/**
+ * Per-unit aggregate qty for the detail grid. A condition is a pricing template,
+ * so its rates should display per unit of measure (e.g. $/m² for area), not as
+ * absolute totals tied to an unrelated measurement.
+ *
+ * - Area + height: 1 m² of face → 1/H linear m of perimeter (typical partition)
+ * - Linear / Count: 1 unit of primary, secondary unused
+ */
+function getPerUnitAggregateQty(c: { type: 'linear' | 'area' | 'count'; height: number | null }): { primary: number; secondary: number } {
+    if (c.type === 'area' && c.height && c.height > 0) {
+        return { primary: 1, secondary: 1 / c.height };
+    }
+    return { primary: 1, secondary: 0 };
+}
+
 export type ConditionCostCode = {
     id?: number;
     cost_code_id: number;
@@ -201,6 +224,11 @@ export function ConditionManager({
     // All labour cost codes for this location (used by the combobox)
     const [allLccs, setAllLccs] = useState<LccSearchResult[]>([]);
 
+    // Project-level master hourly rate (one rate per project, drives detailed labour pricing)
+    const [masterHourlyRate, setMasterHourlyRate] = useState<number | null>(null);
+    const [masterRateInput, setMasterRateInput] = useState('');
+    const [savingMasterRate, setSavingMasterRate] = useState(false);
+
     // Load conditions, pay rate templates, condition types, and labour cost codes
     useEffect(() => {
         if (!open || !locationId) return;
@@ -211,6 +239,9 @@ export function ConditionManager({
             .then((res) => res.json())
             .then((data) => {
                 onConditionsChange(data.conditions || []);
+                const rate = data.master_hourly_rate ?? null;
+                setMasterHourlyRate(rate);
+                setMasterRateInput(rate != null ? String(rate) : '');
             })
             .catch(() => {});
 
@@ -389,6 +420,36 @@ export function ConditionManager({
         setCreating(true);
         setEditing(false);
         setSelectedId(null);
+    };
+
+    const saveMasterRate = async () => {
+        const trimmed = masterRateInput.trim();
+        const parsed = trimmed === '' ? null : parseFloat(trimmed);
+        if (parsed != null && (Number.isNaN(parsed) || parsed < 0)) return;
+        if (parsed === masterHourlyRate) return; // no change
+        setSavingMasterRate(true);
+        try {
+            const res = await fetch(`/locations/${locationId}/master-hourly-rate`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-XSRF-TOKEN': getXsrfToken(),
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ master_hourly_rate: parsed }),
+            });
+            if (!res.ok) throw new Error(`Server error (${res.status})`);
+            const data = await res.json();
+            setMasterHourlyRate(data.master_hourly_rate ?? null);
+            toast.success('Crew rate updated.');
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Failed to save crew rate.');
+            setMasterRateInput(masterHourlyRate != null ? String(masterHourlyRate) : '');
+        } finally {
+            setSavingMasterRate(false);
+        }
     };
 
     const handleSelect = (id: number) => {
@@ -764,7 +825,7 @@ export function ConditionManager({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl h-[80vh] max-h-[90vh] flex flex-row gap-0 p-0 [&_input]:!text-xs [&_textarea]:!text-xs [&_[data-slot=input]]:!text-xs [&_label]:!text-xs [&_[data-slot=label]]:!text-xs">
+            <DialogContent className="sm:max-w-none w-[min(96vw,1400px)] h-[88vh] max-h-[92vh] flex flex-row gap-0 p-0 [&_input]:!text-xs [&_textarea]:!text-xs [&_[data-slot=input]]:!text-xs [&_label]:!text-xs [&_[data-slot=label]]:!text-xs">
                 {/* Sidebar — full height column */}
                 <div className="w-64 shrink-0 flex flex-col border-r min-h-0">
                         <div className="flex-1 min-h-0 overflow-y-auto p-1">
@@ -895,9 +956,28 @@ export function ConditionManager({
 
                                 {/* Pricing-specific details */}
                                 {formPricingMethod === 'detailed' ? (
-                                    <div className="rounded-md bg-muted/40 px-4 py-4 text-xs text-muted-foreground">
-                                        Save the condition first. You'll then be able to add line items — grouped into sections, with layers and per-line costs — from the detail grid.
-                                    </div>
+                                    editing && selectedCondition ? (
+                                        <ConditionDetailGrid
+                                            conditionId={selectedCondition.id}
+                                            conditionType={selectedCondition.type}
+                                            conditionHeight={selectedCondition.height}
+                                            locationId={locationId}
+                                            lineItems={selectedCondition.line_items ?? []}
+                                            aggregateQty={getPerUnitAggregateQty(selectedCondition)}
+                                            masterHourlyRate={masterHourlyRate}
+                                            previewMode
+                                            onLineItemsChange={(updatedItems) => {
+                                                const updated = conditions.map((cc) =>
+                                                    cc.id === selectedCondition.id ? { ...cc, line_items: updatedItems } : cc,
+                                                );
+                                                onConditionsChange(updated);
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="rounded-md bg-muted/40 px-4 py-4 text-xs text-muted-foreground">
+                                            Save the condition first. You'll then be able to add line items — grouped into sections, with layers and per-line costs — from the detail grid.
+                                        </div>
+                                    )
                                 ) : (
                                     (() => {
                                         const labourItems = formBoqItems
@@ -1821,16 +1901,7 @@ export function ConditionManager({
                                                     )}
                                                 </>
                                             );
-                                        })() : (
-                                            <div className="space-y-2">
-                                                <div className="text-xs font-medium">
-                                                    Line items <span className="text-muted-foreground font-normal">· {(c.line_items || []).length}</span>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Use the detail grid to add or edit line items.
-                                                </p>
-                                            </div>
-                                        )}
+                                        })() : null}
 
                                         {(c.condition_labour_codes || []).length > 0 && (
                                             <div className="space-y-2">
@@ -1876,6 +1947,9 @@ export function ConditionManager({
                                                 conditionHeight={c.height}
                                                 locationId={locationId}
                                                 lineItems={c.line_items ?? []}
+                                                aggregateQty={getPerUnitAggregateQty(c)}
+                                                masterHourlyRate={masterHourlyRate}
+                                                previewMode
                                                 onLineItemsChange={(updatedItems) => {
                                                     const updated = conditions.map((cc) =>
                                                         cc.id === c.id ? { ...cc, line_items: updatedItems } : cc,
