@@ -226,8 +226,6 @@ export function ConditionManager({
 
     // Project-level master hourly rate (one rate per project, drives detailed labour pricing)
     const [masterHourlyRate, setMasterHourlyRate] = useState<number | null>(null);
-    const [masterRateInput, setMasterRateInput] = useState('');
-    const [savingMasterRate, setSavingMasterRate] = useState(false);
 
     // Load conditions, pay rate templates, condition types, and labour cost codes
     useEffect(() => {
@@ -239,9 +237,7 @@ export function ConditionManager({
             .then((res) => res.json())
             .then((data) => {
                 onConditionsChange(data.conditions || []);
-                const rate = data.master_hourly_rate ?? null;
-                setMasterHourlyRate(rate);
-                setMasterRateInput(rate != null ? String(rate) : '');
+                setMasterHourlyRate(data.master_hourly_rate ?? null);
             })
             .catch(() => {});
 
@@ -420,36 +416,6 @@ export function ConditionManager({
         setCreating(true);
         setEditing(false);
         setSelectedId(null);
-    };
-
-    const saveMasterRate = async () => {
-        const trimmed = masterRateInput.trim();
-        const parsed = trimmed === '' ? null : parseFloat(trimmed);
-        if (parsed != null && (Number.isNaN(parsed) || parsed < 0)) return;
-        if (parsed === masterHourlyRate) return; // no change
-        setSavingMasterRate(true);
-        try {
-            const res = await fetch(`/locations/${locationId}/master-hourly-rate`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'X-XSRF-TOKEN': getXsrfToken(),
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({ master_hourly_rate: parsed }),
-            });
-            if (!res.ok) throw new Error(`Server error (${res.status})`);
-            const data = await res.json();
-            setMasterHourlyRate(data.master_hourly_rate ?? null);
-            toast.success('Crew rate updated.');
-        } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Failed to save crew rate.');
-            setMasterRateInput(masterHourlyRate != null ? String(masterHourlyRate) : '');
-        } finally {
-            setSavingMasterRate(false);
-        }
     };
 
     const handleSelect = (id: number) => {
