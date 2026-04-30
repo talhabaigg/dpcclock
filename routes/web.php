@@ -75,6 +75,7 @@ use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
 use App\Http\Controllers\ReferenceCheckController;
+use App\Http\Controllers\ScreeningInterviewController;
 use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
@@ -307,6 +308,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');
         Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
         Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
+
+        // Face-to-Face Screening Interview
+        Route::get('/employment-applications/{employmentApplication}/screening-interview/create', [ScreeningInterviewController::class, 'create'])->name('screening-interviews.create');
+        Route::post('/employment-applications/{employmentApplication}/screening-interview', [ScreeningInterviewController::class, 'store'])->name('screening-interviews.store');
+        Route::get('/employment-applications/screening-interviews/{screeningInterview}', [ScreeningInterviewController::class, 'show'])->name('screening-interviews.show');
     });
 
     // ============================================

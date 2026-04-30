@@ -448,7 +448,7 @@ export function LeafletDrawingViewer({
                 zoomControl={false}
                 attributionControl={false}
                 renderer={svgRenderer}
-                wheelPxPerZoomLevel={120}
+                wheelPxPerZoomLevel={30}
                 wheelDebounceTime={20}
                 zoomAnimation={true}
                 zoomAnimationThreshold={6}

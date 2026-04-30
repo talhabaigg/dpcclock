@@ -203,6 +203,7 @@ interface Application {
     employees: { id: number; name: string; eh_employee_id: string | null }[];
     skills: Skill[];
     references: Reference[];
+    screening_interview: { id: number } | null;
 }
 
 interface ActivityEntry {
@@ -2227,6 +2228,20 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         Reference check
                                                     </button>
                                                 )}
+                                                <Link
+                                                    href={
+                                                        app.screening_interview
+                                                            ? `/employment-applications/screening-interviews/${app.screening_interview.id}`
+                                                            : `/employment-applications/${app.id}/screening-interview/create`
+                                                    }
+                                                    className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm"
+                                                >
+                                                    <UserCheck className="h-3.5 w-3.5" />
+                                                    Face-to-Face Screening
+                                                    {app.screening_interview && (
+                                                        <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-600" />
+                                                    )}
+                                                </Link>
                                             </PopoverContent>
                                         </Popover>
                                         <Textarea
