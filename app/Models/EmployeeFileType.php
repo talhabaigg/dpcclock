@@ -169,7 +169,7 @@ class EmployeeFileType extends Model
             'employment_type' => $employee->employment_type === $value,
             'employment_agreement' => $employee->employment_agreement === $value,
             'worktype' => $employee->worktypes->contains('id', (int) $value),
-            'location' => $employee->kiosks->contains('location_id', (int) $value),
+            'location' => $employee->kiosks->contains('eh_location_id', (string) $value),
             default => false,
         };
 
