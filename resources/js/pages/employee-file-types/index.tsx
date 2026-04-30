@@ -437,15 +437,15 @@ export default function EmployeeFileTypesIndex() {
                                         <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
                                         <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
                                         <TableCell>{ft.allow_multiple ? 'Yes' : 'No'}</TableCell>
-                                        <TableCell className="max-w-[320px] text-sm">
+                                        <TableCell className="w-[320px] max-w-[320px] align-top text-sm">
                                             {summary.allEmployees ? (
                                                 <span className="text-muted-foreground">All employees — Mandatory</span>
                                             ) : (
                                                 <div className="flex flex-col gap-1">
                                                     {summary.groups.map((g, idx) => (
                                                         <div key={idx} className="flex items-start gap-2">
-                                                            <Badge variant={LEVEL_BADGE_VARIANT[g.result]} className="text-[10px] capitalize">{LEVEL_LABELS[g.result]}</Badge>
-                                                            <span className="text-muted-foreground text-xs">{g.text}</span>
+                                                            <Badge variant={LEVEL_BADGE_VARIANT[g.result]} className="shrink-0 text-[10px] capitalize">{LEVEL_LABELS[g.result]}</Badge>
+                                                            <span className="min-w-0 flex-1 text-muted-foreground text-xs whitespace-normal break-words">{g.text}</span>
                                                         </div>
                                                     ))}
                                                 </div>
