@@ -35,18 +35,17 @@ The detailed pricing method provides full line-item control over how a condition
   - [API Endpoints](#api-endpoints)
   - [Cost Calculator](#cost-calculator)
   - [Key Files](#key-files)
-- [Comparison — Unit Rate vs Build-Up vs Detailed](#comparison--unit-rate-vs-build-up-vs-detailed)
+- [Comparison — Unit Rate vs Detailed](#comparison--unit-rate-vs-detailed)
 
 ---
 
-## Overview — The Three Pricing Methods
+## Overview — The Two Pricing Methods
 
-Every takeoff condition uses one of three pricing methods:
+Every takeoff condition uses one of two pricing methods:
 
 | Method | Idea | Complexity |
 |--------|------|------------|
-| **Unit Rate** | One dollar-per-unit rate per cost code. Simple flat rate. | Low |
-| **Build-Up** | List of materials with waste factors + a single labour production rate for the whole condition. | Medium |
+| **Unit Rate** | Bill-of-Quantities lines per cost code. One dollar-per-unit rate per labour/material line. | Low |
 | **Detailed** | Full line-item breakdown. Each material and labour item has its own quantity source, OC spacing, layers, waste, and cost. Matches QuickBid's condition structure. | High |
 
 ---
@@ -62,7 +61,7 @@ Use the detailed method when:
 - You need a **section-based cost breakdown** for reporting (Framing, Sheeting, Fixings, etc.)
 - Each labour trade has its **own production rate and hourly rate** (framers vs setters vs sealant installers)
 
-If you just know "this costs $X per m2" — use **unit rate** instead. If you have a materials list but one shared labour rate — use **build-up**.
+If you just know "this costs $X per m2" — use **unit rate** instead.
 
 ---
 
@@ -399,7 +398,7 @@ Click the **Save** button in the bottom-right corner. This sends all line items 
 
 #### TakeoffCondition (`takeoff_conditions` table)
 
-When `pricing_method = 'detailed'`, the condition uses `ConditionLineItem` records instead of `TakeoffConditionMaterial` or `TakeoffConditionCostCode`.
+When `pricing_method = 'detailed'`, the condition uses `ConditionLineItem` records instead of `TakeoffConditionBoqItem` (which backs the unit_rate method).
 
 Key fields specific to detailed mode:
 - `pricing_method` — must be `'detailed'`
@@ -518,18 +517,18 @@ The calculator:
 
 ---
 
-## Comparison — Unit Rate vs Build-Up vs Detailed
+## Comparison — Unit Rate vs Detailed
 
-| Aspect | Unit Rate | Build-Up | Detailed |
-|--------|-----------|----------|----------|
-| **Best for** | Known m2/m rates | Standard material + labour breakdown | Full QuickBid-style estimates |
-| **Data source** | `takeoff_condition_cost_codes` | `takeoff_condition_materials` | `condition_line_items` |
-| **Qty sources** | One (measured value x height) | One (measured value) | Multiple per line (Qty1, Qty2, fixed) |
-| **OC spacing** | No | No | Yes, per line item |
-| **Layers** | No | No | Yes, per line item |
-| **Waste %** | No | Per material | Per line item |
-| **Pack rounding** | No | No | Yes, per line item |
-| **Labour** | Single flat rate per unit | Single production rate + hourly rate | Per-line hourly rate + production rate |
-| **Sections** | No | No | Yes |
-| **Complexity** | Low | Medium | High |
-| **Setup time** | 1 minute | 5 minutes | 15-30 minutes (but reusable) |
+| Aspect | Unit Rate | Detailed |
+|--------|-----------|----------|
+| **Best for** | Known $/unit rates per cost code | Full QuickBid-style estimates |
+| **Data source** | `takeoff_condition_boq_items` | `condition_line_items` |
+| **Qty sources** | One (measured value x height) | Multiple per line (Qty1, Qty2, fixed) |
+| **OC spacing** | No | Yes, per line item |
+| **Layers** | No | Yes, per line item |
+| **Waste %** | No | Per line item |
+| **Pack rounding** | No | Yes, per line item |
+| **Labour** | Per-LCC unit rate (with optional production rate) | Per-line hourly rate + production rate |
+| **Sections** | No | Yes |
+| **Complexity** | Low | High |
+| **Setup time** | 1 minute | 15-30 minutes (but reusable) |

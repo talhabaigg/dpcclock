@@ -64,19 +64,9 @@ class TakeoffCondition extends Model
         return $this->belongsTo(ConditionType::class);
     }
 
-    public function materials(): HasMany
-    {
-        return $this->hasMany(TakeoffConditionMaterial::class);
-    }
-
     public function costCodes(): HasMany
     {
         return $this->hasMany(TakeoffConditionCostCode::class);
-    }
-
-    public function payRateTemplate(): BelongsTo
-    {
-        return $this->belongsTo(LocationPayRateTemplate::class, 'pay_rate_template_id');
     }
 
     public function measurements(): HasMany
@@ -141,19 +131,4 @@ class TakeoffCondition extends Model
         return 1.0;
     }
 
-    /**
-     * Get the effective labour rate (manual or computed from template).
-     */
-    public function getEffectiveLabourRateAttribute(): ?float
-    {
-        if ($this->labour_rate_source === 'manual') {
-            return $this->manual_labour_rate;
-        }
-
-        if ($this->payRateTemplate) {
-            return (float) $this->payRateTemplate->hourly_rate;
-        }
-
-        return null;
-    }
 }

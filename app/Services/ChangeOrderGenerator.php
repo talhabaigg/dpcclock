@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Location;
-use App\Models\MaterialItem;
 use App\Models\TakeoffCondition;
 use App\Models\Variation;
 
@@ -231,7 +230,6 @@ class ChangeOrderGenerator
                 'costCodes.costCode',
                 'boqItems.costCode',
                 'boqItems.labourCostCode',
-                'materials.materialItem.costCode',
             ])->find($item->takeoff_condition_id);
 
             if (! $condition) {
@@ -240,48 +238,22 @@ class ChangeOrderGenerator
 
             $costs = $this->calculator->compute($condition, (float) $item->qty);
 
-            if ($condition->pricing_method === 'unit_rate') {
-                // Unit rate: breakdown has cost_code_id per cost code
-                foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
-                    $code = $cc['cost_code'] ?? null;
-                    if (! $code) {
-                        continue;
-                    }
-                    if (! isset($materialByCostCode[$code])) {
-                        $materialByCostCode[$code] = [
-                            'cost_code_id' => $cc['cost_code_id'],
-                            'description' => $cc['description'] ?? $code,
-                            'total' => 0,
-                        ];
-                    }
-                    $materialByCostCode[$code]['total'] += $cc['line_cost'];
+            // Unit rate: breakdown has cost_code_id per cost code.
+            // Detailed support not yet wired here — VariationCostCalculator
+            // throws for detailed conditions until that lands.
+            foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
+                $code = $cc['cost_code'] ?? null;
+                if (! $code) {
+                    continue;
                 }
-            } else {
-                // Build-up: breakdown has material items with cost_code_id
-                foreach ($costs['breakdown']['materials'] ?? [] as $mat) {
-                    $code = $mat['cost_code'] ?? null;
-                    $costCodeId = $mat['cost_code_id'] ?? null;
-
-                    if (! $code && isset($mat['material_item_id'])) {
-                        // Fallback: resolve from MaterialItem if calculator didn't include it
-                        $mi = MaterialItem::with('costCode')->find($mat['material_item_id']);
-                        $code = $mi?->costCode?->code;
-                        $costCodeId = $mi?->cost_code_id;
-                    }
-
-                    if (! $code) {
-                        continue;
-                    }
-
-                    if (! isset($materialByCostCode[$code])) {
-                        $materialByCostCode[$code] = [
-                            'cost_code_id' => $costCodeId,
-                            'description' => $mat['description'] ?? $code,
-                            'total' => 0,
-                        ];
-                    }
-                    $materialByCostCode[$code]['total'] += $mat['line_cost'];
+                if (! isset($materialByCostCode[$code])) {
+                    $materialByCostCode[$code] = [
+                        'cost_code_id' => $cc['cost_code_id'],
+                        'description' => $cc['description'] ?? $code,
+                        'total' => 0,
+                    ];
                 }
+                $materialByCostCode[$code]['total'] += $cc['line_cost'];
             }
         }
 
@@ -427,7 +399,6 @@ class ChangeOrderGenerator
                 'costCodes.costCode',
                 'boqItems.costCode',
                 'boqItems.labourCostCode',
-                'materials.materialItem.costCode',
             ])->find($conditionId);
 
             if (! $condition) {
@@ -436,45 +407,21 @@ class ChangeOrderGenerator
 
             $costs = $this->calculator->compute($condition, (float) ($item['qty'] ?? 1));
 
-            if ($condition->pricing_method === 'unit_rate') {
-                foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
-                    $code = $cc['cost_code'] ?? null;
-                    if (! $code) {
-                        continue;
-                    }
-                    if (! isset($materialByCostCode[$code])) {
-                        $materialByCostCode[$code] = [
-                            'cost_code_id' => $cc['cost_code_id'],
-                            'description' => $cc['description'] ?? $code,
-                            'total' => 0,
-                        ];
-                    }
-                    $materialByCostCode[$code]['total'] += $cc['line_cost'];
+            // Unit rate only — VariationCostCalculator throws for detailed conditions
+            // until detailed variation pricing is implemented.
+            foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
+                $code = $cc['cost_code'] ?? null;
+                if (! $code) {
+                    continue;
                 }
-            } else {
-                foreach ($costs['breakdown']['materials'] ?? [] as $mat) {
-                    $code = $mat['cost_code'] ?? null;
-                    $costCodeId = $mat['cost_code_id'] ?? null;
-
-                    if (! $code && isset($mat['material_item_id'])) {
-                        $mi = MaterialItem::with('costCode')->find($mat['material_item_id']);
-                        $code = $mi?->costCode?->code;
-                        $costCodeId = $mi?->cost_code_id;
-                    }
-
-                    if (! $code) {
-                        continue;
-                    }
-
-                    if (! isset($materialByCostCode[$code])) {
-                        $materialByCostCode[$code] = [
-                            'cost_code_id' => $costCodeId,
-                            'description' => $mat['description'] ?? $code,
-                            'total' => 0,
-                        ];
-                    }
-                    $materialByCostCode[$code]['total'] += $mat['line_cost'];
+                if (! isset($materialByCostCode[$code])) {
+                    $materialByCostCode[$code] = [
+                        'cost_code_id' => $cc['cost_code_id'],
+                        'description' => $cc['description'] ?? $code,
+                        'total' => 0,
+                    ];
                 }
+                $materialByCostCode[$code]['total'] += $cc['line_cost'];
             }
         }
 

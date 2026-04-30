@@ -24,18 +24,7 @@ class TakeoffCostCalculator
             return $this->computeUnitRate($condition, $measurement);
         }
 
-        if ($condition->pricing_method === 'detailed') {
-            return $this->computeDetailed($condition, $measurement);
-        }
-
-        $materialCost = $this->computeMaterialCost($condition, $measurement);
-        $labourCost = $this->computeLabourCost($condition, $measurement);
-
-        return [
-            'material_cost' => round($materialCost, 2),
-            'labour_cost' => round($labourCost, 2),
-            'total_cost' => round($materialCost + $labourCost, 2),
-        ];
+        return $this->computeDetailed($condition, $measurement);
     }
 
     /**
@@ -66,78 +55,6 @@ class TakeoffCostCalculator
     }
 
     /**
-     * Compute material cost for a measurement.
-     *
-     * For each material line:
-     *   effective_qty = qty_per_unit * (1 + waste_percentage/100) * computed_value
-     *   line_cost = effective_qty * unit_cost
-     */
-    private function computeMaterialCost(TakeoffCondition $condition, DrawingMeasurement $measurement): float
-    {
-        $condition->loadMissing('materials.materialItem');
-        $locationId = $condition->location_id;
-        $totalCost = 0;
-
-        foreach ($condition->materials as $line) {
-            $materialItem = $line->materialItem;
-            if (! $materialItem) {
-                continue;
-            }
-
-            // Get location-specific pricing override, or fall back to base unit_cost
-            $unitCost = $this->getMaterialUnitCost($materialItem, $locationId);
-
-            $effectiveQty = $line->qty_per_unit * (1 + $line->waste_percentage / 100) * $measurement->computed_value;
-            $totalCost += $effectiveQty * $unitCost;
-        }
-
-        return $totalCost;
-    }
-
-    /**
-     * Compute labour cost for a build_up measurement.
-     *
-     * Sums one cost per ConditionLabourCode (each LCC has its own production
-     * rate and hourly rate, with fallback to the LCC defaults). This matches
-     * how the Labour tab computes labour for build_up conditions.
-     *
-     * labour_cost = sum_over_lcc( (computed_value / production_rate) * hourly_rate )
-     */
-    private function computeLabourCost(TakeoffCondition $condition, DrawingMeasurement $measurement): float
-    {
-        $qty = $measurement->computed_value ?? 0;
-        if ($qty <= 0) {
-            return 0;
-        }
-
-        $condition->loadMissing('conditionLabourCodes.labourCostCode');
-
-        $total = 0.0;
-
-        if ($condition->conditionLabourCodes->isNotEmpty()) {
-            foreach ($condition->conditionLabourCodes as $clc) {
-                $pr = $clc->effective_production_rate ?? 0;
-                $hr = $clc->effective_hourly_rate ?? 0;
-                if ($pr > 0 && $hr > 0) {
-                    $total += ($qty / $pr) * $hr;
-                }
-            }
-
-            return $total;
-        }
-
-        // Fallback: single condition-level production rate + effective rate
-        $productionRate = $condition->production_rate;
-        $effectiveRate = $condition->effective_labour_rate;
-
-        if ($productionRate && $productionRate > 0 && $effectiveRate && $effectiveRate > 0) {
-            $total = ($qty / $productionRate) * $effectiveRate;
-        }
-
-        return $total;
-    }
-
-    /**
      * Compute costs using the Detailed (QuickBid-style) method.
      *
      * Each line item calculates its own quantity from the measurement's
@@ -152,7 +69,6 @@ class TakeoffCostCalculator
         $totalLab = 0;
 
         foreach ($condition->lineItems as $line) {
-            // 1. Resolve base quantity from source
             $baseQty = match ($line->qty_source) {
                 'secondary' => $measurement->perimeter_value ?? 0,
                 'fixed' => $line->fixed_qty ?? 0,
@@ -163,7 +79,6 @@ class TakeoffCostCalculator
                 continue;
             }
 
-            // 2. Apply OC spacing and layers
             $ocSpacing = $line->oc_spacing;
             $layers = max(1, $line->layers);
 
@@ -173,10 +88,8 @@ class TakeoffCostCalculator
                 $lineQty = $baseQty * $layers;
             }
 
-            // 3. Apply waste percentage
             $effectiveQty = $lineQty * (1 + ($line->waste_percentage ?? 0) / 100);
 
-            // 4. Material cost
             if ($line->entry_type === 'material') {
                 $unitCost = $line->cost_source === 'manual' || ! $line->materialItem
                     ? ($line->unit_cost ?? 0)
@@ -191,7 +104,6 @@ class TakeoffCostCalculator
                 }
             }
 
-            // 5. Labour cost
             if ($line->entry_type === 'labour') {
                 $hourlyRate = $line->hourly_rate ?? 0;
                 $productionRate = $line->production_rate ?? 0;
@@ -215,7 +127,6 @@ class TakeoffCostCalculator
      */
     private function getMaterialUnitCost($materialItem, int $locationId): float
     {
-        // Check for location-specific pricing via the pivot
         $pivot = $materialItem->locations()->wherePivot('location_id', $locationId)->first();
 
         if ($pivot && $pivot->pivot->unit_cost_override !== null) {
