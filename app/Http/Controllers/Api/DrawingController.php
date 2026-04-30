@@ -225,7 +225,12 @@ class DrawingController extends Controller
             return response()->json(['message' => 'File not found.'], 404);
         }
 
-        $stream = $media->stream();
+        try {
+            $stream = $media->stream();
+        } catch (\League\Flysystem\UnableToReadFile $e) {
+            // Orphan: media row exists but S3 object was deleted/moved.
+            return response()->json(['message' => 'Source file is missing from storage.'], 404);
+        }
 
         return response()->stream(function () use ($stream) {
             fpassthru($stream);

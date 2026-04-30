@@ -1,25 +1,19 @@
-import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
 import CalibrationDialog from '@/components/calibration-dialog';
+import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
 import { ConditionsList } from '@/components/conditions-list';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import { ScaleChip } from '@/components/scale-chip';
 import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
+import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
+import { ScaleChip } from '@/components/scale-chip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Combobox,
-    ComboboxContent,
-    ComboboxEmpty,
-    ComboboxItem,
-    ComboboxList,
-    ComboboxTrigger,
-} from '@/components/ui/combobox';
-import { Combobox as ComboboxPrimitive } from '@base-ui/react';
+import { Switch } from '@/components/ui/switch';
 import { useCalibration } from '@/hooks/use-calibration';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
@@ -27,6 +21,7 @@ import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
 import { measurementIntersectsRect } from '@/lib/drawing-geometry';
+import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { usePage } from '@inertiajs/react';
 import { ArrowRight, FileText, GitBranch, Loader2, Lock, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -107,6 +102,16 @@ export default function DrawingVariations() {
     // Drawing/measurement state
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
     const [snapEnabled, setSnapEnabled] = useState(true);
+
+    // Drawing viewer renderer toggle. Default = Classic; New (Pixi) is
+    // view-only for now while we evaluate.
+    const [useClassicViewer, setUseClassicViewer] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return true;
+        return localStorage.getItem('drawing-viewer-mode') !== 'new';
+    });
+    useEffect(() => {
+        localStorage.setItem('drawing-viewer-mode', useClassicViewer ? 'classic' : 'new');
+    }, [useClassicViewer]);
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -143,7 +148,7 @@ export default function DrawingVariations() {
     }, [conditions]);
 
     const activeCondition = useMemo(
-        () => (activeConditionId ? conditions.find((c) => c.id === activeConditionId) ?? null : null),
+        () => (activeConditionId ? (conditions.find((c) => c.id === activeConditionId) ?? null) : null),
         [activeConditionId, conditions],
     );
 
@@ -153,9 +158,7 @@ export default function DrawingVariations() {
 
     // Load measurements + calibration for this drawing
     useEffect(() => {
-        api.get<{ measurements: MeasurementData[]; calibration: CalibrationData | null }>(
-            `/drawings/${drawing.id}/measurements`,
-        )
+        api.get<{ measurements: MeasurementData[]; calibration: CalibrationData | null }>(`/drawings/${drawing.id}/measurements`)
             .then((data) => {
                 setMeasurements(data.measurements || []);
                 setCalibration(data.calibration || null);
@@ -202,10 +205,7 @@ export default function DrawingVariations() {
 
     // Filter measurements scoped to the selected variation
     const visibleMeasurements = useMemo(
-        () =>
-            selectedVariationId
-                ? measurements.filter((m) => m.scope === 'variation' && m.variation_id === selectedVariationId)
-                : [],
+        () => (selectedVariationId ? measurements.filter((m) => m.scope === 'variation' && m.variation_id === selectedVariationId) : []),
         [measurements, selectedVariationId],
     );
 
@@ -265,9 +265,11 @@ export default function DrawingVariations() {
 
         const cond = activeCondition;
         const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
-        const existingOfType = measurements.filter((m) =>
-            m.scope === 'variation' && m.variation_id === selectedVariationId &&
-            (cond ? m.takeoff_condition_id === cond.id : m.type === type && !m.takeoff_condition_id),
+        const existingOfType = measurements.filter(
+            (m) =>
+                m.scope === 'variation' &&
+                m.variation_id === selectedVariationId &&
+                (cond ? m.takeoff_condition_id === cond.id : m.type === type && !m.takeoff_condition_id),
         );
         const counter = existingOfType.length + 1;
         const name = cond ? `${cond.name} #${counter}` : `Var ${typeLabel} #${counter}`;
@@ -320,9 +322,7 @@ export default function DrawingVariations() {
         });
         if (!confirmed) return;
         try {
-            const data = await api.delete<{ measurement: MeasurementData }>(
-                `/drawings/${drawing.id}/measurements/${m.id}`,
-            );
+            const data = await api.delete<{ measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${m.id}`);
             setMeasurements((prev) => prev.filter((item) => item.id !== m.id));
             if (selectedMeasurementId === m.id) setSelectedMeasurementId(null);
             pushUndo({ type: 'delete', measurement: data.measurement, drawingId: drawing.id });
@@ -365,9 +365,7 @@ export default function DrawingVariations() {
 
         for (const id of ids) {
             try {
-                const data = await api.delete<{ measurement: MeasurementData }>(
-                    `/drawings/${drawing.id}/measurements/${id}`,
-                );
+                const data = await api.delete<{ measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${id}`);
                 deleted.push(data.measurement);
             } catch {
                 failed.push(id);
@@ -408,9 +406,7 @@ export default function DrawingVariations() {
     const handleGeneratePremier = async (variationId: number) => {
         setGeneratingPremier(true);
         try {
-            const data = await api.post<{ variation?: { line_items?: unknown[] } }>(
-                `/variations/${variationId}/generate-premier`,
-            );
+            const data = await api.post<{ variation?: { line_items?: unknown[] } }>(`/variations/${variationId}/generate-premier`);
             toast.success(`Generated ${data.variation?.line_items?.length || 0} Premier line items`);
             await refreshVariations();
         } catch {
@@ -448,10 +444,9 @@ export default function DrawingVariations() {
         const trimmed = newName.trim();
         if (!trimmed || trimmed === selectedVariation.description) return;
         try {
-            const data = await api.patch<{ variation: VariationSummary }>(
-                `/variations/${selectedVariation.id}/rename-draft`,
-                { description: trimmed },
-            );
+            const data = await api.patch<{ variation: VariationSummary }>(`/variations/${selectedVariation.id}/rename-draft`, {
+                description: trimmed,
+            });
             const updated = data.variation;
             setVariations((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
         } catch (err) {
@@ -491,9 +486,7 @@ export default function DrawingVariations() {
         // Prefill: blank CO so user must choose, keep description if user already set one
         setFormaliseCoNumber('');
         setFormaliseDescription(
-            selectedVariation.description && selectedVariation.description !== 'Untitled draft'
-                ? selectedVariation.description
-                : '',
+            selectedVariation.description && selectedVariation.description !== 'Untitled draft' ? selectedVariation.description : '',
         );
         setFormaliseOpen(true);
     };
@@ -513,10 +506,10 @@ export default function DrawingVariations() {
 
         setFormalising(true);
         try {
-            const data = await api.patch<{ variation: VariationSummary }>(
-                `/variations/${selectedVariation.id}/formalise`,
-                { co_number: coNumber, description },
-            );
+            const data = await api.patch<{ variation: VariationSummary }>(`/variations/${selectedVariation.id}/formalise`, {
+                co_number: coNumber,
+                description,
+            });
             const updated = data.variation;
             setVariations((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
             setFormaliseOpen(false);
@@ -530,11 +523,7 @@ export default function DrawingVariations() {
     };
 
     // Exclude internal variations (description prefixed with "(INTERNAL)") from the picker
-    const selectableVariations = useMemo(
-        () => variations.filter((v) => !/^\s*\(internal\)/i.test(v.description ?? '')),
-        [variations],
-    );
-
+    const selectableVariations = useMemo(() => variations.filter((v) => !/^\s*\(internal\)/i.test(v.description ?? '')), [variations]);
 
     // Keyboard shortcuts
     const shortcuts = useMemo(
@@ -544,7 +533,11 @@ export default function DrawingVariations() {
             { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canMeasure },
             { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canMeasure && !!calibration },
             { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canMeasure && !!calibration },
-            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: canMeasure && !!calibration },
+            {
+                key: 'r',
+                handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'),
+                enabled: canMeasure && !!calibration,
+            },
             { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canMeasure },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
@@ -588,14 +581,10 @@ export default function DrawingVariations() {
             statusBar={
                 selectedMeasurementIds.size > 0 || viewMode === 'select' ? (
                     <>
-                        <span className="font-medium">
-                            {viewMode === 'select' ? 'Drag select' : 'Pan'}
-                        </span>
+                        <span className="font-medium">{viewMode === 'select' ? 'Drag select' : 'Pan'}</span>
                         <div className="flex-1" />
                         {viewMode === 'select' && selectedMeasurementIds.size === 0 && (
-                            <span className="text-[10px] text-muted-foreground">
-                                Drag a rectangle to select measurements
-                            </span>
+                            <span className="text-muted-foreground text-[10px]">Drag a rectangle to select measurements</span>
                         )}
                         {selectedMeasurementIds.size > 0 && (
                             <>
@@ -636,6 +625,22 @@ export default function DrawingVariations() {
                         onDelete={cal.handleDelete}
                     />
                     <div className="bg-border h-4 w-px" />
+
+                    {/* Viewer toggle */}
+                    <div className="flex items-center gap-1.5">
+                        <Label htmlFor="viewer-toggle" className="text-muted-foreground cursor-pointer text-[11px]">
+                            Use Classic
+                        </Label>
+                        <Switch id="viewer-toggle" checked={useClassicViewer} onCheckedChange={setUseClassicViewer} className="scale-75" />
+                        {!useClassicViewer && (
+                            <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                NEW
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="bg-border h-4 w-px" />
+
                     {selectableVariations.length === 0 ? (
                         /* Empty state — no variations yet, push the user toward starting a draft */
                         canEdit ? (
@@ -650,180 +655,185 @@ export default function DrawingVariations() {
                                 Start a new variation
                             </Button>
                         ) : (
-                            <span className="text-xs text-muted-foreground">No variations on this drawing.</span>
+                            <span className="text-muted-foreground text-xs">No variations on this drawing.</span>
                         )
                     ) : (
-                    <div className="flex items-center gap-1.5">
-                        <Combobox<VariationSummary>
-                            items={selectableVariations}
-                            value={selectableVariations.find((v) => v.id === selectedVariationId) ?? null}
-                            open={variationComboOpen}
-                            inputValue={variationComboInput}
-                            itemToStringLabel={(item) => `${item.co_number} ${item.description ?? ''}`}
-                            itemToStringValue={(item) => String(item.id)}
-                            isItemEqualToValue={(a, b) => a.id === b.id}
-                            onOpenChange={(next) => {
-                                setVariationComboOpen(next);
-                                if (!next) setVariationComboInput('');
-                            }}
-                            onInputValueChange={setVariationComboInput}
-                            onValueChange={(value) => {
-                                setSelectedVariationId(value ? value.id : null);
-                                setVariationComboOpen(false);
-                                setVariationComboInput('');
-                            }}
-                        >
-                            <ComboboxTrigger
-                                render={
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-6 w-[240px] justify-between gap-1.5 rounded-sm pl-2 pr-1 text-xs font-normal"
-                                    />
-                                }
-                                aria-label="Select variation"
+                        <div className="flex items-center gap-1.5">
+                            <Combobox<VariationSummary>
+                                items={selectableVariations}
+                                value={selectableVariations.find((v) => v.id === selectedVariationId) ?? null}
+                                open={variationComboOpen}
+                                inputValue={variationComboInput}
+                                itemToStringLabel={(item) => `${item.co_number} ${item.description ?? ''}`}
+                                itemToStringValue={(item) => String(item.id)}
+                                isItemEqualToValue={(a, b) => a.id === b.id}
+                                onOpenChange={(next) => {
+                                    setVariationComboOpen(next);
+                                    if (!next) setVariationComboInput('');
+                                }}
+                                onInputValueChange={setVariationComboInput}
+                                onValueChange={(value) => {
+                                    setSelectedVariationId(value ? value.id : null);
+                                    setVariationComboOpen(false);
+                                    setVariationComboInput('');
+                                }}
                             >
-                                {selectedVariation ? (
-                                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                                        {isVariationLocked && (
-                                            <Lock className="size-2 shrink-0 text-muted-foreground/60" />
-                                        )}
-                                        <span className={`font-medium tabular-nums ${isDraft ? 'italic text-muted-foreground' : ''}`}>
-                                            {selectedVariation.co_number}
-                                        </span>
-                                        {isDraft && (
-                                            <span className="rounded-sm border px-1 text-[10px] text-muted-foreground">
-                                                Draft
+                                <ComboboxTrigger
+                                    render={
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 w-[240px] justify-between gap-1.5 rounded-sm pr-1 pl-2 text-xs font-normal"
+                                        />
+                                    }
+                                    aria-label="Select variation"
+                                >
+                                    {selectedVariation ? (
+                                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                                            {isVariationLocked && <Lock className="text-muted-foreground/60 size-2 shrink-0" />}
+                                            <span className={`font-medium tabular-nums ${isDraft ? 'text-muted-foreground italic' : ''}`}>
+                                                {selectedVariation.co_number}
                                             </span>
-                                        )}
-                                        {selectedVariation.description &&
-                                            !(isDraft && selectedVariation.description === 'Untitled draft') && (
-                                                <span className="truncate text-muted-foreground">
-                                                    {selectedVariation.description}
-                                                </span>
+                                            {isDraft && <span className="text-muted-foreground rounded-sm border px-1 text-[10px]">Draft</span>}
+                                            {selectedVariation.description && !(isDraft && selectedVariation.description === 'Untitled draft') && (
+                                                <span className="text-muted-foreground truncate">{selectedVariation.description}</span>
                                             )}
-                                    </span>
-                                ) : (
-                                    <span className="text-muted-foreground">Select variation</span>
-                                )}
-                                {selectedVariation && (
-                                    <span
-                                        role="button"
-                                        tabIndex={0}
-                                        aria-label="Clear variation"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedVariationId(null);
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted-foreground">Select variation</span>
+                                    )}
+                                    {selectedVariation && (
+                                        <span
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label="Clear variation"
+                                            onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedVariationId(null);
-                                            }
-                                        }}
-                                        className="ml-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </span>
-                                )}
-                            </ComboboxTrigger>
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setSelectedVariationId(null);
+                                                }
+                                            }}
+                                            className="text-muted-foreground hover:bg-muted hover:text-foreground ml-auto inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </span>
+                                    )}
+                                </ComboboxTrigger>
 
-                            <ComboboxContent className="w-[340px] p-0 overflow-hidden">
-                                {/* Search bar — flush at top of popup */}
-                                <div className="flex h-8 items-center gap-1.5 border-b px-2">
-                                    <Search className="size-3 shrink-0 text-muted-foreground" />
-                                    <ComboboxPrimitive.Input
-                                        placeholder="Search variations..."
-                                        className="h-full flex-1 bg-transparent text-xs outline-none placeholder:text-xs placeholder:text-muted-foreground"
-                                    />
-                                </div>
+                                <ComboboxContent className="w-[340px] overflow-hidden p-0">
+                                    {/* Search bar — flush at top of popup */}
+                                    <div className="flex h-8 items-center gap-1.5 border-b px-2">
+                                        <Search className="text-muted-foreground size-3 shrink-0" />
+                                        <ComboboxPrimitive.Input
+                                            placeholder="Search variations..."
+                                            className="placeholder:text-muted-foreground h-full flex-1 bg-transparent text-xs outline-none placeholder:text-xs"
+                                        />
+                                    </div>
 
-                                <ComboboxEmpty className="flex-col items-center gap-1 px-4 py-6 text-center">
-                                    <GitBranch className="h-5 w-5 text-muted-foreground/40" />
-                                    <span className="text-xs text-muted-foreground">No variations match</span>
-                                </ComboboxEmpty>
+                                    <ComboboxEmpty className="flex-col items-center gap-1 px-4 py-6 text-center">
+                                        <GitBranch className="text-muted-foreground/40 h-5 w-5" />
+                                        <span className="text-muted-foreground text-xs">No variations match</span>
+                                    </ComboboxEmpty>
 
-                                <ComboboxList className="max-h-[320px] p-0">
-                                    {(v: VariationSummary) => {
-                                        const locked = !!v.premier_co_id;
-                                        const draft = v.status === 'draft';
-                                        return (
-                                            <ComboboxItem
-                                                key={v.id}
-                                                value={v}
-                                                className="rounded-none border-b border-border/50 px-2 py-1.5 text-xs last:border-b-0"
-                                            >
-                                                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                        <span className={`font-medium tabular-nums ${draft ? 'italic text-muted-foreground' : ''}`}>
-                                                            {v.co_number}
-                                                        </span>
-                                                        {draft && (
-                                                            <span className="rounded-sm border px-1 text-[10px] text-muted-foreground">
-                                                                Draft
+                                    <ComboboxList className="max-h-[320px] p-0">
+                                        {(v: VariationSummary) => {
+                                            const locked = !!v.premier_co_id;
+                                            const draft = v.status === 'draft';
+                                            return (
+                                                <ComboboxItem
+                                                    key={v.id}
+                                                    value={v}
+                                                    className="border-border/50 rounded-none border-b px-2 py-1.5 text-xs last:border-b-0"
+                                                >
+                                                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                        <div className="flex min-w-0 items-center gap-1.5">
+                                                            <span
+                                                                className={`font-medium tabular-nums ${draft ? 'text-muted-foreground italic' : ''}`}
+                                                            >
+                                                                {v.co_number}
+                                                            </span>
+                                                            {draft && (
+                                                                <span className="text-muted-foreground rounded-sm border px-1 text-[10px]">
+                                                                    Draft
+                                                                </span>
+                                                            )}
+                                                            {locked && <Lock className="text-muted-foreground size-2 shrink-0" />}
+                                                        </div>
+                                                        {v.description && !(draft && v.description === 'Untitled draft') && (
+                                                            <span className="text-muted-foreground/80 truncate text-[11px] leading-tight">
+                                                                {v.description}
                                                             </span>
                                                         )}
-                                                        {locked && (
-                                                            <Lock className="size-2 shrink-0 text-muted-foreground" />
-                                                        )}
                                                     </div>
-                                                    {v.description && !(draft && v.description === 'Untitled draft') && (
-                                                        <span className="truncate text-[11px] leading-tight text-muted-foreground/80">
-                                                            {v.description}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </ComboboxItem>
-                                        );
-                                    }}
-                                </ComboboxList>
-                            </ComboboxContent>
-                        </Combobox>
-                        {canEdit && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 gap-1 rounded-sm px-2 text-xs"
-                                onClick={handleCreateDraft}
-                                disabled={creatingDraft}
-                            >
-                                {creatingDraft ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                    <Plus className="h-3 w-3" />
-                                )}
-                                New Draft
-                            </Button>
-                        )}
-                    </div>
+                                                </ComboboxItem>
+                                            );
+                                        }}
+                                    </ComboboxList>
+                                </ComboboxContent>
+                            </Combobox>
+                            {canEdit && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 gap-1 rounded-sm px-2 text-xs"
+                                    onClick={handleCreateDraft}
+                                    disabled={creatingDraft}
+                                >
+                                    {creatingDraft ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                                    New Draft
+                                </Button>
+                            )}
+                        </div>
                     )}
                 </>
             }
         >
             <div className="relative flex flex-1 overflow-hidden">
                 <div className="relative isolate flex-1 overflow-hidden">
-                    <LeafletDrawingViewer
-                        tiles={drawing.tiles_info || undefined}
-                        imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}
-                        viewMode={viewMode}
-                        measurements={visibleMeasurements}
-                        selectedMeasurementId={selectedMeasurementId}
-                        selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
-                        calibration={calibration}
-                        conditionOpacities={conditionOpacities}
-                        snapEnabled={snapEnabled}
-                        onCalibrationComplete={cal.handleCalibrationComplete}
-                        onMeasurementComplete={handleMeasurementComplete}
-                        onMeasurementClick={(m) =>
-                            setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)
-                        }
-                        boxSelectMode={viewMode === 'select'}
-                        onBoxSelectComplete={handleBoxSelect}
-                        activeColor={activeCondition?.color ?? null}
-                        className="absolute inset-0"
-                    />
+                    {useClassicViewer ? (
+                        <LeafletDrawingViewer
+                            tiles={drawing.tiles_info || undefined}
+                            imageUrl={!drawing.tiles_info ? imageUrl || undefined : undefined}
+                            viewMode={viewMode}
+                            measurements={visibleMeasurements}
+                            selectedMeasurementId={selectedMeasurementId}
+                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
+                            calibration={calibration}
+                            conditionOpacities={conditionOpacities}
+                            snapEnabled={snapEnabled}
+                            onCalibrationComplete={cal.handleCalibrationComplete}
+                            onMeasurementComplete={handleMeasurementComplete}
+                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                            boxSelectMode={viewMode === 'select'}
+                            onBoxSelectComplete={handleBoxSelect}
+                            activeColor={activeCondition?.color ?? null}
+                            className="absolute inset-0"
+                        />
+                    ) : (
+                        <PixiDrawingViewer
+                            fileUrl={`/api/drawings/${drawing.id}/file`}
+                            viewMode={viewMode}
+                            measurements={visibleMeasurements}
+                            selectedMeasurementId={selectedMeasurementId}
+                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
+                            calibration={calibration}
+                            conditionOpacities={conditionOpacities}
+                            snapEnabled={snapEnabled}
+                            onCalibrationComplete={cal.handleCalibrationComplete}
+                            onMeasurementComplete={handleMeasurementComplete}
+                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                            boxSelectMode={viewMode === 'select'}
+                            onBoxSelectComplete={handleBoxSelect}
+                            activeColor={activeCondition?.color ?? null}
+                            className="absolute inset-0"
+                        />
+                    )}
                 </div>
 
                 {/* Variation Side Panel */}
@@ -836,19 +846,17 @@ export default function DrawingVariations() {
                                     {/* CO row + badge */}
                                     <div className="flex items-center justify-between gap-1.5">
                                         <div className="flex min-w-0 items-center gap-1.5">
-                                            {isVariationLocked && (
-                                                <Lock className="size-2 shrink-0 text-muted-foreground" />
-                                            )}
-                                            <span className={`truncate text-xs font-semibold ${isDraft ? 'italic text-muted-foreground' : ''}`}>
+                                            {isVariationLocked && <Lock className="text-muted-foreground size-2 shrink-0" />}
+                                            <span className={`truncate text-xs font-semibold ${isDraft ? 'text-muted-foreground italic' : ''}`}>
                                                 {selectedVariation.co_number}
                                             </span>
                                         </div>
                                         {isDraft ? (
-                                            <span className="rounded-sm border px-1 text-[10px] text-muted-foreground">
-                                                Draft
-                                            </span>
+                                            <span className="text-muted-foreground rounded-sm border px-1 text-[10px]">Draft</span>
                                         ) : (
-                                            <Badge variant="outline" className="h-4 text-[10px]">{selectedVariation.status}</Badge>
+                                            <Badge variant="outline" className="h-4 text-[10px]">
+                                                {selectedVariation.status}
+                                            </Badge>
                                         )}
                                     </div>
 
@@ -884,11 +892,11 @@ export default function DrawingVariations() {
                                                         setDraftNameInput(
                                                             selectedVariation.description === 'Untitled draft'
                                                                 ? ''
-                                                                : selectedVariation.description ?? '',
+                                                                : (selectedVariation.description ?? ''),
                                                         );
                                                         setRenamingDraft(true);
                                                     }}
-                                                    className="group mt-1 flex w-full items-start gap-1 rounded-sm text-left text-xs text-muted-foreground hover:text-foreground"
+                                                    className="group text-muted-foreground hover:text-foreground mt-1 flex w-full items-start gap-1 rounded-sm text-left text-xs"
                                                 >
                                                     <span className="line-clamp-2 flex-1">
                                                         {selectedVariation.description && selectedVariation.description !== 'Untitled draft'
@@ -899,40 +907,30 @@ export default function DrawingVariations() {
                                                 </button>
                                             )
                                         ) : (
-                                            <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                                                {selectedVariation.description}
-                                            </div>
+                                            <div className="text-muted-foreground mt-1 line-clamp-2 text-xs">{selectedVariation.description}</div>
                                         )
                                     ) : (
                                         selectedVariation.description && (
-                                            <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                                                {selectedVariation.description}
-                                            </div>
+                                            <div className="text-muted-foreground mt-1 line-clamp-2 text-xs">{selectedVariation.description}</div>
                                         )
                                     )}
 
                                     {isVariationLocked && (
-                                        <div className="mt-1 italic text-[10px] text-muted-foreground">
-                                            Read-only — synced to Premier.
-                                        </div>
+                                        <div className="text-muted-foreground mt-1 text-[10px] italic">Read-only — synced to Premier.</div>
                                     )}
                                 </div>
 
                                 {/* Draft actions — sit below the metadata in the same header section */}
                                 {isDraft && canEdit && (
-                                    <div className="flex items-center gap-1.5 px-2 pb-2 pt-2">
-                                        <Button
-                                            size="sm"
-                                            className="h-7 flex-1 gap-1.5 text-xs"
-                                            onClick={openFormaliseDialog}
-                                        >
+                                    <div className="flex items-center gap-1.5 px-2 pt-2 pb-2">
+                                        <Button size="sm" className="h-7 flex-1 gap-1.5 text-xs" onClick={openFormaliseDialog}>
                                             Formalise
                                             <ArrowRight className="h-3 w-3" />
                                         </Button>
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                                            className="text-muted-foreground h-7 gap-1 px-2 text-xs hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
                                             onClick={handleDiscardDraft}
                                             title="Discard draft"
                                         >
@@ -958,14 +956,12 @@ export default function DrawingVariations() {
                                             key={tab.id}
                                             onClick={() => setSidebarTab(tab.id)}
                                             className={`flex flex-1 items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
-                                                isActive
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground'
+                                                isActive ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                                             }`}
                                         >
                                             {tab.label}
                                             {tab.count > 0 && (
-                                                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted-foreground/15 px-1 text-[10px] font-semibold tabular-nums">
+                                                <span className="bg-muted-foreground/15 ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums">
                                                     {tab.count}
                                                 </span>
                                             )}
@@ -975,145 +971,137 @@ export default function DrawingVariations() {
                             </div>
 
                             {/* Tab content (subtle fade on tab switch) */}
-                            <div
-                                key={sidebarTab}
-                                className="flex flex-1 flex-col overflow-hidden animate-in fade-in-0 duration-150"
-                            >
-                            {sidebarTab === 'conditions' && (
-                                <ConditionsList
-                                    conditions={conditions}
-                                    activeConditionId={activeConditionId}
-                                    onActivateCondition={handleActivateCondition}
-                                    measurements={visibleMeasurements}
-                                    hasCalibration={!!calibration}
-                                    readOnly={!canEdit}
-                                    onOpenConditionManager={canEdit ? () => setShowConditionManager(true) : undefined}
-                                />
-                            )}
+                            <div key={sidebarTab} className="animate-in fade-in-0 flex flex-1 flex-col overflow-hidden duration-150">
+                                {sidebarTab === 'conditions' && (
+                                    <ConditionsList
+                                        conditions={conditions}
+                                        activeConditionId={activeConditionId}
+                                        onActivateCondition={handleActivateCondition}
+                                        measurements={visibleMeasurements}
+                                        hasCalibration={!!calibration}
+                                        readOnly={!canEdit}
+                                        onOpenConditionManager={canEdit ? () => setShowConditionManager(true) : undefined}
+                                    />
+                                )}
 
-                            {sidebarTab === 'measures' && (
-                                <div className="flex-1 overflow-y-auto">
-                                    {visibleMeasurements.length === 0 ? (
-                                        <div className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                                            No measurements yet. Activate a condition and start measuring.
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            {visibleMeasurements.map((m) => (
-                                                <div
-                                                    key={m.id}
-                                                    className={`flex cursor-pointer items-center gap-1.5 px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50 ${
-                                                        selectedMeasurementId === m.id ? 'bg-primary/5' : ''
-                                                    }`}
-                                                    onClick={() =>
-                                                        setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)
-                                                    }
-                                                >
-                                                    <span
-                                                        className="h-2 w-2 shrink-0 rounded-full"
-                                                        style={{ backgroundColor: m.color || '#f59e0b' }}
-                                                    />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-xs font-medium">{m.name}</div>
-                                                        <div className="text-[10px] text-muted-foreground">{formatValue(m)}</div>
-                                                    </div>
-                                                    {canMeasure && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteMeasurement(m);
-                                                            }}
-                                                            className="h-5 w-5 p-0 text-muted-foreground/50 hover:text-red-500"
-                                                        >
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {sidebarTab === 'pricing' && (
-                                <>
+                                {sidebarTab === 'measures' && (
                                     <div className="flex-1 overflow-y-auto">
-                                        {pricingItems.length === 0 ? (
-                                            <div className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                                                No pricing items yet. Auto-created when measuring with a condition active.
+                                        {visibleMeasurements.length === 0 ? (
+                                            <div className="text-muted-foreground px-2 py-6 text-center text-[10px]">
+                                                No measurements yet. Activate a condition and start measuring.
                                             </div>
                                         ) : (
                                             <div>
-                                                {pricingItems.map((item) => (
-                                                    <div key={item.id} className="px-2 py-1.5 transition-colors duration-150 hover:bg-muted/30">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="truncate text-xs font-medium">{item.description}</div>
-                                                            <span className="ml-1 shrink-0 text-xs font-semibold text-green-600">
-                                                                ${item.total_cost.toFixed(2)}
-                                                            </span>
+                                                {visibleMeasurements.map((m) => (
+                                                    <div
+                                                        key={m.id}
+                                                        className={`hover:bg-muted/50 flex cursor-pointer items-center gap-1.5 px-2 py-1.5 transition-colors duration-150 ${
+                                                            selectedMeasurementId === m.id ? 'bg-primary/5' : ''
+                                                        }`}
+                                                        onClick={() => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                                                    >
+                                                        <span
+                                                            className="h-2 w-2 shrink-0 rounded-full"
+                                                            style={{ backgroundColor: m.color || '#f59e0b' }}
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="truncate text-xs font-medium">{m.name}</div>
+                                                            <div className="text-muted-foreground text-[10px]">{formatValue(m)}</div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                                            <span>{item.qty} {item.unit}</span>
-                                                            {item.condition && <span className="truncate">{item.condition.name}</span>}
-                                                            <span className="ml-auto">
-                                                                L: ${item.labour_cost.toFixed(0)} M: ${item.material_cost.toFixed(0)}
-                                                            </span>
-                                                        </div>
+                                                        {canMeasure && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteMeasurement(m);
+                                                                }}
+                                                                className="text-muted-foreground/50 h-5 w-5 p-0 hover:text-red-500"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
+                                )}
 
-                                    {pricingItems.length > 0 && (
-                                        <div className="border-t p-2">
-                                            <div className="mb-1.5 flex items-center justify-between text-xs">
-                                                <span className="text-muted-foreground">Total cost</span>
-                                                <span className="font-semibold">
-                                                    ${pricingItems.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
-                                                </span>
-                                            </div>
-                                            <Button
-                                                size="sm"
-                                                className="h-7 w-full gap-1 text-xs"
-                                                onClick={() => handleGeneratePremier(selectedVariation.id)}
-                                                disabled={generatingPremier || isVariationLocked}
-                                            >
-                                                {generatingPremier ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                                ) : (
-                                                    <FileText className="h-3 w-3" />
-                                                )}
-                                                Generate Premier
-                                            </Button>
+                                {sidebarTab === 'pricing' && (
+                                    <>
+                                        <div className="flex-1 overflow-y-auto">
+                                            {pricingItems.length === 0 ? (
+                                                <div className="text-muted-foreground px-2 py-6 text-center text-[10px]">
+                                                    No pricing items yet. Auto-created when measuring with a condition active.
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    {pricingItems.map((item) => (
+                                                        <div key={item.id} className="hover:bg-muted/30 px-2 py-1.5 transition-colors duration-150">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="truncate text-xs font-medium">{item.description}</div>
+                                                                <span className="ml-1 shrink-0 text-xs font-semibold text-green-600">
+                                                                    ${item.total_cost.toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+                                                                <span>
+                                                                    {item.qty} {item.unit}
+                                                                </span>
+                                                                {item.condition && <span className="truncate">{item.condition.name}</span>}
+                                                                <span className="ml-auto">
+                                                                    L: ${item.labour_cost.toFixed(0)} M: ${item.material_cost.toFixed(0)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </>
-                            )}
+
+                                        {pricingItems.length > 0 && (
+                                            <div className="border-t p-2">
+                                                <div className="mb-1.5 flex items-center justify-between text-xs">
+                                                    <span className="text-muted-foreground">Total cost</span>
+                                                    <span className="font-semibold">
+                                                        ${pricingItems.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    className="h-7 w-full gap-1 text-xs"
+                                                    onClick={() => handleGeneratePremier(selectedVariation.id)}
+                                                    disabled={generatingPremier || isVariationLocked}
+                                                >
+                                                    {generatingPremier ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <FileText className="h-3 w-3" />
+                                                    )}
+                                                    Generate Premier
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </>
                     ) : (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center animate-in fade-in-0 duration-200">
-                            <GitBranch className="h-6 w-6 text-muted-foreground/40" />
+                        <div className="animate-in fade-in-0 flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center duration-200">
+                            <GitBranch className="text-muted-foreground/40 h-6 w-6" />
                             {selectableVariations.length === 0 ? (
                                 <>
-                                    <p className="text-xs text-muted-foreground">No variations on this drawing yet.</p>
+                                    <p className="text-muted-foreground text-xs">No variations on this drawing yet.</p>
                                     {canEdit && (
-                                        <Button
-                                            size="sm"
-                                            className="h-6 gap-1 text-xs"
-                                            onClick={handleCreateDraft}
-                                            disabled={creatingDraft}
-                                        >
+                                        <Button size="sm" className="h-6 gap-1 text-xs" onClick={handleCreateDraft} disabled={creatingDraft}>
                                             {creatingDraft ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                                             New Draft
                                         </Button>
                                     )}
                                 </>
                             ) : (
-                                <p className="text-xs text-muted-foreground">Select a variation from the toolbar.</p>
+                                <p className="text-muted-foreground text-xs">Select a variation from the toolbar.</p>
                             )}
                         </div>
                     )}
@@ -1159,11 +1147,13 @@ export default function DrawingVariations() {
                         <DialogTitle>Formalise variation</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-3">
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-muted-foreground text-[11px]">
                             Set a CO number and description. The draft will be moved to <span className="font-semibold">pending</span> status.
                         </div>
                         <div className="grid gap-1.5">
-                            <Label htmlFor="formalise-co" className="text-xs">CO number</Label>
+                            <Label htmlFor="formalise-co" className="text-xs">
+                                CO number
+                            </Label>
                             <Input
                                 id="formalise-co"
                                 value={formaliseCoNumber}
@@ -1179,7 +1169,9 @@ export default function DrawingVariations() {
                             />
                         </div>
                         <div className="grid gap-1.5">
-                            <Label htmlFor="formalise-desc" className="text-xs">Description</Label>
+                            <Label htmlFor="formalise-desc" className="text-xs">
+                                Description
+                            </Label>
                             <Input
                                 id="formalise-desc"
                                 value={formaliseDescription}

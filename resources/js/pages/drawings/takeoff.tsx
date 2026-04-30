@@ -1,9 +1,15 @@
 import { BidAreaManager, type BidArea } from '@/components/bid-area-manager';
+import CalibrationDialog from '@/components/calibration-dialog';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
 import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
+import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
+import { ScaleChip } from '@/components/scale-chip';
 import { TakeoffPanel } from '@/components/takeoff-panel';
 import { Button } from '@/components/ui/button';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,41 +17,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { ConfirmDialog } from '@/components/confirm-dialog';
-import CalibrationDialog from '@/components/calibration-dialog';
-import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import { ScaleChip } from '@/components/scale-chip';
-import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
-import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
-import { api, ApiError } from '@/lib/api';
-import { useMeasurementHistory } from '@/hooks/use-measurement-history';
-import { useConfirm } from '@/hooks/use-confirm';
 import { useCalibration } from '@/hooks/use-calibration';
+import { useConfirm } from '@/hooks/use-confirm';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { useMeasurementHistory } from '@/hooks/use-measurement-history';
+import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
+import { api, ApiError } from '@/lib/api';
+import { PANEL_DEFAULT_WIDTH, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PRESET_COLORS } from '@/lib/constants';
 import { measurementIntersectsRect } from '@/lib/drawing-geometry';
-import { PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, PRESET_COLORS } from '@/lib/constants';
-import type { Project, Revision, Drawing } from '@/types/takeoff';
-import { usePage } from '@inertiajs/react';
-import {
-    FolderTree,
-    GitCompare,
-    Hash,
-    Minus,
-    Pentagon,
-    Plus,
-    Search,
-    Settings,
-    Trash2,
-    X,
-} from 'lucide-react';
-import {
-    Combobox,
-    ComboboxContent,
-    ComboboxEmpty,
-    ComboboxItem,
-    ComboboxList,
-    ComboboxTrigger,
-} from '@/components/ui/combobox';
+import type { Drawing, Project, Revision } from '@/types/takeoff';
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
+import { usePage } from '@inertiajs/react';
+import { FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -78,12 +61,21 @@ export default function DrawingTakeoff() {
 
     const canCompare = revisions.length > 1;
 
-    const candidateImageUrl = candidateRevision
-        ? (candidateRevision.file_url || null)
-        : null;
+    const candidateImageUrl = candidateRevision ? candidateRevision.file_url || null : null;
 
     // View mode
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
+
+    // Drawing viewer renderer toggle. Default = Classic (Leaflet) so existing
+    // takeoff flows work; New (Pixi) is view-only for now while we evaluate
+    // before porting the full measurement layer.
+    const [useClassicViewer, setUseClassicViewer] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return true;
+        return localStorage.getItem('drawing-viewer-mode') !== 'new';
+    });
+    useEffect(() => {
+        localStorage.setItem('drawing-viewer-mode', useClassicViewer ? 'classic' : 'new');
+    }, [useClassicViewer]);
 
     // Takeoff state
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
@@ -181,11 +173,7 @@ export default function DrawingTakeoff() {
         onMeasurementRestored: (m) => {
             if (m.parent_measurement_id) {
                 setMeasurements((prev) =>
-                    prev.map((p) =>
-                        p.id === m.parent_measurement_id
-                            ? { ...p, deductions: [...(p.deductions || []), m] }
-                            : p,
-                    ),
+                    prev.map((p) => (p.id === m.parent_measurement_id ? { ...p, deductions: [...(p.deductions || []), m] } : p)),
                 );
             } else {
                 setMeasurements((prev) => [...prev, m]);
@@ -206,9 +194,7 @@ export default function DrawingTakeoff() {
             if (m.parent_measurement_id) {
                 setMeasurements((prev) =>
                     prev.map((p) =>
-                        p.id === m.parent_measurement_id
-                            ? { ...p, deductions: (p.deductions || []).map((d) => (d.id === m.id ? m : d)) }
-                            : p,
+                        p.id === m.parent_measurement_id ? { ...p, deductions: (p.deductions || []).map((d) => (d.id === m.id ? m : d)) } : p,
                     ),
                 );
             } else {
@@ -226,7 +212,7 @@ export default function DrawingTakeoff() {
     }, [conditions]);
 
     const activeConditionDisplay = useMemo(() => {
-        return activeConditionId ? conditions.find(c => c.id === activeConditionId) ?? null : null;
+        return activeConditionId ? (conditions.find((c) => c.id === activeConditionId) ?? null) : null;
     }, [conditions, activeConditionId]);
 
     // Flatten bid areas tree for selector
@@ -244,7 +230,8 @@ export default function DrawingTakeoff() {
 
     // Fetch measurements + calibration
     const fetchMeasurements = useCallback(() => {
-        return api.get<{ measurements: MeasurementData[]; calibration: CalibrationData | null }>(`/drawings/${drawing.id}/measurements`)
+        return api
+            .get<{ measurements: MeasurementData[]; calibration: CalibrationData | null }>(`/drawings/${drawing.id}/measurements`)
             .then((data) => {
                 setMeasurements(data.measurements || []);
                 setCalibration(data.calibration || null);
@@ -252,7 +239,9 @@ export default function DrawingTakeoff() {
             .catch(() => {});
     }, [drawing.id]);
 
-    useEffect(() => { fetchMeasurements(); }, [fetchMeasurements]);
+    useEffect(() => {
+        fetchMeasurements();
+    }, [fetchMeasurements]);
 
     useEffect(() => {
         api.get<{ conditions: TakeoffCondition[] }>(`/locations/${projectId}/takeoff-conditions`)
@@ -267,25 +256,25 @@ export default function DrawingTakeoff() {
     }, [projectId]);
 
     // Takeoff page only shows base-bid measurements
-    const visibleMeasurements = useMemo(
-        () => allMeasurements.filter((m) => !m.scope || m.scope === 'takeoff'),
-        [allMeasurements],
-    );
+    const visibleMeasurements = useMemo(() => allMeasurements.filter((m) => !m.scope || m.scope === 'takeoff'), [allMeasurements]);
 
     const existingCategories = [...new Set(measurements.map((m) => m.category).filter(Boolean))] as string[];
 
-    const handleActivateCondition = useCallback((conditionId: number | null) => {
-        setActiveConditionId(conditionId);
-        if (conditionId) {
-            const condition = conditions.find((c) => c.id === conditionId);
-            if (condition) {
-                const modeMap = { linear: 'measure_line', area: 'measure_area', count: 'measure_count' } as const;
-                setViewMode(modeMap[condition.type]);
+    const handleActivateCondition = useCallback(
+        (conditionId: number | null) => {
+            setActiveConditionId(conditionId);
+            if (conditionId) {
+                const condition = conditions.find((c) => c.id === conditionId);
+                if (condition) {
+                    const modeMap = { linear: 'measure_line', area: 'measure_area', count: 'measure_count' } as const;
+                    setViewMode(modeMap[condition.type]);
+                }
+            } else {
+                setViewMode('pan');
             }
-        } else {
-            setViewMode('pan');
-        }
-    }, [conditions]);
+        },
+        [conditions],
+    );
 
     const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
         if (deductionParentId) {
@@ -303,13 +292,7 @@ export default function DrawingTakeoff() {
                     parent_measurement_id: deductionParentId,
                     bid_area_id: activeBidAreaId || null,
                 });
-                setMeasurements((prev) =>
-                    prev.map((m) =>
-                        m.id === deductionParentId
-                            ? { ...m, deductions: [...(m.deductions || []), saved] }
-                            : m,
-                    ),
-                );
+                setMeasurements((prev) => prev.map((m) => (m.id === deductionParentId ? { ...m, deductions: [...(m.deductions || []), saved] } : m)));
                 pushUndo({ type: 'create', measurement: saved, drawingId: drawing.id });
                 toast.success(`Deduction saved on "${parent?.name}"`);
             } catch (err) {
@@ -325,14 +308,10 @@ export default function DrawingTakeoff() {
 
         const typeLabel = type === 'linear' ? 'Line' : type === 'area' ? 'Area' : 'Count';
         const existingOfType = measurements.filter((m) =>
-            currentCondition
-                ? m.takeoff_condition_id === currentCondition.id
-                : m.type === type && !m.takeoff_condition_id,
+            currentCondition ? m.takeoff_condition_id === currentCondition.id : m.type === type && !m.takeoff_condition_id,
         );
         const counter = existingOfType.length + 1;
-        const name = currentCondition
-            ? `${currentCondition.name} #${counter}`
-            : `${typeLabel} #${counter}`;
+        const name = currentCondition ? `${currentCondition.name} #${counter}` : `${typeLabel} #${counter}`;
         const color = currentCondition?.color || '#3b82f6';
         const category = currentCondition?.name || null;
 
@@ -405,7 +384,9 @@ export default function DrawingTakeoff() {
         });
         if (!confirmed) return;
         try {
-            const data = await api.delete<{ message: string; measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${measurement.id}`);
+            const data = await api.delete<{ message: string; measurement: MeasurementData }>(
+                `/drawings/${drawing.id}/measurements/${measurement.id}`,
+            );
             if (measurement.parent_measurement_id) {
                 setMeasurements((prev) =>
                     prev.map((m) =>
@@ -459,9 +440,7 @@ export default function DrawingTakeoff() {
 
         for (const id of ids) {
             try {
-                const data = await api.delete<{ measurement: MeasurementData }>(
-                    `/drawings/${drawing.id}/measurements/${id}`,
-                );
+                const data = await api.delete<{ measurement: MeasurementData }>(`/drawings/${drawing.id}/measurements/${id}`);
                 deleted.push(data.measurement);
             } catch {
                 failed.push(id);
@@ -581,9 +560,7 @@ export default function DrawingTakeoff() {
     };
 
     // Determine comparison image URL
-    const comparisonImageUrl = showCompareOverlay
-        ? (candidateImageUrl || undefined)
-        : undefined;
+    const comparisonImageUrl = showCompareOverlay ? candidateImageUrl || undefined : undefined;
 
     // Keyboard shortcuts
     const shortcuts = useMemo(
@@ -593,14 +570,18 @@ export default function DrawingTakeoff() {
             { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canEditTakeoff },
             { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canEditTakeoff && !!calibration },
             { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canEditTakeoff && !!calibration },
-            { key: 'r', handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'), enabled: canEditTakeoff && !!calibration },
+            {
+                key: 'r',
+                handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'),
+                enabled: canEditTakeoff && !!calibration,
+            },
             { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canEditTakeoff },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
                 enabled: canEditTakeoff,
             })),
-            { key: 'n', handler: () => setSnapEnabled(prev => !prev), enabled: canEditTakeoff },
+            { key: 'n', handler: () => setSnapEnabled((prev) => !prev), enabled: canEditTakeoff },
             { key: 'z', ctrl: true, handler: undo, enabled: canEditTakeoff },
             { key: 'z', ctrl: true, shift: true, handler: redo, enabled: canEditTakeoff },
             { key: 'y', ctrl: true, handler: redo, enabled: canEditTakeoff },
@@ -618,16 +599,30 @@ export default function DrawingTakeoff() {
             statusBar={
                 <>
                     <span className="font-medium">
-                        {viewMode === 'pan' ? 'Pan' : viewMode === 'select' ? 'Drag select' : viewMode === 'calibrate' ? 'Calibrate' : viewMode === 'measure_line' ? 'Line' : viewMode === 'measure_area' ? 'Area' : viewMode === 'measure_rectangle' ? 'Rectangle' : viewMode === 'measure_count' ? 'Count' : 'Pan'}
+                        {viewMode === 'pan'
+                            ? 'Pan'
+                            : viewMode === 'select'
+                              ? 'Drag select'
+                              : viewMode === 'calibrate'
+                                ? 'Calibrate'
+                                : viewMode === 'measure_line'
+                                  ? 'Line'
+                                  : viewMode === 'measure_area'
+                                    ? 'Area'
+                                    : viewMode === 'measure_rectangle'
+                                      ? 'Rectangle'
+                                      : viewMode === 'measure_count'
+                                        ? 'Count'
+                                        : 'Pan'}
                     </span>
                     <div className="bg-border h-3 w-px" />
-                    <span>{measurements.length} measurement{measurements.length !== 1 ? 's' : ''}</span>
+                    <span>
+                        {measurements.length} measurement{measurements.length !== 1 ? 's' : ''}
+                    </span>
                     <div className="flex-1" />
 
                     {viewMode === 'select' && selectedMeasurementIds.size === 0 && (
-                        <span className="text-[10px] text-muted-foreground">
-                            Drag a rectangle to select measurements
-                        </span>
+                        <span className="text-muted-foreground text-[10px]">Drag a rectangle to select measurements</span>
                     )}
 
                     {selectedMeasurementIds.size > 0 && (
@@ -683,6 +678,21 @@ export default function DrawingTakeoff() {
 
                     <div className="bg-border h-4 w-px" />
 
+                    {/* Viewer toggle: Classic (Leaflet, full features) vs New (Pixi, view-only spike) */}
+                    <div className="flex items-center gap-1.5">
+                        <Label htmlFor="viewer-toggle" className="text-muted-foreground cursor-pointer text-[11px]">
+                            Use Classic
+                        </Label>
+                        <Switch id="viewer-toggle" checked={useClassicViewer} onCheckedChange={setUseClassicViewer} className="scale-75" />
+                        {!useClassicViewer && (
+                            <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                NEW
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="bg-border h-4 w-px" />
+
                     {/* Bid Area Selector */}
                     <div className="flex items-center gap-1">
                         <Combobox<BidArea & { depth: number }>
@@ -715,14 +725,12 @@ export default function DrawingTakeoff() {
                                 aria-label="Filter by bid area"
                             >
                                 <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                                    <FolderTree className="size-3 shrink-0 text-muted-foreground" />
-                                    {activeBidAreaId
-                                        ? (
-                                            <span className="truncate">
-                                                {flatBidAreas.find((a) => a.id === activeBidAreaId)?.name ?? 'Unknown area'}
-                                            </span>
-                                        )
-                                        : <span className="text-muted-foreground">All areas</span>}
+                                    <FolderTree className="text-muted-foreground size-3 shrink-0" />
+                                    {activeBidAreaId ? (
+                                        <span className="truncate">{flatBidAreas.find((a) => a.id === activeBidAreaId)?.name ?? 'Unknown area'}</span>
+                                    ) : (
+                                        <span className="text-muted-foreground">All areas</span>
+                                    )}
                                 </span>
                                 {activeBidAreaId && (
                                     <span
@@ -740,27 +748,25 @@ export default function DrawingTakeoff() {
                                                 setActiveBidAreaId(null);
                                             }
                                         }}
-                                        className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        className="text-muted-foreground hover:bg-muted hover:text-foreground ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-sm"
                                     >
                                         <X className="size-3" />
                                     </span>
                                 )}
                             </ComboboxTrigger>
 
-                            <ComboboxContent className="w-[280px] p-0 overflow-hidden">
+                            <ComboboxContent className="w-[280px] overflow-hidden p-0">
                                 <div className="flex h-8 items-center gap-1.5 border-b px-2">
-                                    <Search className="size-3 shrink-0 text-muted-foreground" />
+                                    <Search className="text-muted-foreground size-3 shrink-0" />
                                     <ComboboxPrimitive.Input
                                         placeholder="Search areas..."
-                                        className="h-full flex-1 bg-transparent text-xs outline-none placeholder:text-xs placeholder:text-muted-foreground"
+                                        className="placeholder:text-muted-foreground h-full flex-1 bg-transparent text-xs outline-none placeholder:text-xs"
                                     />
                                 </div>
 
                                 <ComboboxEmpty className="flex-col items-center gap-1 px-4 py-6 text-center">
-                                    <FolderTree className="size-4 text-muted-foreground/40" />
-                                    <span className="text-xs text-muted-foreground">
-                                        {flatBidAreas.length === 0 ? 'No areas yet' : 'No matches'}
-                                    </span>
+                                    <FolderTree className="text-muted-foreground/40 size-4" />
+                                    <span className="text-muted-foreground text-xs">{flatBidAreas.length === 0 ? 'No areas yet' : 'No matches'}</span>
                                     {canEditTakeoff && flatBidAreas.length === 0 && (
                                         <Button
                                             type="button"
@@ -783,12 +789,9 @@ export default function DrawingTakeoff() {
                                         <ComboboxItem
                                             key={area.id}
                                             value={area}
-                                            className="rounded-none border-b border-border/50 px-2 py-1.5 text-xs last:border-b-0"
+                                            className="border-border/50 rounded-none border-b px-2 py-1.5 text-xs last:border-b-0"
                                         >
-                                            <span
-                                                className="truncate"
-                                                style={{ paddingLeft: area.depth * 10 }}
-                                            >
+                                            <span className="truncate" style={{ paddingLeft: area.depth * 10 }}>
                                                 {area.name}
                                             </span>
                                         </ComboboxItem>
@@ -824,9 +827,7 @@ export default function DrawingTakeoff() {
                                     >
                                         <GitCompare className="h-3 w-3" />
                                         Compare
-                                        {showCompareOverlay && (
-                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                        )}
+                                        {showCompareOverlay && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64 p-3" align="end">
@@ -854,7 +855,7 @@ export default function DrawingTakeoff() {
                                             <>
                                                 {revisions.filter((rev) => rev.id !== drawing.id && rev.file_url).length > 0 && (
                                                     <div className="space-y-1">
-                                                        <Label className="text-[11px] text-muted-foreground">Revision</Label>
+                                                        <Label className="text-muted-foreground text-[11px]">Revision</Label>
                                                         <Select
                                                             value={compareRevisionId ? String(compareRevisionId) : ''}
                                                             onValueChange={(value) => setCompareRevisionId(Number(value))}
@@ -877,8 +878,10 @@ export default function DrawingTakeoff() {
 
                                                 <div className="space-y-1">
                                                     <div className="flex items-center justify-between">
-                                                        <Label className="text-[11px] text-muted-foreground">Opacity</Label>
-                                                        <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{overlayOpacity}%</span>
+                                                        <Label className="text-muted-foreground text-[11px]">Opacity</Label>
+                                                        <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                                                            {overlayOpacity}%
+                                                        </span>
                                                     </div>
                                                     <Slider
                                                         value={[overlayOpacity]}
@@ -888,7 +891,6 @@ export default function DrawingTakeoff() {
                                                         step={5}
                                                     />
                                                 </div>
-
                                             </>
                                         )}
                                     </div>
@@ -901,12 +903,13 @@ export default function DrawingTakeoff() {
                 </>
             }
         >
-                {/* Main Viewer + Panels */}
-                <div className="relative flex flex-1 overflow-hidden">
-                    <div className="relative isolate flex-1 overflow-hidden">
+            {/* Main Viewer + Panels */}
+            <div className="relative flex flex-1 overflow-hidden">
+                <div className="relative isolate flex-1 overflow-hidden">
+                    {useClassicViewer ? (
                         <LeafletDrawingViewer
                             tiles={drawing.tiles_info || undefined}
-                            imageUrl={!drawing.tiles_info ? (imageUrl || undefined) : undefined}
+                            imageUrl={!drawing.tiles_info ? imageUrl || undefined : undefined}
                             comparisonImageUrl={comparisonImageUrl}
                             comparisonOpacity={overlayOpacity}
                             viewMode={viewMode}
@@ -928,51 +931,74 @@ export default function DrawingTakeoff() {
                             activeColor={activeConditionDisplay?.color ?? null}
                             className="absolute inset-0"
                         />
-                    </div>
-
-                    {/* Takeoff Side Panel */}
-                    <div
-                        className="relative shrink-0 overflow-hidden border-l bg-background"
-                        style={{ width: panelWidth }}
-                    >
-                        <div
-                            className="absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group/handle"
-                            onMouseDown={(e) => {
-                                e.preventDefault();
-                                panelResizing.current = true;
-                                panelStartX.current = e.clientX;
-                                panelStartW.current = panelWidth;
-                                document.body.style.cursor = 'col-resize';
-                                document.body.style.userSelect = 'none';
-                            }}
-                        >
-                            <div className="flex flex-col gap-0.5 opacity-30 group-hover/handle:opacity-60 transition-opacity">
-                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                                <div className="h-0.5 w-0.5 rounded-full bg-muted-foreground" />
-                            </div>
-                        </div>
-                        <TakeoffPanel
-                            calibration={calibration}
-                            measurements={measurements.filter((m) => !m.scope || m.scope === 'takeoff')}
+                    ) : (
+                        <PixiDrawingViewer
+                            fileUrl={`/api/drawings/${drawing.id}/file`}
+                            viewMode={viewMode}
+                            measurements={visibleMeasurements}
                             selectedMeasurementId={selectedMeasurementId}
-                            conditions={conditions}
-                            activeConditionId={activeConditionId}
-                            onMeasurementSelect={setSelectedMeasurementId}
-                            onMeasurementEdit={handleEditMeasurement}
-                            onMeasurementDelete={handleDeleteMeasurement}
-                            onOpenConditionManager={() => setShowConditionManager(true)}
-                            onActivateCondition={handleActivateCondition}
-                            onAddDeduction={handleAddDeduction}
+                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
+                            calibration={calibration}
+                            conditionOpacities={conditionOpacities}
+                            onCalibrationComplete={cal.handleCalibrationComplete}
+                            onMeasurementComplete={handleMeasurementComplete}
+                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
                             onMeasurementHover={setHoveredMeasurementId}
-                            drawingId={drawing.id}
-                            quantityMultiplier={1}
-                            readOnly={!canEditTakeoff}
+                            snapEnabled={snapEnabled}
+                            hoveredMeasurementId={hoveredMeasurementId}
+                            boxSelectMode={viewMode === 'select'}
+                            onBoxSelectComplete={handleBoxSelect}
+                            activeColor={activeConditionDisplay?.color ?? null}
+                            editableVertices={editableVertices}
+                            onVertexDragEnd={handleVertexDragEnd}
+                            onVertexDelete={handleVertexDelete}
+                            comparisonImageUrl={comparisonImageUrl}
+                            comparisonOpacity={overlayOpacity}
+                            className="absolute inset-0"
                         />
-                    </div>
+                    )}
                 </div>
+
+                {/* Takeoff Side Panel */}
+                <div className="bg-background relative shrink-0 overflow-hidden border-l" style={{ width: panelWidth }}>
+                    <div
+                        className="hover:bg-primary/20 active:bg-primary/30 group/handle absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center transition-colors"
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            panelResizing.current = true;
+                            panelStartX.current = e.clientX;
+                            panelStartW.current = panelWidth;
+                            document.body.style.cursor = 'col-resize';
+                            document.body.style.userSelect = 'none';
+                        }}
+                    >
+                        <div className="flex flex-col gap-0.5 opacity-30 transition-opacity group-hover/handle:opacity-60">
+                            <div className="bg-muted-foreground h-0.5 w-0.5 rounded-full" />
+                            <div className="bg-muted-foreground h-0.5 w-0.5 rounded-full" />
+                            <div className="bg-muted-foreground h-0.5 w-0.5 rounded-full" />
+                            <div className="bg-muted-foreground h-0.5 w-0.5 rounded-full" />
+                            <div className="bg-muted-foreground h-0.5 w-0.5 rounded-full" />
+                        </div>
+                    </div>
+                    <TakeoffPanel
+                        calibration={calibration}
+                        measurements={measurements.filter((m) => !m.scope || m.scope === 'takeoff')}
+                        selectedMeasurementId={selectedMeasurementId}
+                        conditions={conditions}
+                        activeConditionId={activeConditionId}
+                        onMeasurementSelect={setSelectedMeasurementId}
+                        onMeasurementEdit={handleEditMeasurement}
+                        onMeasurementDelete={handleDeleteMeasurement}
+                        onOpenConditionManager={() => setShowConditionManager(true)}
+                        onActivateCondition={handleActivateCondition}
+                        onAddDeduction={handleAddDeduction}
+                        onMeasurementHover={setHoveredMeasurementId}
+                        drawingId={drawing.id}
+                        quantityMultiplier={1}
+                        readOnly={!canEditTakeoff}
+                    />
+                </div>
+            </div>
 
             {/* Calibration Dialog */}
             <CalibrationDialog
@@ -1063,12 +1089,17 @@ export default function DrawingTakeoff() {
                                 ))}
                                 <label
                                     className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-2 transition-all ${
-                                        !PRESET_COLORS.includes(measurementColor) ? 'border-foreground scale-110' : 'border-dashed border-muted-foreground/40 hover:scale-105'
+                                        !PRESET_COLORS.includes(measurementColor)
+                                            ? 'border-foreground scale-110'
+                                            : 'border-muted-foreground/40 border-dashed hover:scale-105'
                                     }`}
                                     style={!PRESET_COLORS.includes(measurementColor) ? { backgroundColor: measurementColor } : undefined}
                                     title="Custom color"
                                 >
-                                    <Plus className="h-3 w-3 text-muted-foreground" style={!PRESET_COLORS.includes(measurementColor) ? { color: 'white', mixBlendMode: 'difference' } : undefined} />
+                                    <Plus
+                                        className="text-muted-foreground h-3 w-3"
+                                        style={!PRESET_COLORS.includes(measurementColor) ? { color: 'white', mixBlendMode: 'difference' } : undefined}
+                                    />
                                     <input
                                         type="color"
                                         value={measurementColor}
