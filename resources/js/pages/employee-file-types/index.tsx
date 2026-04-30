@@ -223,13 +223,13 @@ export default function EmployeeFileTypesIndex() {
     const getValueOptions = (field: string) => {
         switch (field) {
             case 'employment_type':
-                return employmentTypes.map((t) => ({ value: t, label: t }));
+                return (employmentTypes ?? []).map((t) => ({ value: t, label: t }));
             case 'employment_agreement':
-                return employmentAgreements.map((a) => ({ value: a, label: a }));
+                return (employmentAgreements ?? []).map((a) => ({ value: a, label: a }));
             case 'worktype':
-                return worktypes.map((w) => ({ value: String(w.id), label: w.name }));
+                return (worktypes ?? []).map((w) => ({ value: String(w.id), label: w.name }));
             case 'location':
-                return locations.map((l) => ({ value: String(l.id), label: l.name }));
+                return (locations ?? []).map((l) => ({ value: String(l.id), label: l.name }));
             default:
                 return [];
         }
@@ -578,7 +578,7 @@ export default function EmployeeFileTypesIndex() {
                         </div>
                     </div>
 
-                    <DialogFooter className="border-t p-4">
+                    <DialogFooter className="m-0">
                         <Button variant="outline" onClick={() => setShowDialog(false)}>
                             Cancel
                         </Button>
