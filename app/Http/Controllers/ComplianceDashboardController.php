@@ -78,13 +78,23 @@ class ComplianceDashboardController extends Controller
                 ->unique('employee_file_type_id')
                 ->keyBy('employee_file_type_id');
 
-            $requiredTypes = $fileTypes->filter(fn (EmployeeFileType $type) => $type->appliesToEmployee($employee));
+            // Resolve level per file type and drop those that don't apply (level = none).
+            $requiredWithLevel = $fileTypes
+                ->map(fn (EmployeeFileType $type) => [
+                    'type' => $type,
+                    'level' => $type->requirementForEmployee($employee),
+                ])
+                ->filter(fn (array $row) => $row['level'] !== EmployeeFileType::LEVEL_NONE);
 
             $expired = 0;
             $expiringSoon = 0;
             $missing = 0;
+            $hasMandatoryIssue = false;
+            $hasPreferredIssue = false;
 
-            $statuses = $requiredTypes->mapWithKeys(function (EmployeeFileType $type) use ($latest, &$expired, &$expiringSoon, &$missing, &$fileTypeIssues) {
+            $statuses = $requiredWithLevel->mapWithKeys(function (array $row) use ($latest, &$expired, &$expiringSoon, &$missing, &$hasMandatoryIssue, &$hasPreferredIssue, &$fileTypeIssues) {
+                $type = $row['type'];
+                $level = $row['level'];
                 $file = $latest->get($type->id);
                 $status = 'valid';
 
@@ -101,15 +111,23 @@ class ComplianceDashboardController extends Controller
                     }
                 }
 
-                // Track per file-type breakdown
-                if ($status !== 'valid') {
+                // Track per file-type breakdown (mandatory/preferred only - optional gaps are info).
+                if ($status !== 'valid' && $level !== EmployeeFileType::LEVEL_OPTIONAL) {
                     if (! isset($fileTypeIssues[$type->id])) {
                         $fileTypeIssues[$type->id] = ['expired' => 0, 'expiring_soon' => 0, 'missing' => 0];
                     }
                     $fileTypeIssues[$type->id][$status]++;
                 }
 
-                return [$type->id => $status];
+                // Severity flags drive overall status.
+                if ($level === EmployeeFileType::LEVEL_MANDATORY && in_array($status, ['expired', 'missing'], true)) {
+                    $hasMandatoryIssue = true;
+                }
+                if ($level === EmployeeFileType::LEVEL_PREFERRED && in_array($status, ['expired', 'missing', 'expiring_soon'], true)) {
+                    $hasPreferredIssue = true;
+                }
+
+                return [$type->id => ['status' => $status, 'level' => $level]];
             });
 
             // Count unsigned signing requests (site-visible templates only)
@@ -122,8 +140,13 @@ class ComplianceDashboardController extends Controller
             $totalMissing += $missing;
             $totalUnsigned += $unsignedCount;
 
-            $hasIssues = $expired > 0 || $missing > 0;
-            if (! $hasIssues && $expiringSoon === 0 && $unsignedCount === 0) {
+            $overall = match (true) {
+                $hasMandatoryIssue => 'non_compliant',
+                $hasPreferredIssue || $expiringSoon > 0 || $unsignedCount > 0 => 'warning',
+                default => 'compliant',
+            };
+
+            if ($overall === 'compliant') {
                 $totalCompliant++;
             }
 
@@ -136,7 +159,7 @@ class ComplianceDashboardController extends Controller
                 'expiring_soon_count' => $expiringSoon,
                 'missing_count' => $missing,
                 'unsigned_count' => $unsignedCount,
-                'overall' => $hasIssues ? 'non_compliant' : ($expiringSoon > 0 || $unsignedCount > 0 ? 'warning' : 'compliant'),
+                'overall' => $overall,
             ];
         });
 

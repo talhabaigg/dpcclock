@@ -31,11 +31,19 @@ interface FileTypeBreakdown {
     missing: number;
 }
 
+type RequirementLevel = 'mandatory' | 'preferred' | 'optional';
+type FileStatus = 'valid' | 'expired' | 'expiring_soon' | 'missing';
+
+interface FileStatusEntry {
+    status: FileStatus;
+    level: RequirementLevel;
+}
+
 interface EmployeeCompliance {
     id: number;
     name: string;
     employment_type: string | null;
-    statuses: Record<number, string>;
+    statuses: Record<number, FileStatusEntry>;
     expired_count: number;
     expiring_soon_count: number;
     missing_count: number;
@@ -326,7 +334,20 @@ function OverallBadge({ status }: { status: 'non_compliant' | 'warning' | 'compl
     return <Badge variant="outline" className="text-red-700/80 dark:text-red-400/70">Non-Compliant</Badge>;
 }
 
-function FileStatusDots({ statuses, fileTypes }: { statuses: Record<number, string>; fileTypes: FileType[] }) {
+const LEVEL_LABEL: Record<RequirementLevel, string> = {
+    mandatory: 'Mandatory',
+    preferred: 'Preferred',
+    optional: 'Optional',
+};
+
+const STATUS_LABEL: Record<FileStatus, string> = {
+    valid: 'Valid',
+    expired: 'Expired',
+    expiring_soon: 'Expiring soon',
+    missing: 'Missing',
+};
+
+function FileStatusDots({ statuses, fileTypes }: { statuses: Record<number, FileStatusEntry>; fileTypes: FileType[] }) {
     const fileTypeMap = useMemo(() => {
         const map = new Map<number, string>();
         fileTypes.forEach((ft) => map.set(ft.id, ft.name));
@@ -338,26 +359,40 @@ function FileStatusDots({ statuses, fileTypes }: { statuses: Record<number, stri
 
     return (
         <div className="flex flex-wrap items-center justify-center gap-0.5">
-            {entries.map(([typeId, status]) => {
+            {entries.map(([typeId, entry]) => {
                 const name = fileTypeMap.get(Number(typeId)) ?? `File #${typeId}`;
+                const { status, level } = entry;
+
+                // Status drives color, level drives intensity/treatment.
+                const statusColor =
+                    status === 'valid' ? 'bg-emerald-400/60 dark:bg-emerald-500/40' :
+                    status === 'expired' ? 'bg-red-400/80 dark:bg-red-500/60' :
+                    status === 'expiring_soon' ? 'bg-amber-400/80 dark:bg-amber-500/60' :
+                    'bg-red-300/70 dark:bg-red-500/40'; // missing
+
+                // Optional gaps fade to muted grey instead of red — they're informational.
+                const optionalMuted = level === 'optional' && status !== 'valid';
+                const dotClass = cn(
+                    'block size-2 rounded-full',
+                    optionalMuted ? 'bg-muted-foreground/40' : statusColor,
+                    // Preferred items get a ring outline to flag "amber severity"
+                    level === 'preferred' && status !== 'valid' && 'ring-1 ring-amber-500/60 ring-offset-1 ring-offset-background',
+                );
+
                 return (
                     <Tooltip key={typeId}>
                         <TooltipTrigger asChild>
                             <span className="inline-flex items-center justify-center p-1">
-                                <span
-                                    className={cn(
-                                        'block size-2 rounded-full',
-                                        status === 'valid' && 'bg-emerald-400/60 dark:bg-emerald-500/40',
-                                        status === 'expired' && 'bg-red-400/70 dark:bg-red-500/50',
-                                        status === 'expiring_soon' && 'bg-amber-400/70 dark:bg-amber-500/50',
-                                        status === 'missing' && 'bg-red-300/60 dark:bg-red-500/30',
-                                    )}
-                                />
+                                <span className={dotClass} />
                             </span>
                         </TooltipTrigger>
                         <TooltipContent side="top">
                             <p className="text-xs font-medium">{name}</p>
-                            <p className="text-xs capitalize text-muted-foreground">{status.replace('_', ' ')}</p>
+                            <p className="text-xs text-muted-foreground">
+                                <span className="capitalize">{LEVEL_LABEL[level]}</span>
+                                <span className="mx-1">·</span>
+                                {STATUS_LABEL[status]}
+                            </p>
                         </TooltipContent>
                     </Tooltip>
                 );
