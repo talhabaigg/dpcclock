@@ -952,6 +952,7 @@ export default function DrawingTakeoff() {
                             editableVertices={editableVertices}
                             onVertexDragEnd={handleVertexDragEnd}
                             onVertexDelete={handleVertexDelete}
+                            tileWidth={drawing.tiles_info?.width}
                             comparisonImageUrl={comparisonImageUrl}
                             comparisonOpacity={overlayOpacity}
                             className="absolute inset-0"

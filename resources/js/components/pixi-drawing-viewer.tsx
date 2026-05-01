@@ -1,7 +1,10 @@
+import { Maximize, Minus, Plus } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPageProxy, type RenderTask } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { Application, CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, CanvasSource, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from './ui/button';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from './measurement-layer';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -37,6 +40,12 @@ type Props = {
     editableVertices?: boolean;
     onVertexDragEnd?: (measurementId: number, pointIndex: number, newPoint: Point) => void;
     onVertexDelete?: (measurementId: number, pointIndex: number) => void;
+    /** Tile-pixel-space width at zoom 0 — needed to interpret the server's
+     * `pixels_per_unit` calibration value (stored in tile pixels). Without it,
+     * preset-method calibrations can't be converted to PDF-point space.
+     * (Height not needed: PDF rendering is isotropic, so the x-axis ratio
+     * tileWidth ↔ pdfDims.width covers both axes.) */
+    tileWidth?: number;
     /** Comparison overlay (revision diff). PDF or image URL. */
     comparisonImageUrl?: string;
     comparisonOpacity?: number;
@@ -54,11 +63,30 @@ type Props = {
      * known. Useful for callers that need pdfDims for coordinate math. */
     onPdfDimsLoaded?: (dims: { width: number; height: number }) => void;
     onZoomChange?: (zoom: number) => void;
+    /** Receives finish/undo/cancel functions + current draw state so the parent
+     *  can render a stylus-friendly floating panel. Called whenever state changes;
+     *  null when not actively drawing. */
+    onDrawingControlsChange?: (state: DrawingControls | null) => void;
     className?: string;
 };
 
-const MIN_SCALE = 0.05;
+export type DrawingControls = {
+    viewMode: ViewMode;
+    pointCount: number;
+    canFinish: boolean;
+    canUndo: boolean;
+    finish: () => void;
+    undo: () => void;
+    cancel: () => void;
+};
+
+// Dynamic min scale: a viewer is never allowed to zoom out smaller than the
+// scale that fits the whole PDF on screen with a small padding. Computed at
+// runtime; this constant is just a hard floor so an undersized canvas can't
+// bring the scale to zero.
+const ABSOLUTE_MIN_SCALE = 0.001;
 const MAX_SCALE = 32;
+const FIT_PADDING = 24;
 const RASTER_OVERSCAN = 1.0;
 const RENDER_REGION_OVERSCAN = 2.0;
 const FALLBACK_QUALITY_MULTIPLIER = 3.0;
@@ -90,6 +118,18 @@ const hexFromCss = (css: string | null | undefined): number => {
         return parseInt(c[0] + c[0] + c[1] + c[1] + c[2] + c[2], 16);
     }
     return parseInt(c.slice(0, 6), 16);
+};
+
+type SnapCandidate = {
+    point: Point;
+    kind: 'endpoint' | 'midpoint';
+};
+
+type LivePanelContent = {
+    label: string;
+    value: string;
+    secondary?: string;
+    hint?: string;
 };
 
 // Distance from point P to segment AB
@@ -136,6 +176,7 @@ export function PixiDrawingViewer({
     editableVertices,
     onVertexDragEnd,
     onVertexDelete,
+    tileWidth,
     comparisonImageUrl,
     comparisonOpacity = 50,
     productionLabels,
@@ -145,6 +186,7 @@ export function PixiDrawingViewer({
     selectedSegments,
     onPdfDimsLoaded,
     onZoomChange,
+    onDrawingControlsChange,
     className,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -154,6 +196,9 @@ export function PixiDrawingViewer({
     const fallbackSpriteRef = useRef<Sprite | null>(null);
     const measurementsLayerRef = useRef<Container | null>(null);
     const drawingLayerRef = useRef<Container | null>(null);
+    // Transient effects (click bursts, creation pulses). Lives above
+    // measurements so animations sit on top.
+    const fxLayerRef = useRef<Container | null>(null);
     const docRef = useRef<PDFDocumentProxy | null>(null);
     const pageRef = useRef<PDFPageProxy | null>(null);
     const renderTaskRef = useRef<RenderTask | null>(null);
@@ -177,9 +222,19 @@ export function PixiDrawingViewer({
     // Active vertex drag (UV). Null when not dragging a vertex.
     const [draggingVertex, setDraggingVertex] = useState<{ id: number; index: number; uv: Point } | null>(null);
     // Snap target rendered at the cursor while drawing — endpoint/midpoint of an existing measurement.
-    const [snapCandidate, setSnapCandidate] = useState<Point | null>(null);
+    const [snapCandidate, setSnapCandidate] = useState<SnapCandidate | null>(null);
     const [zoomDisplay, setZoomDisplay] = useState(1);
     const [appReady, setAppReady] = useState(false);
+    // Cursor position (host-relative) used to anchor the hover tooltip.
+    const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+    // Cursor position (host-relative) used to anchor the live measurement
+    // panel (during measure mode). Tracked separately from tooltipPos because
+    // it has different show/hide rules.
+    const [livePanelPos, setLivePanelPos] = useState<{ x: number; y: number } | null>(null);
+    // Dynamic minimum scale = whatever scale fits the full PDF in the viewport
+    // (with FIT_PADDING). Recomputed when dims/screen change so resizing the
+    // window doesn't trap the user at a too-small zoom.
+    const minScaleRef = useRef<number>(ABSOLUTE_MIN_SCALE);
     // Comparison overlay sprite (revision diff)
     const comparisonSpriteRef = useRef<Sprite | null>(null);
 
@@ -202,6 +257,10 @@ export function PixiDrawingViewer({
                 autoDensity: true,
                 resolution: window.devicePixelRatio || 1,
                 preference: 'webgl',
+                // WebGL clears the drawing buffer after each present by default;
+                // we read pixels back via drawImage(pixiCanvas, …) to feed the
+                // measurement-panel magnifier, so the buffer must be preserved.
+                preserveDrawingBuffer: true,
             });
             if (cancelled) {
                 app.destroy(true, { children: true, texture: true });
@@ -215,14 +274,17 @@ export function PixiDrawingViewer({
             const world = new Container();
             const measurementsLayer = new Container();
             const drawingLayer = new Container();
+            const fxLayer = new Container();
             world.addChild(measurementsLayer);
             world.addChild(drawingLayer);
+            world.addChild(fxLayer);
             app.stage.addChild(world);
 
             appRef.current = app;
             worldRef.current = world;
             measurementsLayerRef.current = measurementsLayer;
             drawingLayerRef.current = drawingLayer;
+            fxLayerRef.current = fxLayer;
             setAppReady(true);
 
             // WebGL context loss handler — when the browser drops the GL
@@ -259,6 +321,7 @@ export function PixiDrawingViewer({
             fallbackSpriteRef.current = null;
             measurementsLayerRef.current = null;
             drawingLayerRef.current = null;
+            fxLayerRef.current = null;
         };
     }, []);
 
@@ -652,7 +715,7 @@ export function PixiDrawingViewer({
 
             const oldScale = world.scale.x;
             const factor = Math.exp(-delta * 0.0015);
-            const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, oldScale * factor));
+            const newScale = Math.max(minScaleRef.current, Math.min(MAX_SCALE, oldScale * factor));
 
             const localX = (cx - world.position.x) / oldScale;
             const localY = (cy - world.position.y) / oldScale;
@@ -759,9 +822,10 @@ export function PixiDrawingViewer({
     );
 
     // Find the nearest endpoint or midpoint to snap to. Returns null if
-    // nothing's within tolerance (or snap is disabled).
+    // nothing's within tolerance (or snap is disabled). Endpoints win ties so
+    // existing vertices feel sticky relative to mid-edges.
     const findSnapPoint = useCallback(
-        (uv: Point, excludeMeasurementId?: number): Point | null => {
+        (uv: Point, excludeMeasurementId?: number): SnapCandidate | null => {
             if (!snapEnabled) return null;
             const world = worldRef.current;
             if (!world || !pdfDims) return null;
@@ -769,19 +833,17 @@ export function PixiDrawingViewer({
             const tolUv = Math.max(tolPx / pdfDims.width, tolPx / pdfDims.height);
 
             let bestDist = tolUv;
-            let best: Point | null = null;
+            let best: SnapCandidate | null = null;
 
             for (const m of measurements) {
                 if (excludeMeasurementId != null && m.id === excludeMeasurementId) continue;
-                // All vertex endpoints
                 for (const p of m.points) {
                     const d = Math.hypot(p.x - uv.x, p.y - uv.y);
                     if (d < bestDist) {
                         bestDist = d;
-                        best = p;
+                        best = { point: p, kind: 'endpoint' };
                     }
                 }
-                // Midpoints between consecutive vertices (line + area edges)
                 if (m.type === 'linear' || m.type === 'area') {
                     const segments = m.type === 'area' ? m.points.length : m.points.length - 1;
                     for (let i = 0; i < segments; i++) {
@@ -789,9 +851,10 @@ export function PixiDrawingViewer({
                         const b = m.points[(i + 1) % m.points.length];
                         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
                         const d = Math.hypot(mid.x - uv.x, mid.y - uv.y);
+                        // Strict < so an endpoint at the same distance wins (more useful).
                         if (d < bestDist) {
                             bestDist = d;
-                            best = mid;
+                            best = { point: mid, kind: 'midpoint' };
                         }
                     }
                 }
@@ -808,12 +871,30 @@ export function PixiDrawingViewer({
         return set;
     }, [selectedMeasurementId, selectedMeasurementIds]);
 
-    // Renderer-agnostic distance/area conversion. Uses the calibration's UV
-    // points + real_distance — no dependency on the original tile pixel space.
-    // PDF coords are isotropic, so we convert UV → PDF first, then scale.
+    // Convert calibration into a "PDF points per real unit" scalar that the
+    // measurement code can apply directly. Two paths so both calibration
+    // methods are supported:
+    //   1. pixels_per_unit + tileWidth → preferred; works for both 'manual'
+    //      and 'preset' methods, since the server always stores ppu.
+    //   2. point_a/b + real_distance → fallback for manual when tileWidth
+    //      isn't passed (older callers).
+    // Returns null if neither path can produce a usable scalar.
     const calibrationFactor = useMemo(() => {
         if (!calibration || !pdfDims) return null;
-        const { point_a_x, point_a_y, point_b_x, point_b_y, real_distance, unit } = calibration;
+        const unit = calibration.unit || '';
+
+        // Preferred: pixels_per_unit lives in tile-pixel space at zoom 0;
+        // pdfDims.width / tileWidth is the conversion factor from tile pixels
+        // to PDF points along x (PDF rendering is isotropic, so x suffices).
+        if (calibration.pixels_per_unit && tileWidth && tileWidth > 0) {
+            const pdfPointsPerUnit = (calibration.pixels_per_unit * pdfDims.width) / tileWidth;
+            if (pdfPointsPerUnit > 0) {
+                return { pdfPointsPerUnit, unit };
+            }
+        }
+
+        // Fallback: derive from manual-method point_a/b + real_distance.
+        const { point_a_x, point_a_y, point_b_x, point_b_y, real_distance } = calibration;
         if (point_a_x == null || point_a_y == null || point_b_x == null || point_b_y == null || !real_distance) {
             return null;
         }
@@ -821,8 +902,8 @@ export function PixiDrawingViewer({
         const dy = (point_b_y - point_a_y) * pdfDims.height;
         const pdfDist = Math.hypot(dx, dy);
         if (pdfDist <= 0) return null;
-        return { pdfPointsPerUnit: pdfDist / real_distance, unit: unit || '' };
-    }, [calibration, pdfDims]);
+        return { pdfPointsPerUnit: pdfDist / real_distance, unit };
+    }, [calibration, pdfDims, tileWidth]);
 
     // Total length of a polyline (UV) in real units. Returns null if not calibrated.
     const computeRealLength = useCallback(
@@ -877,6 +958,118 @@ export function PixiDrawingViewer({
         },
         [calibrationFactor],
     );
+
+    // Compute the scale that makes the full PDF fit the viewport with padding.
+    const computeFitScale = useCallback((): number => {
+        const app = appRef.current;
+        if (!app || !pdfDims) return ABSOLUTE_MIN_SCALE;
+        const sx = (app.screen.width - FIT_PADDING * 2) / pdfDims.width;
+        const sy = (app.screen.height - FIT_PADDING * 2) / pdfDims.height;
+        const fit = Math.min(sx, sy);
+        return Math.max(ABSOLUTE_MIN_SCALE, fit);
+    }, [pdfDims]);
+
+    // Imperatively zoom around the viewport center. Used by the +/- buttons.
+    // Clamps to [minScale, MAX_SCALE].
+    const zoomByFactor = useCallback((factor: number) => {
+        const app = appRef.current;
+        const world = worldRef.current;
+        if (!app || !world) return;
+        const cx = app.canvas.clientWidth / 2;
+        const cy = app.canvas.clientHeight / 2;
+        const oldScale = world.scale.x;
+        const minScale = minScaleRef.current;
+        const newScale = Math.max(minScale, Math.min(MAX_SCALE, oldScale * factor));
+        if (newScale === oldScale) return;
+        const localX = (cx - world.position.x) / oldScale;
+        const localY = (cy - world.position.y) / oldScale;
+        world.scale.set(newScale);
+        world.position.set(cx - localX * newScale, cy - localY * newScale);
+        setZoomDisplay(newScale);
+        onZoomChange?.(newScale);
+        window.setTimeout(() => maybeRerasterize(), 100);
+    }, [onZoomChange, maybeRerasterize]);
+
+    // Reset the world transform to fit the full PDF in the viewport.
+    const fitToScreen = useCallback(() => {
+        const app = appRef.current;
+        const world = worldRef.current;
+        if (!app || !world || !pdfDims) return;
+        const fit = computeFitScale();
+        world.scale.set(fit);
+        world.position.set(
+            (app.screen.width - pdfDims.width * fit) / 2,
+            (app.screen.height - pdfDims.height * fit) / 2,
+        );
+        setZoomDisplay(fit);
+        onZoomChange?.(fit);
+        window.setTimeout(() => maybeRerasterize(), 100);
+    }, [pdfDims, computeFitScale, onZoomChange, maybeRerasterize]);
+
+    // Keep minScaleRef in sync with the current viewport. If a resize would
+    // make the current zoom smaller than the new minimum, snap up to fit.
+    useEffect(() => {
+        if (!appReady || !pdfDims) return;
+        const app = appRef.current;
+        const world = worldRef.current;
+        if (!app || !world) return;
+
+        const update = () => {
+            const fit = computeFitScale();
+            minScaleRef.current = fit;
+            if (world.scale.x < fit) {
+                world.scale.set(fit);
+                world.position.set(
+                    (app.screen.width - pdfDims.width * fit) / 2,
+                    (app.screen.height - pdfDims.height * fit) / 2,
+                );
+                setZoomDisplay(fit);
+                onZoomChange?.(fit);
+            }
+        };
+        update();
+
+        const ro = new ResizeObserver(update);
+        if (containerRef.current) ro.observe(containerRef.current);
+        return () => ro.disconnect();
+    }, [appReady, pdfDims, computeFitScale, onZoomChange]);
+
+    // Brief outward ring at a UV point for tactile feedback on each placed
+    // point. Pixi has no DOM, so we drive it manually via app.ticker.
+    const fireClickBurst = useCallback((uv: Point, cssColor: string, kind: 'click' | 'pulse' = 'click') => {
+        const app = appRef.current;
+        const world = worldRef.current;
+        const fxLayer = fxLayerRef.current;
+        if (!app || !world || !fxLayer || !pdfDims) return;
+
+        const color = hexFromCss(cssColor);
+        const cx = uv.x * pdfDims.width;
+        const cy = uv.y * pdfDims.height;
+        const invScale = 1 / world.scale.x;
+        const startRadius = (kind === 'click' ? 6 : 8) * invScale;
+        const endRadius = (kind === 'click' ? 18 : 28) * invScale;
+        const duration = kind === 'click' ? 550 : 1300;
+
+        const ring = new Graphics();
+        fxLayer.addChild(ring);
+
+        const start = performance.now();
+        const tick = () => {
+            const t = (performance.now() - start) / duration;
+            if (t >= 1) {
+                fxLayer.removeChild(ring);
+                ring.destroy();
+                app.ticker.remove(tick);
+                return;
+            }
+            const eased = 1 - Math.pow(1 - t, 3);
+            const r = startRadius + (endRadius - startRadius) * eased;
+            const alpha = 0.9 * (1 - t);
+            ring.clear();
+            ring.circle(cx, cy, r).stroke({ color, width: 3 * invScale, alpha });
+        };
+        app.ticker.add(tick);
+    }, [pdfDims]);
 
     // Find a vertex of a selected measurement under a UV point — for vertex
     // drag detection. Returns { id, index, uv } or null.
@@ -1019,7 +1212,7 @@ export function PixiDrawingViewer({
                 let target = uv;
                 if (snapEnabled) {
                     const snap = findSnapPoint(uv, activeVertex.id);
-                    if (snap) target = snap;
+                    if (snap) target = snap.point;
                 }
                 activeVertexDraggedTo = target;
                 setDraggingVertex({ id: activeVertex.id, index: activeVertex.index, uv: target });
@@ -1032,7 +1225,7 @@ export function PixiDrawingViewer({
                 if (snapEnabled) {
                     const snap = findSnapPoint(uv);
                     setSnapCandidate(snap);
-                    if (snap) preview = snap;
+                    if (snap) preview = snap.point;
                 } else {
                     setSnapCandidate(null);
                 }
@@ -1046,15 +1239,28 @@ export function PixiDrawingViewer({
                     preview = snapAngleFromRef(last, preview);
                 }
                 setHoverPoint(preview);
+                // Track cursor in canvas-relative px so the live measurement
+                // panel (DOM overlay with magnifier) can anchor to it.
+                const rect = canvas.getBoundingClientRect();
+                setLivePanelPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
             } else {
                 setHoverPoint(null);
                 setSnapCandidate(null);
+                setLivePanelPos((prev) => (prev == null ? prev : null));
             }
 
             // Hover highlight on existing measurements (pan mode only)
             if (viewMode === 'pan' && !dragging && uv) {
                 const found = findMeasurementAtUv(uv);
                 onMeasurementHover?.(found ? found.id : null);
+                if (found) {
+                    const rect = canvas.getBoundingClientRect();
+                    setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                } else {
+                    setTooltipPos((prev) => (prev == null ? prev : null));
+                }
+            } else {
+                setTooltipPos((prev) => (prev == null ? prev : null));
             }
 
             if (!dragging) return;
@@ -1063,7 +1269,18 @@ export function PixiDrawingViewer({
             const dy = e.clientY - startCy;
             if (!moved && Math.hypot(dx, dy) > CLICK_THRESHOLD_PX) moved = true;
 
-            if (moved && viewMode === 'pan') {
+            // Pan-while-measuring: in measure_line / measure_area / measure_count
+            // / calibrate, treat a drag as a pan (matches Leaflet UX). pointerup
+            // distinguishes click-to-place-point from drag-to-pan via the moved
+            // flag.
+            const dragPansWorld =
+                viewMode === 'pan' ||
+                viewMode === 'measure_line' ||
+                viewMode === 'measure_area' ||
+                viewMode === 'measure_count' ||
+                viewMode === 'calibrate';
+
+            if (moved && dragPansWorld) {
                 world.position.set(startWorldX + dx, startWorldY + dy);
             } else if (moved && useBoxSelect && boxStartUv && uv) {
                 setBoxSelectRect({ x1: boxStartUv.x, y1: boxStartUv.y, x2: uv.x, y2: uv.y });
@@ -1111,7 +1328,13 @@ export function PixiDrawingViewer({
             }
 
             if (moved) {
-                if (viewMode === 'pan') {
+                const dragPanned =
+                    viewMode === 'pan' ||
+                    viewMode === 'measure_line' ||
+                    viewMode === 'measure_area' ||
+                    viewMode === 'measure_count' ||
+                    viewMode === 'calibrate';
+                if (dragPanned) {
                     window.setTimeout(() => maybeRerasterize(), 100);
                 } else if (useBoxSelect && boxStartUv) {
                     const uv = clientToUv(e.clientX, e.clientY);
@@ -1148,7 +1371,7 @@ export function PixiDrawingViewer({
                 (viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_count' || viewMode === 'calibrate')
             ) {
                 const snap = findSnapPoint(uv);
-                if (snap) uv = snap;
+                if (snap) uv = snap.point;
             }
             // Shift constrains line/area/calibrate clicks to 15° from last point
             if (
@@ -1187,11 +1410,13 @@ export function PixiDrawingViewer({
             }
 
             if (viewMode === 'measure_count') {
+                fireClickBurst(uv, activeColor ?? '#3b82f6');
                 onMeasurementComplete?.([uv], 'count');
                 return;
             }
 
             if (viewMode === 'calibrate') {
+                fireClickBurst(uv, '#f59e0b');
                 setDrawingPoints((prev) => {
                     const next = [...prev, uv];
                     if (next.length === 2) {
@@ -1215,6 +1440,7 @@ export function PixiDrawingViewer({
                         return [];
                     });
                 } else {
+                    fireClickBurst(uv, activeColor ?? '#3b82f6');
                     setDrawingPoints((prev) => [...prev, uv]);
                 }
                 return;
@@ -1237,16 +1463,24 @@ export function PixiDrawingViewer({
         };
         canvas.style.cursor = cursorMap[viewMode] ?? 'default';
 
+        const onPointerLeave = () => {
+            setTooltipPos(null);
+            setLivePanelPos(null);
+            onMeasurementHover?.(null);
+        };
+
         canvas.addEventListener('pointerdown', onPointerDown);
         canvas.addEventListener('pointermove', onPointerMove);
         canvas.addEventListener('pointerup', onPointerUp);
         canvas.addEventListener('pointercancel', onPointerUp);
+        canvas.addEventListener('pointerleave', onPointerLeave);
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         return () => {
             canvas.removeEventListener('pointerdown', onPointerDown);
             canvas.removeEventListener('pointermove', onPointerMove);
             canvas.removeEventListener('pointerup', onPointerUp);
             canvas.removeEventListener('pointercancel', onPointerUp);
+            canvas.removeEventListener('pointerleave', onPointerLeave);
         };
         // We intentionally re-bind on viewMode/snapEnabled/etc. changes so the
         // closures see fresh values.
@@ -1257,7 +1491,9 @@ export function PixiDrawingViewer({
         snapEnabled,
         editableVertices,
         allSelectedIds,
+        activeColor,
         clientToUv,
+        fireClickBurst,
         findMeasurementAtUv,
         findSnapPoint,
         findVertexAtUv,
@@ -1310,6 +1546,65 @@ export function PixiDrawingViewer({
         setRectDragStart(null);
         setBoxSelectRect(null);
     }, [viewMode]);
+
+    // Stable drawing controls so the parent can wire stylus/touch UI buttons.
+    // We expose finish/undo/cancel + state so the parent's panel can light up
+    // appropriately. Refs avoid stale closure bugs.
+    const drawingPointsLatestRef = useRef<Point[]>(drawingPoints);
+    drawingPointsLatestRef.current = drawingPoints;
+    const onMeasurementCompleteRef = useRef(onMeasurementComplete);
+    onMeasurementCompleteRef.current = onMeasurementComplete;
+
+    const finishDrawing = useCallback(() => {
+        const pts = drawingPointsLatestRef.current;
+        if (pts.length < 2) return;
+        if (viewMode === 'measure_line' || viewMode === 'measure_area') {
+            const minPts = viewMode === 'measure_line' ? 2 : 3;
+            if (pts.length >= minPts) {
+                onMeasurementCompleteRef.current?.(pts, viewMode === 'measure_line' ? 'linear' : 'area');
+            }
+            setDrawingPoints([]);
+        }
+    }, [viewMode]);
+
+    const undoLastPoint = useCallback(() => {
+        setDrawingPoints((prev) => prev.slice(0, -1));
+    }, []);
+
+    const cancelDrawing = useCallback(() => {
+        setDrawingPoints([]);
+        setHoverPoint(null);
+        setRectDragStart(null);
+    }, []);
+
+    useEffect(() => {
+        if (!onDrawingControlsChange) return;
+        const isMeasuring =
+            viewMode === 'measure_line' ||
+            viewMode === 'measure_area' ||
+            viewMode === 'measure_rectangle' ||
+            viewMode === 'measure_count' ||
+            viewMode === 'calibrate';
+        if (!isMeasuring) {
+            onDrawingControlsChange(null);
+            return;
+        }
+        const minPointsToFinish =
+            viewMode === 'measure_line' ? 2 :
+            viewMode === 'measure_area' ? 3 :
+            viewMode === 'measure_rectangle' ? 2 :
+            viewMode === 'measure_count' ? 1 :
+            Infinity;
+        onDrawingControlsChange({
+            viewMode,
+            pointCount: drawingPoints.length,
+            canFinish: drawingPoints.length >= minPointsToFinish,
+            canUndo: drawingPoints.length > 0,
+            finish: finishDrawing,
+            undo: undoLastPoint,
+            cancel: cancelDrawing,
+        });
+    }, [viewMode, drawingPoints.length, finishDrawing, undoLastPoint, cancelDrawing, onDrawingControlsChange]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Rendering: measurements (saved) + in-progress drawing + box select rect
@@ -1442,49 +1737,12 @@ export function PixiDrawingViewer({
                 }
             }
 
-            // Production-mode percent-complete chip (overrides distance/area label
-            // when both are present)
+            // Production-mode percent-complete chip (per-measurement % complete).
+            // Saved measurements no longer render an inline value label —
+            // the side panel and hover tooltip already surface the value, and
+            // an in-canvas label clutters small/dense polygons.
             const productionPct = productionLabels?.[m.id];
             const productionText = productionPct != null ? `${Math.round(productionPct)}%` : null;
-            // Distance/area label using computed_value if backend has filled it
-            // in. We position labels in PDF coords; fontSize is divided by
-            // world.scale to keep the on-screen size constant.
-            const labelText = productionText ? null : m.computed_value != null && m.unit ? `${formatNumber(m.computed_value)} ${m.unit}` : null;
-            if (labelText && m.type !== 'count' && renderPoints.length >= 2) {
-                let lx = 0,
-                    ly = 0;
-                if (m.type === 'area') {
-                    // Centroid of polygon (avg of vertices is good enough for label placement)
-                    for (const p of renderPoints) {
-                        lx += p.x;
-                        ly += p.y;
-                    }
-                    lx /= renderPoints.length;
-                    ly /= renderPoints.length;
-                    lx *= W;
-                    ly *= H;
-                } else {
-                    // Linear: midpoint of polyline
-                    const a = renderPoints[Math.floor(renderPoints.length / 2) - (renderPoints.length % 2 === 0 ? 1 : 0)];
-                    const b = renderPoints[Math.floor(renderPoints.length / 2)];
-                    lx = ((a.x + b.x) / 2) * W;
-                    ly = ((a.y + b.y) / 2) * H;
-                }
-                const label = new Text({
-                    text: labelText,
-                    style: {
-                        fontFamily: 'sans-serif',
-                        fontSize: 11 * invScale,
-                        fill: 0xffffff,
-                        stroke: { color: 0x000000, width: 3 * invScale, join: 'round' },
-                        fontWeight: '600',
-                    },
-                });
-                label.x = lx;
-                label.y = ly;
-                label.anchor.set(0.5, 0.5);
-                layer.addChild(label);
-            }
 
             // Production-mode chip (per-measurement % complete)
             if (productionText) {
@@ -1543,6 +1801,91 @@ export function PixiDrawingViewer({
         hiddenSegments,
         selectedSegments,
     ]);
+
+    // Auto-pan to selected measurement. Only pans if the measurement's center
+    // is outside the inner 60% of the viewport — avoids tiny pans on adjacent
+    // selections. Animates over ~400ms with cubic ease-out.
+    // We hold measurements in a ref to avoid re-running this effect (and its
+    // pan animation) every time the measurement list changes — only selection
+    // changes should trigger a pan.
+    const measurementsLatestRef = useRef(measurements);
+    measurementsLatestRef.current = measurements;
+    useEffect(() => {
+        if (selectedMeasurementId == null) return;
+        const app = appRef.current;
+        const world = worldRef.current;
+        if (!app || !world || !pdfDims) return;
+        const m = measurementsLatestRef.current.find((x) => x.id === selectedMeasurementId);
+        if (!m || m.points.length === 0) return;
+
+        let cx = 0;
+        let cy = 0;
+        for (const p of m.points) {
+            cx += p.x;
+            cy += p.y;
+        }
+        cx /= m.points.length;
+        cy /= m.points.length;
+        const targetWorldX = cx * pdfDims.width;
+        const targetWorldY = cy * pdfDims.height;
+
+        const screenX = targetWorldX * world.scale.x + world.position.x;
+        const screenY = targetWorldY * world.scale.y + world.position.y;
+        const w = app.canvas.clientWidth;
+        const h = app.canvas.clientHeight;
+        const padX = w * 0.2;
+        const padY = h * 0.2;
+        const inInner = screenX >= padX && screenX <= w - padX && screenY >= padY && screenY <= h - padY;
+        if (inInner) return;
+
+        const startX = world.position.x;
+        const startY = world.position.y;
+        const endX = w / 2 - targetWorldX * world.scale.x;
+        const endY = h / 2 - targetWorldY * world.scale.y;
+        const duration = 400;
+        const start = performance.now();
+        const tick = () => {
+            const t = Math.min(1, (performance.now() - start) / duration);
+            const eased = 1 - Math.pow(1 - t, 3);
+            world.position.set(startX + (endX - startX) * eased, startY + (endY - startY) * eased);
+            if (t >= 1) {
+                app.ticker.remove(tick);
+                window.setTimeout(() => maybeRerasterize(), 50);
+            }
+        };
+        app.ticker.add(tick);
+        return () => {
+            app.ticker.remove(tick);
+        };
+    }, [selectedMeasurementId, pdfDims, maybeRerasterize]);
+
+    // Creation pulse: when a new measurement appears, fire a brief outward
+    // pulse on it for confirmation feedback. Tracks measurement-id set across
+    // renders to detect single-additions.
+    const prevMeasurementIdsRef = useRef<Set<number>>(new Set());
+    useEffect(() => {
+        if (!appReady) return;
+        const currentIds = new Set(measurements.map((m) => m.id));
+        if (measurements.length === prevMeasurementIdsRef.current.size + 1) {
+            const newIds: number[] = [];
+            for (const id of currentIds) {
+                if (!prevMeasurementIdsRef.current.has(id)) newIds.push(id);
+            }
+            if (newIds.length === 1) {
+                const m = measurements.find((x) => x.id === newIds[0]);
+                if (m && m.points.length > 0) {
+                    if (m.type === 'count') {
+                        for (const p of m.points) fireClickBurst(p, m.color, 'pulse');
+                    } else {
+                        // Pulse each vertex; cheaper than tracing the whole path
+                        // and reads as an outline emanation visually.
+                        for (const p of m.points) fireClickBurst(p, m.color, 'pulse');
+                    }
+                }
+            }
+        }
+        prevMeasurementIdsRef.current = currentIds;
+    }, [measurements, appReady, fireClickBurst]);
 
     // In-progress drawing
     useEffect(() => {
@@ -1633,76 +1976,39 @@ export function PixiDrawingViewer({
             layer.addChild(g);
         }
 
-        // Snap target indicator — pulsing ring at the snap point so the user
-        // knows where their click will land.
+        // Snap target indicator — endpoint (amber solid) vs midpoint (purple dashed)
+        // so the user can tell at a glance which kind of snap they're about to lock onto.
         if (snapCandidate) {
+            const isEndpoint = snapCandidate.kind === 'endpoint';
+            const ringColor = isEndpoint ? 0xf59e0b : 0x8b5cf6;
+            const fillColor = isEndpoint ? 0xfbbf24 : 0xa78bfa;
+            const cx = snapCandidate.point.x * W;
+            const cy = snapCandidate.point.y * H;
+            const radius = (isEndpoint ? 8 : 6) * invScale;
+            const lineWidth = 2 * invScale;
             const g = new Graphics();
-            g.circle(snapCandidate.x * W, snapCandidate.y * H, 7 * invScale).stroke({ color: 0xfbbf24, width: 2 * invScale });
-            g.circle(snapCandidate.x * W, snapCandidate.y * H, 2 * invScale).fill({ color: 0xfbbf24 });
+            if (isEndpoint) {
+                g.circle(cx, cy, radius).stroke({ color: ringColor, width: lineWidth });
+            } else {
+                // Approximate Leaflet's "3, 3" dashed ring with 8 short arcs.
+                const dashCount = 8;
+                for (let i = 0; i < dashCount; i++) {
+                    if (i % 2 === 1) continue; // skip every other arc → dashed
+                    const a0 = (i / dashCount) * Math.PI * 2;
+                    const a1 = ((i + 1) / dashCount) * Math.PI * 2;
+                    g.moveTo(cx + Math.cos(a0) * radius, cy + Math.sin(a0) * radius);
+                    g.arc(cx, cy, radius, a0, a1);
+                    g.stroke({ color: ringColor, width: lineWidth });
+                }
+            }
+            g.circle(cx, cy, 2 * invScale).fill({ color: fillColor });
             layer.addChild(g);
         }
 
-        // Live readout: running total near cursor while drawing
-        if (hoverPoint && (viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'calibrate') && drawingPoints.length > 0) {
-            const allPoints = [...drawingPoints, hoverPoint];
-            let readout: string | null = null;
-            if (viewMode === 'measure_line') {
-                const len = computeRealLength(allPoints, false);
-                readout = formatLength(len);
-            } else if (viewMode === 'measure_area' && allPoints.length >= 3) {
-                const area = computeRealArea(allPoints);
-                const perim = computeRealLength(allPoints, true);
-                const a = formatArea(area);
-                const p = formatLength(perim);
-                readout = a && p ? `${a} · ${p}` : a;
-            } else if (viewMode === 'calibrate' && allPoints.length === 2) {
-                const len = computeRealLength(allPoints, false);
-                readout = len != null && calibrationFactor ? `${formatNumber(len)} ${calibrationFactor.unit}` : 'click to set distance';
-            }
-            if (readout) {
-                const text = new Text({
-                    text: readout,
-                    style: {
-                        fontFamily: 'sans-serif',
-                        fontSize: 12 * invScale,
-                        fill: 0xffffff,
-                        stroke: { color: 0x000000, width: 3 * invScale, join: 'round' },
-                        fontWeight: '600',
-                    },
-                });
-                text.x = hoverPoint.x * W + 12 * invScale;
-                text.y = hoverPoint.y * H - 18 * invScale;
-                layer.addChild(text);
-            }
-        } else if (rectDragStart && hoverPoint && viewMode === 'measure_rectangle') {
-            const w = Math.abs(hoverPoint.x - rectDragStart.x);
-            const h = Math.abs(hoverPoint.y - rectDragStart.y);
-            const widthLen = computeRealLength([rectDragStart, { x: hoverPoint.x, y: rectDragStart.y }], false);
-            const heightLen = computeRealLength([rectDragStart, { x: rectDragStart.x, y: hoverPoint.y }], false);
-            const area = computeRealArea([
-                rectDragStart,
-                { x: hoverPoint.x, y: rectDragStart.y },
-                hoverPoint,
-                { x: rectDragStart.x, y: hoverPoint.y },
-            ]);
-            const wText = formatLength(widthLen);
-            const hText = formatLength(heightLen);
-            const aText = formatArea(area);
-            const readout = wText && hText && aText ? `${wText} × ${hText} = ${aText}` : `${(w * 100).toFixed(1)}% × ${(h * 100).toFixed(1)}%`;
-            const text = new Text({
-                text: readout,
-                style: {
-                    fontFamily: 'sans-serif',
-                    fontSize: 12 * invScale,
-                    fill: 0xffffff,
-                    stroke: { color: 0x000000, width: 3 * invScale, join: 'round' },
-                    fontWeight: '600',
-                },
-            });
-            text.x = hoverPoint.x * W + 12 * invScale;
-            text.y = hoverPoint.y * H - 18 * invScale;
-            layer.addChild(text);
-        }
+        // The live measurement panel is rendered as a React DOM overlay
+        // (LiveMeasurementPanel below) so it can host an HTML <canvas>
+        // magnifier and use crisp DOM typography. See livePanelContent +
+        // <LiveMeasurementPanel> in the component's JSX.
     }, [
         drawingPoints,
         hoverPoint,
@@ -1724,7 +2030,111 @@ export function PixiDrawingViewer({
     // UI
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Re-render a slice of the world at a custom resolution and return the
+    // resulting canvas. Used by the live-measurement panel's magnifier so the
+    // loupe shows native-resolution PDF pixels instead of upscaled
+    // screen-rendered ones. Caller passes CSS-px coords + the loupe's target
+    // resolution; we let Pixi handle the GPU readback.
+    const extractMagnifierRegion = useCallback((cssX: number, cssY: number, cssSize: number, resolution: number): HTMLCanvasElement | null => {
+        const app = appRef.current;
+        if (!app || !app.renderer) return null;
+        try {
+            const result = app.renderer.extract.canvas({
+                target: app.stage,
+                frame: new Rectangle(cssX - cssSize / 2, cssY - cssSize / 2, cssSize, cssSize),
+                resolution,
+                antialias: true,
+            });
+            return result as HTMLCanvasElement;
+        } catch {
+            return null;
+        }
+    }, []);
+
     const showInProgressBanner = (viewMode === 'measure_line' || viewMode === 'measure_area') && drawingPoints.length > 0;
+    const hoveredMeasurement = useMemo(
+        () => (hoveredMeasurementId != null ? measurements.find((m) => m.id === hoveredMeasurementId) : undefined),
+        [hoveredMeasurementId, measurements],
+    );
+    const showHoverTooltip = !!(hoveredMeasurement && tooltipPos && viewMode === 'pan');
+
+    // Compute the live measurement panel's content from the current draw
+    // state. Memoized so the React panel only re-renders when relevant state
+    // changes — not on every unrelated re-render.
+    const livePanelContent = useMemo<LivePanelContent | null>(() => {
+        if (!hoverPoint) return null;
+
+        if (viewMode === 'measure_line') {
+            const allPoints = [...drawingPoints, hoverPoint];
+            const segments = Math.max(0, allPoints.length - 1);
+            if (drawingPoints.length === 0) {
+                return { label: 'Length', value: '—', hint: 'Click to start measuring' };
+            }
+            const len = computeRealLength(allPoints, false);
+            const lenStr = formatLength(len);
+            return {
+                label: 'Length',
+                value: lenStr ?? '(set scale to see length)',
+                secondary: segments > 1 ? `${segments} segments` : undefined,
+                hint: 'Double-click or Enter to finish',
+            };
+        }
+
+        if (viewMode === 'measure_area') {
+            const allPoints = [...drawingPoints, hoverPoint];
+            if (allPoints.length >= 3) {
+                const area = computeRealArea(allPoints);
+                const perim = computeRealLength(allPoints, true);
+                const a = formatArea(area);
+                const p = formatLength(perim);
+                return {
+                    label: 'Area',
+                    value: a ?? `${allPoints.length} vertices`,
+                    secondary: p ? `Perimeter ${p}` : undefined,
+                    hint: 'Double-click to close polygon',
+                };
+            }
+            return {
+                label: 'Area',
+                value: drawingPoints.length === 0 ? '—' : `${drawingPoints.length} of 3 vertices`,
+                hint: drawingPoints.length === 0 ? 'Click to start measuring' : 'Click to add another vertex',
+            };
+        }
+
+        if (viewMode === 'measure_rectangle' && rectDragStart) {
+            const rectPts: Point[] = [
+                rectDragStart,
+                { x: hoverPoint.x, y: rectDragStart.y },
+                hoverPoint,
+                { x: rectDragStart.x, y: hoverPoint.y },
+            ];
+            const w = Math.abs(hoverPoint.x - rectDragStart.x);
+            const h = Math.abs(hoverPoint.y - rectDragStart.y);
+            const aText = formatArea(computeRealArea(rectPts));
+            const pText = formatLength(computeRealLength(rectPts, true));
+            return {
+                label: 'Rectangle',
+                value: aText ?? `${(w * 100).toFixed(1)}% × ${(h * 100).toFixed(1)}%`,
+                secondary: pText ? `Perimeter ${pText}` : undefined,
+                hint: 'Hold Shift for square',
+            };
+        }
+
+        if (viewMode === 'calibrate') {
+            const allPoints = [...drawingPoints, hoverPoint];
+            if (allPoints.length < 2) {
+                return { label: 'Distance', value: '—', hint: 'Click first point of a known distance' };
+            }
+            const len = computeRealLength(allPoints, false);
+            return {
+                label: 'Distance',
+                value: len != null && calibrationFactor ? `${formatNumber(len)} ${calibrationFactor.unit}` : '—',
+                hint: 'Click to set scale',
+            };
+        }
+
+        return null;
+    }, [viewMode, drawingPoints, hoverPoint, rectDragStart, calibrationFactor, computeRealArea, computeRealLength, formatArea, formatLength]);
 
     return (
         <div ref={containerRef} className={`relative h-full w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900 ${className ?? ''}`}>
@@ -1741,8 +2151,46 @@ export function PixiDrawingViewer({
                 </div>
             )}
 
-            <div className="pointer-events-none absolute right-2 bottom-2 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">
+            <div className="pointer-events-none absolute right-2 bottom-32 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">
                 {Math.round(zoomDisplay * 100)}% · {viewMode}
+            </div>
+
+            {/* Floating zoom controls — bottom-right of the viewer. Mirrors the
+                Leaflet viewer's control stack so users see the same affordance
+                regardless of which renderer is active. */}
+            <div className="bg-background/90 absolute right-2 bottom-2 z-10 flex flex-col rounded-md border shadow-sm backdrop-blur">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-none rounded-t-md p-0"
+                    onClick={() => zoomByFactor(1.25)}
+                    title="Zoom in"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                </Button>
+                <div className="bg-border h-px" />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-none p-0"
+                    onClick={() => zoomByFactor(0.8)}
+                    title="Zoom out"
+                >
+                    <Minus className="h-3.5 w-3.5" />
+                </Button>
+                <div className="bg-border h-px" />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-none rounded-b-md p-0"
+                    onClick={fitToScreen}
+                    title="Fit to screen"
+                >
+                    <Maximize className="h-3.5 w-3.5" />
+                </Button>
             </div>
 
             {showInProgressBanner && (
@@ -1756,6 +2204,196 @@ export function PixiDrawingViewer({
                     Click second point to set scale
                 </div>
             )}
+
+            {showHoverTooltip && hoveredMeasurement && tooltipPos && (
+                <HoverTooltip x={tooltipPos.x} y={tooltipPos.y} measurement={hoveredMeasurement} />
+            )}
+
+            {livePanelContent && livePanelPos && (
+                <LiveMeasurementPanel
+                    cursorX={livePanelPos.x}
+                    cursorY={livePanelPos.y}
+                    content={livePanelContent}
+                    accentColor={activeColor ?? '#3b82f6'}
+                    extractRegion={extractMagnifierRegion}
+                    containerRef={containerRef}
+                />
+            )}
+        </div>
+    );
+}
+
+function HoverTooltip({ x, y, measurement }: { x: number; y: number; measurement: MeasurementData }) {
+    const isDeduction = measurement.parent_measurement_id != null;
+    const co = measurement.variation?.co_number ?? null;
+    const typeLabel = measurement.type === 'linear' ? 'Length' : measurement.type === 'area' ? 'Area' : 'Count';
+    const value = measurement.computed_value;
+    const unit = measurement.unit ?? '';
+    const perimeter = measurement.perimeter_value;
+    const accent = measurement.color || '#3b82f6';
+    // Offset the tooltip so it sits up-and-right of the cursor without overlapping it.
+    const style: CSSProperties = {
+        left: x + 14,
+        top: y + 14,
+        borderColor: accent,
+    };
+    return (
+        <div
+            className="pointer-events-none absolute z-20 rounded-md border-l-2 bg-black/85 px-2.5 py-1.5 text-[11px] text-white shadow-lg backdrop-blur-sm"
+            style={style}
+        >
+            <div className="flex items-center gap-1.5">
+                {isDeduction && (
+                    <span className="rounded bg-red-500/80 px-1 py-px text-[9px] font-semibold tracking-wide uppercase">Deduction</span>
+                )}
+                {co && <span className="rounded bg-blue-500/80 px-1 py-px text-[9px] font-semibold">CO {co}</span>}
+                <span className="font-semibold">{measurement.name}</span>
+            </div>
+            <div className="mt-0.5 text-[13px] leading-tight font-bold tabular-nums">
+                {value != null ? `${value.toFixed(2)} ${unit}` : '—'}
+            </div>
+            <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[10px]">
+                <span>{typeLabel}</span>
+                {perimeter != null && !isDeduction && (
+                    <>
+                        <span className="text-white/30">·</span>
+                        <span>Perimeter {perimeter.toFixed(2)} {unit}</span>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+const LOUPE_SIZE = 88;
+const LOUPE_MAGNIFICATION = 3;
+const LIVE_PANEL_OFFSET = 18;
+// Approximate panel size for edge-clamp math. Conservative — real panel may
+// be slightly smaller; over-estimating just means we flip a touch early.
+const LIVE_PANEL_WIDTH = 270;
+const LIVE_PANEL_HEIGHT = 130;
+
+function LiveMeasurementPanel({
+    cursorX,
+    cursorY,
+    content,
+    accentColor,
+    extractRegion,
+    containerRef,
+}: {
+    cursorX: number;
+    cursorY: number;
+    content: LivePanelContent;
+    accentColor: string;
+    extractRegion: (cssX: number, cssY: number, cssSize: number, resolution: number) => HTMLCanvasElement | null;
+    containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+    const loupeRef = useRef<HTMLCanvasElement | null>(null);
+
+    // Edge-clamp: flip the panel to the opposite side of the cursor when it
+    // would clip the canvas edge. Falls back to default down-right of cursor.
+    const containerW = containerRef.current?.clientWidth ?? 0;
+    const containerH = containerRef.current?.clientHeight ?? 0;
+    let left = cursorX + LIVE_PANEL_OFFSET;
+    let top = cursorY + LIVE_PANEL_OFFSET;
+    if (containerW > 0 && left + LIVE_PANEL_WIDTH > containerW - 8) {
+        left = cursorX - LIVE_PANEL_WIDTH - LIVE_PANEL_OFFSET;
+    }
+    if (containerH > 0 && top + LIVE_PANEL_HEIGHT > containerH - 8) {
+        top = cursorY - LIVE_PANEL_HEIGHT - LIVE_PANEL_OFFSET;
+    }
+    left = Math.max(8, left);
+    top = Math.max(8, top);
+
+    // Paint the magnifier by re-rendering the world at high resolution via
+    // Pixi's extract API. This pulls native-quality PDF pixels (the texture
+    // is rasterized at 3× quality) instead of upscaling the screen-rendered
+    // canvas — much sharper than drawImage(pixiCanvas, ...).
+    useEffect(() => {
+        const loupe = loupeRef.current;
+        if (!loupe) return;
+        const ctx = loupe.getContext('2d');
+        if (!ctx) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        if (loupe.width !== LOUPE_SIZE * dpr) loupe.width = LOUPE_SIZE * dpr;
+        if (loupe.height !== LOUPE_SIZE * dpr) loupe.height = LOUPE_SIZE * dpr;
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        (ctx as CanvasRenderingContext2D & { imageSmoothingQuality?: ImageSmoothingQuality }).imageSmoothingQuality = 'high';
+
+        // Background fill in case extract fails or partially out of bounds.
+        ctx.fillStyle = '#0c0c0c';
+        ctx.fillRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
+
+        // Source size in CSS px; extract resolution chosen so the result
+        // canvas is at least dpr × LOUPE_SIZE pixels. Slight downscale to
+        // LOUPE_SIZE × dpr in the loupe = sharp.
+        const srcSizeCss = LOUPE_SIZE / LOUPE_MAGNIFICATION;
+        const extractResolution = Math.max(2, Math.ceil((LOUPE_SIZE * dpr) / srcSizeCss));
+        const extracted = extractRegion(cursorX, cursorY, srcSizeCss, extractResolution);
+        if (extracted) {
+            try {
+                ctx.drawImage(extracted, 0, 0, LOUPE_SIZE, LOUPE_SIZE);
+            } catch {
+                /* swallow */
+            }
+        }
+
+        // Crosshair + center dot in the accent color so the user sees their
+        // exact target.
+        const cx = LOUPE_SIZE / 2;
+        const cy = LOUPE_SIZE / 2;
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 10, cy);
+        ctx.lineTo(cx - 3, cy);
+        ctx.moveTo(cx + 3, cy);
+        ctx.lineTo(cx + 10, cy);
+        ctx.moveTo(cx, cy - 10);
+        ctx.lineTo(cx, cy - 3);
+        ctx.moveTo(cx, cy + 3);
+        ctx.lineTo(cx, cy + 10);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }, [cursorX, cursorY, extractRegion, accentColor, content.value]);
+
+    return (
+        <div
+            className="pointer-events-none absolute z-20 flex items-stretch gap-3 overflow-hidden rounded-lg bg-zinc-900/95 p-2.5 shadow-xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-md"
+            style={{
+                left,
+                top,
+                borderLeft: `3px solid ${accentColor}`,
+                fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+            }}
+        >
+            <canvas
+                ref={loupeRef}
+                width={LOUPE_SIZE}
+                height={LOUPE_SIZE}
+                className="shrink-0 self-center rounded-md ring-1 ring-white/10"
+                style={{ width: LOUPE_SIZE, height: LOUPE_SIZE }}
+            />
+            <div className="flex min-w-[150px] flex-col justify-center gap-0.5 text-white">
+                <span className="text-[9px] font-bold tracking-[0.12em] text-white/55 uppercase">{content.label}</span>
+                <span
+                    className="text-[20px] leading-none font-bold tabular-nums"
+                    style={{ fontFamily: 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace' }}
+                >
+                    {content.value}
+                </span>
+                {content.secondary && <span className="mt-1 text-[11px] text-white/75 tabular-nums">{content.secondary}</span>}
+                {content.hint && <span className="mt-0.5 text-[10px] text-white/45">{content.hint}</span>}
+            </div>
         </div>
     );
 }

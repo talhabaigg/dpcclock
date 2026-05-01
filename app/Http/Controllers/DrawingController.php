@@ -221,25 +221,6 @@ class DrawingController extends Controller
     }
 
     /**
-     * Experimental PixiJS + PDF.js viewer (spike).
-     * Uses WebGL with hardware-mipmapped textures so the PDF stays sharp at any
-     * zoom level without re-rasterizing. Same overlay architecture as the Konva
-     * spike — single transform on a world container, no flicker.
-     */
-    public function pixi(Drawing $drawing): Response
-    {
-        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
-
-        return Inertia::render('drawings/pixi', [
-            'drawing' => $drawing,
-            'revisions' => $revisions,
-            'project' => $drawing->project,
-            'activeTab' => 'takeoff',
-            'projectDrawings' => $projectDrawings,
-        ]);
-    }
-
-    /**
      * Condition summary — project-level condition table across all drawings.
      */
     public function conditions(Drawing $drawing): Response
