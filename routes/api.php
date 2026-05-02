@@ -158,11 +158,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('drawings/{drawing}/segment-status-bulk', [DrawingController::class, 'bulkUpdateSegmentStatus'])
         ->name('api.drawings.segment-status.bulk');
 
-    // Drawing tiles (for mobile viewer)
-    Route::get('drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'tile'])
-        ->name('api.drawings.tile')
-        ->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
-
     // ── Project Schedule (for React Native app) ──
     Route::prefix('schedule')->name('api.schedule.')->group(function () {
         Route::get('projects', [ScheduleController::class, 'projects'])->name('projects');

@@ -1,5 +1,4 @@
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, ViewMode } from '@/components/measurement-layer';
 import { getSegmentColor } from '@/components/measurement-layer';
 import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
@@ -30,15 +29,6 @@ type Revision = {
     file_url?: string;
 };
 
-type TilesInfo = {
-    baseUrl: string;
-    maxZoom: number;
-    minNativeZoom?: number;
-    width: number;
-    height: number;
-    tileSize: number;
-};
-
 type Drawing = {
     id: number;
     project_id: number;
@@ -48,7 +38,6 @@ type Drawing = {
     display_name?: string;
     file_url?: string | null;
     revision_number?: string | null;
-    tiles_info?: TilesInfo | null;
 };
 
 type ConditionLabourCode = {
@@ -218,14 +207,6 @@ export default function DrawingProduction() {
 
     // Box-select mode
     const [selectorMode, setSelectorMode] = useState(false);
-
-    const [useClassicViewer, setUseClassicViewer] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return true;
-        return localStorage.getItem('drawing-viewer-mode') !== 'new';
-    });
-    useEffect(() => {
-        localStorage.setItem('drawing-viewer-mode', useClassicViewer ? 'classic' : 'new');
-    }, [useClassicViewer]);
 
     // Clear selection & hideComplete when LCC changes
     useEffect(() => {
@@ -673,19 +654,6 @@ export default function DrawingProduction() {
                     selectModeTitle="Box select — drag to mark items complete"
                 />
             }
-            toolbar={
-                <div className="flex items-center gap-1.5">
-                    <Label htmlFor="viewer-toggle" className="text-muted-foreground cursor-pointer text-[11px]">
-                        Use Classic
-                    </Label>
-                    <Switch id="viewer-toggle" checked={useClassicViewer} onCheckedChange={setUseClassicViewer} className="scale-75" />
-                    {!useClassicViewer && (
-                        <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                            NEW
-                        </span>
-                    )}
-                </div>
-            }
             statusBar={(() => {
                 const totalBudget = lccSummary.reduce((s, c) => s + c.budget_hours, 0);
                 const totalEarned = lccSummary.reduce((s, c) => s + c.earned_hours, 0);
@@ -721,53 +689,25 @@ export default function DrawingProduction() {
             <div className="relative flex flex-1 overflow-hidden">
                 {/* Drawing Viewer */}
                 <div className="relative isolate flex-1 overflow-hidden">
-                    {useClassicViewer ? (
-                        <LeafletDrawingViewer
-                            tiles={drawing.tiles_info || undefined}
-                            imageUrl={!drawing.tiles_info ? imageUrl || undefined : undefined}
-                            observations={[]}
-                            selectedObservationIds={new Set()}
-                            viewMode="pan"
-                            onObservationClick={() => {}}
-                            onMapClick={handleMapClick}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            calibration={initialCalibration}
-                            conditionOpacities={conditionOpacities}
-                            onCalibrationComplete={() => {}}
-                            onMeasurementComplete={() => {}}
-                            onMeasurementClick={handleMeasurementClick}
-                            productionLabels={selectedLccId ? productionLabels : undefined}
-                            segmentStatuses={selectedLccId ? segmentStatuses : undefined}
-                            hiddenSegments={hiddenSegments}
-                            onSegmentClick={handleSegmentClick}
-                            selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
-                            selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
-                            boxSelectMode={selectorMode && !!selectedLccId}
-                            onBoxSelectComplete={handleBoxSelect}
-                            className="absolute inset-0"
-                        />
-                    ) : (
-                        <PixiDrawingViewer
-                            fileUrl={`/api/drawings/${drawing.id}/file`}
-                            viewMode={selectorMode ? ('select' as ViewMode) : ('pan' as ViewMode)}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
-                            calibration={initialCalibration}
-                            conditionOpacities={conditionOpacities}
-                            onMeasurementComplete={() => {}}
-                            onMeasurementClick={handleMeasurementClick}
-                            productionLabels={selectedLccId ? productionLabels : undefined}
-                            segmentStatuses={selectedLccId ? segmentStatuses : undefined}
-                            hiddenSegments={hiddenSegments}
-                            onSegmentClick={handleSegmentClick}
-                            selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
-                            boxSelectMode={selectorMode && !!selectedLccId}
-                            onBoxSelectComplete={handleBoxSelect}
-                            className="absolute inset-0"
-                        />
-                    )}
+                    <PixiDrawingViewer
+                        fileUrl={`/api/drawings/${drawing.id}/file`}
+                        viewMode={selectorMode ? ('select' as ViewMode) : ('pan' as ViewMode)}
+                        measurements={visibleMeasurements}
+                        selectedMeasurementId={selectedMeasurementId}
+                        selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
+                        calibration={initialCalibration}
+                        conditionOpacities={conditionOpacities}
+                        onMeasurementComplete={() => {}}
+                        onMeasurementClick={handleMeasurementClick}
+                        productionLabels={selectedLccId ? productionLabels : undefined}
+                        segmentStatuses={selectedLccId ? segmentStatuses : undefined}
+                        hiddenSegments={hiddenSegments}
+                        onSegmentClick={handleSegmentClick}
+                        selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
+                        boxSelectMode={selectorMode && !!selectedLccId}
+                        onBoxSelectComplete={handleBoxSelect}
+                        className="absolute inset-0"
+                    />
 
                     {/* Percent Dropdown Overlay */}
                     {percentDropdown && selectedLccId && (

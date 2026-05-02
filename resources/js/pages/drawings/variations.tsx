@@ -3,7 +3,6 @@ import { ConditionManager, type TakeoffCondition } from '@/components/condition-
 import { ConditionsList } from '@/components/conditions-list';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
 import { ScaleChip } from '@/components/scale-chip';
@@ -39,15 +38,6 @@ type Revision = {
     file_url?: string;
 };
 
-type TilesInfo = {
-    baseUrl: string;
-    maxZoom: number;
-    minNativeZoom?: number;
-    width: number;
-    height: number;
-    tileSize: number;
-};
-
 type Drawing = {
     id: number;
     project_id: number;
@@ -57,7 +47,6 @@ type Drawing = {
     display_name?: string;
     file_url?: string | null;
     revision_number?: string | null;
-    tiles_info?: TilesInfo | null;
 };
 
 type VariationSummary = {
@@ -103,15 +92,6 @@ export default function DrawingVariations() {
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
     const [snapEnabled, setSnapEnabled] = useState(true);
 
-    // Drawing viewer renderer toggle. Default = Classic; New (Pixi) is
-    // view-only for now while we evaluate.
-    const [useClassicViewer, setUseClassicViewer] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return true;
-        return localStorage.getItem('drawing-viewer-mode') !== 'new';
-    });
-    useEffect(() => {
-        localStorage.setItem('drawing-viewer-mode', useClassicViewer ? 'classic' : 'new');
-    }, [useClassicViewer]);
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -626,21 +606,6 @@ export default function DrawingVariations() {
                     />
                     <div className="bg-border h-4 w-px" />
 
-                    {/* Viewer toggle */}
-                    <div className="flex items-center gap-1.5">
-                        <Label htmlFor="viewer-toggle" className="text-muted-foreground cursor-pointer text-[11px]">
-                            Use Classic
-                        </Label>
-                        <Switch id="viewer-toggle" checked={useClassicViewer} onCheckedChange={setUseClassicViewer} className="scale-75" />
-                        {!useClassicViewer && (
-                            <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                                NEW
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="bg-border h-4 w-px" />
-
                     {selectableVariations.length === 0 ? (
                         /* Empty state — no variations yet, push the user toward starting a draft */
                         canEdit ? (
@@ -796,44 +761,23 @@ export default function DrawingVariations() {
         >
             <div className="relative flex flex-1 overflow-hidden">
                 <div className="relative isolate flex-1 overflow-hidden">
-                    {useClassicViewer ? (
-                        <LeafletDrawingViewer
-                            tiles={drawing.tiles_info || undefined}
-                            imageUrl={!drawing.tiles_info ? imageUrl || undefined : undefined}
-                            viewMode={viewMode}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
-                            calibration={calibration}
-                            conditionOpacities={conditionOpacities}
-                            snapEnabled={snapEnabled}
-                            onCalibrationComplete={cal.handleCalibrationComplete}
-                            onMeasurementComplete={handleMeasurementComplete}
-                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                            boxSelectMode={viewMode === 'select'}
-                            onBoxSelectComplete={handleBoxSelect}
-                            activeColor={activeCondition?.color ?? null}
-                            className="absolute inset-0"
-                        />
-                    ) : (
-                        <PixiDrawingViewer
-                            fileUrl={`/api/drawings/${drawing.id}/file`}
-                            viewMode={viewMode}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
-                            calibration={calibration}
-                            conditionOpacities={conditionOpacities}
-                            snapEnabled={snapEnabled}
-                            onCalibrationComplete={cal.handleCalibrationComplete}
-                            onMeasurementComplete={handleMeasurementComplete}
-                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                            boxSelectMode={viewMode === 'select'}
-                            onBoxSelectComplete={handleBoxSelect}
-                            activeColor={activeCondition?.color ?? null}
-                            className="absolute inset-0"
-                        />
-                    )}
+                    <PixiDrawingViewer
+                        fileUrl={`/api/drawings/${drawing.id}/file`}
+                        viewMode={viewMode}
+                        measurements={visibleMeasurements}
+                        selectedMeasurementId={selectedMeasurementId}
+                        selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
+                        calibration={calibration}
+                        conditionOpacities={conditionOpacities}
+                        snapEnabled={snapEnabled}
+                        onCalibrationComplete={cal.handleCalibrationComplete}
+                        onMeasurementComplete={handleMeasurementComplete}
+                        onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        boxSelectMode={viewMode === 'select'}
+                        onBoxSelectComplete={handleBoxSelect}
+                        activeColor={activeCondition?.color ?? null}
+                        className="absolute inset-0"
+                    />
                 </div>
 
                 {/* Variation Side Panel */}

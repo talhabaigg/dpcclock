@@ -3,7 +3,6 @@ import CalibrationDialog from '@/components/calibration-dialog';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import { LeafletDrawingViewer } from '@/components/leaflet-drawing-viewer';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
 import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
 import { ScaleChip } from '@/components/scale-chip';
@@ -65,17 +64,6 @@ export default function DrawingTakeoff() {
 
     // View mode
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
-
-    // Drawing viewer renderer toggle. Default = Classic (Leaflet) so existing
-    // takeoff flows work; New (Pixi) is view-only for now while we evaluate
-    // before porting the full measurement layer.
-    const [useClassicViewer, setUseClassicViewer] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return true;
-        return localStorage.getItem('drawing-viewer-mode') !== 'new';
-    });
-    useEffect(() => {
-        localStorage.setItem('drawing-viewer-mode', useClassicViewer ? 'classic' : 'new');
-    }, [useClassicViewer]);
 
     // Takeoff state
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
@@ -678,21 +666,6 @@ export default function DrawingTakeoff() {
 
                     <div className="bg-border h-4 w-px" />
 
-                    {/* Viewer toggle: Classic (Leaflet, full features) vs New (Pixi, view-only spike) */}
-                    <div className="flex items-center gap-1.5">
-                        <Label htmlFor="viewer-toggle" className="text-muted-foreground cursor-pointer text-[11px]">
-                            Use Classic
-                        </Label>
-                        <Switch id="viewer-toggle" checked={useClassicViewer} onCheckedChange={setUseClassicViewer} className="scale-75" />
-                        {!useClassicViewer && (
-                            <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                                NEW
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="bg-border h-4 w-px" />
-
                     {/* Bid Area Selector */}
                     <div className="flex items-center gap-1">
                         <Combobox<BidArea & { depth: number }>
@@ -906,58 +879,30 @@ export default function DrawingTakeoff() {
             {/* Main Viewer + Panels */}
             <div className="relative flex flex-1 overflow-hidden">
                 <div className="relative isolate flex-1 overflow-hidden">
-                    {useClassicViewer ? (
-                        <LeafletDrawingViewer
-                            tiles={drawing.tiles_info || undefined}
-                            imageUrl={!drawing.tiles_info ? imageUrl || undefined : undefined}
-                            comparisonImageUrl={comparisonImageUrl}
-                            comparisonOpacity={overlayOpacity}
-                            viewMode={viewMode}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
-                            calibration={calibration}
-                            conditionOpacities={conditionOpacities}
-                            onCalibrationComplete={cal.handleCalibrationComplete}
-                            onMeasurementComplete={handleMeasurementComplete}
-                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                            editableVertices={editableVertices}
-                            onVertexDragEnd={handleVertexDragEnd}
-                            onVertexDelete={handleVertexDelete}
-                            snapEnabled={snapEnabled}
-                            hoveredMeasurementId={hoveredMeasurementId}
-                            boxSelectMode={viewMode === 'select'}
-                            onBoxSelectComplete={handleBoxSelect}
-                            activeColor={activeConditionDisplay?.color ?? null}
-                            className="absolute inset-0"
-                        />
-                    ) : (
-                        <PixiDrawingViewer
-                            fileUrl={`/api/drawings/${drawing.id}/file`}
-                            viewMode={viewMode}
-                            measurements={visibleMeasurements}
-                            selectedMeasurementId={selectedMeasurementId}
-                            selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
-                            calibration={calibration}
-                            conditionOpacities={conditionOpacities}
-                            onCalibrationComplete={cal.handleCalibrationComplete}
-                            onMeasurementComplete={handleMeasurementComplete}
-                            onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                            onMeasurementHover={setHoveredMeasurementId}
-                            snapEnabled={snapEnabled}
-                            hoveredMeasurementId={hoveredMeasurementId}
-                            boxSelectMode={viewMode === 'select'}
-                            onBoxSelectComplete={handleBoxSelect}
-                            activeColor={activeConditionDisplay?.color ?? null}
-                            editableVertices={editableVertices}
-                            onVertexDragEnd={handleVertexDragEnd}
-                            onVertexDelete={handleVertexDelete}
-                            tileWidth={drawing.tiles_info?.width}
-                            comparisonImageUrl={comparisonImageUrl}
-                            comparisonOpacity={overlayOpacity}
-                            className="absolute inset-0"
-                        />
-                    )}
+                    <PixiDrawingViewer
+                        fileUrl={`/api/drawings/${drawing.id}/file`}
+                        viewMode={viewMode}
+                        measurements={visibleMeasurements}
+                        selectedMeasurementId={selectedMeasurementId}
+                        selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
+                        calibration={calibration}
+                        conditionOpacities={conditionOpacities}
+                        onCalibrationComplete={cal.handleCalibrationComplete}
+                        onMeasurementComplete={handleMeasurementComplete}
+                        onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        onMeasurementHover={setHoveredMeasurementId}
+                        snapEnabled={snapEnabled}
+                        hoveredMeasurementId={hoveredMeasurementId}
+                        boxSelectMode={viewMode === 'select'}
+                        onBoxSelectComplete={handleBoxSelect}
+                        activeColor={activeConditionDisplay?.color ?? null}
+                        editableVertices={editableVertices}
+                        onVertexDragEnd={handleVertexDragEnd}
+                        onVertexDelete={handleVertexDelete}
+                        comparisonImageUrl={comparisonImageUrl}
+                        comparisonOpacity={overlayOpacity}
+                        className="absolute inset-0"
+                    />
                 </div>
 
                 {/* Takeoff Side Panel */}

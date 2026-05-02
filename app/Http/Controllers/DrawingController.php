@@ -86,7 +86,7 @@ class DrawingController extends Controller
             ->with('media')
             ->select([
                 'id', 'project_id', 'sheet_number', 'title',
-                'revision_number', 'status', 'tiles_status', 'created_at',
+                'revision_number', 'status', 'created_at',
             ])
             ->orderBy('created_at', 'desc')
             ->limit(50)
@@ -194,24 +194,6 @@ class DrawingController extends Controller
         [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
 
         return Inertia::render('drawings/takeoff', [
-            'drawing' => $drawing,
-            'revisions' => $revisions,
-            'project' => $drawing->project,
-            'activeTab' => 'takeoff',
-            'projectDrawings' => $projectDrawings,
-        ]);
-    }
-
-    /**
-     * Experimental Konva + PDF.js viewer (spike).
-     * Renders the original PDF directly via PDF.js into a single Konva canvas
-     * for smooth GPU-driven pan/zoom. Sits alongside the Leaflet viewer.
-     */
-    public function konva(Drawing $drawing): Response
-    {
-        [$drawing, $revisions, $projectDrawings] = $this->loadDrawingWithRevisions($drawing);
-
-        return Inertia::render('drawings/konva', [
             'drawing' => $drawing,
             'revisions' => $revisions,
             'project' => $drawing->project,
@@ -1468,61 +1450,6 @@ class DrawingController extends Controller
         }
 
         return redirect($media->getUrl());
-    }
-
-    /**
-     * Serve a single map tile for the drawing viewer.
-     * For S3: redirects to a temporary signed URL (browser loads directly from S3).
-     * For local: streams from disk.
-     */
-    public function serveTile(Drawing $drawing, int $z, string $coords)
-    {
-        if (! $drawing->tiles_base_url) {
-            abort(404);
-        }
-
-        $tilePath = "{$drawing->tiles_base_url}/{$z}/{$coords}.png";
-        $disk = config('filesystems.drawings_disk', 'public');
-
-        // S3: redirect to a temporary signed URL — browser fetches directly from S3
-        if ($disk === 's3') {
-            try {
-                $url = Storage::disk('s3')->temporaryUrl($tilePath, now()->addHour());
-
-                return redirect($url, 302, [
-                    'Cache-Control' => 'public, max-age=3600',
-                ]);
-            } catch (\Exception $e) {
-                abort(404);
-            }
-        }
-
-        // Local disk: stream directly
-        try {
-            $stream = Storage::disk($disk)->readStream($tilePath);
-            if ($stream) {
-                $size = Storage::disk($disk)->size($tilePath);
-
-                return response()->stream(
-                    function () use ($stream) {
-                        fpassthru($stream);
-                        if (is_resource($stream)) {
-                            fclose($stream);
-                        }
-                    },
-                    200,
-                    [
-                        'Content-Type' => 'image/png',
-                        'Content-Length' => $size,
-                        'Cache-Control' => 'public, max-age=604800',
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            // Tile not found
-        }
-
-        abort(404);
     }
 
     /**

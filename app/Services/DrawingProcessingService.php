@@ -22,6 +22,7 @@ class DrawingProcessingService
         try {
             $drawing->update(['status' => Drawing::STATUS_PROCESSING]);
 
+            $this->captureSourceDimensions($drawing);
             $this->generateThumbnail($drawing);
 
             $drawing->update(['status' => Drawing::STATUS_ACTIVE]);
@@ -37,6 +38,67 @@ class DrawingProcessingService
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Probe the source PDF/image for its native pixel dimensions and persist them.
+     * These are used by DrawingMeasurementController for normalized→real coordinate math.
+     * Renders the PDF at a fixed DPI so the values are reproducible.
+     */
+    protected function captureSourceDimensions(Drawing $drawing): void
+    {
+        $source = $drawing->getFirstMedia('source');
+        if (! $source) {
+            return;
+        }
+
+        $sourcePath = $this->resolveLocalSourcePath($source);
+        if (! $sourcePath) {
+            return;
+        }
+
+        $ext = Str::lower(pathinfo($source->file_name, PATHINFO_EXTENSION));
+        $isPdf = $ext === 'pdf' || str_contains(strtolower($source->mime_type ?? ''), 'pdf');
+
+        [$width, $height] = $isPdf
+            ? $this->probePdfDimensions($sourcePath)
+            : ($this->probeImageDimensions($sourcePath) ?? [0, 0]);
+
+        if ($width > 0 && $height > 0) {
+            $drawing->update([
+                'tiles_width' => $width,
+                'tiles_height' => $height,
+            ]);
+        } else {
+            Log::warning('Drawing dimension probe failed', [
+                'drawing_id' => $drawing->id,
+                'source' => $source->file_name,
+            ]);
+        }
+    }
+
+    /**
+     * Render the PDF's first page at a fixed DPI and read its dimensions.
+     * Renders to a temp PNG and reads dims via getimagesize (cheap header read).
+     */
+    protected function probePdfDimensions(string $pdfPath, int $dpi = 200): array
+    {
+        $tempPng = sys_get_temp_dir().'/drawing_dims_'.uniqid().'.png';
+        try {
+            if (! $this->pdfToImage($pdfPath, $tempPng, 4000)) {
+                return [0, 0];
+            }
+            $info = @getimagesize($tempPng);
+            return $info ? [$info[0], $info[1]] : [0, 0];
+        } finally {
+            @unlink($tempPng);
+        }
+    }
+
+    protected function probeImageDimensions(string $imagePath): ?array
+    {
+        $info = @getimagesize($imagePath);
+        return $info ? [$info[0], $info[1]] : null;
     }
 
     protected function generateThumbnail(Drawing $drawing): void

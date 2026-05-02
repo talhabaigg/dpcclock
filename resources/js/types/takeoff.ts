@@ -39,15 +39,6 @@ export type Revision = {
     thumbnail_url?: string | null;
 };
 
-export type TilesInfo = {
-    baseUrl: string;
-    maxZoom: number;
-    minNativeZoom?: number;
-    width: number;
-    height: number;
-    tileSize: number;
-};
-
 export type Drawing = {
     id: number;
     project_id: number;
@@ -64,7 +55,6 @@ export type Drawing = {
         revision_number?: string | null;
     };
     revision_number?: string | null;
-    tiles_info?: TilesInfo | null;
 };
 
 export type PendingPoint = {

@@ -1079,7 +1079,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // DRAWINGS
     // ============================================
 
-    // Core drawing access (index, file serving, tiles, revisions)
+    // Core drawing access (index, file serving, revisions)
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
         Route::get('/drawings/{drawing}', function (\App\Models\Drawing $drawing) {
@@ -1097,7 +1097,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('drawings.show');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
-        Route::get('/drawings/{drawing}/tiles/{z}/{coords}', [DrawingController::class, 'serveTile'])->name('drawings.tile')->where(['z' => '[0-9]+', 'coords' => '[0-9]+_[0-9]+']);
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
     });
     Route::middleware('permission:drawings.create')->group(function () {
@@ -1115,7 +1114,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------
     Route::middleware('permission:takeoff.view')->group(function () {
         Route::get('/drawings/{drawing}/takeoff', [DrawingController::class, 'takeoff'])->name('drawings.takeoff');
-        Route::get('/drawings/{drawing}/konva', [DrawingController::class, 'konva'])->name('drawings.konva');
         Route::get('/drawings/{drawing}/conditions', [DrawingController::class, 'conditions'])->name('drawings.conditions');
         Route::get('/drawings/{drawing}/labour', [DrawingController::class, 'labour'])->name('drawings.labour');
         Route::get('/drawings/{drawing}/material', [DrawingController::class, 'material'])->name('drawings.material');

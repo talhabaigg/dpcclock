@@ -23,28 +23,21 @@ class Drawing extends Model implements HasMedia
         'revision_number',
         'status',
         'previous_revision_id',
-        'tiles_base_url',
-        'tiles_max_zoom',
         'tiles_width',
         'tiles_height',
-        'tile_size',
-        'tiles_status',
         'created_by',
         'updated_by',
     ];
 
     protected $casts = [
-        'tiles_max_zoom' => 'integer',
         'tiles_width' => 'integer',
         'tiles_height' => 'integer',
-        'tile_size' => 'integer',
     ];
 
     protected $appends = [
         'file_url',
         'thumbnail_url',
         'display_name',
-        'tiles_info',
     ];
 
     // Workflow status constants
@@ -210,30 +203,6 @@ class Drawing extends Model implements HasMedia
         }
 
         return "Drawing #{$this->id}";
-    }
-
-    public function getTilesInfoAttribute(): ?array
-    {
-        if ($this->tiles_status !== 'completed' || ! $this->tiles_base_url) {
-            return null;
-        }
-
-        $baseUrl = "/drawings/{$this->id}/tiles";
-
-        $maxZoom = $this->tiles_max_zoom ?? 5;
-        $maxDim = max($this->tiles_width ?? 0, $this->tiles_height ?? 0);
-        $minNativeZoom = $maxDim > 0
-            ? max(0, $maxZoom - (int) floor(log(max($maxDim, 1) / 3000, 2)))
-            : 0;
-
-        return [
-            'baseUrl' => $baseUrl,
-            'maxZoom' => $maxZoom,
-            'minNativeZoom' => min($minNativeZoom, $maxZoom),
-            'width' => $this->tiles_width ?? 0,
-            'height' => $this->tiles_height ?? 0,
-            'tileSize' => $this->tile_size ?? 2048,
-        ];
     }
 
     public function getIsPdfAttribute(): bool
@@ -410,13 +379,4 @@ class Drawing extends Model implements HasMedia
         return 'A'.$letters;
     }
 
-    /**
-     * Check if this drawing has tiles available for Leaflet viewer.
-     */
-    public function hasTiles(): bool
-    {
-        return $this->tiles_status === 'completed'
-            && $this->tiles_base_url
-            && $this->tiles_max_zoom !== null;
-    }
 }
