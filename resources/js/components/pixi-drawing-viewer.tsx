@@ -1,6 +1,9 @@
 import { Maximize, Minus, Plus } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPageProxy, type RenderTask } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Custom worker entry that polyfills Map.getOrInsertComputed before loading
+// pdf.worker — Safari/iPadOS doesn't ship that method yet and PDF.js v5 calls
+// it inside the worker. See resources/js/pdf-worker-with-polyfill.ts.
+import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
 import { Application, CanvasSource, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -97,7 +100,14 @@ const FIT_PADDING = 24;
 const RASTER_OVERSCAN = 1.0;
 const RENDER_REGION_OVERSCAN = 2.0;
 const FALLBACK_QUALITY_MULTIPLIER = 3.0;
-const MAX_TEXTURE_DIM = 8192;
+// iOS Safari caps each canvas at ~16M pixels (4096×4096); above that, the
+// canvas silently renders blank. Other browsers can handle 8192. Detect once.
+const IS_IOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        // iPadOS 13+ reports as Mac with touch support.
+        (navigator.platform === 'MacIntel' && (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints! > 1));
+const MAX_TEXTURE_DIM = IS_IOS ? 2048 : 8192;
 const RERASTER_DRIFT = 0.1;
 const CLICK_THRESHOLD_PX = 4;
 // Hit-test tolerance in screen px — gives a forgiving click target on lines.
@@ -294,6 +304,10 @@ export function PixiDrawingViewer({
     const renderTaskRef = useRef<RenderTask | null>(null);
     const regionRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
     const regionScaleRef = useRef(1);
+    const lastRasterErrorRef = useRef<string | null>(null);
+    // Set true while a 2+ finger pinch is in progress so the single-pointer
+    // pan handler stops fighting the pinch's scale/translate updates.
+    const pinchingRef = useRef(false);
 
     const [pdfDims, setPdfDims] = useState<{ width: number; height: number } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -360,6 +374,9 @@ export function PixiDrawingViewer({
             app.canvas.style.display = 'block';
             app.canvas.style.width = '100%';
             app.canvas.style.height = '100%';
+            // Stop iOS Safari from intercepting our pinch / pan gestures
+            // (page-level zoom or scroll). The viewer owns all touch input.
+            app.canvas.style.touchAction = 'none';
 
             const world = new Container();
             const measurementsLayer = new Container();
@@ -425,7 +442,10 @@ export function PixiDrawingViewer({
                     url: fileUrl,
                     isEvalSupported: false,
                     withCredentials: true,
-                    enableHWA: true,
+                    // PDF.js's hardware-accelerated decode path has known
+                    // rendering regressions on Safari/iOS — force the standard
+                    // canvas path there.
+                    enableHWA: !IS_IOS,
                 });
                 const doc = await task.promise;
                 if (cancelled) {
@@ -498,12 +518,21 @@ export function PixiDrawingViewer({
             const canvasW = Math.max(1, Math.ceil(region.w * finalScale));
             const canvasH = Math.max(1, Math.ceil(region.h * finalScale));
 
-            const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+            // Safari's OffscreenCanvas 2D path has render-correctness bugs
+            // (PDF.js renders can come back blank). Use a regular HTMLCanvas
+            // there even though it's a bit slower.
+            const useOffscreen = !IS_IOS && typeof OffscreenCanvas !== 'undefined';
             const canvas: HTMLCanvasElement | OffscreenCanvas = useOffscreen
                 ? new OffscreenCanvas(canvasW, canvasH)
                 : Object.assign(document.createElement('canvas'), { width: canvasW, height: canvasH });
             const ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-            if (!ctx) return null;
+            if (!ctx) {
+                const msg = `Failed to acquire 2D context (canvas ${canvasW}×${canvasH})`;
+                // eslint-disable-next-line no-console -- intentional diagnostic for iOS canvas-limit failures
+                console.error('[pixi-drawing-viewer]', msg);
+                lastRasterErrorRef.current = msg;
+                return null;
+            }
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvasW, canvasH);
             ctx.translate(-region.x * finalScale, -region.y * finalScale);
@@ -521,7 +550,14 @@ export function PixiDrawingViewer({
                 await renderTask.promise;
                 renderTaskRef.current = null;
                 return { canvas, effectiveScale: finalScale };
-            } catch {
+            } catch (err) {
+                if ((err as { name?: string })?.name === 'RenderingCancelledException') return null;
+                const errName = (err as { name?: string })?.name ?? 'Error';
+                const errMsg = err instanceof Error ? err.message : String(err);
+                const detail = `${errName}: ${errMsg} (canvas ${canvasW}×${canvasH}, scale ${finalScale.toFixed(3)})`;
+                // eslint-disable-next-line no-console -- intentional diagnostic for iOS PDF render failures
+                console.error('[pixi-drawing-viewer] PDF render failed', err, { canvasW, canvasH, finalScale });
+                lastRasterErrorRef.current = detail;
                 return null;
             }
         },
@@ -595,7 +631,23 @@ export function PixiDrawingViewer({
 
             const region = computeVisibleRegion(RENDER_REGION_OVERSCAN);
             const result = await rasterizeRegion(region, fit * dpr * RASTER_OVERSCAN);
-            if (cancelled || !result) return;
+            if (cancelled) return;
+            if (!result) {
+                // If both passes failed and no fallback sprite was added, the
+                // viewer would otherwise stay blank with no message. Surface
+                // the captured render error so users without a desktop devtools
+                // session can read what failed.
+                if (!fallbackSpriteRef.current) {
+                    const detail = lastRasterErrorRef.current ?? 'unknown error';
+                    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+                    const plat = typeof navigator !== 'undefined' ? navigator.platform : '';
+                    const mtp = typeof navigator !== 'undefined' ? (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints : '';
+                    setLoadError(
+                        `Render failed.\n\n${detail}\n\nIS_IOS=${IS_IOS} dpr=${dpr} pdf=${Math.round(pdfDims.width)}x${Math.round(pdfDims.height)} fit=${fit.toFixed(3)}\nplatform=${plat} maxTouchPoints=${mtp}\nUA: ${ua}`,
+                    );
+                }
+                return;
+            }
 
             const texture = makeMipmappedTexture(result.canvas);
             const sprite = new Sprite(texture);
@@ -840,10 +892,91 @@ export function PixiDrawingViewer({
         };
 
         canvas.addEventListener('wheel', onWheel, { passive: false });
+
+        // ─── Two-finger pinch zoom (touch devices) ───────────────────────────
+        // Tracks two-finger gestures and converts them into the same
+        // scale/translate updates the wheel handler does. preventDefault on
+        // touchstart with 2+ touches cancels the in-flight single-finger
+        // pointer pan, so the existing pointer flow resumes cleanly when one
+        // finger lifts.
+        let initialDist = 0;
+        let initialScale = 1;
+        let pinchAnchorWorld = { x: 0, y: 0 };
+        let pinchRerasterTimer: number | null = null;
+
+        const distance = (a: Touch, b: Touch) => Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+
+        const onTouchStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                pinchingRef.current = true;
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const rect = canvas.getBoundingClientRect();
+                initialDist = Math.max(1, distance(t1, t2));
+                initialScale = world.scale.x;
+                const cx = (t1.clientX + t2.clientX) / 2 - rect.left;
+                const cy = (t1.clientY + t2.clientY) / 2 - rect.top;
+                pinchAnchorWorld = {
+                    x: (cx - world.position.x) / world.scale.x,
+                    y: (cy - world.position.y) / world.scale.y,
+                };
+            }
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+            if (!pinchingRef.current || e.touches.length < 2) return;
+            e.preventDefault();
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            const rect = canvas.getBoundingClientRect();
+            const dist = Math.max(1, distance(t1, t2));
+            const ratio = dist / initialDist;
+            const newScale = Math.max(minScaleRef.current, Math.min(MAX_SCALE, initialScale * ratio));
+            const cx = (t1.clientX + t2.clientX) / 2 - rect.left;
+            const cy = (t1.clientY + t2.clientY) / 2 - rect.top;
+            world.scale.set(newScale);
+            world.position.set(cx - pinchAnchorWorld.x * newScale, cy - pinchAnchorWorld.y * newScale);
+            setZoomDisplay(newScale);
+            onZoomChange?.(newScale);
+        };
+
+        const onTouchEnd = (e: TouchEvent) => {
+            if (!pinchingRef.current) return;
+            if (e.touches.length < 2) {
+                pinchingRef.current = false;
+                if (pinchRerasterTimer !== null) window.clearTimeout(pinchRerasterTimer);
+                pinchRerasterTimer = window.setTimeout(() => {
+                    pinchRerasterTimer = null;
+                    maybeRerasterize();
+                }, 100);
+            }
+        };
+
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvas.addEventListener('touchend', onTouchEnd);
+        canvas.addEventListener('touchcancel', onTouchEnd);
+
+        // Block Safari's pinch-to-zoom-the-page gesture so the viewer owns
+        // the gesture (otherwise iOS zooms the whole layout).
+        const blockGesture = (e: Event) => e.preventDefault();
+        canvas.addEventListener('gesturestart', blockGesture);
+        canvas.addEventListener('gesturechange', blockGesture);
+        canvas.addEventListener('gestureend', blockGesture);
+
         return () => {
             canvas.removeEventListener('wheel', onWheel);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchmove', onTouchMove);
+            canvas.removeEventListener('touchend', onTouchEnd);
+            canvas.removeEventListener('touchcancel', onTouchEnd);
+            canvas.removeEventListener('gesturestart', blockGesture);
+            canvas.removeEventListener('gesturechange', blockGesture);
+            canvas.removeEventListener('gestureend', blockGesture);
             if (rafId !== null) cancelAnimationFrame(rafId);
             if (rerasterTimer !== null) window.clearTimeout(rerasterTimer);
+            if (pinchRerasterTimer !== null) window.clearTimeout(pinchRerasterTimer);
         };
     }, [appReady, maybeRerasterize, onZoomChange]);
 
@@ -1444,7 +1577,11 @@ export function PixiDrawingViewer({
                 viewMode === 'calibrate'
             );
 
-            if (moved && dragPansWorld) {
+            // Pinch-zoom owns the world transform while two fingers are down —
+            // skip the single-pointer pan update or it'll fight the pinch.
+            if (pinchingRef.current) {
+                /* no-op */
+            } else if (moved && dragPansWorld) {
                 world.position.set(startWorldX + dx, startWorldY + dy);
             } else if (moved && useBoxSelect && boxStartUv && uv) {
                 setBoxSelectRect({ x1: boxStartUv.x, y1: boxStartUv.y, x2: uv.x, y2: uv.y });
@@ -2424,7 +2561,13 @@ export function PixiDrawingViewer({
                     Loading PDF…
                 </div>
             )}
-            {loadError && <div className="absolute inset-0 z-10 flex items-center justify-center p-4 text-xs text-red-500">{loadError}</div>}
+            {loadError && (
+                <div className="absolute inset-0 z-10 flex items-start justify-center overflow-auto bg-white/95 p-4 dark:bg-neutral-900/95">
+                    <pre className="font-mono text-[11px] leading-snug whitespace-pre-wrap break-words text-red-600 select-text">
+                        {loadError}
+                    </pre>
+                </div>
+            )}
 
             {!calibration && (viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_rectangle') && (
                 <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded bg-amber-500/90 px-3 py-1 text-[11px] text-white">

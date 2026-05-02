@@ -1,3 +1,4 @@
+import './polyfills';
 import '../css/app.css';
 import './echo';
 
