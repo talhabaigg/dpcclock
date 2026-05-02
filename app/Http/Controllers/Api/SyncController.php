@@ -10,6 +10,8 @@ use App\Models\DrawingObservation;
 use App\Models\Location;
 use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
+use App\Services\TakeoffCostCalculator;
+use App\Support\MeasurementGeometry;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -141,8 +143,8 @@ class SyncController extends Controller
     /**
      * Push local changes from WatermelonDB to server.
      *
-     * Writable tables: observations, measurement_statuses, segment_statuses.
-     * Read-only (ignored on push): projects, drawings, measurements, measurement_labour_codes.
+     * Writable tables: observations, measurements, measurement_statuses, segment_statuses.
+     * Read-only (ignored on push): projects, drawings, measurement_labour_codes.
      */
     public function push(Request $request)
     {
@@ -159,6 +161,10 @@ class SyncController extends Controller
         try {
             if (isset($changes['observations'])) {
                 $this->pushObservations($changes['observations'], $lastPulledAt);
+            }
+
+            if (isset($changes['measurements'])) {
+                $this->pushMeasurements($changes['measurements'], $lastPulledAt);
             }
 
             if (isset($changes['measurement_statuses'])) {
@@ -420,16 +426,37 @@ class SyncController extends Controller
             $m->saveQuietly();
         }
 
+        // Resolve parent measurement watermelon_id (for deductions)
+        $parentWatermelonId = null;
+        if ($m->parent_measurement_id) {
+            $parent = DrawingMeasurement::find($m->parent_measurement_id);
+            if ($parent) {
+                if (!$parent->watermelon_id) {
+                    $parent->watermelon_id = (string) Str::uuid();
+                    $parent->saveQuietly();
+                }
+                $parentWatermelonId = $parent->watermelon_id;
+            }
+        }
+
         return [
             'id' => $m->watermelon_id,
             'server_id' => $m->id,
             'drawing_server_id' => $m->drawing_id,
+            'name' => $m->name ?? '',
+            'category' => $m->category,
             'type' => $m->type,
             'points_json' => json_encode($m->points ?? []),
             'computed_value' => (float) ($m->computed_value ?? 0),
+            'perimeter_value' => $m->perimeter_value !== null ? (float) $m->perimeter_value : null,
+            'unit' => $m->unit,
             'color' => $m->color,
             'takeoff_condition_id' => $m->takeoff_condition_id,
             'condition_name' => $m->condition?->name ?? '',
+            'bid_area_id' => $m->bid_area_id,
+            'parent_measurement_id' => $parentWatermelonId,
+            'scope' => $m->scope ?? 'takeoff',
+            'variation_id' => $m->variation_id,
             'created_at' => $m->created_at?->getTimestampMs() ?? 0,
             'updated_at' => $m->updated_at?->getTimestampMs() ?? 0,
         ];
@@ -561,6 +588,194 @@ class SyncController extends Controller
                 $obs->delete(); // Soft delete
             }
         }
+    }
+
+    /**
+     * Push measurements from mobile (iPad WatermelonDB).
+     *
+     * iPad sends:
+     *   - id (watermelon UUID)
+     *   - drawing_id (watermelon UUID — resolved to server FK)
+     *   - parent_measurement_id (watermelon UUID, optional — for deductions)
+     *   - type ('linear' | 'area' | 'count')
+     *   - points_json (or points): normalized [0,1] coords
+     *   - name, color, optional category
+     *   - takeoff_condition_id (server numeric, optional)
+     *   - bid_area_id (server numeric, optional)
+     *   - scope (default 'takeoff')
+     *   - variation_id (server numeric, optional)
+     *
+     * Server computes computed_value, perimeter_value, unit from the drawing's
+     * calibration + source dimensions, and runs TakeoffCostCalculator if a
+     * condition is assigned. Client-supplied computed_value is ignored.
+     */
+    private function pushMeasurements(array $changes, Carbon $lastPulledAt): void
+    {
+        $costCalc = new TakeoffCostCalculator;
+
+        foreach ($changes['created'] ?? [] as $record) {
+            $drawing = Drawing::where('watermelon_id', $record['drawing_id'] ?? '')->first();
+            if (!$drawing) {
+                Log::warning('[Sync] Push: drawing not found for measurement', [
+                    'drawing_watermelon_id' => $record['drawing_id'] ?? null,
+                    'measurement_watermelon_id' => $record['id'] ?? null,
+                ]);
+                continue;
+            }
+
+            $points = $this->extractPoints($record);
+            $type = $record['type'] ?? null;
+            if (!in_array($type, ['linear', 'area', 'count'], true) || !is_array($points)) {
+                Log::warning('[Sync] Push: invalid measurement payload', [
+                    'watermelon_id' => $record['id'] ?? null,
+                    'type' => $type,
+                ]);
+                continue;
+            }
+
+            $parentId = $this->resolveMeasurementParentId($record['parent_measurement_id'] ?? null);
+
+            [$computedValue, $perimeterValue, $unit] = $this->deriveMeasurementValues($drawing, $type, $points);
+
+            $m = new DrawingMeasurement([
+                'watermelon_id' => $record['id'],
+                'drawing_id' => $drawing->id,
+                'name' => $record['name'] ?? '',
+                'type' => $type,
+                'color' => $record['color'] ?? '#3b82f6',
+                'category' => $record['category'] ?? null,
+                'points' => $points,
+                'computed_value' => $computedValue,
+                'perimeter_value' => $perimeterValue,
+                'unit' => $unit,
+                'takeoff_condition_id' => $record['takeoff_condition_id'] ?? null,
+                'bid_area_id' => $record['bid_area_id'] ?? null,
+                'parent_measurement_id' => $parentId,
+                'scope' => $record['scope'] ?? 'takeoff',
+                'variation_id' => $record['variation_id'] ?? null,
+            ]);
+            $m->created_by = auth()->id();
+            $m->save();
+
+            if ($m->takeoff_condition_id) {
+                $m->load('condition');
+                $costs = $costCalc->compute($m);
+                $m->update($costs);
+            }
+        }
+
+        foreach ($changes['updated'] ?? [] as $record) {
+            $m = DrawingMeasurement::where('watermelon_id', $record['id'] ?? '')->first();
+            if (!$m) {
+                Log::warning('[Sync] Push: measurement not found for update', [
+                    'watermelon_id' => $record['id'] ?? null,
+                ]);
+                continue;
+            }
+
+            // Conflict check — server modified after client's last pull
+            if ($m->updated_at && $m->updated_at->gt($lastPulledAt)) {
+                throw new \Exception(
+                    "Conflict: measurement {$record['id']} was modified on server after last pull",
+                    409
+                );
+            }
+
+            $points = $this->extractPoints($record) ?? $m->points;
+
+            $updates = [
+                'name' => $record['name'] ?? $m->name,
+                'color' => $record['color'] ?? $m->color,
+                'category' => array_key_exists('category', $record) ? $record['category'] : $m->category,
+                'points' => $points,
+                'takeoff_condition_id' => array_key_exists('takeoff_condition_id', $record)
+                    ? $record['takeoff_condition_id']
+                    : $m->takeoff_condition_id,
+                'bid_area_id' => array_key_exists('bid_area_id', $record) ? $record['bid_area_id'] : $m->bid_area_id,
+                'scope' => $record['scope'] ?? $m->scope,
+                'variation_id' => array_key_exists('variation_id', $record) ? $record['variation_id'] : $m->variation_id,
+            ];
+
+            // Recompute when geometry could have changed
+            $type = $record['type'] ?? $m->type;
+            [$computedValue, $perimeterValue, $unit] = $this->deriveMeasurementValues($m->drawing, $type, $points);
+            $updates['computed_value'] = $computedValue;
+            $updates['perimeter_value'] = $perimeterValue;
+            $updates['unit'] = $unit;
+
+            $m->update($updates);
+
+            if ($m->takeoff_condition_id) {
+                $m->load('condition');
+                $m->update($costCalc->compute($m));
+            }
+        }
+
+        foreach ($changes['deleted'] ?? [] as $watermelonId) {
+            $m = DrawingMeasurement::where('watermelon_id', $watermelonId)->first();
+            if ($m) {
+                $m->delete();
+            }
+        }
+    }
+
+    /** Extract a points array from either points_json (string) or points (array). */
+    private function extractPoints(array $record): ?array
+    {
+        if (isset($record['points']) && is_array($record['points'])) {
+            return $record['points'];
+        }
+        if (isset($record['points_json']) && is_string($record['points_json'])) {
+            $decoded = json_decode($record['points_json'], true);
+            return is_array($decoded) ? $decoded : null;
+        }
+        return null;
+    }
+
+    /** Resolve a parent measurement watermelon_id to a server FK, or null. */
+    private function resolveMeasurementParentId(?string $watermelonId): ?int
+    {
+        if (!$watermelonId) {
+            return null;
+        }
+        return DrawingMeasurement::where('watermelon_id', $watermelonId)->value('id');
+    }
+
+    /**
+     * Compute (computed_value, perimeter_value, unit) for a measurement using
+     * the drawing's calibration + source dimensions. Mirrors what the web
+     * DrawingMeasurementController does on create.
+     *
+     * @return array{0: float, 1: float|null, 2: string|null}
+     */
+    private function deriveMeasurementValues(Drawing $drawing, string $type, array $points): array
+    {
+        if ($type === 'count') {
+            return [(float) count($points), null, 'ea'];
+        }
+
+        $calibration = $drawing->scaleCalibration;
+        if (!$calibration) {
+            return [0.0, null, null];
+        }
+
+        $imgW = $drawing->tiles_width ?: 1;
+        $imgH = $drawing->tiles_height ?: 1;
+        $ppu = (float) $calibration->pixels_per_unit;
+
+        if ($type === 'linear') {
+            return [
+                MeasurementGeometry::polylineLength($points, $ppu, $imgW, $imgH),
+                null,
+                $calibration->unit,
+            ];
+        }
+
+        return [
+            MeasurementGeometry::polygonArea($points, $ppu, $imgW, $imgH),
+            MeasurementGeometry::polygonPerimeter($points, $ppu, $imgW, $imgH),
+            'sq '.$calibration->unit,
+        ];
     }
 
     /**

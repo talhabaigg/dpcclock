@@ -7,6 +7,7 @@ use App\Models\DrawingMeasurement;
 use App\Models\DrawingScaleCalibration;
 use App\Models\Variation;
 use App\Services\TakeoffCostCalculator;
+use App\Support\MeasurementGeometry;
 use Illuminate\Http\Request;
 
 class DrawingMeasurementController extends Controller
@@ -200,15 +201,15 @@ class DrawingMeasurementController extends Controller
                 $imgH = $drawing->tiles_height ?: 1;
 
                 if ($validated['type'] === 'linear') {
-                    $computedValue = $this->computePolylineLength(
+                    $computedValue = MeasurementGeometry::polylineLength(
                         $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                     );
                     $unit = $calibration->unit;
                 } else {
-                    $computedValue = $this->computePolygonArea(
+                    $computedValue = MeasurementGeometry::polygonArea(
                         $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                     );
-                    $perimeterValue = $this->computePolygonPerimeter(
+                    $perimeterValue = MeasurementGeometry::polygonPerimeter(
                         $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                     );
                     $unit = 'sq ' . $calibration->unit;
@@ -277,15 +278,15 @@ class DrawingMeasurementController extends Controller
                     $imgW = $drawing->tiles_width ?: 1;
                     $imgH = $drawing->tiles_height ?: 1;
                     if ($measurement->type === 'linear') {
-                        $validated['computed_value'] = $this->computePolylineLength(
+                        $validated['computed_value'] = MeasurementGeometry::polylineLength(
                             $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                         );
                         $validated['unit'] = $calibration->unit;
                     } else {
-                        $validated['computed_value'] = $this->computePolygonArea(
+                        $validated['computed_value'] = MeasurementGeometry::polygonArea(
                             $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                         );
-                        $validated['perimeter_value'] = $this->computePolygonPerimeter(
+                        $validated['perimeter_value'] = MeasurementGeometry::polygonPerimeter(
                             $validated['points'], $calibration->pixels_per_unit, $imgW, $imgH
                         );
                         $validated['unit'] = 'sq ' . $calibration->unit;
@@ -379,49 +380,6 @@ class DrawingMeasurementController extends Controller
 
     // ---- Private computation helpers ----
 
-    private function computePolylineLength(array $points, float $ppu, int $imgW, int $imgH): float
-    {
-        $total = 0;
-        for ($i = 1; $i < count($points); $i++) {
-            $dx = ($points[$i]['x'] - $points[$i - 1]['x']) * $imgW;
-            $dy = ($points[$i]['y'] - $points[$i - 1]['y']) * $imgH;
-            $total += sqrt($dx * $dx + $dy * $dy);
-        }
-
-        return round($total / $ppu, 4);
-    }
-
-    private function computePolygonArea(array $points, float $ppu, int $imgW, int $imgH): float
-    {
-        $n = count($points);
-        $area = 0;
-        for ($i = 0; $i < $n; $i++) {
-            $j = ($i + 1) % $n;
-            $xi = $points[$i]['x'] * $imgW;
-            $yi = $points[$i]['y'] * $imgH;
-            $xj = $points[$j]['x'] * $imgW;
-            $yj = $points[$j]['y'] * $imgH;
-            $area += ($xi * $yj) - ($xj * $yi);
-        }
-        $pixelArea = abs($area) / 2;
-
-        return round($pixelArea / ($ppu * $ppu), 4);
-    }
-
-    private function computePolygonPerimeter(array $points, float $ppu, int $imgW, int $imgH): float
-    {
-        $n = count($points);
-        $total = 0;
-        for ($i = 0; $i < $n; $i++) {
-            $j = ($i + 1) % $n;
-            $dx = ($points[$j]['x'] - $points[$i]['x']) * $imgW;
-            $dy = ($points[$j]['y'] - $points[$i]['y']) * $imgH;
-            $total += sqrt($dx * $dx + $dy * $dy);
-        }
-
-        return round($total / $ppu, 4);
-    }
-
     private function recomputeMeasurements(Drawing $drawing, float $ppu, string $baseUnit, int $imgW, int $imgH): void
     {
         $drawing->measurements()->chunk(100, function ($measurements) use ($ppu, $baseUnit, $imgW, $imgH) {
@@ -429,11 +387,11 @@ class DrawingMeasurementController extends Controller
                 if ($m->type === 'count') {
                     continue;
                 } elseif ($m->type === 'linear') {
-                    $m->computed_value = $this->computePolylineLength($m->points, $ppu, $imgW, $imgH);
+                    $m->computed_value = MeasurementGeometry::polylineLength($m->points, $ppu, $imgW, $imgH);
                     $m->unit = $baseUnit;
                 } else {
-                    $m->computed_value = $this->computePolygonArea($m->points, $ppu, $imgW, $imgH);
-                    $m->perimeter_value = $this->computePolygonPerimeter($m->points, $ppu, $imgW, $imgH);
+                    $m->computed_value = MeasurementGeometry::polygonArea($m->points, $ppu, $imgW, $imgH);
+                    $m->perimeter_value = MeasurementGeometry::polygonPerimeter($m->points, $ppu, $imgW, $imgH);
                     $m->unit = 'sq ' . $baseUnit;
                 }
                 $m->save();
