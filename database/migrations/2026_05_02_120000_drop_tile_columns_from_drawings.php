@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,17 +12,22 @@ return new class extends Migration
             return;
         }
 
-        // Drop the tiles_status index first if it still exists.
-        $indexes = collect(DB::select(
-            "SELECT INDEX_NAME FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'drawings' AND COLUMN_NAME = 'tiles_status'"
-        ))->pluck('INDEX_NAME')->unique();
+        // Drop any index that references tiles_status. Use Schema::getIndexes()
+        // (Laravel 11+) for driver portability — MySQL in prod, SQLite in tests.
+        if (Schema::hasColumn('drawings', 'tiles_status')) {
+            $indexNames = collect(Schema::getIndexes('drawings'))
+                ->filter(fn ($idx) => in_array('tiles_status', $idx['columns'] ?? [], true) && ! ($idx['primary'] ?? false))
+                ->pluck('name')
+                ->all();
 
-        Schema::table('drawings', function (Blueprint $table) use ($indexes) {
-            foreach ($indexes as $idx) {
-                $table->dropIndex($idx);
+            if (! empty($indexNames)) {
+                Schema::table('drawings', function (Blueprint $table) use ($indexNames) {
+                    foreach ($indexNames as $name) {
+                        $table->dropIndex($name);
+                    }
+                });
             }
-        });
+        }
 
         // Idempotently drop each obsolete tile-related column.
         foreach (['tiles_base_url', 'tiles_max_zoom', 'tile_size', 'tiles_status'] as $col) {
