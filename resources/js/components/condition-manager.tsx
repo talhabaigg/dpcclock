@@ -180,6 +180,7 @@ export function ConditionManager({
     const [formOpacity, setFormOpacity] = useState(50);
     const [formDescription, setFormDescription] = useState('');
     const [formHeight, setFormHeight] = useState('');
+    const [formThickness, setFormThickness] = useState('');
     const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'detailed'>('unit_rate');
 
     // BoQ form state — unified items list, distinguished by `kind`.
@@ -333,6 +334,7 @@ export function ConditionManager({
         setFormOpacity(50);
         setFormDescription('');
         setFormHeight('');
+        setFormThickness('');
         setFormPricingMethod('unit_rate');
         setFormBoqItems([]);
         setCostCodeSearch('');
@@ -355,6 +357,7 @@ export function ConditionManager({
         setFormOpacity(c.opacity ?? 50);
         setFormDescription(c.description || '');
         setFormHeight(c.height?.toString() || '');
+        setFormThickness(c.thickness?.toString() || '');
         setFormPricingMethod(c.pricing_method || 'unit_rate');
 
         // Load BoQ items. Falls back to translating the legacy shape (cost_codes + labour_unit_rate)
@@ -448,6 +451,7 @@ export function ConditionManager({
                 opacity: formOpacity,
                 description: formDescription || null,
                 height: formHeight ? parseFloat(formHeight) : null,
+                thickness: formThickness ? parseFloat(formThickness) : null,
                 pricing_method: formPricingMethod,
             };
 
@@ -1235,7 +1239,7 @@ export function ConditionManager({
                                                     <span className="text-xs font-medium tabular-nums">${grandTotal.toFixed(2)}</span>
                                                 </div>
 
-                                                {/* Height + Appearance row */}
+                                                {/* Height + Thickness + Appearance row */}
                                                 <div className="flex items-end gap-3 flex-wrap">
                                                     {formType === 'linear' && (
                                                         <div className="space-y-1.5 w-[180px]">
@@ -1259,6 +1263,32 @@ export function ConditionManager({
                                                                 value={formHeight}
                                                                 onChange={(e) => setFormHeight(e.target.value)}
                                                                 placeholder="2.70"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    {formType === 'linear' && (
+                                                        <div className="space-y-1.5 w-[180px]">
+                                                            <Label className="flex items-center gap-1">
+                                                                Thickness (m)
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Why thickness matters">
+                                                                            <Info className="h-3 w-3" />
+                                                                        </button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent className="text-xs">
+                                                                        Sets the line stroke width on the drawing — useful for walls,
+                                                                        insulation, or any item with a real-world thickness.
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </Label>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.001"
+                                                                min="0"
+                                                                value={formThickness}
+                                                                onChange={(e) => setFormThickness(e.target.value)}
+                                                                placeholder="0.10"
                                                             />
                                                         </div>
                                                     )}
@@ -1340,17 +1370,32 @@ export function ConditionManager({
                                     <>
                                         <Separator />
 
-                                        {/* Height */}
-                                        <div className="space-y-1.5 max-w-[220px]">
-                                            <Label>Height (m)</Label>
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                value={formHeight}
-                                                onChange={(e) => setFormHeight(e.target.value)}
-                                                placeholder="2.70"
-                                            />
+                                        {/* Height + Thickness */}
+                                        <div className="flex items-end gap-3 flex-wrap">
+                                            <div className="space-y-1.5 w-[180px]">
+                                                <Label>Height (m)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={formHeight}
+                                                    onChange={(e) => setFormHeight(e.target.value)}
+                                                    placeholder="2.70"
+                                                />
+                                            </div>
+                                            {formType === 'linear' && (
+                                                <div className="space-y-1.5 w-[180px]">
+                                                    <Label>Thickness (m)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.001"
+                                                        min="0"
+                                                        value={formThickness}
+                                                        onChange={(e) => setFormThickness(e.target.value)}
+                                                        placeholder="0.10"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Appearance */}

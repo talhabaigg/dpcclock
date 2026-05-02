@@ -407,7 +407,7 @@ export function DrawingWorkspaceLayout({ drawing, revisions, project, activeTab,
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">S</kbd>
                                 <span>Calibrate scale</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">L</kbd>
-                                <span>Line measurement</span>
+                                <span>Line measurement (long-press for curve)</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">A</kbd>
                                 <span>Area measurement</span>
                                 <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">R</kbd>

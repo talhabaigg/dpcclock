@@ -126,7 +126,7 @@ export function DrawingToolsToolbar({
                                 <ToolButton
                                     isActive={viewMode === 'measure_line'}
                                     onClick={() => toggleMode('measure_line')}
-                                    title="Measure line (L)"
+                                    title="Measure line (L) — long-press for curve"
                                     icon={<Minus className="h-3.5 w-3.5" />}
                                     shortcut="L"
                                 />

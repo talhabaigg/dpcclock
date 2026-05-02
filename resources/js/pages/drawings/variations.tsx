@@ -12,7 +12,6 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, C
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useCalibration } from '@/hooks/use-calibration';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
@@ -84,7 +83,6 @@ export default function DrawingVariations() {
         auth?: { permissions?: string[] };
     }>().props;
 
-    const imageUrl = drawing.file_url || null;
     const projectId = project?.id || drawing.project_id;
     const canEdit = auth?.permissions?.includes('variations.edit') ?? true;
 
@@ -124,6 +122,16 @@ export default function DrawingVariations() {
     const conditionOpacities = useMemo(() => {
         const map: Record<number, number> = {};
         for (const c of conditions) map[c.id] = c.opacity ?? 50;
+        return map;
+    }, [conditions]);
+
+    const conditionThicknesses = useMemo(() => {
+        const map: Record<number, number> = {};
+        for (const c of conditions) {
+            if (c.type === 'linear' && c.thickness && c.thickness > 0) {
+                map[c.id] = c.thickness;
+            }
+        }
         return map;
     }, [conditions]);
 
@@ -769,6 +777,10 @@ export default function DrawingVariations() {
                         selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
                         calibration={calibration}
                         conditionOpacities={conditionOpacities}
+                        conditionThicknesses={conditionThicknesses}
+                        activeConditionThickness={
+                            activeCondition?.type === 'linear' ? (activeCondition?.thickness ?? null) : null
+                        }
                         snapEnabled={snapEnabled}
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}

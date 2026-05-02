@@ -27,6 +27,13 @@ type Props = {
     selectedMeasurementIds?: Set<number>;
     calibration?: CalibrationData | null;
     conditionOpacities?: Record<number, number>;
+    /** condition_id → thickness in meters. When set on a linear measurement's
+     *  condition, the line is stroked at that real-world thickness in PDF
+     *  space (and scales naturally with zoom). */
+    conditionThicknesses?: Record<number, number>;
+    /** Active condition's thickness in meters — used for the in-progress
+     *  measure_line preview stroke so the user sees real width while drawing. */
+    activeConditionThickness?: number | null;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
     onMeasurementClick?: (m: MeasurementData, event?: { clientX: number; clientY: number }) => void;
@@ -103,6 +110,17 @@ const formatNumber = (v: number): string => {
     return formatted.replace(/\.?0+$/, '');
 };
 
+// Conversion factors: how many meters in one of each calibration unit.
+// Used to translate condition thickness (always meters) into the calibration's
+// own unit, then into PDF-point space for rendering.
+const METERS_PER_UNIT: Record<string, number> = {
+    mm: 0.001,
+    cm: 0.01,
+    m: 1,
+    in: 0.0254,
+    ft: 0.3048,
+};
+
 // Production status color for a percent_complete value.
 // 0 = not started (gray), partial = yellow, 100 = green.
 const segmentStatusColor = (pct: number): number => {
@@ -142,6 +160,76 @@ const distPointToSegment = (p: Point, a: Point, b: Point): number => {
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 };
 
+// True when this point has a bezier handle on either side. A vertex with no
+// handles is a corner; with handles it's a smooth bezier control point.
+const pointHasHandles = (p: Point): boolean =>
+    p.hix !== undefined || p.hiy !== undefined || p.hox !== undefined || p.hoy !== undefined;
+
+// Cubic Bezier point at parameter t ∈ [0, 1].
+const bezierPoint = (a: Point, ah: Point, bh: Point, b: Point, t: number): Point => {
+    const u = 1 - t;
+    const u2 = u * u;
+    const u3 = u2 * u;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return {
+        x: u3 * a.x + 3 * u2 * t * ah.x + 3 * u * t2 * bh.x + t3 * b.x,
+        y: u3 * a.y + 3 * u2 * t * ah.y + 3 * u * t2 * bh.y + t3 * b.y,
+    };
+};
+
+// Stroke a polyline/polygon onto a Pixi Graphics, using cubic bezier for any
+// segment whose endpoints have handles. Caller still applies fill/stroke.
+const drawBezierPath = (g: Graphics, points: Point[], W: number, H: number, closed: boolean): void => {
+    if (points.length === 0) return;
+    g.moveTo(points[0].x * W, points[0].y * H);
+    const last = closed ? points.length : points.length - 1;
+    for (let i = 0; i < last; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        const aHas = a.hox !== undefined || a.hoy !== undefined;
+        const bHas = b.hix !== undefined || b.hiy !== undefined;
+        if (aHas || bHas) {
+            g.bezierCurveTo(
+                (a.x + (a.hox ?? 0)) * W,
+                (a.y + (a.hoy ?? 0)) * H,
+                (b.x + (b.hix ?? 0)) * W,
+                (b.y + (b.hiy ?? 0)) * H,
+                b.x * W,
+                b.y * H,
+            );
+        } else {
+            g.lineTo(b.x * W, b.y * H);
+        }
+    }
+    if (closed) g.closePath();
+};
+
+// Tessellate any segments with handles into short straight chords; corner-only
+// segments stay as-is. Used for length/area math and hit-testing.
+const tessellateBeziers = (points: Point[], samplesPerSegment = 24): Point[] => {
+    const n = points.length;
+    if (n < 2) return points.slice();
+    const out: Point[] = [{ x: points[0].x, y: points[0].y }];
+    for (let i = 0; i < n - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        const aHas = a.hox !== undefined || a.hoy !== undefined;
+        const bHas = b.hix !== undefined || b.hiy !== undefined;
+        if (!aHas && !bHas) {
+            out.push({ x: b.x, y: b.y });
+            continue;
+        }
+        const ah = { x: a.x + (a.hox ?? 0), y: a.y + (a.hoy ?? 0) };
+        const bh = { x: b.x + (b.hix ?? 0), y: b.y + (b.hiy ?? 0) };
+        for (let s = 1; s <= samplesPerSegment; s++) {
+            const t = s / samplesPerSegment;
+            out.push(bezierPoint(a, ah, bh, b, t));
+        }
+    }
+    return out;
+};
+
 // Point in polygon (ray-casting)
 const pointInPolygon = (p: Point, poly: Point[]): boolean => {
     let inside = false;
@@ -164,6 +252,8 @@ export function PixiDrawingViewer({
     selectedMeasurementIds,
     calibration,
     conditionOpacities,
+    conditionThicknesses,
+    activeConditionThickness,
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
@@ -809,10 +899,11 @@ export function PixiDrawingViewer({
                         if (distPointToSegment(uv, a, b) < tolUv) return m;
                     }
                 } else {
-                    // linear
+                    // linear — tessellate any bezier segments for hit-testing.
                     if (m.points.length < 2) continue;
-                    for (let j = 0; j < m.points.length - 1; j++) {
-                        if (distPointToSegment(uv, m.points[j], m.points[j + 1]) < tolUv) return m;
+                    const hitPoints = m.points.some(pointHasHandles) ? tessellateBeziers(m.points) : m.points;
+                    for (let j = 0; j < hitPoints.length - 1; j++) {
+                        if (distPointToSegment(uv, hitPoints[j], hitPoints[j + 1]) < tolUv) return m;
                     }
                 }
             }
@@ -844,11 +935,16 @@ export function PixiDrawingViewer({
                         best = { point: p, kind: 'endpoint' };
                     }
                 }
+                // Midpoint snap is meaningful for straight segments only — for
+                // bezier segments the chord midpoint isn't on the curve, so
+                // only emit midpoints for corner-to-corner segments.
                 if (m.type === 'linear' || m.type === 'area') {
                     const segments = m.type === 'area' ? m.points.length : m.points.length - 1;
                     for (let i = 0; i < segments; i++) {
                         const a = m.points[i];
                         const b = m.points[(i + 1) % m.points.length];
+                        const segIsCurved = a.hox !== undefined || a.hoy !== undefined || b.hix !== undefined || b.hiy !== undefined;
+                        if (segIsCurved) continue;
                         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
                         const d = Math.hypot(mid.x - uv.x, mid.y - uv.y);
                         // Strict < so an endpoint at the same distance wins (more useful).
@@ -1121,6 +1217,14 @@ export function PixiDrawingViewer({
         let boxStartUv: Point | null = null;
         // For rectangle measurement drag
         let rectStartUv: Point | null = null;
+        // Long-press → bezier-handle drag, in measure_line/measure_area.
+        // After ~250ms holding still, the in-progress vertex is placed at
+        // pressUv and `handleDraggingIdx` points to it. Subsequent move
+        // sets its bezier handles; pointerup commits.
+        let longPressTimer: number | null = null;
+        let pressUv: Point | null = null;
+        let handleDraggingIdx: number | null = null;
+        const LONG_PRESS_MS = 250;
 
         const useBoxSelect = boxSelectMode || viewMode === 'select';
 
@@ -1196,6 +1300,31 @@ export function PixiDrawingViewer({
                     rectStartUv = uv;
                     setRectDragStart(uv);
                 }
+            } else if (viewMode === 'measure_line' || viewMode === 'measure_area') {
+                // Capture press location + arm long-press timer. Apply snap +
+                // shift constraint here so the placed vertex lines up with
+                // what the user expects from a normal click.
+                let uv = clientToUv(e.clientX, e.clientY);
+                if (uv) {
+                    if (snapEnabled) {
+                        const snap = findSnapPoint(uv);
+                        if (snap) uv = snap.point;
+                    }
+                    if (e.shiftKey && drawingPointsRef.current.length > 0) {
+                        const last = drawingPointsRef.current[drawingPointsRef.current.length - 1];
+                        uv = snapAngleFromRef(last, uv);
+                    }
+                    pressUv = uv;
+                    longPressTimer = window.setTimeout(() => {
+                        longPressTimer = null;
+                        if (!pressUv) return;
+                        // Place the vertex now and enter handle-drag mode.
+                        // The newly-placed vertex is at the end of drawingPoints.
+                        handleDraggingIdx = drawingPointsRef.current.length;
+                        setDrawingPoints((prev) => [...prev, pressUv!]);
+                        fireClickBurst(pressUv, activeColor ?? '#3b82f6');
+                    }, LONG_PRESS_MS);
+                }
             }
 
             canvas.setPointerCapture(e.pointerId);
@@ -1203,6 +1332,39 @@ export function PixiDrawingViewer({
 
         const onPointerMove = (e: PointerEvent) => {
             const uv = clientToUv(e.clientX, e.clientY);
+
+            // Cancel pending long-press if user starts moving — that's a pan.
+            if (longPressTimer != null) {
+                const dx = e.clientX - startCx;
+                const dy = e.clientY - startCy;
+                if (Math.hypot(dx, dy) > CLICK_THRESHOLD_PX) {
+                    window.clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                    pressUv = null;
+                }
+            }
+
+            // Bezier-handle drag (after long-press fired): cursor sets the
+            // INCOMING handle on the just-placed vertex — the segment from the
+            // previous vertex curves in to it. The outgoing side stays straight
+            // unless the next vertex is also long-press-curved, so each curve
+            // affects only the segment leading into it.
+            //
+            // hix is opposite the drag direction, so the curve's tangent as it
+            // arrives at this vertex (= -hix) points along the drag.
+            if (handleDraggingIdx != null && uv) {
+                const idx = handleDraggingIdx;
+                setDrawingPoints((prev) => {
+                    if (idx >= prev.length) return prev;
+                    const v = prev[idx];
+                    const dx = uv.x - v.x;
+                    const dy = uv.y - v.y;
+                    const next = prev.slice();
+                    next[idx] = { ...v, hix: -dx, hiy: -dy };
+                    return next;
+                });
+                return;
+            }
 
             // While dragging a vertex, update its position (with snap if enabled).
             if (activeVertex && uv) {
@@ -1229,7 +1391,7 @@ export function PixiDrawingViewer({
                 } else {
                     setSnapCandidate(null);
                 }
-                // Shift held during line/area: snap to nearest 15° from last point
+                // Shift held during line/area/calibrate: snap to nearest 15° from last point
                 if (
                     e.shiftKey &&
                     (viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'calibrate') &&
@@ -1272,13 +1434,15 @@ export function PixiDrawingViewer({
             // Pan-while-measuring: in measure_line / measure_area / measure_count
             // / calibrate, treat a drag as a pan (matches Leaflet UX). pointerup
             // distinguishes click-to-place-point from drag-to-pan via the moved
-            // flag.
-            const dragPansWorld =
+            // flag. Skip when we're mid-bezier-handle-drag — the gesture there
+            // is already owned by the handle-drag branch above.
+            const dragPansWorld = handleDraggingIdx == null && (
                 viewMode === 'pan' ||
                 viewMode === 'measure_line' ||
                 viewMode === 'measure_area' ||
                 viewMode === 'measure_count' ||
-                viewMode === 'calibrate';
+                viewMode === 'calibrate'
+            );
 
             if (moved && dragPansWorld) {
                 world.position.set(startWorldX + dx, startWorldY + dy);
@@ -1293,12 +1457,26 @@ export function PixiDrawingViewer({
         };
 
         const onPointerUp = (e: PointerEvent) => {
+            // Always clear pending long-press timer on release.
+            if (longPressTimer != null) {
+                window.clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            pressUv = null;
+
             if (!dragging) return;
             dragging = false;
             try {
                 canvas.releasePointerCapture(e.pointerId);
             } catch {
                 /* noop */
+            }
+
+            // Bezier handle-drag finalization — vertex was placed when timer
+            // fired; release just exits the gesture. No click-to-place.
+            if (handleDraggingIdx != null) {
+                handleDraggingIdx = null;
+                return;
             }
 
             // Vertex drag finalization
@@ -1467,6 +1645,12 @@ export function PixiDrawingViewer({
             setTooltipPos(null);
             setLivePanelPos(null);
             onMeasurementHover?.(null);
+            // Cancel any pending long-press if pointer leaves the canvas.
+            if (longPressTimer != null) {
+                window.clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            pressUv = null;
         };
 
         canvas.addEventListener('pointerdown', onPointerDown);
@@ -1481,6 +1665,9 @@ export function PixiDrawingViewer({
             canvas.removeEventListener('pointerup', onPointerUp);
             canvas.removeEventListener('pointercancel', onPointerUp);
             canvas.removeEventListener('pointerleave', onPointerLeave);
+            if (longPressTimer != null) {
+                window.clearTimeout(longPressTimer);
+            }
         };
         // We intentionally re-bind on viewMode/snapEnabled/etc. changes so the
         // closures see fresh values.
@@ -1638,6 +1825,19 @@ export function PixiDrawingViewer({
             const strokeAlpha = conditionOpacity;
             const fillAlpha = 0.15 * conditionOpacity;
 
+            // Real-world thickness for linear measurements: when the condition
+            // carries a `thickness` (meters), stroke the line at that physical
+            // width in PDF-point space. Renders in world coords so it scales
+            // with zoom — same as a wall drawn on the plan.
+            let linearStrokeWidth = strokeWidth;
+            if (m.type === 'linear' && m.takeoff_condition_id != null && conditionThicknesses && calibrationFactor) {
+                const tMeters = conditionThicknesses[m.takeoff_condition_id];
+                if (tMeters && tMeters > 0) {
+                    const metersPerUnit = METERS_PER_UNIT[calibrationFactor.unit] ?? 1;
+                    linearStrokeWidth = (tMeters / metersPerUnit) * calibrationFactor.pdfPointsPerUnit;
+                }
+            }
+
             const renderPoints = resolvePoints(m);
             const g = new Graphics();
 
@@ -1656,9 +1856,7 @@ export function PixiDrawingViewer({
                 }
             } else if (m.type === 'area') {
                 if (renderPoints.length < 2) continue;
-                g.moveTo(renderPoints[0].x * W, renderPoints[0].y * H);
-                for (let i = 1; i < renderPoints.length; i++) g.lineTo(renderPoints[i].x * W, renderPoints[i].y * H);
-                g.closePath();
+                drawBezierPath(g, renderPoints, W, H, true);
                 g.fill({ color, alpha: fillAlpha });
                 g.stroke({ color, width: strokeWidth, alpha: strokeAlpha });
 
@@ -1666,9 +1864,7 @@ export function PixiDrawingViewer({
                     for (const d of m.deductions) {
                         if (d.points.length < 2) continue;
                         const dg = new Graphics();
-                        dg.moveTo(d.points[0].x * W, d.points[0].y * H);
-                        for (let i = 1; i < d.points.length; i++) dg.lineTo(d.points[i].x * W, d.points[i].y * H);
-                        dg.closePath();
+                        drawBezierPath(dg, d.points, W, H, true);
                         dg.fill({ color: 0xffffff, alpha: 0.6 });
                         dg.stroke({ color, width: 1.5 * invScale, alpha: strokeAlpha * 0.7 });
                         layer.addChild(dg);
@@ -1685,23 +1881,39 @@ export function PixiDrawingViewer({
                         if (hiddenSegments?.has(segKey)) continue;
                         const pct = segmentStatuses?.[segKey] ?? 0;
                         const segColor = segmentStatusColor(pct);
+                        const a = renderPoints[i];
+                        const b = renderPoints[i + 1];
+                        const aHas = a.hox !== undefined || a.hoy !== undefined;
+                        const bHas = b.hix !== undefined || b.hiy !== undefined;
+                        const drawSegment = (gfx: Graphics) => {
+                            gfx.moveTo(a.x * W, a.y * H);
+                            if (aHas || bHas) {
+                                gfx.bezierCurveTo(
+                                    (a.x + (a.hox ?? 0)) * W,
+                                    (a.y + (a.hoy ?? 0)) * H,
+                                    (b.x + (b.hix ?? 0)) * W,
+                                    (b.y + (b.hiy ?? 0)) * H,
+                                    b.x * W,
+                                    b.y * H,
+                                );
+                            } else {
+                                gfx.lineTo(b.x * W, b.y * H);
+                            }
+                        };
                         const segG = new Graphics();
-                        segG.moveTo(renderPoints[i].x * W, renderPoints[i].y * H);
-                        segG.lineTo(renderPoints[i + 1].x * W, renderPoints[i + 1].y * H);
-                        segG.stroke({ color: segColor, width: strokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
+                        drawSegment(segG);
+                        segG.stroke({ color: segColor, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
                         layer.addChild(segG);
                         if (selectedSegments?.has(segKey)) {
                             const halo = new Graphics();
-                            halo.moveTo(renderPoints[i].x * W, renderPoints[i].y * H);
-                            halo.lineTo(renderPoints[i + 1].x * W, renderPoints[i + 1].y * H);
-                            halo.stroke({ color: 0xffffff, width: strokeWidth + 4 * invScale, alpha: 0.5 });
+                            drawSegment(halo);
+                            halo.stroke({ color: 0xffffff, width: linearStrokeWidth + 4 * invScale, alpha: 0.5 });
                             layer.addChildAt(halo, layer.children.length - 1);
                         }
                     }
                 } else {
-                    g.moveTo(renderPoints[0].x * W, renderPoints[0].y * H);
-                    for (let i = 1; i < renderPoints.length; i++) g.lineTo(renderPoints[i].x * W, renderPoints[i].y * H);
-                    g.stroke({ color, width: strokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
+                    drawBezierPath(g, renderPoints, W, H, false);
+                    g.stroke({ color, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
                     layer.addChild(g);
                 }
             }
@@ -1713,13 +1925,14 @@ export function PixiDrawingViewer({
                 layer.addChild(g);
             }
 
-            // Selection halo for line/area types
+            // Selection halo for line/area types — sized to whichever stroke
+            // the underlying shape used (real-world thickness for linears
+            // with a condition, screen-space otherwise).
             if (isSelected && m.type !== 'count' && renderPoints.length >= 2) {
                 const halo = new Graphics();
-                halo.moveTo(renderPoints[0].x * W, renderPoints[0].y * H);
-                for (let i = 1; i < renderPoints.length; i++) halo.lineTo(renderPoints[i].x * W, renderPoints[i].y * H);
-                if (m.type === 'area') halo.closePath();
-                halo.stroke({ color: 0xffffff, width: strokeWidth + 4 * invScale, alpha: 0.5 });
+                drawBezierPath(halo, renderPoints, W, H, m.type === 'area');
+                const baseWidth = m.type === 'linear' ? linearStrokeWidth : strokeWidth;
+                halo.stroke({ color: 0xffffff, width: baseWidth + 4 * invScale, alpha: 0.5 });
                 layer.addChildAt(halo, layer.children.length - 1);
             }
 
@@ -1792,6 +2005,8 @@ export function PixiDrawingViewer({
         allSelectedIds,
         hoveredMeasurementId,
         conditionOpacities,
+        conditionThicknesses,
+        calibrationFactor,
         pdfDims,
         zoomDisplay,
         editableVertices,
@@ -1921,23 +2136,83 @@ export function PixiDrawingViewer({
         // Line / area in-progress
         if ((viewMode === 'measure_line' || viewMode === 'measure_area') && drawingPoints.length > 0) {
             const g = new Graphics();
-            g.moveTo(drawingPoints[0].x * W, drawingPoints[0].y * H);
-            for (let i = 1; i < drawingPoints.length; i++) g.lineTo(drawingPoints[i].x * W, drawingPoints[i].y * H);
-            if (viewMode === 'measure_area' && drawingPoints.length >= 3) {
+            const isArea = viewMode === 'measure_area';
+            // For area mode, fold the cursor in as a temp last vertex so the
+            // user sees the polygon close + fill in real-time as they move.
+            const previewPoints = isArea && hoverPoint
+                ? [...drawingPoints, hoverPoint]
+                : drawingPoints;
+
+            drawBezierPath(g, previewPoints, W, H, false);
+            if (isArea && previewPoints.length >= 3) {
                 g.closePath();
                 g.fill({ color: drawColor, alpha: 0.13 });
             }
-            g.stroke({ color: drawColor, width: 2 * invScale, cap: 'round', join: 'round' });
+            // For line mode with an active-condition thickness, preview the
+            // stroke at the real-world width so the user sees the same line
+            // they'll get after committing.
+            let inProgressStrokeWidth = 2 * invScale;
+            if (
+                viewMode === 'measure_line'
+                && activeConditionThickness
+                && activeConditionThickness > 0
+                && calibrationFactor
+            ) {
+                const metersPerUnit = METERS_PER_UNIT[calibrationFactor.unit] ?? 1;
+                inProgressStrokeWidth = (activeConditionThickness / metersPerUnit) * calibrationFactor.pdfPointsPerUnit;
+            }
+            g.stroke({ color: drawColor, width: inProgressStrokeWidth, cap: 'round', join: 'round' });
             layer.addChild(g);
 
-            // Preview segment from last point to cursor
-            if (hoverPoint) {
+            // Preview segment from last placed point to cursor for line mode
+            // only — for area, the cursor is already woven into the closed
+            // polygon above.
+            if (hoverPoint && !isArea) {
                 const preview = new Graphics();
                 const last = drawingPoints[drawingPoints.length - 1];
                 preview.moveTo(last.x * W, last.y * H);
-                preview.lineTo(hoverPoint.x * W, hoverPoint.y * H);
-                preview.stroke({ color: drawColor, width: 1.5 * invScale, alpha: 0.6 });
+                if (last.hox !== undefined || last.hoy !== undefined) {
+                    preview.bezierCurveTo(
+                        (last.x + (last.hox ?? 0)) * W,
+                        (last.y + (last.hoy ?? 0)) * H,
+                        hoverPoint.x * W,
+                        hoverPoint.y * H,
+                        hoverPoint.x * W,
+                        hoverPoint.y * H,
+                    );
+                } else {
+                    preview.lineTo(hoverPoint.x * W, hoverPoint.y * H);
+                }
+                // Match the in-progress stroke width so the preview chord
+                // doesn't shrink to a thin line for thick-walled conditions.
+                preview.stroke({
+                    color: drawColor,
+                    width: inProgressStrokeWidth > 2 * invScale ? inProgressStrokeWidth : 1.5 * invScale,
+                    alpha: 0.6,
+                });
                 layer.addChild(preview);
+            }
+
+            // Bezier handle indicators on placed vertices that have them
+            for (const p of drawingPoints) {
+                if (p.hox !== undefined || p.hoy !== undefined) {
+                    const hx = (p.x + (p.hox ?? 0)) * W;
+                    const hy = (p.y + (p.hoy ?? 0)) * H;
+                    const stick = new Graphics();
+                    stick.moveTo(p.x * W, p.y * H).lineTo(hx, hy);
+                    stick.stroke({ color: drawColor, width: 1 * invScale, alpha: 0.5 });
+                    stick.circle(hx, hy, 3 * invScale).fill({ color: drawColor, alpha: 0.7 });
+                    layer.addChild(stick);
+                }
+                if (p.hix !== undefined || p.hiy !== undefined) {
+                    const hx = (p.x + (p.hix ?? 0)) * W;
+                    const hy = (p.y + (p.hiy ?? 0)) * H;
+                    const stick = new Graphics();
+                    stick.moveTo(p.x * W, p.y * H).lineTo(hx, hy);
+                    stick.stroke({ color: drawColor, width: 1 * invScale, alpha: 0.5 });
+                    stick.circle(hx, hy, 3 * invScale).fill({ color: drawColor, alpha: 0.7 });
+                    layer.addChild(stick);
+                }
             }
 
             // Vertex dots
@@ -2017,6 +2292,7 @@ export function PixiDrawingViewer({
         snapCandidate,
         viewMode,
         activeColor,
+        activeConditionThickness,
         pdfDims,
         zoomDisplay,
         calibrationFactor,
@@ -2070,28 +2346,33 @@ export function PixiDrawingViewer({
             if (drawingPoints.length === 0) {
                 return { label: 'Length', value: '—', hint: 'Click to start measuring' };
             }
-            const len = computeRealLength(allPoints, false);
+            // Tessellate any bezier segments so the live length matches the
+            // rendered path when the user has dragged out handles.
+            const len = computeRealLength(tessellateBeziers(allPoints), false);
             const lenStr = formatLength(len);
             return {
                 label: 'Length',
                 value: lenStr ?? '(set scale to see length)',
                 secondary: segments > 1 ? `${segments} segments` : undefined,
-                hint: 'Double-click or Enter to finish',
+                hint: 'Double-click or Enter to finish · long-press a vertex to curve',
             };
         }
 
         if (viewMode === 'measure_area') {
             const allPoints = [...drawingPoints, hoverPoint];
             if (allPoints.length >= 3) {
-                const area = computeRealArea(allPoints);
-                const perim = computeRealLength(allPoints, true);
+                // Tessellate beziers so curved edges contribute correctly to
+                // both area and perimeter calculations.
+                const flat = tessellateBeziers(allPoints);
+                const area = computeRealArea(flat);
+                const perim = computeRealLength(flat, true);
                 const a = formatArea(area);
                 const p = formatLength(perim);
                 return {
                     label: 'Area',
                     value: a ?? `${allPoints.length} vertices`,
                     secondary: p ? `Perimeter ${p}` : undefined,
-                    hint: 'Double-click to close polygon',
+                    hint: 'Double-click to close polygon · long-press to curve',
                 };
             }
             return {

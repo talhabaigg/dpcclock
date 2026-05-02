@@ -5,8 +5,6 @@ import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
 import { ProductionPanel, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
 import { usePage } from '@inertiajs/react';
@@ -187,8 +185,6 @@ export default function DrawingProduction() {
 
     const canEditProduction = auth?.permissions?.includes('production.edit') ?? false;
 
-    const imageUrl = drawing.file_url || null;
-
     // State
     const [selectedLccId, setSelectedLccId] = useState<number | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -276,6 +272,21 @@ export default function DrawingProduction() {
         for (const m of initialMeasurements) {
             if (m.takeoff_condition_id && m.condition) {
                 map[m.takeoff_condition_id] = (m.condition as { opacity?: number }).opacity ?? 50;
+            }
+        }
+        return map;
+    }, [initialMeasurements]);
+
+    const conditionThicknesses = useMemo(() => {
+        const map: Record<number, number> = {};
+        if (!initialMeasurements) return map;
+        for (const m of initialMeasurements) {
+            if (m.takeoff_condition_id && m.condition) {
+                const t = (m.condition as { thickness?: number | null; type?: string }).thickness;
+                const type = (m.condition as { type?: string }).type;
+                if (type === 'linear' && t && t > 0) {
+                    map[m.takeoff_condition_id] = t;
+                }
             }
         }
         return map;
@@ -616,11 +627,6 @@ export default function DrawingProduction() {
         [drawing.id],
     );
 
-    // Close dropdown on outside click
-    const handleMapClick = useCallback(() => {
-        setPercentDropdown(null);
-    }, []);
-
     // Keyboard: Escape clears selection
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -697,6 +703,7 @@ export default function DrawingProduction() {
                         selectedMeasurementIds={selectedMeasurementIdsSet.size > 0 ? selectedMeasurementIdsSet : undefined}
                         calibration={initialCalibration}
                         conditionOpacities={conditionOpacities}
+                        conditionThicknesses={conditionThicknesses}
                         onMeasurementComplete={() => {}}
                         onMeasurementClick={handleMeasurementClick}
                         productionLabels={selectedLccId ? productionLabels : undefined}

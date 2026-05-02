@@ -1,6 +1,15 @@
 export type Point = {
     x: number;
     y: number;
+    // Optional cubic-bezier handle deltas in UV space, relative to (x, y).
+    // hix/hiy = handle pointing into this vertex (controls curve coming from
+    // the previous vertex). hox/hoy = handle pointing out (controls curve
+    // going to the next vertex). A vertex with no handles is a corner; the
+    // segments on either side are straight unless the neighbor has a handle.
+    hix?: number;
+    hiy?: number;
+    hox?: number;
+    hoy?: number;
 };
 
 export type CalibrationData = {

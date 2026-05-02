@@ -42,8 +42,6 @@ export default function DrawingTakeoff() {
 
     const canEditTakeoff = auth?.permissions?.includes('takeoff.edit') ?? false;
 
-    const imageUrl = drawing.file_url || null;
-
     const projectId = project?.id || drawing.project_id;
 
     // Promise-based confirmation dialog
@@ -197,6 +195,18 @@ export default function DrawingTakeoff() {
             opacities[c.id] = c.opacity ?? 50;
         }
         return opacities;
+    }, [conditions]);
+
+    // Real-world thickness (meters) per linear condition. Drives stroke width
+    // on linear measurements so a 100mm wall renders as 100mm thick on the plan.
+    const conditionThicknesses = useMemo(() => {
+        const widths: Record<number, number> = {};
+        for (const c of conditions) {
+            if (c.type === 'linear' && c.thickness && c.thickness > 0) {
+                widths[c.id] = c.thickness;
+            }
+        }
+        return widths;
     }, [conditions]);
 
     const activeConditionDisplay = useMemo(() => {
@@ -887,6 +897,10 @@ export default function DrawingTakeoff() {
                         selectedMeasurementIds={selectedMeasurementIds.size > 0 ? selectedMeasurementIds : undefined}
                         calibration={calibration}
                         conditionOpacities={conditionOpacities}
+                        conditionThicknesses={conditionThicknesses}
+                        activeConditionThickness={
+                            activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.thickness ?? null) : null
+                        }
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
