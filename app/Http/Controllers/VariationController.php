@@ -190,7 +190,7 @@ class VariationController extends Controller
 
     public function edit($id)
     {
-        $variation = Variation::with('lineItems', 'location', 'pricingItems.condition.conditionType')->findOrFail($id);
+        $variation = Variation::with('lineItems', 'location', 'pricingItems.condition.conditionType', 'pricingItems.measurement')->findOrFail($id);
         $user = auth()->user();
         $locationsQuery = Location::open()->with([
             'costCodes.costType',
@@ -225,7 +225,7 @@ class VariationController extends Controller
 
     public function show(Variation $variation)
     {
-        $variation->load(['lineItems', 'location', 'pricingItems.condition.conditionType', 'drawing']);
+        $variation->load(['lineItems', 'location', 'pricingItems.condition.conditionType', 'pricingItems.measurement', 'drawing']);
 
         return Inertia::render('variation/show', [
             'variation' => $variation,
@@ -768,7 +768,7 @@ class VariationController extends Controller
     public function indexPricingItems(Variation $variation): JsonResponse
     {
         $items = $variation->pricingItems()
-            ->with('condition.conditionType')
+            ->with('condition.conditionType', 'measurement')
             ->orderBy('sort_order')
             ->get();
 
@@ -838,7 +838,12 @@ class VariationController extends Controller
     }
 
     /**
-     * Update a pricing item (qty, sell_rate, or manual cost fields).
+     * Update a pricing item.
+     *
+     * Editability depends on the row's flavour:
+     *   - Manual: any field
+     *   - Aggregated (auto from measurements + condition): only sell_rate
+     *   - Unpriced (auto from measurement, no condition): labour_cost, material_cost, sell_rate
      */
     public function updatePricingItem(Request $request, Variation $variation, VariationPricingItem $item): JsonResponse
     {
@@ -854,7 +859,41 @@ class VariationController extends Controller
             'description' => 'nullable|string|max:255',
         ]);
 
-        // If qty changed on a condition item, recompute costs
+        if ($item->isAggregated()) {
+            // Aggregated rows are owned by the sync service. Only sell_rate is user-editable.
+            if (isset($validated['sell_rate'])) {
+                $item->sell_rate = round((float) $validated['sell_rate'], 2);
+                $item->sell_total = round($item->qty * $item->sell_rate, 2);
+                $item->save();
+            }
+            $item->load('condition.conditionType', 'measurement');
+
+            return response()->json(['pricing_item' => $item]);
+        }
+
+        if ($item->isUnpriced()) {
+            // Unpriced rows: user fills labour/material/sell_rate. Description/qty/unit are
+            // mirrored from the measurement and ignored here.
+            if (isset($validated['labour_cost'])) {
+                $item->labour_cost = round((float) $validated['labour_cost'], 2);
+            }
+            if (isset($validated['material_cost'])) {
+                $item->material_cost = round((float) $validated['material_cost'], 2);
+            }
+            $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
+
+            if (isset($validated['sell_rate'])) {
+                $item->sell_rate = round((float) $validated['sell_rate'], 2);
+                $item->sell_total = round($item->qty * $item->sell_rate, 2);
+            }
+
+            $item->save();
+            $item->load('condition.conditionType', 'measurement');
+
+            return response()->json(['pricing_item' => $item]);
+        }
+
+        // Manual row — original behaviour.
         if (isset($validated['qty']) && $item->takeoff_condition_id) {
             $condition = TakeoffCondition::findOrFail($item->takeoff_condition_id);
             $calculator = app(VariationCostCalculator::class);
@@ -864,9 +903,7 @@ class VariationController extends Controller
             $item->material_cost = $costs['material_base'];
             $item->total_cost = round($costs['labour_base'] + $costs['material_base'], 2);
         } elseif (isset($validated['qty'])) {
-            // Manual item qty change
             $item->qty = $validated['qty'];
-            // Recalculate total from existing per-unit costs if labour/material not also provided
             if (! isset($validated['labour_cost']) && ! isset($validated['material_cost'])) {
                 $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
             }
@@ -892,13 +929,14 @@ class VariationController extends Controller
         }
 
         $item->save();
-        $item->load('condition.conditionType');
+        $item->load('condition.conditionType', 'measurement');
 
         return response()->json(['pricing_item' => $item]);
     }
 
     /**
-     * Delete a pricing item.
+     * Delete a pricing item. Auto-rows (source='measurement') cannot be deleted directly —
+     * the underlying measurement must be removed/changed on the drawing instead.
      */
     public function destroyPricingItem(Variation $variation, VariationPricingItem $item): JsonResponse
     {
@@ -906,9 +944,30 @@ class VariationController extends Controller
             abort(404);
         }
 
+        if (! $item->isManual()) {
+            return response()->json([
+                'error' => 'This row is generated from a measurement and cannot be deleted here. Remove or reassign the measurement on the drawing instead.',
+            ], 422);
+        }
+
         $item->delete();
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Manually re-run the measurement → pricing item sync for a variation.
+     * Used by the "Refresh from measurements" button in the Pricing tab.
+     */
+    public function syncPricingFromMeasurements(Variation $variation): JsonResponse
+    {
+        app(\App\Services\VariationPricingSyncService::class)->syncVariation($variation->id);
+
+        $variation->load('pricingItems.condition.conditionType', 'pricingItems.measurement');
+
+        return response()->json([
+            'pricing_items' => $variation->pricingItems,
+        ]);
     }
 
     /**
@@ -974,7 +1033,7 @@ class VariationController extends Controller
             }
         }
 
-        $variation->load('pricingItems.condition.conditionType');
+        $variation->load('pricingItems.condition.conditionType', 'pricingItems.measurement');
 
         return response()->json(['pricing_items' => $variation->pricingItems]);
     }
@@ -985,7 +1044,7 @@ class VariationController extends Controller
      */
     public function clientQuote(Request $request, Variation $variation)
     {
-        $variation->load('pricingItems.condition.conditionType', 'location');
+        $variation->load('pricingItems.condition.conditionType', 'pricingItems.measurement', 'location');
 
         // IDs of pricing items the user toggled to m2 display
         $uomM2Ids = collect($request->input('uom_m2', []))->map(fn ($v) => (int) $v)->all();

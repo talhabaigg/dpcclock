@@ -1048,6 +1048,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/variations/{variation}/pricing-items', [VariationController::class, 'storePricingItem'])->name('variations.pricing-items.store');
         Route::put('/variations/{variation}/pricing-items/{item}', [VariationController::class, 'updatePricingItem'])->name('variations.pricing-items.update');
         Route::delete('/variations/{variation}/pricing-items/{item}', [VariationController::class, 'destroyPricingItem'])->name('variations.pricing-items.destroy');
+        Route::post('/variations/{variation}/pricing-items/sync', [VariationController::class, 'syncPricingFromMeasurements'])->name('variations.pricing-items.sync');
         Route::post('/variations/{variation}/generate-premier', [VariationController::class, 'generatePremier'])->name('variations.generate-premier');
         Route::post('/variations/preview-premier-lines', [VariationController::class, 'previewPremierLines'])->name('variations.preview-premier-lines');
         Route::post('/variations/{variation}/sell-rates', [VariationController::class, 'updateSellRates'])->name('variations.sell-rates');

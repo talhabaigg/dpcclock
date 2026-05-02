@@ -12,13 +12,14 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, fmtCurrency, round2 } from '@/lib/utils';
 import { api, ApiError } from '@/lib/api';
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useHttp } from '@inertiajs/react';
-import { Check, ChevronsUpDown, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronsUpDown, GripVertical, Link2, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Condition } from './ConditionPricingPanel';
@@ -26,11 +27,16 @@ import { Condition } from './ConditionPricingPanel';
 let _clientKeyCounter = 0;
 export function nextClientKey() { return `ck-${++_clientKeyCounter}`; }
 
+export type PricingItemSource = 'manual' | 'measurement';
+export type PricingItemFlavour = 'manual' | 'aggregated' | 'unpriced';
+
 export interface PricingItem {
     id?: number;
     _clientKey?: string;
     variation_id?: number;
     takeoff_condition_id?: number | null;
+    drawing_measurement_id?: number | null;
+    source?: PricingItemSource;
     description: string;
     qty: number;
     unit: string;
@@ -40,12 +46,24 @@ export interface PricingItem {
     sell_rate?: number | null;
     sell_total?: number | null;
     sort_order: number;
+    last_synced_at?: string | null;
     condition?: {
         name: string;
         type?: 'linear' | 'area' | 'count';
         height?: number | null;
         condition_type?: { name: string; unit: string; color: string } | null;
     } | null;
+    measurement?: {
+        id: number;
+        drawing_id: number;
+        name?: string | null;
+        type?: 'linear' | 'area' | 'count';
+    } | null;
+}
+
+export function getFlavour(item: PricingItem): PricingItemFlavour {
+    if (item.source !== 'measurement') return 'manual';
+    return item.drawing_measurement_id ? 'unpriced' : 'aggregated';
 }
 
 
@@ -55,6 +73,23 @@ interface VariationPricingTabProps {
     locationId: string;
     pricingItems: PricingItem[];
     onPricingItemsChange: (items: PricingItem[]) => void;
+}
+
+function FlavourBadge({ flavour }: { flavour: PricingItemFlavour }) {
+    if (flavour === 'manual') return null;
+
+    const isUnpriced = flavour === 'unpriced';
+    const label = isUnpriced ? 'From drawing — needs pricing' : 'From drawing';
+    const cls = isUnpriced
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+        : 'bg-sky-100 text-sky-800 dark:bg-sky-950/30 dark:text-sky-300';
+
+    return (
+        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium', cls)}>
+            <Link2 className="h-2.5 w-2.5" />
+            {label}
+        </span>
+    );
 }
 
 function SortableRow({
@@ -70,6 +105,7 @@ function SortableRow({
     setDeleteTarget,
     conditions,
     onSelectCondition,
+    onAssignConditionToMeasurement,
     isSelected,
     onToggleSelect,
     onQtyChangeForCondition,
@@ -86,11 +122,34 @@ function SortableRow({
     setDeleteTarget: (t: { item: PricingItem; index: number } | null) => void;
     conditions: Condition[];
     onSelectCondition: (conditionId: number, idx: number) => void;
+    onAssignConditionToMeasurement: (drawingId: number, measurementId: number, conditionId: number | null) => void;
     isSelected: boolean;
     onToggleSelect: () => void;
     onQtyChangeForCondition: (conditionId: number, qty: number) => void;
 }) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const flavour = getFlavour(item);
+    const isAuto = flavour !== 'manual';
+    const isAggregated = flavour === 'aggregated';
+    const isUnpriced = flavour === 'unpriced';
+
+    // Editability per flavour:
+    //   manual     → everything editable, condition column triggers manual condition path
+    //   aggregated → nothing editable in this tab (sell_rate lives elsewhere)
+    //   unpriced   → labour/material editable, condition column updates the underlying measurement
+    const canEditDescription = !isAuto;
+    const canEditQty = !isAuto;
+    const canEditCosts = !isAggregated; // manual or unpriced
+    const canEditCondition = !isAggregated; // manual or unpriced
+
+    // For unpriced rows, restrict the picker to conditions matching the measurement's type.
+    const pickableConditions = isUnpriced && item.measurement?.type
+        ? conditions.filter((c) => c.type === item.measurement!.type)
+        : conditions;
+
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id,
+        disabled: isAuto,
+    });
     const [popoverOpen, setPopoverOpen] = useState(false);
 
     const style = {
@@ -103,27 +162,38 @@ function SortableRow({
         <tr
             ref={setNodeRef}
             style={style}
-            className="hover:bg-muted/30 border-b"
+            className={cn(
+                'hover:bg-muted/30 border-b',
+                isAggregated && 'bg-sky-50/40 dark:bg-sky-950/10',
+                isUnpriced && 'bg-amber-50/40 dark:bg-amber-950/10',
+            )}
         >
             <td className="w-8 px-2 py-1.5">
                 <Checkbox
                     checked={isSelected}
                     onCheckedChange={onToggleSelect}
+                    disabled={isAuto}
                 />
             </td>
             <td className="w-6 px-0.5 py-1.5">
-                <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing rounded p-0.5"
-                    {...attributes}
-                    {...listeners}
-                >
-                    <GripVertical className="h-3.5 w-3.5" />
-                </button>
+                {isAuto ? (
+                    <span className="text-muted-foreground/30 inline-block p-0.5">
+                        <GripVertical className="h-3.5 w-3.5" />
+                    </span>
+                ) : (
+                    <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing rounded p-0.5"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <GripVertical className="h-3.5 w-3.5" />
+                    </button>
+                )}
             </td>
             {/* Condition */}
             <td className="px-2 py-1.5 text-left">
-                {isEditing && conditions.length > 0 ? (
+                {(isEditing || isUnpriced) && canEditCondition ? (
                     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                         <PopoverTrigger asChild>
                             <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="h-6 w-full justify-between px-1.5 text-xs font-normal">
@@ -131,41 +201,58 @@ function SortableRow({
                                     {item.condition?.condition_type && (
                                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.condition.condition_type.color }} />
                                     )}
-                                    {item.takeoff_condition_id ? `#${item.takeoff_condition_id}` : 'Search condition...'}
+                                    {item.takeoff_condition_id ? `#${item.takeoff_condition_id}` : isUnpriced ? 'Pick condition...' : 'Search condition...'}
                                 </span>
                                 <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-72 p-0" align="start" side="bottom" sideOffset={4}>
-                            <Command>
-                                <CommandInput placeholder="Search..." className="h-7 text-xs" />
-                                <CommandList>
-                                    <CommandEmpty className="py-2 text-center text-xs">No match</CommandEmpty>
-                                    <CommandGroup>
-                                        {conditions.map((c) => (
-                                            <CommandItem
-                                                key={c.id}
-                                                value={`${c.id} ${c.name}`}
-                                                className="data-selected:bg-transparent"
-                                                onSelect={() => {
-                                                    onSelectCondition(c.id, idx);
-                                                    setEditValues({ ...editValues, description: c.name });
-                                                    setPopoverOpen(false);
-                                                }}
-                                            >
-                                                <div className="flex items-center gap-1.5 text-xs">
-                                                    {c.condition_type && (
-                                                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c.condition_type.color }} />
-                                                    )}
-                                                    <span className="truncate font-medium">{c.name}</span>
-                                                    <span className="text-muted-foreground text-[10px] shrink-0">{c.condition_type?.unit ?? 'EA'}</span>
-                                                </div>
-                                                <Check className={cn('ml-auto h-3 w-3 shrink-0', item.takeoff_condition_id === c.id ? 'opacity-100' : 'opacity-0')} />
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                            </Command>
+                            {pickableConditions.length === 0 ? (
+                                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                    {isUnpriced && item.measurement?.type ? (
+                                        <>
+                                            No <span className="font-medium">{item.measurement.type}</span> conditions defined for this project yet.<br />
+                                            Open the drawing and use <span className="font-medium">Manage conditions</span> to add one.
+                                        </>
+                                    ) : (
+                                        <>No conditions defined for this project yet.</>
+                                    )}
+                                </div>
+                            ) : (
+                                <Command>
+                                    <CommandInput placeholder="Search..." className="h-7 text-xs" />
+                                    <CommandList>
+                                        <CommandEmpty className="py-2 text-center text-xs">No match</CommandEmpty>
+                                        <CommandGroup>
+                                            {pickableConditions.map((c) => (
+                                                <CommandItem
+                                                    key={c.id}
+                                                    value={`${c.id} ${c.name}`}
+                                                    className="data-selected:bg-transparent"
+                                                    onSelect={() => {
+                                                        if (isUnpriced && item.measurement) {
+                                                            onAssignConditionToMeasurement(item.measurement.drawing_id, item.measurement.id, c.id);
+                                                        } else {
+                                                            onSelectCondition(c.id, idx);
+                                                            setEditValues({ ...editValues, description: c.name });
+                                                        }
+                                                        setPopoverOpen(false);
+                                                    }}
+                                                >
+                                                    <div className="flex items-center gap-1.5 text-xs">
+                                                        {c.condition_type && (
+                                                            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c.condition_type.color }} />
+                                                        )}
+                                                        <span className="truncate font-medium">{c.name}</span>
+                                                        <span className="text-muted-foreground text-[10px] shrink-0">{c.condition_type?.unit ?? 'EA'}</span>
+                                                    </div>
+                                                    <Check className={cn('ml-auto h-3 w-3 shrink-0', item.takeoff_condition_id === c.id ? 'opacity-100' : 'opacity-0')} />
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            )}
                         </PopoverContent>
                     </Popover>
                 ) : (
@@ -179,25 +266,28 @@ function SortableRow({
             </td>
             {/* Description */}
             <td className="px-3 py-1.5">
-                {isEditing ? (
-                    <input
-                        value={editValues.description}
-                        onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
-                        disabled={!!item.takeoff_condition_id}
-                        className={cn(
-                            'w-full h-6 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:ring-1 focus:ring-ring',
-                            item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
-                        )}
-                        autoFocus={!item.takeoff_condition_id}
-                        placeholder="Description"
-                        onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                    />
-                ) : (
-                    <span>{item.description || <span className="text-muted-foreground italic">empty</span>}</span>
-                )}
+                <div className="flex flex-col gap-0.5">
+                    {isEditing && canEditDescription ? (
+                        <input
+                            value={editValues.description}
+                            onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
+                            disabled={!!item.takeoff_condition_id}
+                            className={cn(
+                                'w-full h-6 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:ring-1 focus:ring-ring',
+                                item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
+                            )}
+                            autoFocus={!item.takeoff_condition_id}
+                            placeholder="Description"
+                            onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
+                        />
+                    ) : (
+                        <span>{item.description || <span className="text-muted-foreground italic">empty</span>}</span>
+                    )}
+                    {isAuto && <FlavourBadge flavour={flavour} />}
+                </div>
             </td>
             <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing ? (
+                {isEditing && canEditQty ? (
                     <input type="number" step="0.01" value={editValues.qty} onChange={(e) => {
                         const newQty = e.target.value;
                         setEditValues({ ...editValues, qty: newQty });
@@ -209,30 +299,31 @@ function SortableRow({
             </td>
             <td className="text-muted-foreground px-3 py-1.5 text-center text-xs">{item.unit}</td>
             <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing ? (
+                {isEditing && canEditCosts ? (
                     <input
                         type="number" step="0.01"
                         value={editValues.labour_cost}
                         onChange={(e) => setEditValues({ ...editValues, labour_cost: e.target.value })}
-                        disabled={!!item.takeoff_condition_id}
+                        disabled={!isUnpriced && !!item.takeoff_condition_id}
                         className={cn(
                             'w-20 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring',
-                            item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
+                            !isUnpriced && item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
                         )}
+                        autoFocus={isUnpriced}
                         onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
                     />
                 ) : fmtCurrency(item.labour_cost)}
             </td>
             <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing ? (
+                {isEditing && canEditCosts ? (
                     <input
                         type="number" step="0.01"
                         value={editValues.material_cost}
                         onChange={(e) => setEditValues({ ...editValues, material_cost: e.target.value })}
-                        disabled={!!item.takeoff_condition_id}
+                        disabled={!isUnpriced && !!item.takeoff_condition_id}
                         className={cn(
                             'w-20 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring',
-                            item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
+                            !isUnpriced && item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
                         )}
                         onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
                     />
@@ -250,10 +341,31 @@ function SortableRow({
                             <button type="button" onClick={saveEditing} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"><Check className="h-3.5 w-3.5" /></button>
                             <button type="button" onClick={cancelEditing} className="text-muted-foreground rounded p-1 hover:bg-muted hover:text-red-600"><X className="h-3.5 w-3.5" /></button>
                         </>
+                    ) : isAggregated ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="text-muted-foreground/30 inline-block p-1"><Pencil className="h-3 w-3" /></span>
+                                </TooltipTrigger>
+                                <TooltipContent>Generated from drawing measurements. Edit on the drawing instead.</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     ) : (
                         <>
                             <button type="button" onClick={() => startEditing(idx)} className="text-muted-foreground rounded p-1 hover:bg-muted hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                            <button type="button" onClick={() => setDeleteTarget({ item, index: idx })} className="text-muted-foreground rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-3 w-3" /></button>
+                            {!isAuto && (
+                                <button type="button" onClick={() => setDeleteTarget({ item, index: idx })} className="text-muted-foreground rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-3 w-3" /></button>
+                            )}
+                            {isUnpriced && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="text-muted-foreground/30 inline-block p-1"><Trash2 className="h-3 w-3" /></span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Remove the measurement on the drawing to delete this row.</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
                         </>
                     )}
                 </div>
@@ -293,11 +405,14 @@ export default function VariationPricingTab({
         });
     };
 
+    const manualItems = pricingItems.filter((item) => getFlavour(item) === 'manual');
+
     const toggleSelectAll = () => {
-        if (selectedIds.size === pricingItems.length) {
+        if (selectedIds.size === manualItems.length) {
             setSelectedIds(new Set());
         } else {
-            setSelectedIds(new Set(pricingItems.map((item) => getItemKey(item))));
+            // Only manual rows are selectable.
+            setSelectedIds(new Set(manualItems.map((item) => getItemKey(item))));
         }
     };
 
@@ -305,6 +420,8 @@ export default function VariationPricingTab({
         const selectedIndices = new Set<number>();
         const selectedDbIds = new Set<number>();
         pricingItems.forEach((item, idx) => {
+            // Defensive: never bulk-delete an auto-row even if somehow selected.
+            if (getFlavour(item) !== 'manual') return;
             const key = getItemKey(item);
             if (selectedIds.has(key)) {
                 selectedIndices.add(idx);
@@ -312,7 +429,6 @@ export default function VariationPricingTab({
             }
         });
 
-        // Delete persisted items from server
         selectedDbIds.forEach((id) => {
             if (variationId) {
                 deleteHttp.destroy(`/variations/${variationId}/pricing-items/${id}`, {
@@ -321,11 +437,49 @@ export default function VariationPricingTab({
             }
         });
 
-        // Remove all selected from local state
         onPricingItemsChange(pricingItems.filter((_, idx) => !selectedIndices.has(idx)));
         setSelectedIds(new Set());
         setBulkDeleteOpen(false);
         toast.success(`${selectedIndices.size} item${selectedIndices.size !== 1 ? 's' : ''} removed`);
+    };
+
+    const [refreshing, setRefreshing] = useState(false);
+    const handleRefreshFromMeasurements = async () => {
+        if (!variationId) return;
+        setRefreshing(true);
+        try {
+            const data = await api.post<{ pricing_items: PricingItem[] }>(
+                `/variations/${variationId}/pricing-items/sync`,
+                {},
+            );
+            onPricingItemsChange(data.pricing_items);
+            toast.success('Refreshed from measurements');
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? err.message : 'Refresh failed');
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    // Assign (or clear) a condition on the underlying measurement of an unpriced auto-row.
+    // The DrawingMeasurement observer fires the sync, which morphs the unpriced row into
+    // an aggregated row (or shrinks back to unpriced if cleared). After the API returns
+    // we re-fetch pricing items so the UI reflects the swap.
+    const handleAssignConditionToMeasurement = async (drawingId: number, measurementId: number, conditionId: number | null) => {
+        if (!variationId) return;
+        try {
+            await api.put(`/drawings/${drawingId}/measurements/${measurementId}`, {
+                takeoff_condition_id: conditionId,
+            });
+            const data = await api.get<{ pricing_items: PricingItem[] }>(
+                `/variations/${variationId}/pricing-items`,
+            );
+            onPricingItemsChange(data.pricing_items);
+            setEditingIdx(null);
+            toast.success(conditionId ? 'Condition assigned' : 'Condition cleared');
+        } catch (err: unknown) {
+            toast.error(err instanceof ApiError ? err.message : 'Failed to update condition');
+        }
     };
 
     const handleAddEmptyRow = () => {
@@ -373,6 +527,7 @@ export default function VariationPricingTab({
     // --- Inline editing ---
     const startEditing = (idx: number) => {
         const item = pricingItems[idx];
+        if (getFlavour(item) === 'aggregated') return; // aggregated auto-rows are not editable here
         setEditingIdx(idx);
         setEditValues({
             description: item.description,
@@ -551,9 +706,37 @@ export default function VariationPricingTab({
         return sum + (item.total_cost || 0);
     }, 0);
     const unsavedCount = pricingItems.filter((i) => !i.id).length;
+    const aggregatedCount = pricingItems.filter((i) => getFlavour(i) === 'aggregated').length;
+    const unpricedCount = pricingItems.filter((i) => getFlavour(i) === 'unpriced').length;
+    const manualCount = manualItems.length;
 
     return (
         <div>
+            {(aggregatedCount + unpricedCount + manualCount) > 0 && (
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-3">
+                        <span>From drawing: <span className="font-medium text-foreground">{aggregatedCount}</span> priced, <span className="font-medium text-foreground">{unpricedCount}</span> {unpricedCount === 1 ? 'needs' : 'need'} pricing</span>
+                        <span>Manual: <span className="font-medium text-foreground">{manualCount}</span></span>
+                    </div>
+                    {variationId && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRefreshFromMeasurements}
+                            disabled={refreshing}
+                            className="h-6 gap-1 px-2 text-xs"
+                        >
+                            <RefreshCcw className={cn('h-3 w-3', refreshing && 'animate-spin')} />
+                            {refreshing ? 'Refreshing…' : 'Refresh from measurements'}
+                        </Button>
+                    )}
+                </div>
+            )}
+            {unpricedCount > 0 && (
+                <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                    {unpricedCount} measurement{unpricedCount === 1 ? '' : 's'} on the drawing {unpricedCount === 1 ? 'has' : 'have'} no condition assigned. Enter labour and material costs below.
+                </div>
+            )}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-xs">
@@ -561,8 +744,9 @@ export default function VariationPricingTab({
                             <tr className="border-b">
                                 <th className="w-8 px-2 py-2">
                                     <Checkbox
-                                        checked={pricingItems.length > 0 && selectedIds.size === pricingItems.length}
+                                        checked={manualCount > 0 && selectedIds.size === manualCount}
                                         onCheckedChange={toggleSelectAll}
+                                        disabled={manualCount === 0}
                                     />
                                 </th>
                                 <th className="w-6 px-0.5 py-2"></th>
@@ -594,6 +778,7 @@ export default function VariationPricingTab({
                                             setDeleteTarget={setDeleteTarget}
                                             conditions={filteredConditions}
                                             onSelectCondition={handleSelectCondition}
+                                            onAssignConditionToMeasurement={handleAssignConditionToMeasurement}
                                             isSelected={selectedIds.has(getItemKey(item))}
                                             onToggleSelect={() => toggleSelect(getItemKey(item))}
                                             onQtyChangeForCondition={handleQtyChangeForCondition}

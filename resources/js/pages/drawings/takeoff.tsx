@@ -136,6 +136,7 @@ export default function DrawingTakeoff() {
     const [measurementName, setMeasurementName] = useState('');
     const [measurementCategory, setMeasurementCategory] = useState('');
     const [measurementColor, setMeasurementColor] = useState('#3b82f6');
+    const [measurementConditionId, setMeasurementConditionId] = useState<number | null>(null);
     const [savingMeasurement, setSavingMeasurement] = useState(false);
 
     // Conditions state
@@ -343,8 +344,18 @@ export default function DrawingTakeoff() {
         setSavingMeasurement(true);
         try {
             if (editingMeasurement) {
-                const before = { name: editingMeasurement.name, category: editingMeasurement.category, color: editingMeasurement.color };
-                const after = { name, category: measurementCategory || null, color: measurementColor };
+                const before = {
+                    name: editingMeasurement.name,
+                    category: editingMeasurement.category,
+                    color: editingMeasurement.color,
+                    takeoff_condition_id: editingMeasurement.takeoff_condition_id ?? null,
+                };
+                const after = {
+                    name,
+                    category: measurementCategory || null,
+                    color: measurementColor,
+                    takeoff_condition_id: measurementConditionId,
+                };
                 const updated = await api.put<MeasurementData>(`/drawings/${drawing.id}/measurements/${editingMeasurement.id}`, after);
                 setMeasurements((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
                 pushUndo({ type: 'update', measurementId: editingMeasurement.id, drawingId: drawing.id, before, after });
@@ -485,6 +496,7 @@ export default function DrawingTakeoff() {
         setMeasurementName(measurement.name);
         setMeasurementCategory(measurement.category || '');
         setMeasurementColor(measurement.color);
+        setMeasurementConditionId(measurement.takeoff_condition_id ?? null);
         setMeasurementDialogOpen(true);
     };
 
@@ -991,6 +1003,7 @@ export default function DrawingTakeoff() {
                     if (!open) {
                         setPendingMeasurementData(null);
                         setEditingMeasurement(null);
+                        setMeasurementConditionId(null);
                     }
                 }}
             >
@@ -1033,6 +1046,41 @@ export default function DrawingTakeoff() {
                                 ))}
                             </datalist>
                         </div>
+                        {editingMeasurement && (() => {
+                            const eligibleConditions = conditions.filter((c) => c.type === editingMeasurement.type);
+                            const selectedCondition = eligibleConditions.find((c) => c.id === measurementConditionId) ?? null;
+                            return (
+                                <div className="grid gap-2">
+                                    <Label className="text-xs">Condition</Label>
+                                    <Select
+                                        value={measurementConditionId ? String(measurementConditionId) : 'none'}
+                                        onValueChange={(value) => setMeasurementConditionId(value === 'none' ? null : Number(value))}
+                                    >
+                                        <SelectTrigger className="h-9 text-xs">
+                                            <SelectValue placeholder="No condition (price manually)">
+                                                {selectedCondition ? selectedCondition.name : <span className="text-muted-foreground">No condition (price manually)</span>}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">
+                                                <span className="text-muted-foreground">No condition (price manually)</span>
+                                            </SelectItem>
+                                            {eligibleConditions.map((c) => (
+                                                <SelectItem key={c.id} value={String(c.id)}>
+                                                    <span className="flex items-center gap-2">
+                                                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                                                        <span>{c.name}</span>
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                            {eligibleConditions.length === 0 && (
+                                                <div className="text-muted-foreground px-2 py-1.5 text-xs italic">No {editingMeasurement.type} conditions defined for this project.</div>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            );
+                        })()}
                         <div className="grid gap-2">
                             <Label className="text-xs">Color</Label>
                             <div className="flex items-center gap-2">

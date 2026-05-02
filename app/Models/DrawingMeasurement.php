@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\VariationPricingSyncService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -55,6 +56,52 @@ class DrawingMeasurement extends Model
         static::updating(function ($model) {
             $model->updated_by = auth()->id();
         });
+
+        static::created(function (self $model) {
+            app(VariationPricingSyncService::class)->handleMeasurementChange(
+                $model,
+                previousVariationId: null,
+                previousConditionId: null,
+                previousScope: null,
+            );
+        });
+
+        static::updated(function (self $model) {
+            $previousVariationId = self::nullableInt($model->getOriginal('variation_id'));
+            $previousConditionId = self::nullableInt($model->getOriginal('takeoff_condition_id'));
+            $previousScope = $model->getOriginal('scope');
+
+            app(VariationPricingSyncService::class)->handleMeasurementChange(
+                $model,
+                previousVariationId: $previousVariationId,
+                previousConditionId: $previousConditionId,
+                previousScope: $previousScope,
+            );
+        });
+
+        static::deleted(function (self $model) {
+            app(VariationPricingSyncService::class)->handleMeasurementChange(
+                $model,
+                previousVariationId: self::nullableInt($model->variation_id),
+                previousConditionId: self::nullableInt($model->takeoff_condition_id),
+                previousScope: $model->scope,
+                treatAsDeleted: true,
+            );
+        });
+
+        static::restored(function (self $model) {
+            app(VariationPricingSyncService::class)->handleMeasurementChange(
+                $model,
+                previousVariationId: null,
+                previousConditionId: null,
+                previousScope: null,
+            );
+        });
+    }
+
+    private static function nullableInt(mixed $v): ?int
+    {
+        return $v === null ? null : (int) $v;
     }
 
     public function drawing(): BelongsTo

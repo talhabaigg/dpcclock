@@ -7,9 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VariationPricingItem extends Model
 {
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_MEASUREMENT = 'measurement';
+
     protected $fillable = [
         'variation_id',
         'takeoff_condition_id',
+        'drawing_measurement_id',
+        'source',
         'description',
         'qty',
         'unit',
@@ -19,6 +25,7 @@ class VariationPricingItem extends Model
         'sell_rate',
         'sell_total',
         'sort_order',
+        'last_synced_at',
     ];
 
     protected $casts = [
@@ -29,6 +36,11 @@ class VariationPricingItem extends Model
         'sell_rate' => 'float',
         'sell_total' => 'float',
         'sort_order' => 'integer',
+        'last_synced_at' => 'datetime',
+    ];
+
+    protected $attributes = [
+        'source' => self::SOURCE_MANUAL,
     ];
 
     public function variation(): BelongsTo
@@ -39,5 +51,34 @@ class VariationPricingItem extends Model
     public function condition(): BelongsTo
     {
         return $this->belongsTo(TakeoffCondition::class, 'takeoff_condition_id');
+    }
+
+    public function measurement(): BelongsTo
+    {
+        return $this->belongsTo(DrawingMeasurement::class, 'drawing_measurement_id');
+    }
+
+    public function isManual(): bool
+    {
+        return $this->source === self::SOURCE_MANUAL;
+    }
+
+    public function isAggregated(): bool
+    {
+        return $this->source === self::SOURCE_MEASUREMENT && $this->drawing_measurement_id === null;
+    }
+
+    public function isUnpriced(): bool
+    {
+        return $this->source === self::SOURCE_MEASUREMENT && $this->drawing_measurement_id !== null;
+    }
+
+    public function flavour(): string
+    {
+        if ($this->isManual()) {
+            return 'manual';
+        }
+
+        return $this->isUnpriced() ? 'unpriced' : 'aggregated';
     }
 }
