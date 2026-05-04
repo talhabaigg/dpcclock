@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -405,7 +406,7 @@ export default function MyReceiptsIndex({ receipts, filters, categories }: Props
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="transaction_date">Transaction Date</Label>
-                                    <Input id="transaction_date" type="date" value={editForm.transaction_date} onChange={(e) => setEditForm({ ...editForm, transaction_date: e.target.value })} />
+                                    <DatePicker id="transaction_date" value={editForm.transaction_date} onChange={(value) => setEditForm({ ...editForm, transaction_date: value })} clearable />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="card_last_four">Card Last 4 Digits</Label>
@@ -447,7 +448,7 @@ export default function MyReceiptsIndex({ receipts, filters, categories }: Props
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label>Date From</Label>
-                                <Input type="date" value={localFilters.date_from || ''} onChange={(e) => setLocalFilters({ ...localFilters, date_from: e.target.value })} />
+                                <DatePicker value={localFilters.date_from || ''} onChange={(value) => setLocalFilters({ ...localFilters, date_from: value })} clearable />
                             </div>
                             <div className="grid gap-2">
                                 <Label>Date To</Label>

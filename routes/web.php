@@ -1064,6 +1064,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/my-receipts', [CreditCardReceiptController::class, 'index'])->name('my-receipts.index');
         Route::post('/my-receipts', [CreditCardReceiptController::class, 'store'])->name('my-receipts.store');
         Route::put('/my-receipts/{creditCardReceipt}', [CreditCardReceiptController::class, 'update'])->name('my-receipts.update');
+        Route::get('/credit-card-receipts/{creditCardReceipt}/file', [CreditCardReceiptController::class, 'file'])->name('credit-card-receipts.file');
     });
 
     // Manage Receipts — all users, full CRUD, export

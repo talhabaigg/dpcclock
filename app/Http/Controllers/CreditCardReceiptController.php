@@ -230,6 +230,43 @@ class CreditCardReceiptController extends Controller
         return back()->with('success', 'Invoice is being sent to Premier...');
     }
 
+    /**
+     * Stream the receipt's media inline (so PDFs render in the browser instead of forcing download).
+     * Optional ?variant=processed serves the processed image.
+     */
+    public function file(Request $request, CreditCardReceipt $creditCardReceipt): StreamedResponse
+    {
+        if ($creditCardReceipt->user_id !== $request->user()->id && ! $request->user()->can('receipts.manage')) {
+            abort(403);
+        }
+
+        $collection = $request->input('variant') === 'processed' ? 'processed_receipts' : 'receipts';
+        $media = $creditCardReceipt->getFirstMedia($collection)
+            ?? $creditCardReceipt->getFirstMedia('receipts');
+
+        if (! $media) {
+            abort(404, 'Receipt file not found.');
+        }
+
+        try {
+            $stream = $media->stream();
+        } catch (\League\Flysystem\UnableToReadFile $e) {
+            abort(404, 'Receipt file is missing from storage.');
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $media->mime_type ?? 'application/octet-stream',
+            'Content-Length' => $media->size,
+            'Content-Disposition' => 'inline; filename="'.$media->file_name.'"',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     public function export(Request $request): StreamedResponse
     {
         $query = CreditCardReceipt::with('user')
@@ -290,16 +327,22 @@ class CreditCardReceiptController extends Controller
             $media = $receipt->getFirstMedia('receipts');
             if ($media) {
                 $receipt->mime_type = $media->mime_type;
-                try {
-                    $receipt->image_url = $media->getTemporaryUrl(now()->addMinutes(30));
-                } catch (\RuntimeException) {
-                    $receipt->image_url = $media->getUrl();
-                    if ($media->disk !== 's3') {
-                        $receipt->image_url = str_replace(
-                            $media->file_name,
-                            rawurlencode($media->file_name),
-                            $receipt->image_url
-                        );
+                // PDFs route through our streaming endpoint so the browser gets
+                // Content-Disposition: inline (S3 signed URLs often force download).
+                if ($media->mime_type === 'application/pdf') {
+                    $receipt->image_url = route('credit-card-receipts.file', $receipt->id);
+                } else {
+                    try {
+                        $receipt->image_url = $media->getTemporaryUrl(now()->addMinutes(30));
+                    } catch (\RuntimeException) {
+                        $receipt->image_url = $media->getUrl();
+                        if ($media->disk !== 's3') {
+                            $receipt->image_url = str_replace(
+                                $media->file_name,
+                                rawurlencode($media->file_name),
+                                $receipt->image_url
+                            );
+                        }
                     }
                 }
             }
