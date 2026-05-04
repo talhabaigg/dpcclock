@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowRight,
@@ -142,12 +142,21 @@ interface EmployeeFileRecord {
     notes: string | null;
 }
 
+interface SickLeaveSummary {
+    fy_label: string;
+    fy_start: string;
+    fy_end: string;
+    days: number;
+    hours: number;
+}
+
 interface PageProps {
     transfer: Transfer;
     injuries: InjuryRecord[];
     employeeFiles: EmployeeFileRecord[];
     isReceivingForeman: boolean;
     isCurrentForeman: boolean;
+    sickLeaveSummary: SickLeaveSummary | null;
     authUser: { id: number; name: string };
 }
 
@@ -539,8 +548,14 @@ function RecommendationDialog({ transfer, role, label, open, onOpenChange }: {
     );
 }
 
-export default function Show({ transfer, injuries, isReceivingForeman }: PageProps) {
+export default function Show({ transfer, injuries, isReceivingForeman, isCurrentForeman, sickLeaveSummary }: PageProps) {
     const [recDialog, setRecDialog] = useState<{ role: string; label: string } | null>(null);
+
+    const pageAuth = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean } }>().props.auth;
+    const permissions = pageAuth.permissions ?? [];
+    const isAdmin = !!pageAuth.isAdmin;
+    const canApprove = isAdmin || permissions.includes('employee-transfers.approve');
+    const canSafetyReview = isAdmin || permissions.includes('employee-transfers.safety-review');
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employee Transfers', href: '/employee-transfers' },
@@ -624,7 +639,7 @@ export default function Show({ transfer, injuries, isReceivingForeman }: PagePro
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <RecommendationBadge recommendation={transfer.current_foreman_recommendation} />
-                                    {!transfer.current_foreman_recommendation && (
+                                    {!transfer.current_foreman_recommendation && isCurrentForeman && (
                                         <Button size="sm" variant="outline" onClick={() => setRecDialog({ role: 'current_foreman', label: 'Current Foreman' })}>
                                             Submit
                                         </Button>
@@ -641,7 +656,7 @@ export default function Show({ transfer, injuries, isReceivingForeman }: PagePro
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <RecommendationBadge recommendation={transfer.safety_manager_recommendation} />
-                                    {!transfer.safety_manager_recommendation && (
+                                    {!transfer.safety_manager_recommendation && canSafetyReview && (
                                         <Button size="sm" variant="outline" onClick={() => setRecDialog({ role: 'safety_manager', label: 'Safety Manager' })}>
                                             Submit
                                         </Button>
@@ -658,7 +673,7 @@ export default function Show({ transfer, injuries, isReceivingForeman }: PagePro
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <RecommendationBadge recommendation={transfer.receiving_foreman_recommendation} />
-                                    {!transfer.receiving_foreman_recommendation && transfer.position_applying_for && (
+                                    {!transfer.receiving_foreman_recommendation && transfer.position_applying_for && isReceivingForeman && (
                                         <Button size="sm" variant="outline" onClick={() => setRecDialog({ role: 'receiving_foreman', label: 'Receiving Foreman' })}>
                                             Submit
                                         </Button>
@@ -679,9 +694,11 @@ export default function Show({ transfer, injuries, isReceivingForeman }: PagePro
                                     ) : (
                                         <>
                                             <span className="text-xs text-muted-foreground">Pending</span>
+                                            {canApprove && (
                                             <Button size="sm" onClick={() => setRecDialog({ role: 'construction_manager', label: 'Construction Manager' })}>
                                                 Final Decision
                                             </Button>
+                                            )}
                                         </>
                                     )}
                                 </div>
@@ -749,6 +766,17 @@ export default function Show({ transfer, injuries, isReceivingForeman }: PagePro
                             <RatingRow label="Punctuality" value={transfer.punctuality} />
                             <RatingRow label="Attendance" value={transfer.attendance} />
                             <DataRow label="Excessive Sick Leave" value={transfer.excessive_sick_leave ? 'Yes' : 'No'} variant={transfer.excessive_sick_leave ? 'danger' : 'success'} />
+                            {sickLeaveSummary && (
+                                <DataRow
+                                    label={`Sick Leave Taken (${sickLeaveSummary.fy_label})`}
+                                    value={
+                                        sickLeaveSummary.days === 0
+                                            ? 'None recorded'
+                                            : `${sickLeaveSummary.days} ${sickLeaveSummary.days === 1 ? 'day' : 'days'} (${sickLeaveSummary.hours} hrs)`
+                                    }
+                                    variant={sickLeaveSummary.days >= 5 ? 'danger' : sickLeaveSummary.days > 0 ? 'warning' : 'success'}
+                                />
+                            )}
                         </div>
                         {transfer.sick_leave_details && (
                             <p className="mt-3 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">{transfer.sick_leave_details}</p>

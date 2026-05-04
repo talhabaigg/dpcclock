@@ -364,6 +364,8 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Employee Transfers' => [
             'employee-transfers.view' => 'View and manage employee transfer requests',
+            'employee-transfers.safety-review' => 'Submit safety manager recommendation on transfer requests',
+            'employee-transfers.approve' => 'Construction manager final decision: approve, approve with conditions, or decline transfer',
         ],
 
         // ============================================

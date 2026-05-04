@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Clock;
 use App\Models\Employee;
 use App\Models\EmployeeFile;
 use App\Models\EmployeeTransfer;
 use App\Models\Injury;
 use App\Models\Kiosk;
 use App\Models\User;
+use App\Models\Worktype;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -221,9 +224,16 @@ class EmployeeTransferController extends Controller
                 'notes' => $file->notes,
             ]);
 
-        $isAdmin = $request->user()->isAdmin();
-        $isReceivingForeman = $isAdmin || $request->user()->id === $employeeTransfer->receiving_foreman_id;
-        $isCurrentForeman = $isAdmin || $request->user()->id === $employeeTransfer->current_foreman_id;
+        $user = $request->user();
+        $userId = $user->id;
+        $isAdmin = $user->isAdmin();
+        $isReceivingForeman = $isAdmin || $userId === $employeeTransfer->receiving_foreman_id;
+        $isCurrentForeman = $isAdmin || $userId === $employeeTransfer->current_foreman_id;
+        $isApprover = $user->can('employee-transfers.approve');
+
+        $sickLeaveSummary = $isApprover
+            ? $this->buildSickLeaveSummary($employeeTransfer->employee)
+            : null;
 
         return Inertia::render('employee-transfers/show', [
             'transfer' => $employeeTransfer,
@@ -231,11 +241,72 @@ class EmployeeTransferController extends Controller
             'employeeFiles' => $employeeFiles,
             'isReceivingForeman' => $isReceivingForeman,
             'isCurrentForeman' => $isCurrentForeman,
+            'sickLeaveSummary' => $sickLeaveSummary,
             'authUser' => [
                 'id' => $request->user()->id,
                 'name' => $request->user()->name,
             ],
         ]);
+    }
+
+    /**
+     * Sick leave taken in the current Australian financial year (Jul 1 – Jun 30).
+     * Counts unique sick-leave days from Processed timesheet clocks.
+     */
+    private function buildSickLeaveSummary(?Employee $employee): ?array
+    {
+        if (!$employee || !$employee->eh_employee_id) {
+            return null;
+        }
+
+        $now = Carbon::now();
+        $fyStart = $now->month >= 7
+            ? Carbon::create($now->year, 7, 1)->startOfDay()
+            : Carbon::create($now->year - 1, 7, 1)->startOfDay();
+        $fyEnd = $fyStart->copy()->addYear()->subSecond();
+        $fyLabel = 'FY '.$fyStart->format('Y').'/'.$fyStart->copy()->addYear()->format('y');
+
+        $sickWorkTypeIds = Worktype::where('name', 'like', '%Personal%Carer%Leave%')
+            ->pluck('eh_worktype_id')
+            ->all();
+        $excludedWorkTypeIds = Worktype::where('name', 'like', '%Workcover%')
+            ->pluck('eh_worktype_id')
+            ->all();
+
+        if (empty($sickWorkTypeIds)) {
+            return [
+                'fy_label' => $fyLabel,
+                'fy_start' => $fyStart->toDateString(),
+                'fy_end' => $fyEnd->toDateString(),
+                'days' => 0,
+                'hours' => 0.0,
+            ];
+        }
+
+        $clocks = Clock::query()
+            ->where('eh_employee_id', $employee->eh_employee_id)
+            ->whereIn('eh_worktype_id', $sickWorkTypeIds)
+            ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
+            ->where('status', 'Processed')
+            ->whereBetween('clock_in', [$fyStart, $fyEnd])
+            ->whereNotNull('hours_worked')
+            ->where('hours_worked', '>', 0)
+            ->get(['clock_in', 'hours_worked']);
+
+        $uniqueDays = $clocks
+            ->map(fn ($c) => Carbon::parse($c->clock_in)->toDateString())
+            ->unique()
+            ->count();
+
+        $totalHours = (float) $clocks->sum('hours_worked');
+
+        return [
+            'fy_label' => $fyLabel,
+            'fy_start' => $fyStart->toDateString(),
+            'fy_end' => $fyEnd->toDateString(),
+            'days' => $uniqueDays,
+            'hours' => round($totalHours, 2),
+        ];
     }
 
     /**
@@ -279,7 +350,15 @@ class EmployeeTransferController extends Controller
             'comments' => 'nullable|string',
         ]);
 
+        $user = $request->user();
         $role = $validated['role'];
+
+        abort_unless(match ($role) {
+            'construction_manager' => $user->can('employee-transfers.approve'),
+            'safety_manager' => $user->can('employee-transfers.safety-review'),
+            'current_foreman' => $user->isAdmin() || $user->id === $employeeTransfer->current_foreman_id,
+            'receiving_foreman' => $user->isAdmin() || $user->id === $employeeTransfer->receiving_foreman_id,
+        }, 403, 'You are not authorized to submit this recommendation.');
 
         if ($role === 'construction_manager') {
             $employeeTransfer->update([
