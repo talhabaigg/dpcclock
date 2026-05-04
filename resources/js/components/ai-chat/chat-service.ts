@@ -247,6 +247,36 @@ export class ChatService {
     }
 
     /**
+     * Persist voice-call transcripts into a chat conversation so voice + text exchanges share one thread.
+     * If conversationId is null, the server creates a new conversation.
+     */
+    async saveVoiceTranscripts(
+        conversationId: string | null,
+        entries: Array<{ role: 'user' | 'assistant'; text: string }>,
+    ): Promise<{
+        conversation_id: string;
+        messages: Array<{ id: number; role: string; content: string; created_at: string }>;
+    }> {
+        const response = await csrfFetch(`${API_BASE}/chat/voice-transcripts`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                conversation_id: conversationId,
+                entries,
+            }),
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
+
+    /**
      * Transcribe an audio blob using Whisper
      */
     async transcribeAudio(audioBlob: Blob): Promise<string> {
@@ -270,6 +300,27 @@ export class ChatService {
 
         const data = await response.json();
         return data.text;
+    }
+
+    /**
+     * Fetch a freshly AI-generated welcome greeting.
+     * Called on every home-page visit — no caching.
+     */
+    async getWelcomeMessage(signal?: AbortSignal): Promise<string> {
+        const response = await csrfFetch(`${API_BASE}/chat/welcome-message`, {
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Cache-Control': 'no-cache',
+            },
+            credentials: 'same-origin',
+            signal,
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        return data.greeting;
     }
 
     /**

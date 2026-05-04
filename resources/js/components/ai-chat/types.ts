@@ -72,6 +72,9 @@ export interface AiModel {
 }
 
 export const AVAILABLE_MODELS: AiModel[] = [
+    { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI', description: 'Latest flagship — frontier reasoning' },
+    { id: 'gpt-5.5-mini', name: 'GPT-5.5 Mini', provider: 'OpenAI', description: 'Latest — fast & powerful' },
+    { id: 'gpt-5.5-nano', name: 'GPT-5.5 Nano', provider: 'OpenAI', description: 'Latest — cheapest tier' },
     { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', description: 'Most capable — 1M context' },
     { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', provider: 'OpenAI', description: 'Fast & powerful' },
     { id: 'gpt-5.4-nano', name: 'GPT-5.4 Nano', provider: 'OpenAI', description: 'Cheapest GPT-5 class' },
@@ -107,4 +110,5 @@ export interface UseChatReturn {
     clearMessages: () => void;
     stopGeneration: () => void;
     loadMessages: (messages: ChatMessage[], conversationId: string) => void;
+    appendMessages: (messages: ChatMessage[], conversationId: string) => void;
 }

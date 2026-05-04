@@ -4,14 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { Mic, MicOff, PhoneOff, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SuperiorMark } from './superior-mark';
 import { useVoiceCall, VoiceCallStatus, TranscriptEntry } from './use-voice-call';
 
 interface VoiceCallModalProps {
     isOpen: boolean;
     onClose: () => void;
     className?: string;
+    /** Active chat conversation id (for merging voice transcripts back into the same thread). */
+    conversationId?: string | null;
+    /** Called once the call has fully ended, with the transcripts captured during the call. */
+    onTranscriptsReady?: (
+        entries: Array<{ role: 'user' | 'assistant'; text: string; timestamp: Date }>,
+    ) => void;
 }
 
 const VOICE_OPTIONS = [
@@ -52,12 +59,6 @@ function SoundWave({
     audioLevels?: number[];
 }) {
     const barCount = 5;
-    const colors = {
-        listening: 'bg-violet-500',
-        speaking: 'bg-emerald-500',
-        processing: 'bg-purple-500',
-    };
-
     const hasRealLevels = audioLevels && audioLevels.some((l) => l > 0.02);
 
     return (
@@ -77,10 +78,12 @@ function SoundWave({
                         key={i}
                         className={cn(
                             'w-1 rounded-full',
-                            isActive ? colors[variant] : 'bg-muted-foreground/30',
-                            // Only use CSS animation for listening (user mic doesn't have analyser)
+                            isActive
+                                ? variant === 'speaking'
+                                    ? 'bg-foreground'
+                                    : 'bg-foreground/70'
+                                : 'bg-muted-foreground/30',
                             isActive && !useRealData && 'voice-wave-bar',
-                            // Smooth transitions for real data
                             useRealData ? 'transition-[height] duration-75' : 'transition-all duration-300',
                         )}
                         style={{
@@ -103,59 +106,52 @@ function VoiceOrb({ status, audioLevels }: { status: VoiceCallStatus; audioLevel
     const isActive = isListening || isSpeaking || isProcessing;
 
     return (
-        <div className="relative flex items-center justify-center">
-            {/* Outer glow rings - smooth breathing animation */}
+        <div className="relative flex size-44 items-center justify-center">
+            {/* Outer glow ring — soft breathing fade */}
             <div
-                className={cn('absolute rounded-full transition-all duration-1000 ease-in-out', isActive && 'voice-glow-outer')}
+                className={cn(
+                    'text-foreground/[0.10] pointer-events-none absolute rounded-full transition-all duration-1000 ease-in-out',
+                    isActive && 'voice-glow-outer',
+                )}
                 style={{
-                    width: 180,
-                    height: 180,
-                    background: isListening
-                        ? 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)'
-                        : isSpeaking
-                          ? 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)'
-                          : isProcessing
-                            ? 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)'
-                            : 'radial-gradient(circle, rgba(100, 100, 100, 0.1) 0%, transparent 70%)',
+                    width: 160,
+                    height: 160,
+                    background: 'radial-gradient(circle, currentColor 0%, transparent 70%)',
                 }}
             />
 
             {/* Middle ring */}
             <div
-                className={cn('absolute rounded-full transition-all duration-700 ease-in-out', isActive && 'voice-glow-middle')}
+                className={cn(
+                    'text-foreground/[0.16] pointer-events-none absolute rounded-full transition-all duration-700 ease-in-out',
+                    isActive && 'voice-glow-middle',
+                )}
                 style={{
-                    width: 140,
-                    height: 140,
-                    background: isListening
-                        ? 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, transparent 70%)'
-                        : isSpeaking
-                          ? 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)'
-                          : isProcessing
-                            ? 'radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%)'
-                            : 'radial-gradient(circle, rgba(100, 100, 100, 0.15) 0%, transparent 70%)',
+                    width: 124,
+                    height: 124,
+                    background: 'radial-gradient(circle, currentColor 0%, transparent 70%)',
                 }}
             />
 
             {/* Main orb */}
             <div
                 className={cn(
-                    'relative flex size-24 items-center justify-center rounded-full shadow-2xl transition-all duration-500',
-                    status === 'idle' && 'bg-gradient-to-br from-zinc-700 to-zinc-800',
-                    isConnecting && 'voice-orb-connecting bg-gradient-to-br from-amber-500 to-orange-600',
-                    isListening && 'bg-gradient-to-br from-violet-500 to-purple-600',
-                    isSpeaking && 'bg-gradient-to-br from-emerald-500 to-teal-600',
-                    isProcessing && 'bg-gradient-to-br from-purple-500 to-pink-600',
-                    status === 'error' && 'bg-gradient-to-br from-red-500 to-rose-600',
-                    status === 'disconnected' && 'bg-gradient-to-br from-zinc-600 to-zinc-700',
+                    'relative flex size-24 items-center justify-center rounded-full shadow-lg transition-all duration-500',
+                    'border-border border',
+                    status === 'idle' && 'bg-muted',
+                    isConnecting && 'voice-orb-connecting bg-muted',
+                    isListening && 'bg-muted',
+                    isSpeaking && 'bg-foreground/10',
+                    isProcessing && 'bg-muted',
+                    status === 'error' && 'border-destructive/40 bg-destructive/10',
+                    status === 'disconnected' && 'bg-muted',
                 )}
             >
-                {/* Inner glow */}
+                {/* Inner subtle glow when active */}
                 <div
                     className={cn(
                         'absolute inset-2 rounded-full opacity-50 blur-md transition-all duration-500',
-                        isListening && 'bg-violet-400',
-                        isSpeaking && 'bg-emerald-400',
-                        isProcessing && 'bg-purple-400',
+                        isActive ? 'bg-foreground/15' : 'bg-transparent',
                     )}
                 />
 
@@ -163,7 +159,7 @@ function VoiceOrb({ status, audioLevels }: { status: VoiceCallStatus; audioLevel
                 <div className="relative z-10">
                     {isProcessing ? (
                         <div className="flex items-center justify-center">
-                            <Sparkles className="voice-sparkle size-8 text-white" />
+                            <SuperiorMark className="voice-sparkle text-foreground size-8" />
                         </div>
                     ) : (
                         <SoundWave isActive={isListening || isSpeaking} variant={isSpeaking ? 'speaking' : 'listening'} audioLevels={audioLevels} />
@@ -196,16 +192,11 @@ function TranscriptHistory({ entries }: { entries: TranscriptEntry[] }) {
                     <div
                         key={i}
                         className={cn(
-                            'rounded-xl px-3 py-2 text-sm',
-                            entry.role === 'user' ? 'bg-muted/50' : 'bg-violet-500/10',
+                            'rounded-lg px-3 py-2 text-sm',
+                            entry.role === 'user' ? 'bg-muted/60' : 'border-border bg-muted/30 border',
                         )}
                     >
-                        <p
-                            className={cn(
-                                'mb-0.5 text-[10px] font-medium tracking-wider uppercase',
-                                entry.role === 'user' ? 'text-muted-foreground' : 'text-violet-500',
-                            )}
-                        >
+                        <p className="text-muted-foreground mb-0.5 text-[10px] font-medium tracking-wider uppercase">
                             {entry.role === 'user' ? 'You' : 'AI'}
                         </p>
                         <p className="leading-relaxed">{entry.text}</p>
@@ -216,8 +207,20 @@ function TranscriptHistory({ entries }: { entries: TranscriptEntry[] }) {
     );
 }
 
-export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalProps) {
-    const [selectedVoice, setSelectedVoice] = useState('ash');
+const VOICE_STORAGE_KEY = 'voice-call:selected-voice';
+
+export function VoiceCallModal({ isOpen, onClose, className, onTranscriptsReady }: VoiceCallModalProps) {
+    const [selectedVoice, setSelectedVoice] = useState<string>(() => {
+        if (typeof window === 'undefined') return 'ash';
+        return localStorage.getItem(VOICE_STORAGE_KEY) ?? 'ash';
+    });
+
+    // Persist voice choice across calls so user only picks it once
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(VOICE_STORAGE_KEY, selectedVoice);
+        }
+    }, [selectedVoice]);
 
     const { status, isConnected, isMuted, aiResponse, transcriptHistory, callDuration, audioLevels, startCall, endCall, toggleMute } = useVoiceCall({
         voice: selectedVoice,
@@ -225,18 +228,18 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
         },
     });
 
-    // Auto-start call when modal opens
-    useEffect(() => {
-        if (isOpen && status === 'idle') {
-            startCall();
-        }
-    }, [isOpen, status, startCall]);
+    const isPreCall = status === 'idle' || status === 'disconnected' || status === 'error';
 
-    // Clean up on close
+    // Clean up on close — hand transcripts to parent so it can merge them into the chat thread.
+    // Only persist if the user actually said something; a solo AI greeting isn't worth saving.
     const handleClose = useCallback(() => {
+        const hasUserSpeech = transcriptHistory.some((e) => e.role === 'user');
+        if (hasUserSpeech) {
+            onTranscriptsReady?.(transcriptHistory);
+        }
         endCall();
         onClose();
-    }, [endCall, onClose]);
+    }, [endCall, onClose, onTranscriptsReady, transcriptHistory]);
 
     // Handle ESC key
     useEffect(() => {
@@ -253,23 +256,26 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop with gradient */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop — matches shadcn Dialog overlay */}
             <div
-                className="from-background/95 via-background/90 to-background/95 absolute inset-0 bg-gradient-to-b backdrop-blur-md"
+                className="bg-background/80 absolute inset-0 backdrop-blur-sm"
                 onClick={handleClose}
             />
 
-            {/* Modal */}
+            {/* Dialog content */}
             <div
                 className={cn(
-                    'border-border/50 bg-card/80 relative z-10 flex max-h-[90vh] w-full max-w-md flex-col items-center rounded-3xl border p-8 shadow-2xl backdrop-blur-sm',
+                    'border-border bg-background relative z-10 flex max-h-[90vh] w-full max-w-md flex-col items-center rounded-lg border p-6 shadow-lg',
                     className,
                 )}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Voice call with Superior AI"
             >
                 {/* Header */}
                 <div className="mb-1 flex shrink-0 items-center gap-2">
-                    <Sparkles className="size-5 text-violet-500" />
+                    <SuperiorMark className="text-foreground size-5" />
                     <h2 className="text-lg font-semibold">Superior AI</h2>
                 </div>
 
@@ -282,12 +288,7 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 <p
                     className={cn(
                         'mb-4 shrink-0 text-sm font-medium transition-colors duration-300',
-                        status === 'listening' && 'text-violet-500',
-                        status === 'speaking' && 'text-emerald-500',
-                        status === 'processing' && 'text-purple-500',
-                        status === 'connecting' && 'text-amber-500',
-                        status === 'error' && 'text-red-500',
-                        (status === 'idle' || status === 'disconnected' || status === 'connected') && 'text-muted-foreground',
+                        status === 'error' ? 'text-destructive' : 'text-muted-foreground',
                     )}
                 >
                     {statusMessages[status]}
@@ -300,8 +301,8 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
 
                 {/* Live AI response (current turn) */}
                 {aiResponse && (
-                    <div className="mb-3 w-full shrink-0 rounded-2xl bg-violet-500/10 px-4 py-3 backdrop-blur-sm">
-                        <p className="mb-1 text-[10px] font-medium tracking-wider text-violet-500 uppercase">Speaking</p>
+                    <div className="border-border bg-muted/40 mb-3 w-full shrink-0 rounded-lg border px-4 py-3">
+                        <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">Speaking</p>
                         <p className="text-sm leading-relaxed">{aiResponse}</p>
                     </div>
                 )}
@@ -312,36 +313,48 @@ export function VoiceCallModal({ isOpen, onClose, className }: VoiceCallModalPro
                 </div>
 
                 {/* Controls */}
-                <div className="flex shrink-0 items-center gap-6">
-                    {/* Mute button */}
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className={cn(
-                            'size-14 rounded-full border-2 transition-all duration-300',
-                            isMuted
-                                ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                                : 'border-border hover:border-foreground/50 hover:bg-muted',
-                        )}
-                        onClick={toggleMute}
-                        disabled={!isConnected}
-                    >
-                        {isMuted ? <MicOff className="size-6" /> : <Mic className="size-6" />}
-                    </Button>
+                <div className="flex shrink-0 items-center gap-3">
+                    {isPreCall ? (
+                        <>
+                            <Button variant="outline" onClick={handleClose}>
+                                Cancel
+                            </Button>
+                            <Button onClick={startCall} className="gap-2">
+                                <Phone className="size-4" />
+                                Start call
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            {/* Mute button */}
+                            <Button
+                                variant={isMuted ? 'destructive' : 'outline'}
+                                size="icon"
+                                className="size-12 rounded-full"
+                                onClick={toggleMute}
+                                disabled={!isConnected}
+                                aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                            >
+                                {isMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+                            </Button>
 
-                    {/* End call button */}
-                    <Button
-                        size="icon"
-                        className="size-16 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/25 transition-all duration-300 hover:scale-105 hover:bg-red-600 hover:shadow-red-500/40"
-                        onClick={handleClose}
-                    >
-                        <PhoneOff className="size-7" />
-                    </Button>
+                            {/* End call button */}
+                            <Button
+                                variant="destructive"
+                                size="icon"
+                                className="size-12 rounded-full"
+                                onClick={handleClose}
+                                aria-label="End call"
+                            >
+                                <PhoneOff className="size-5" />
+                            </Button>
+                        </>
+                    )}
                 </div>
 
                 {/* Voice selector + help */}
                 <div className="mt-6 flex w-full shrink-0 items-center justify-between">
-                    <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isConnected}>
+                    <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={!isPreCall}>
                         <SelectTrigger className="h-8 w-32 text-xs">
                             <SelectValue placeholder="Voice" />
                         </SelectTrigger>

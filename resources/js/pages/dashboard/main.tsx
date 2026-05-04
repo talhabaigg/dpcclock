@@ -6,11 +6,12 @@ interface PageProps {
     auth: {
         permissions: string[];
     };
+    conversationId?: string | null;
     [key: string]: unknown;
 }
 
 const Dashboard = () => {
-    const { auth } = usePage<PageProps>().props;
+    const { auth, conversationId } = usePage<PageProps>().props;
     const permissions = auth?.permissions ?? [];
     const hasAiChat = permissions.includes('ai.chat');
     const hasAiVoice = permissions.includes('ai.voice');
@@ -21,7 +22,12 @@ const Dashboard = () => {
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {hasAiChat ? (
                     <div className="min-h-0 flex-1">
-                        <AiChat className="h-full" centered enableVoice={hasAiVoice} />
+                        <AiChat
+                            className="h-full"
+                            centered
+                            enableVoice={hasAiVoice}
+                            initialConversationId={conversationId ?? null}
+                        />
                     </div>
                 ) : (
                     <div className="flex h-full items-center justify-center">

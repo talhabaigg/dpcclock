@@ -6,6 +6,7 @@ use App\Models\AiChatMessage;
 use App\Traits\ExecutesAiTools;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -242,7 +243,7 @@ INSTRUCTIONS;
             'message' => ['required', 'string', 'max:'.self::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['nullable', 'string', 'max:36'],
             'force_tool' => ['nullable', 'string', 'max:50'],
-            'model' => ['nullable', 'string', 'in:gpt-5.4,gpt-5.4-mini,gpt-5.4-nano,gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o4-mini,claude-sonnet-4-20250514,claude-3-5-haiku-20241022'],
+            'model' => ['nullable', 'string', 'in:gpt-5.5,gpt-5.5-mini,gpt-5.5-nano,gpt-5.4,gpt-5.4-mini,gpt-5.4-nano,gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o4-mini,claude-sonnet-4-20250514,claude-3-5-haiku-20241022'],
             'files' => ['nullable', 'array', 'max:5'],
             'files.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,csv,xlsx,xls,doc,docx,txt'],
         ]);
@@ -1537,6 +1538,45 @@ INSTRUCTIONS;
     }
 
     /**
+     * Persist a voice-call transcript into the active chat conversation
+     * so voice and text exchanges live in the same thread.
+     */
+    public function saveVoiceTranscripts(Request $request)
+    {
+        $data = $request->validate([
+            'conversation_id' => ['nullable', 'string', 'max:36'],
+            'entries' => ['required', 'array', 'min:1', 'max:200'],
+            'entries.*.role' => ['required', 'string', 'in:user,assistant'],
+            'entries.*.text' => ['required', 'string', 'max:8000'],
+        ]);
+
+        $userId = $this->getUserId();
+        $conversationId = $data['conversation_id'] ?: Str::uuid()->toString();
+
+        $created = [];
+        foreach ($data['entries'] as $entry) {
+            $row = AiChatMessage::create([
+                'user_id' => $userId,
+                'conversation_id' => $conversationId,
+                'role' => $entry['role'],
+                'message' => $entry['text'],
+                'model_used' => 'voice-realtime',
+            ]);
+            $created[] = [
+                'id' => $row->id,
+                'role' => $row->role,
+                'content' => $row->message,
+                'created_at' => $row->created_at?->toIso8601String(),
+            ];
+        }
+
+        return response()->json([
+            'conversation_id' => $conversationId,
+            'messages' => $created,
+        ]);
+    }
+
+    /**
      * Transcribe an audio file using OpenAI Whisper
      */
     public function transcribe(Request $request)
@@ -1574,6 +1614,98 @@ INSTRUCTIONS;
                 'error' => 'Transcription failed',
                 'message' => app()->isProduction() ? 'Please try again' : $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Generate an AI welcome greeting for the home screen.
+     * Cached per-user for 2 hours so refreshes don't spam the model.
+     */
+    public function welcomeMessage(Request $request)
+    {
+        $user = $request->user();
+        $firstName = $user?->name ? trim(explode(' ', $user->name)[0]) : null;
+        $fallback = $firstName ? "What can I help with, {$firstName}?" : 'What can I help with?';
+
+        $cacheKey = 'ai_welcome_greeting:user:'.($user?->id ?? 'guest');
+        $cached = Cache::get($cacheKey);
+        if (is_string($cached) && $cached !== '') {
+            return response()->json(['greeting' => $cached]);
+        }
+
+        try {
+            $tones = [
+                'warm and welcoming',
+                'curious and inviting',
+                'energetic and upbeat',
+                'calm and focused',
+                'playful and witty',
+                'professional but friendly',
+                'concise and confident',
+                'thoughtful and motivating',
+            ];
+            $framings = [
+                'invite them to start a chat or ask a question',
+                'ask them what they want to tackle today',
+                'offer to help them get something done',
+                'check in on what they are working on',
+                'invite them to dive into their tasks',
+                'ask what is on their mind',
+                'offer help and a fresh start to the day',
+            ];
+            $tone = $tones[array_rand($tones)];
+            $framing = $framings[array_rand($framings)];
+
+            $hour = (int) now()->format('H');
+            $partOfDay = match (true) {
+                $hour < 5 => 'late night',
+                $hour < 12 => 'morning',
+                $hour < 17 => 'afternoon',
+                $hour < 21 => 'evening',
+                default => 'night',
+            };
+
+            $namePart = $firstName
+                ? "Address them by their first name '{$firstName}' (use it once, naturally)."
+                : 'Do not include any name.';
+
+            $systemPrompt = "You write greetings for the landing screen of an AI assistant called Superior AI. "
+                ."Generate exactly ONE single-sentence greeting between 4 and 14 words. "
+                ."Tone: {$tone}. Goal: {$framing}. Time of day: {$partOfDay} (you may, but need not, reference it). "
+                ."{$namePart} "
+                .'End with either a question mark or a period. '
+                .'Output ONLY the greeting itself — no quotes, no preface, no commentary, no emojis.';
+
+            $response = Http::withToken($this->getApiKey())
+                ->timeout(8)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => 'gpt-4.1-mini',
+                    'messages' => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user', 'content' => 'Generate the greeting now. Make it different from any previous one. Seed: '.Str::random(8)],
+                    ],
+                    'temperature' => 1.1,
+                    'max_tokens' => 60,
+                ]);
+
+            if ($response->failed()) {
+                return response()->json(['greeting' => $fallback]);
+            }
+
+            $greeting = trim((string) $response->json('choices.0.message.content'));
+            $greeting = trim($greeting, " \t\n\r\0\x0B\"'`");
+
+            if ($greeting === '') {
+                $greeting = $fallback;
+            }
+
+            Cache::put($cacheKey, $greeting, now()->addHours(2));
+
+            return response()->json(['greeting' => $greeting]);
+        } catch (Throwable $e) {
+            Log::warning('Welcome greeting generation failed', ['message' => $e->getMessage()]);
+
+            return response()->json(['greeting' => $fallback]);
         }
     }
 

@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, Sparkles, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, X } from 'lucide-react';
+import { SuperiorMark } from './superior-mark';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatService } from './chat-service';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 import type { SuggestedPrompt } from './types';
+import { VoiceWaveform } from './voice-waveform';
 
 interface ChatWelcomeProps {
     title?: string;
@@ -69,41 +71,66 @@ function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }
     );
 }
 
-// Animated text component for typing effect
+// Animated text component for typing effect.
+// Fetches a fresh AI-generated greeting on every mount, then types it out.
 function AnimatedGreeting({ userName }: { userName?: string }) {
-    const greeting = userName ? `What can I help with, ${userName}?` : 'What can I help with?';
-
+    const fallback = userName ? `What can I help with, ${userName}?` : 'What can I help with?';
+    const [greeting, setGreeting] = useState<string | null>(null);
     const [displayedGreeting, setDisplayedGreeting] = useState('');
     const [isComplete, setIsComplete] = useState(false);
 
+    // Fetch a fresh AI greeting on every mount (every home-page visit).
     useEffect(() => {
-        let greetingIndex = 0;
+        const controller = new AbortController();
+        let cancelled = false;
 
-        const greetingInterval = setInterval(() => {
-            if (greetingIndex < greeting.length) {
-                setDisplayedGreeting(greeting.slice(0, greetingIndex + 1));
-                greetingIndex++;
+        chatService
+            .getWelcomeMessage(controller.signal)
+            .then((text) => {
+                if (cancelled) return;
+                const trimmed = text?.trim();
+                setGreeting(trimmed && trimmed.length > 0 ? trimmed : fallback);
+            })
+            .catch((err) => {
+                if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
+                setGreeting(fallback);
+            });
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
+    }, [fallback]);
+
+    // Type-out animation, runs once the greeting resolves.
+    useEffect(() => {
+        if (!greeting) return;
+
+        setDisplayedGreeting('');
+        setIsComplete(false);
+        let i = 0;
+
+        const interval = setInterval(() => {
+            if (i < greeting.length) {
+                setDisplayedGreeting(greeting.slice(0, i + 1));
+                i++;
             } else {
-                clearInterval(greetingInterval);
+                clearInterval(interval);
                 setIsComplete(true);
             }
         }, 40);
 
-        return () => {
-            clearInterval(greetingInterval);
-        };
+        return () => clearInterval(interval);
     }, [greeting]);
 
     return (
         <div className="mb-8 w-full max-w-2xl">
-            {/* Greeting */}
             <h1 className="text-center text-3xl font-semibold tracking-tight md:text-4xl">
                 <span className="text-foreground">
                     {displayedGreeting}
                     {!isComplete && <span className="text-muted-foreground animate-pulse">|</span>}
                 </span>
             </h1>
-
         </div>
     );
 }
@@ -130,6 +157,7 @@ export function ChatWelcome({
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
+    const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -190,6 +218,7 @@ export function ChatWelcome({
             const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
             audioChunksRef.current = [];
             mediaRecorderRef.current = mediaRecorder;
+            setAudioStream(stream);
 
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -197,6 +226,7 @@ export function ChatWelcome({
 
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach((t) => t.stop());
+                setAudioStream(null);
                 if (recordingTimerRef.current) {
                     clearInterval(recordingTimerRef.current);
                     recordingTimerRef.current = null;
@@ -249,6 +279,7 @@ export function ChatWelcome({
         }
         setIsRecording(false);
         setRecordingDuration(0);
+        setAudioStream(null);
         audioChunksRef.current = [];
     }, []);
 
@@ -326,11 +357,13 @@ export function ChatWelcome({
                             <div className="relative px-4 pt-4 pb-2">
                                 {isRecording ? (
                                     <div className="flex min-h-[44px] items-center gap-3">
-                                        <span className="relative flex size-2.5">
+                                        <span className="relative flex size-2.5 shrink-0">
                                             <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
                                             <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
                                         </span>
-                                        <span className="text-sm font-medium text-red-500">Recording {formatRecordingTime(recordingDuration)}</span>
+                                        <span className="text-foreground/80 shrink-0 text-sm font-medium">Recording</span>
+                                        <VoiceWaveform stream={audioStream} className="text-foreground/70 h-7" />
+                                        <span className="text-muted-foreground shrink-0 text-sm font-medium tabular-nums">{formatRecordingTime(recordingDuration)}</span>
                                     </div>
                                 ) : isTranscribing ? (
                                     <div className="flex min-h-[44px] items-center gap-3">
@@ -492,8 +525,8 @@ export function ChatWelcome({
     return (
         <div className={cn('flex flex-col items-center justify-center px-4 py-8', className)}>
             {/* Logo/Icon */}
-            <div className="mb-6 flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
-                <Sparkles className="size-8 text-white" />
+            <div className="border-border bg-background mb-6 flex size-16 items-center justify-center rounded-2xl border">
+                <SuperiorMark className="text-foreground size-8" />
             </div>
 
             {/* Title */}

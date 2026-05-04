@@ -32,19 +32,19 @@ class VoiceCallController extends Controller
             $response = Http::withToken($apiKey)
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/realtime/sessions', [
-                    'model' => 'gpt-4o-mini-realtime',
+                    'model' => 'gpt-4o-mini-realtime-preview',
                     'voice' => $voice,
                     'instructions' => $this->getVoiceInstructions(),
                     'tools' => $this->getRealtimeTools(),
                     'tool_choice' => 'auto',
                     'input_audio_transcription' => [
-                        'model' => 'whisper-1',
+                        'model' => 'gpt-4o-mini-transcribe',
                     ],
                     'turn_detection' => [
                         'type' => 'server_vad',
-                        'threshold' => 0.5,
+                        'threshold' => 0.6,
                         'prefix_padding_ms' => 300,
-                        'silence_duration_ms' => 500,
+                        'silence_duration_ms' => 900,
                     ],
                 ]);
 
@@ -72,7 +72,7 @@ class VoiceCallController extends Controller
                 'status' => 'active',
                 'metadata' => [
                     'voice' => $voice,
-                    'model' => 'gpt-4o-mini-realtime',
+                    'model' => 'gpt-4o-mini-realtime-preview',
                 ],
             ]);
 
@@ -476,7 +476,7 @@ INSTRUCTIONS;
                 'conversation_id' => $conversationId,
                 'role' => 'assistant',
                 'message' => $validated['ai_transcript'],
-                'model_used' => 'gpt-4o-mini-realtime',
+                'model_used' => 'gpt-4o-mini-realtime-preview',
             ]);
         }
 

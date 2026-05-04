@@ -201,6 +201,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         lastUserMessageRef.current = null;
     }, []);
 
+    const appendMessages = useCallback((msgs: ChatMessage[], convId: string) => {
+        setMessages((prev) => [...prev, ...msgs]);
+        setConversationId(convId);
+        setError(null);
+    }, []);
+
     return {
         messages,
         isLoading,
@@ -211,5 +217,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         clearMessages,
         stopGeneration,
         loadMessages,
+        appendMessages,
     };
 }

@@ -7,6 +7,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { chatService } from './chat-service';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
+import { VoiceWaveform } from './voice-waveform';
 
 export interface ChatInputProps {
     onSubmit: (message: string, attachments?: File[]) => void;
@@ -84,6 +85,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
+    const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -160,6 +162,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
             const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
             audioChunksRef.current = [];
             mediaRecorderRef.current = mediaRecorder;
+            setAudioStream(stream);
 
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -167,6 +170,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
 
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach((t) => t.stop());
+                setAudioStream(null);
                 if (recordingTimerRef.current) {
                     clearInterval(recordingTimerRef.current);
                     recordingTimerRef.current = null;
@@ -219,6 +223,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         }
         setIsRecording(false);
         setRecordingDuration(0);
+        setAudioStream(null);
         audioChunksRef.current = [];
     }, []);
 
@@ -281,11 +286,13 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     <div className="relative px-4 pt-3 pb-1.5">
                         {isRecording ? (
                             <div className="flex min-h-[24px] items-center gap-3">
-                                <span className="relative flex size-2.5">
+                                <span className="relative flex size-2.5 shrink-0">
                                     <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
                                     <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
                                 </span>
-                                <span className="text-sm font-medium text-red-500">Recording {formatRecordingTime(recordingDuration)}</span>
+                                <span className="text-foreground/80 shrink-0 text-sm font-medium">Recording</span>
+                                <VoiceWaveform stream={audioStream} className="text-foreground/70" />
+                                <span className="text-muted-foreground shrink-0 text-sm font-medium tabular-nums">{formatRecordingTime(recordingDuration)}</span>
                             </div>
                         ) : isTranscribing ? (
                             <div className="flex min-h-[24px] items-center gap-3">

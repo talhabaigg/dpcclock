@@ -1,10 +1,13 @@
 'use client';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
-import { Check, Copy, Download, FileText, RefreshCw, Sparkles, User } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
+import { Check, Copy, Download, FileText, RefreshCw } from 'lucide-react';
+import { SuperiorMark } from './superior-mark';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -752,32 +755,29 @@ function SmoothStreamingText({ content }: { content: string }) {
 
 function StreamingIndicator() {
     return (
-        <div className="flex flex-col gap-3 py-1">
-            <div className="flex flex-col gap-[10px]">
-                <div className="gemini-line h-[14px] w-[85%] rounded-full" style={{ animationDelay: '0s' }} />
-                <div className="gemini-line h-[14px] w-[70%] rounded-full" style={{ animationDelay: '0.15s' }} />
-                <div className="gemini-line h-[14px] w-[50%] rounded-full" style={{ animationDelay: '0.3s' }} />
-            </div>
+        <div className="flex items-center gap-1 py-2" role="status" aria-label="AI is responding">
+            <span className="typing-dot bg-muted-foreground size-1.5 rounded-full" style={{ animationDelay: '0ms' }} />
+            <span className="typing-dot bg-muted-foreground size-1.5 rounded-full" style={{ animationDelay: '180ms' }} />
+            <span className="typing-dot bg-muted-foreground size-1.5 rounded-full" style={{ animationDelay: '360ms' }} />
             <style>{`
-                @keyframes gemini-shimmer {
-                    0% { background-position: -200% 0; }
-                    100% { background-position: 200% 0; }
+                @keyframes typing-dot {
+                    0%, 70%, 100% {
+                        transform: scale(0.65);
+                        opacity: 0.35;
+                    }
+                    35% {
+                        transform: scale(1);
+                        opacity: 1;
+                    }
                 }
-                .gemini-line {
-                    background: linear-gradient(90deg,
-                        rgba(66,133,244,0.08) 0%, rgba(155,114,203,0.2) 20%,
-                        rgba(217,101,112,0.25) 40%, rgba(155,114,203,0.2) 60%,
-                        rgba(66,133,244,0.08) 80%, transparent 100%);
-                    background-size: 200% 100%;
-                    animation: gemini-shimmer 2s ease-in-out infinite;
+                .typing-dot {
+                    animation: typing-dot 1.3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                    will-change: transform, opacity;
                 }
-                :is(.dark) .gemini-line {
-                    background: linear-gradient(90deg,
-                        rgba(66,133,244,0.12) 0%, rgba(155,114,203,0.3) 20%,
-                        rgba(217,101,112,0.35) 40%, rgba(155,114,203,0.3) 60%,
-                        rgba(66,133,244,0.12) 80%, transparent 100%);
-                    background-size: 200% 100%;
-                    animation: gemini-shimmer 2s ease-in-out infinite;
+                @media (prefers-reduced-motion: reduce) {
+                    .typing-dot {
+                        animation-duration: 2.4s;
+                    }
                 }
             `}</style>
         </div>
@@ -789,6 +789,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
     const isUser = message.role === 'user';
     const isStreaming = message.status === 'streaming';
     const isError = message.status === 'error';
+
+    const { auth } = usePage<{ auth: { user?: { name?: string; avatar?: string } } }>().props;
+    const getInitials = useInitials();
+    const userName = auth?.user?.name ?? 'You';
+    const userAvatar = auth?.user?.avatar;
 
     const handleCopy = async () => {
         try {
@@ -825,9 +830,16 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
         <div className={cn('group relative flex gap-3 px-4 py-4 transition-colors', isUser ? 'bg-transparent' : 'bg-muted/30')}>
             {/* Avatar */}
             <div className="flex-shrink-0">
-                <Avatar className={cn('size-8', isUser ? 'bg-primary' : 'border-border bg-background border')}>
-                    <AvatarFallback className={cn(isUser ? 'bg-primary text-primary-foreground' : 'bg-transparent text-foreground')}>
-                        {isUser ? <User className="size-4" /> : <Sparkles className="size-4" />}
+                <Avatar className={cn('size-8', !isUser && 'border-border bg-background border')}>
+                    {isUser && userAvatar && <AvatarImage src={userAvatar} alt={userName} />}
+                    <AvatarFallback
+                        className={cn(
+                            isUser
+                                ? 'bg-primary text-primary-foreground text-xs font-medium'
+                                : 'bg-transparent text-foreground',
+                        )}
+                    >
+                        {isUser ? getInitials(userName) : <SuperiorMark className="size-4" />}
                     </AvatarFallback>
                 </Avatar>
             </div>

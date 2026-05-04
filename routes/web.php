@@ -171,6 +171,8 @@ Route::middleware(['auth', 'permission:ai.chat'])->group(function () {
     Route::post('/chat', [ChatController::class, 'handle'])->name('chat.handle');
     Route::post('/chat/stream', [ChatController::class, 'handleStream'])->name('chat.stream');
     Route::post('/chat/transcribe', [ChatController::class, 'transcribe'])->name('chat.transcribe');
+    Route::post('/chat/voice-transcripts', [ChatController::class, 'saveVoiceTranscripts'])->name('chat.voice-transcripts.save');
+    Route::get('/chat/welcome-message', [ChatController::class, 'welcomeMessage'])->name('chat.welcome-message');
     Route::get('/chat/conversations', [ConversationController::class, 'index'])->name('chat.conversations.index');
     Route::get('/chat/conversations/{conversationId}', [ConversationController::class, 'show'])->name('chat.conversations.show');
     Route::delete('/chat/conversations/{conversationId}', [ConversationController::class, 'destroy'])->name('chat.conversations.destroy');
@@ -200,6 +202,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('dashboard/main');
     })->name('dashboard')->middleware('permission:dashboard.view');
+
+    // AI chat conversation deep-link (renders the dashboard with an active conversation)
+    Route::get('ai/chat/{conversationId}', function (string $conversationId) {
+        return Inertia::render('dashboard/main', [
+            'conversationId' => $conversationId,
+        ]);
+    })
+        ->where('conversationId', '[A-Za-z0-9_-]+')
+        ->name('ai.chat.show')
+        ->middleware('permission:dashboard.view');
 
     // ============================================
     // USER MANAGEMENT

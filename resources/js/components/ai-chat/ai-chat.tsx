@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { BrickWall, Coins, GraduationCap, Phone, Sparkles, Trash2 } from 'lucide-react';
+import { BrickWall, Coins, GraduationCap, Phone, Trash2 } from 'lucide-react';
+import { SuperiorMark } from './superior-mark';
 import { DEFAULT_MODEL_ID } from './types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatInput, ChatInputRef } from './chat-input';
@@ -39,9 +40,23 @@ interface AiChatProps {
     className?: string;
     centered?: boolean;
     enableVoice?: boolean;
+    /** Conversation ID from the URL (e.g. /dashboard/c/{id}). When set, that conversation is loaded on mount. */
+    initialConversationId?: string | null;
+    /** URL path for the empty/welcome state. Defaults to "/dashboard". */
+    baseUrl?: string;
+    /** URL path prefix for an active conversation. Defaults to "/ai/chat". The id is appended. */
+    conversationUrlPrefix?: string;
 }
 
-export function AiChat({ config = {}, className, centered = false, enableVoice = false }: AiChatProps) {
+export function AiChat({
+    config = {},
+    className,
+    centered = false,
+    enableVoice = false,
+    initialConversationId = null,
+    baseUrl = '/dashboard',
+    conversationUrlPrefix = '/ai/chat',
+}: AiChatProps) {
     const {
         placeholder = 'Message Superior AI...',
         welcomeMessage = 'How can I help you today?',
@@ -49,14 +64,15 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
         showTimestamps = false,
     } = config;
 
-    const { messages, isLoading, conversationId, sendMessage, regenerateLastMessage, clearMessages, stopGeneration, loadMessages } = useChat();
+    const { messages, isLoading, conversationId, sendMessage, regenerateLastMessage, clearMessages, stopGeneration, loadMessages, appendMessages } = useChat();
 
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<ChatInputRef>(null);
     const [isVoiceCallOpen, setIsVoiceCallOpen] = useState(false);
     const [panelOpen, setPanelOpen] = useState(false);
     const [selectedModelId, setSelectedModelId] = useState(DEFAULT_MODEL_ID);
-    const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversationId);
+    const [isRestoring, setIsRestoring] = useState<boolean>(!!initialConversationId);
     const loadingRef = useRef(false);
 
     // Sync conversationId from useChat back to active state
@@ -65,6 +81,58 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
             setActiveConversationId(conversationId);
         }
     }, [conversationId]);
+
+    // Keep the URL in sync with the active conversation (no Inertia visit — pure history API)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const targetUrl = activeConversationId
+            ? `${conversationUrlPrefix}/${activeConversationId}`
+            : baseUrl;
+        if (window.location.pathname !== targetUrl) {
+            window.history.replaceState(window.history.state, '', targetUrl);
+        }
+    }, [activeConversationId, baseUrl, conversationUrlPrefix]);
+
+    // Restore conversation on mount when arriving at a deep-link URL
+    useEffect(() => {
+        if (!initialConversationId) {
+            setIsRestoring(false);
+            return;
+        }
+
+        let cancelled = false;
+        loadingRef.current = true;
+
+        chatService
+            .getConversation(initialConversationId)
+            .then((data) => {
+                if (cancelled) return;
+                const mapped: ChatMessageType[] = data.messages.map((m, i) => ({
+                    id: `loaded_${m.id}_${i}`,
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                    timestamp: new Date(m.created_at),
+                    status: 'complete',
+                }));
+                loadMessages(mapped, initialConversationId);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                // Conversation no longer exists / not accessible — drop back to a fresh chat
+                setActiveConversationId(null);
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    loadingRef.current = false;
+                    setIsRestoring(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+         
+    }, [initialConversationId]);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -119,6 +187,40 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
         [sendMessage, selectedModelId],
     );
 
+    const handleVoiceTranscriptsReady = useCallback(
+        async (entries: Array<{ role: 'user' | 'assistant'; text: string; timestamp: Date }>) => {
+            if (entries.length === 0) return;
+            try {
+                const result = await chatService.saveVoiceTranscripts(
+                    activeConversationId,
+                    entries.map((e) => ({ role: e.role, text: e.text })),
+                );
+                const mapped: ChatMessageType[] = result.messages.map((m) => ({
+                    id: `voice_${m.id}`,
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                    timestamp: new Date(m.created_at),
+                    status: 'complete',
+                }));
+                appendMessages(mapped, result.conversation_id);
+                setActiveConversationId(result.conversation_id);
+            } catch {
+                // Persist failed — fall back to in-memory only so user still sees the exchange
+                const mapped: ChatMessageType[] = entries.map((e, i) => ({
+                    id: `voice_local_${Date.now()}_${i}`,
+                    role: e.role,
+                    content: e.text,
+                    timestamp: e.timestamp,
+                    status: 'complete',
+                }));
+                if (activeConversationId) {
+                    appendMessages(mapped, activeConversationId);
+                }
+            }
+        },
+        [activeConversationId, appendMessages],
+    );
+
     const lastAssistantIndex = messages.findLastIndex((m) => m.role === 'assistant');
 
     const panelToggleButton = !panelOpen ? (
@@ -128,6 +230,7 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
     // Centered mode for dashboard
     if (centered) {
         const hasMessages = messages.length > 0;
+        const showWelcome = !hasMessages && !isRestoring;
 
         return (
             <div className={cn('relative flex h-full min-h-0 overflow-hidden', className)}>
@@ -143,7 +246,7 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
 
                 {/* Main content area */}
                 <div className="flex min-w-0 flex-1 flex-col">
-                    {!hasMessages ? (
+                    {showWelcome ? (
                         /* Welcome screen */
                         <>
                             {panelToggleButton && (
@@ -164,6 +267,25 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                                 onModelChange={setSelectedModelId}
                             />
                         </>
+                    ) : isRestoring && !hasMessages ? (
+                        /* Restoring conversation — skeleton */
+                        <div className="flex h-full flex-col">
+                            <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                    {panelToggleButton}
+                                    <div className="border-border bg-background flex size-8 items-center justify-center rounded-full border">
+                                        <SuperiorMark className="size-4" />
+                                    </div>
+                                    <span className="font-semibold">Superior AI</span>
+                                </div>
+                            </div>
+                            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6">
+                                <div className="bg-muted/60 h-4 w-2/3 animate-pulse rounded" />
+                                <div className="bg-muted/40 h-4 w-1/2 animate-pulse rounded" style={{ animationDelay: '120ms' }} />
+                                <div className="bg-muted/30 ml-auto h-4 w-1/3 animate-pulse rounded" style={{ animationDelay: '240ms' }} />
+                                <div className="bg-muted/40 h-4 w-3/4 animate-pulse rounded" style={{ animationDelay: '360ms' }} />
+                            </div>
+                        </div>
                     ) : (
                         /* Conversation view */
                         <>
@@ -172,7 +294,7 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                                 <div className="flex items-center gap-2">
                                     {panelToggleButton}
                                     <div className="border-border bg-background flex size-8 items-center justify-center rounded-full border">
-                                        <Sparkles className="size-4" />
+                                        <SuperiorMark className="size-4" />
                                     </div>
                                     <span className="font-semibold">Superior AI</span>
                                 </div>
@@ -248,7 +370,14 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                         </>
                     )}
 
-                    {enableVoice && <VoiceCallModal isOpen={isVoiceCallOpen} onClose={() => setIsVoiceCallOpen(false)} />}
+                    {enableVoice && (
+                        <VoiceCallModal
+                            isOpen={isVoiceCallOpen}
+                            onClose={() => setIsVoiceCallOpen(false)}
+                            conversationId={activeConversationId}
+                            onTranscriptsReady={handleVoiceTranscriptsReady}
+                        />
+                    )}
                 </div>
             </div>
         );
@@ -330,7 +459,14 @@ export function AiChat({ config = {}, className, centered = false, enableVoice =
                 <p className="text-muted-foreground mt-2 text-center text-xs">Superior AI can make mistakes. Please verify important information.</p>
             </div>
 
-            {enableVoice && <VoiceCallModal isOpen={isVoiceCallOpen} onClose={() => setIsVoiceCallOpen(false)} />}
+            {enableVoice && (
+                        <VoiceCallModal
+                            isOpen={isVoiceCallOpen}
+                            onClose={() => setIsVoiceCallOpen(false)}
+                            conversationId={activeConversationId}
+                            onTranscriptsReady={handleVoiceTranscriptsReady}
+                        />
+                    )}
         </div>
     );
 }

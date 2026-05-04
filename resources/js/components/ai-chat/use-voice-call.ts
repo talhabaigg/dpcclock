@@ -112,8 +112,9 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
                         break;
 
                     case 'conversation.item.input_audio_transcription.completed': {
-                        // User's speech transcribed
-                        const transcript = message.transcript || '';
+                        // User's speech transcribed — drop empty/whitespace-only outputs (transcription hallucinations)
+                        const transcript = (message.transcript || '').trim();
+                        if (!transcript) break;
                         setUserTranscript(transcript);
                         setTranscriptHistory((prev) => [...prev, { role: 'user', text: transcript, timestamp: new Date() }]);
                         onTranscript?.(transcript, true);
@@ -357,7 +358,7 @@ export function useVoiceCall(options: UseVoiceCallOptions = {}): UseVoiceCallRet
 
             // Step 6: Connect to OpenAI Realtime API
             const baseUrl = 'https://api.openai.com/v1/realtime';
-            const model = 'gpt-4o-mini-realtime';
+            const model = 'gpt-4o-mini-realtime-preview';
 
             const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
                 method: 'POST',
