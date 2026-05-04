@@ -56,6 +56,8 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
+import SubmissionContent from '@/components/employment-applications/submission-content';
+
 const ApplicantMiniMap = lazy(() => import('@/components/employment-applications/applicant-mini-map'));
 
 interface Skill {
@@ -1903,6 +1905,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [showOnboardModal, setShowOnboardModal] = useState(false);
+    const [showSubmissionPane, setShowSubmissionPane] = useState(false);
 
     // Reference check dialog
     const [refCheckOpen, setRefCheckOpen] = useState(false);
@@ -2047,6 +2050,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Enquiry`} />
 
+            <div className={cn('transition-[padding] duration-200', showSubmissionPane && 'xl:pr-[520px]')}>
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {alertMessage && (
                     <Alert variant="destructive">
@@ -2501,15 +2505,16 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 <Separator className="my-2" />
 
-                                {/* View Full Submission Link */}
-                                <Link
-                                    href={`/employment-applications/${app.id}/submission`}
-                                    className="text-primary mt-2 flex items-center gap-1.5 py-2 text-sm font-medium hover:underline"
+                                {/* View Full Submission — opens side pane */}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubmissionPane(true)}
+                                    className="text-primary mt-2 flex w-full items-center gap-1.5 py-2 text-left text-sm font-medium hover:underline"
                                 >
                                     <ExternalLink className="h-3.5 w-3.5" />
                                     View Full Submission
                                     <ChevronRight className="ml-auto h-3.5 w-3.5" />
-                                </Link>
+                                </button>
 
                                 {canScreen && app.status !== 'declined' && app.status !== 'onboarded' && (
                                     <button
@@ -2548,6 +2553,54 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     </div>
                 </Card>
             </div>
+            </div>
+
+            {/* Full Submission Side Pane — non-modal, leaves main content interactive */}
+            {showSubmissionPane && (
+                <aside
+                    className="bg-background fixed inset-y-0 right-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
+                    aria-label="Full submission"
+                >
+                    <div className="bg-background flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">
+                                {app.first_name} {app.surname} — Full Submission
+                            </p>
+                            <p className="text-muted-foreground text-xs truncate">
+                                Submitted {formatDate(app.created_at)}
+                            </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <a
+                                href={`/employment-applications/${app.id}/submission/pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-8 items-center gap-1.5 rounded-md px-2 text-xs transition-colors"
+                                title="Download PDF"
+                            >
+                                <FileIcon className="h-3.5 w-3.5" />
+                                PDF
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => setShowSubmissionPane(false)}
+                                className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                                title="Close"
+                                aria-label="Close submission pane"
+                            >
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <SubmissionContent
+                            application={app}
+                            showSectionIndicator={false}
+                            fieldGridClassName="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2"
+                        />
+                    </div>
+                </aside>
+            )}
 
             {/* Reference Check Dialog */}
             <ReferenceCheckDialog

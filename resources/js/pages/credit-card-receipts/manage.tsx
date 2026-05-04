@@ -379,7 +379,7 @@ export default function ManageReceipts({ receipts, filters, statusCounts, catego
             setExpandedId(first.id);
             primeReceiptForms(first);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [receipts.data]);
 
     const primeReceiptForms = (receipt: ReceiptType) => {
