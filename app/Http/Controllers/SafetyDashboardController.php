@@ -104,98 +104,48 @@ class SafetyDashboardController extends Controller
             }
         }
 
-        // Suitable duties days from date ranges overlapping selected months
+        // Suitable duties days from date ranges overlapping selected months,
+        // split per project based on where the worker actually clocked in each day.
         $sortedMonths = $monthValues;
         sort($sortedMonths);
         $monthStart = Carbon::create($year, $sortedMonths[0], 1)->startOfDay();
         $monthEnd = Carbon::create($year, end($sortedMonths), 1)->endOfMonth();
 
-        $suitableDutiesInjuries = Injury::with('location.projectGroup')
-            ->whereNotNull('suitable_duties_from')
-            ->where('suitable_duties_from', '<=', $monthEnd->toDateString())
-            ->where(function ($q) use ($monthStart) {
-                $q->whereNull('suitable_duties_to')
-                  ->orWhere('suitable_duties_to', '>=', $monthStart->toDateString());
-            })
-            ->get();
+        $sdDaysByProject = $this->getSuitableDutiesDaysByProject($monthStart, $monthEnd, $monthValues);
 
-        if ($suitableDutiesInjuries->isNotEmpty()) {
-            $excludedDates = TimesheetEvent::whereIn('type', ['public_holiday', 'rdo'])
-                ->where('start', '<=', $monthEnd->toDateString())
-                ->where('end', '>=', $monthStart->toDateString())
-                ->get()
-                ->flatMap(function ($event) use ($monthStart, $monthEnd) {
-                    $dates = [];
-                    $s = Carbon::parse($event->start)->max($monthStart);
-                    $e = Carbon::parse($event->end)->min($monthEnd);
-                    for ($d = $s->copy(); $d->lte($e); $d->addDay()) {
-                        $dates[] = $d->toDateString();
-                    }
-                    return $dates;
-                })
-                ->unique()
-                ->toArray();
-
+        if (! empty($sdDaysByProject)) {
             foreach ($rows as &$mRow) {
                 $mRow['days_suitable_duties'] = 0;
             }
             unset($mRow);
 
-            foreach ($suitableDutiesInjuries as $injury) {
-                $today = Carbon::today();
-                $effectiveEnd = $monthEnd->gt($today) ? $today : $monthEnd;
-                $from = Carbon::parse($injury->suitable_duties_from)->max($monthStart);
-                $to = $injury->suitable_duties_to
-                    ? Carbon::parse($injury->suitable_duties_to)->min($effectiveEnd)
-                    : $effectiveEnd->copy();
-
-                $days = 0;
-                for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
-                    if (! in_array($d->month, $monthValues)) {
-                        continue;
+            foreach ($sdDaysByProject as $project => $days) {
+                $found = false;
+                foreach ($rows as &$mRow) {
+                    if ($mRow['project'] === $project) {
+                        $mRow['days_suitable_duties'] += $days;
+                        $found = true;
+                        break;
                     }
-                    if ($d->isWeekend() || in_array($d->toDateString(), $excludedDates)) {
-                        continue;
-                    }
-                    $days++;
                 }
+                unset($mRow);
 
-                if ($days > 0) {
-                    $loc = $injury->location;
-                    $project = 'Others';
-                    if ($loc) {
-                        $project = $loc->project_group_id
-                            ? ($loc->projectGroup?->name ?? $loc->name)
-                            : $loc->name;
-                    }
-
-                    $found = false;
-                    foreach ($rows as &$mRow) {
-                        if ($mRow['project'] === $project) {
-                            $mRow['days_suitable_duties'] += $days;
-                            $found = true;
-                            break;
-                        }
-                    }
-                    unset($mRow);
-
-                    if (! $found) {
-                        $rows[] = [
-                            'project' => $project,
-                            'location_id' => $loc?->project_group_id ?? $loc?->id,
-                            'reported_injuries' => 0,
-                            'type_of_injuries' => '-',
-                            'wcq_claims' => 0,
-                            'lti_count' => 0,
-                            'total_days_lost' => 0,
-                            'mti_count' => 0,
-                            'days_suitable_duties' => $days,
-                            'first_aid_count' => 0,
-                            'report_only_count' => 0,
-                            'near_miss_count' => 0,
-                            'medical_expenses' => 0,
-                        ];
-                    }
+                if (! $found) {
+                    $rows[] = [
+                        'project' => $project,
+                        'location_id' => null,
+                        'reported_injuries' => 0,
+                        'type_of_injuries' => '-',
+                        'wcq_claims' => 0,
+                        'lti_count' => 0,
+                        'total_days_lost' => 0,
+                        'mti_count' => 0,
+                        'days_suitable_duties' => $days,
+                        'first_aid_count' => 0,
+                        'report_only_count' => 0,
+                        'near_miss_count' => 0,
+                        'medical_expenses' => 0,
+                    ];
                 }
             }
         }
@@ -233,6 +183,47 @@ class SafetyDashboardController extends Controller
             ->whereBetween('occurred_at', [$fyStart, $fyEnd])
             ->get();
         $rows = $this->aggregateByProject($injuries);
+
+        // Override days_suitable_duties with per-project breakdown based on actual
+        // clocked locations during the FY range (clipped to today for ongoing periods).
+        $fyRangeStart = Carbon::parse($fyStart)->startOfDay();
+        $fyRangeEnd = Carbon::parse($fyEnd)->endOfDay();
+        $sdDaysByProject = $this->getSuitableDutiesDaysByProject($fyRangeStart, $fyRangeEnd);
+
+        foreach ($rows as &$row) {
+            $row['days_suitable_duties'] = 0;
+        }
+        unset($row);
+
+        foreach ($sdDaysByProject as $project => $days) {
+            $found = false;
+            foreach ($rows as &$row) {
+                if ($row['project'] === $project) {
+                    $row['days_suitable_duties'] += $days;
+                    $found = true;
+                    break;
+                }
+            }
+            unset($row);
+
+            if (! $found) {
+                $rows[] = [
+                    'project' => $project,
+                    'location_id' => null,
+                    'reported_injuries' => 0,
+                    'type_of_injuries' => '-',
+                    'wcq_claims' => 0,
+                    'lti_count' => 0,
+                    'total_days_lost' => 0,
+                    'mti_count' => 0,
+                    'days_suitable_duties' => $days,
+                    'first_aid_count' => 0,
+                    'report_only_count' => 0,
+                    'near_miss_count' => 0,
+                    'medical_expenses' => 0,
+                ];
+            }
+        }
 
         // Build man hours per project using location hierarchy
         $manHours = $this->getManHoursByProject($fyStartYear, $fyEndYear);
@@ -438,6 +429,140 @@ class SafetyDashboardController extends Controller
             'near_miss_count' => array_sum(array_column($rows, 'near_miss_count')),
             'medical_expenses' => round(array_sum(array_column($rows, 'medical_expenses')), 2),
         ];
+    }
+
+    /**
+     * Split suitable-duties business days per project across a date range.
+     *
+     * For each business day in the period (excluding weekends, public holidays, RDOs),
+     * the worker's actual clocked location for that day determines the project the day
+     * is attributed to. If the worker has no clock for that day, the day falls back to
+     * the injury's own project.
+     *
+     * @return array<string, int>  [projectName => days]
+     */
+    private function getSuitableDutiesDaysByProject(Carbon $rangeStart, Carbon $rangeEnd, ?array $monthValues = null): array
+    {
+        $injuries = Injury::with(['location.projectGroup', 'employee'])
+            ->whereNotNull('suitable_duties_from')
+            ->where('suitable_duties_from', '<=', $rangeEnd->toDateString())
+            ->where(function ($q) use ($rangeStart) {
+                $q->whereNull('suitable_duties_to')
+                  ->orWhere('suitable_duties_to', '>=', $rangeStart->toDateString());
+            })
+            ->get();
+
+        if ($injuries->isEmpty()) {
+            return [];
+        }
+
+        $excludedDates = TimesheetEvent::whereIn('type', ['public_holiday', 'rdo'])
+            ->where('start', '<=', $rangeEnd->toDateString())
+            ->where('end', '>=', $rangeStart->toDateString())
+            ->get()
+            ->flatMap(function ($event) use ($rangeStart, $rangeEnd) {
+                $dates = [];
+                $s = Carbon::parse($event->start)->max($rangeStart);
+                $e = Carbon::parse($event->end)->min($rangeEnd);
+                for ($d = $s->copy(); $d->lte($e); $d->addDay()) {
+                    $dates[] = $d->toDateString();
+                }
+                return $dates;
+            })
+            ->unique()
+            ->toArray();
+
+        // Build [eh_employee_id => [date => dominant eh_location_id]] from clock data.
+        $ehEmployeeIds = $injuries->pluck('employee.eh_employee_id')->filter()->unique()->all();
+        $clockMap = [];
+
+        if (! empty($ehEmployeeIds)) {
+            $clocks = Clock::whereIn('eh_employee_id', $ehEmployeeIds)
+                ->where('clock_in', '>=', $rangeStart->toDateString())
+                ->where('clock_in', '<=', $rangeEnd->copy()->endOfDay())
+                ->whereNotNull('clock_out')
+                ->whereNotNull('eh_location_id')
+                ->select('eh_employee_id', 'eh_location_id', 'clock_in', 'hours_worked')
+                ->get();
+
+            foreach ($clocks as $clock) {
+                $date = Carbon::parse($clock->clock_in)->toDateString();
+                $key = $clock->eh_employee_id;
+                $locId = $clock->eh_location_id;
+                $hours = (float) $clock->hours_worked;
+                $clockMap[$key][$date][$locId] = ($clockMap[$key][$date][$locId] ?? 0) + $hours;
+            }
+
+            // Resolve each day's clocked location to the one with most hours
+            foreach ($clockMap as $empId => $byDate) {
+                foreach ($byDate as $date => $byLoc) {
+                    arsort($byLoc);
+                    $clockMap[$empId][$date] = (int) array_key_first($byLoc);
+                }
+            }
+        }
+
+        // Map all distinct eh_location_ids to project names.
+        $allEhIds = [];
+        foreach ($clockMap as $byDate) {
+            foreach ($byDate as $locId) {
+                $allEhIds[$locId] = true;
+            }
+        }
+        $ehLocationToProject = ! empty($allEhIds)
+            ? $this->buildLocationToProjectMap(array_keys($allEhIds))
+            : [];
+
+        $today = Carbon::today();
+        $effectiveEnd = $rangeEnd->gt($today) ? $today->copy() : $rangeEnd->copy();
+
+        $daysByProject = [];
+
+        foreach ($injuries as $injury) {
+            $injuryProject = $this->resolveInjuryProject($injury);
+            $empId = $injury->employee?->eh_employee_id;
+
+            $from = Carbon::parse($injury->suitable_duties_from)->max($rangeStart);
+            $to = $injury->suitable_duties_to
+                ? Carbon::parse($injury->suitable_duties_to)->min($effectiveEnd)
+                : $effectiveEnd->copy();
+
+            for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                if ($monthValues !== null && ! in_array($d->month, $monthValues, true)) {
+                    continue;
+                }
+                if ($d->isWeekend() || in_array($d->toDateString(), $excludedDates, true)) {
+                    continue;
+                }
+
+                $project = null;
+                if ($empId) {
+                    $ehLocId = $clockMap[$empId][$d->toDateString()] ?? null;
+                    if ($ehLocId) {
+                        $project = $ehLocationToProject[$ehLocId] ?? null;
+                    }
+                }
+                if (! $project) {
+                    $project = $injuryProject;
+                }
+
+                $daysByProject[$project] = ($daysByProject[$project] ?? 0) + 1;
+            }
+        }
+
+        return $daysByProject;
+    }
+
+    private function resolveInjuryProject(Injury $injury): string
+    {
+        $loc = $injury->location;
+        if (! $loc) {
+            return 'Others';
+        }
+        if ($loc->project_group_id) {
+            return $loc->projectGroup?->name ?? $loc->name;
+        }
+        return $loc->name;
     }
 
     private function buildLocationToProjectMap(array $ehLocationIds): array
