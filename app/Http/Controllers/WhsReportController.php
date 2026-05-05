@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArPostedInvoice;
 use App\Models\Clock;
-use App\Models\GlTransactionDetail;
 use App\Models\Injury;
 use App\Models\JobCostDetail;
 use App\Models\Location;
@@ -66,21 +66,7 @@ class WhsReportController extends Controller
             ->whereMonth('transaction_date', $month)
             ->sum('amount');
 
-        // CSQ payments from GL transactions (income account 7002 = Misc. Income)
-        $csqGlPayments = GlTransactionDetail::where('account', '7002')
-            ->where('description', 'like', '%CSQ%')
-            ->whereYear('transaction_date', $year)
-            ->whereMonth('transaction_date', $month)
-            ->orderBy('transaction_date')
-            ->get()
-            ->map(fn ($gl) => [
-                'reference' => $gl->reference_document_number ?? '',
-                'date' => $gl->transaction_date?->format('d/m/Y') ?? '',
-                'description' => $gl->description ?? '',
-                'total' => round((float) $gl->credit, 2),
-            ])
-            ->values()
-            ->all();
+        $csqGlPayments = $this->getCsqPayments($year, $month);
 
         // Project locations for apprentice selector
         $jobsEhIds = Location::where('name', 'Jobs')->pluck('eh_location_id')->all();
@@ -370,21 +356,7 @@ class WhsReportController extends Controller
             ->forFinancialYear($fyStartYear)
             ->get();
 
-        // CSQ payments from GL
-        $csqGlPayments = GlTransactionDetail::where('account', '7002')
-            ->where('description', 'like', '%CSQ%')
-            ->whereYear('transaction_date', $year)
-            ->whereMonth('transaction_date', $month)
-            ->orderBy('transaction_date')
-            ->get()
-            ->map(fn ($gl) => [
-                'reference' => $gl->reference_document_number ?? '',
-                'date' => $gl->transaction_date?->format('d/m/Y') ?? '',
-                'description' => $gl->description ?? '',
-                'total' => round((float) $gl->credit, 2),
-            ])
-            ->values()
-            ->all();
+        $csqGlPayments = $this->getCsqPayments($year, $month);
 
         // LTIFR comparison with previous years (keyed by FY end year, e.g. 2026 = FY 2025/2026)
         $historicalLtifr = [
@@ -567,6 +539,28 @@ class WhsReportController extends Controller
                 ];
             })->values(),
         ]);
+    }
+
+    private function getCsqPayments(int $year, int $month): array
+    {
+        return ArPostedInvoice::where(function ($q) {
+                $q->where('contract_customer_name', 'like', '%CSQ%')
+                  ->orWhere('bill_to_customer_name', 'like', '%CSQ%')
+                  ->orWhere('mail_to_customer_name', 'like', '%CSQ%')
+                  ->orWhere('contract_customer_code', 'like', '%CSQ%');
+            })
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->orderBy('transaction_date')
+            ->get()
+            ->map(fn ($inv) => [
+                'reference' => $inv->invoice_number ?? '',
+                'date' => $inv->transaction_date?->format('d/m/Y') ?? '',
+                'description' => $inv->memo ?: ($inv->job_name ?? ''),
+                'total' => round((float) $inv->subtotal, 2),
+            ])
+            ->values()
+            ->all();
     }
 
     // --- Reuse aggregation logic from SafetyDashboardController ---
