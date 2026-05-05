@@ -30,6 +30,7 @@ interface EmployeesOnSiteData {
     total_workers?: number;
     prev_workers?: number;
     casual_workers?: number;
+    total_workers_to_date?: number;
 }
 
 interface EmployeesOnSiteCardProps {
@@ -73,6 +74,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
     const total = data?.total_workers ?? 0;
     const prev = data?.prev_workers ?? 0;
     const casuals = data?.casual_workers ?? 0;
+    const totalToDate = data?.total_workers_to_date ?? 0;
     const delta = total - prev;
     const deltaPct = prev > 0 ? Math.round((delta / prev) * 100) : null;
 
@@ -160,7 +162,12 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                         {/* Hero KPI */}
                         {total > 0 && (
                             <div className="flex items-center gap-1.5">
-                                <span className="text-xl font-bold tabular-nums leading-none">{total}</span>
+                                <span
+                                    className="text-xl font-bold tabular-nums leading-none"
+                                    title="Unique employees on site in the last 30 days"
+                                >
+                                    {total}
+                                </span>
                                 {deltaPct !== null && delta !== 0 && (
                                     <span className={cn(
                                         "flex items-center gap-0.5 text-[10px] font-medium tabular-nums",
@@ -178,6 +185,17 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 {casuals > 0 && (
                                     <span className="text-[10px] text-muted-foreground font-medium tabular-nums">
                                         ({casuals} casual{casuals !== 1 ? 's' : ''})
+                                    </span>
+                                )}
+                                {totalToDate > 0 && (
+                                    <span
+                                        className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-border"
+                                        title="Unique employees who have ever clocked on this job"
+                                    >
+                                        <span className="text-base font-semibold tabular-nums leading-none">{totalToDate}</span>
+                                        <span className="text-[9px] text-muted-foreground font-medium leading-none uppercase tracking-wide">
+                                            to&nbsp;date
+                                        </span>
                                     </span>
                                 )}
                             </div>
@@ -313,7 +331,10 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                         {/* Hero KPI */}
                         {total > 0 && (
                             <div className="flex items-center gap-2">
-                                <span className="text-2xl font-bold tabular-nums leading-none">{total}</span>
+                                <div className="flex flex-col items-end leading-none">
+                                    <span className="text-2xl font-bold tabular-nums leading-none">{total}</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">last 30 days</span>
+                                </div>
                                 {deltaPct !== null && delta !== 0 && (
                                     <span className={cn(
                                         "flex items-center gap-0.5 text-sm font-medium tabular-nums",
@@ -327,6 +348,12 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                     <span className="text-xs text-muted-foreground font-medium tabular-nums">
                                         ({casuals} casual{casuals !== 1 ? 's' : ''})
                                     </span>
+                                )}
+                                {totalToDate > 0 && (
+                                    <div className="flex flex-col items-end leading-none pl-3 ml-1 border-l border-border">
+                                        <span className="text-2xl font-bold tabular-nums leading-none">{totalToDate}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">to date</span>
+                                    </div>
                                 )}
                             </div>
                         )}

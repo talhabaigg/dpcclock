@@ -557,12 +557,21 @@ class LocationController extends Controller
                 ->distinct('clocks.eh_employee_id')
                 ->count('clocks.eh_employee_id');
 
+            // Cumulative unique workers to date (entire project history)
+            $totalWorkersToDate = (int) DB::table('clocks')
+                ->whereIn('eh_location_id', $locationIds)
+                ->where('status', 'processed')
+                ->whereNotNull('clock_out')
+                ->distinct('eh_employee_id')
+                ->count('eh_employee_id');
+
             $employeesOnSite = [
                 'by_type' => $byType,
                 'weekly_trend' => $weeklyTrend,
                 'total_workers' => $totalWorkers,
                 'prev_workers' => $prevWorkers,
                 'casual_workers' => $casualWorkers,
+                'total_workers_to_date' => $totalWorkersToDate,
             ];
         }
 
