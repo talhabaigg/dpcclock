@@ -23,6 +23,7 @@ interface ClientVariationTabProps {
     variationId?: number;
     pricingItems: PricingItem[];
     clientNotes: string;
+    defaultSellMultiplier?: number | null;
     onClientNotesChange: (notes: string) => void;
     onPricingItemsChange: (items: PricingItem[]) => void;
 }
@@ -52,6 +53,7 @@ export default function ClientVariationTab({
     variationId,
     pricingItems,
     clientNotes,
+    defaultSellMultiplier,
     onClientNotesChange,
     onPricingItemsChange,
 }: ClientVariationTabProps) {
@@ -98,17 +100,25 @@ export default function ClientVariationTab({
     useEffect(() => {
         const rates: Record<string, string> = {};
         const mults: Record<string, string> = {};
+        const hasDefault = defaultSellMultiplier != null && defaultSellMultiplier > 0;
         pricingItems.forEach((item, idx) => {
             const key = itemKey(item, idx);
             if (item.sell_rate != null) {
                 rates[key] = String(item.sell_rate);
                 const basis = getRateBasis(item);
                 if (basis > 0) mults[key] = ((item.sell_rate / basis) * 100).toFixed(0);
+            } else if (hasDefault) {
+                // Auto-populate from location default; user can override per-row
+                const basis = getRateBasis(item);
+                mults[key] = String(defaultSellMultiplier);
+                if (basis > 0) {
+                    rates[key] = (basis * (defaultSellMultiplier! / 100)).toFixed(2);
+                }
             }
         });
         setSellRates(rates);
         setMultipliers(mults);
-    }, [pricingItems]);
+    }, [pricingItems, defaultSellMultiplier]);
 
     const handleSellRateChange = (key: string, displayValue: string, costRatePrimary: number, factor: number) => {
         const displaySell = parseFloat(displayValue);

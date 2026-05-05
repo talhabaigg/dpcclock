@@ -959,6 +959,19 @@ class LocationController extends Controller
         return response()->json(['variation_number_start' => $location->variation_number_start]);
     }
 
+    public function updateSellMultiplier(Request $request, Location $location): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'sell_multiplier_percentage' => 'nullable|numeric|min:0|max:9999.99',
+        ]);
+
+        $location->update([
+            'sell_multiplier_percentage' => $validated['sell_multiplier_percentage'] ?? null,
+        ]);
+
+        return response()->json(['sell_multiplier_percentage' => $location->sell_multiplier_percentage]);
+    }
+
     public function close(Location $location)
     {
         $location->update([

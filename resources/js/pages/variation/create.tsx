@@ -41,6 +41,7 @@ interface Location {
     name: string;
     cost_codes: CostCode[];
     variation_next_number: number | null;
+    sell_multiplier_percentage?: number | string | null;
 }
 
 interface VariationData {
@@ -51,6 +52,7 @@ interface VariationData {
     status: string;
     description: string;
     client_notes: string | null;
+    extra_days: number | null;
     premier_lines_stale?: boolean;
     amount: number | string;
     co_date: string;
@@ -112,6 +114,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
         co_number: variation?.co_number ?? '',
         description: variation?.description ?? '',
         client_notes: variation?.client_notes ?? '',
+        extra_days: variation?.extra_days != null ? String(variation.extra_days) : '',
         amount: variation?.amount ?? '',
         date: variation?.co_date ?? new Date().toISOString().split('T')[0],
         line_items: variation
@@ -671,39 +674,57 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     />
                                 </div>
 
-                                {/* Change Type */}
-                                <div className="space-y-1.5">
-                                    <Label className="font-normal">Type</Label>
-                                    <div className="flex items-center gap-2">
-                                        <div className="inline-flex rounded-md border">
-                                            {([
-                                                { value: 'YET2SUBMIT', label: 'Yet to Submit' },
-                                                { value: 'PENDING', label: 'Pending' },
-                                                { value: 'APPROVED', label: 'Approved' },
-                                            ] as const).map((opt, i) => (
-                                                <button
-                                                    key={opt.value}
-                                                    type="button"
-                                                    onClick={() => setData('type', opt.value)}
-                                                    className={cn(
-                                                        'px-3 py-1.5 text-xs font-medium transition-colors',
-                                                        i > 0 && 'border-l',
-                                                        i === 0 && 'rounded-l-md',
-                                                        i === 2 && 'rounded-r-md',
-                                                        data.type === opt.value
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                                                    )}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            ))}
+                                {/* Change Type + Extra Days */}
+                                <div className="flex flex-wrap items-end gap-6">
+                                    <div className="space-y-1.5">
+                                        <Label className="font-normal">Type</Label>
+                                        <div className="flex items-center gap-2">
+                                            <div className="inline-flex rounded-md border">
+                                                {([
+                                                    { value: 'YET2SUBMIT', label: 'Yet to Submit' },
+                                                    { value: 'PENDING', label: 'Pending' },
+                                                    { value: 'APPROVED', label: 'Approved' },
+                                                ] as const).map((opt, i) => (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        onClick={() => setData('type', opt.value)}
+                                                        className={cn(
+                                                            'px-3 py-1.5 text-xs font-medium transition-colors',
+                                                            i > 0 && 'border-l',
+                                                            i === 0 && 'rounded-l-md',
+                                                            i === 2 && 'rounded-r-md',
+                                                            data.type === opt.value
+                                                                ? 'bg-primary text-primary-foreground'
+                                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                                        )}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {!['YET2SUBMIT', 'PENDING', 'APPROVED'].includes(data.type) && (
+                                                <span className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                                    {data.type}
+                                                </span>
+                                            )}
                                         </div>
-                                        {!['YET2SUBMIT', 'PENDING', 'APPROVED'].includes(data.type) && (
-                                            <span className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                                {data.type}
-                                            </span>
-                                        )}
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="extra_days" className="font-normal">Extra Days</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="extra_days"
+                                                type="number"
+                                                min={0}
+                                                step={1}
+                                                value={data.extra_days}
+                                                onChange={(e) => setData('extra_days', e.target.value)}
+                                                placeholder="0"
+                                                className="h-7 w-24 text-sm"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -748,6 +769,11 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 variationId={savedVariationId}
                                 pricingItems={pricingItems}
                                 clientNotes={data.client_notes}
+                                defaultSellMultiplier={
+                                    selectedLocation?.sell_multiplier_percentage != null
+                                        ? Number(selectedLocation.sell_multiplier_percentage)
+                                        : null
+                                }
                                 onClientNotesChange={(notes) => setData('client_notes', notes)}
                                 onPricingItemsChange={setPricingItemsTracked}
                             />

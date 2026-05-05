@@ -25,11 +25,13 @@ class Variation extends Model
         'premier_co_id',
         'markup_percentage',
         'client_notes',
+        'extra_days',
         'premier_lines_stale',
     ];
 
     protected $casts = [
         'markup_percentage' => 'float',
+        'extra_days' => 'integer',
         'premier_lines_stale' => 'boolean',
     ];
 

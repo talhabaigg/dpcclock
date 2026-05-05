@@ -32,6 +32,7 @@ class Location extends Model
         'latitude',
         'longitude',
         'master_hourly_rate',
+        'sell_multiplier_percentage',
     ];
 
     protected $casts = [
@@ -41,6 +42,7 @@ class Location extends Model
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
         'master_hourly_rate' => 'float',
+        'sell_multiplier_percentage' => 'float',
     ];
 
     /** JS day-of-week indices (0=Sun..6=Sat) considered working. Defaults to Mon-Fri. */

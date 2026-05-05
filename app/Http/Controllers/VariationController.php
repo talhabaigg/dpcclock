@@ -246,6 +246,7 @@ class VariationController extends Controller
             'co_number' => 'required|string',
             'description' => 'required|string',
             'client_notes' => 'nullable|string',
+            'extra_days' => 'nullable|integer|min:0',
 
             'date' => 'required|date',
             'line_items' => 'required|array',
@@ -265,6 +266,7 @@ class VariationController extends Controller
             'co_number' => $validated['co_number'],
             'description' => $validated['description'],
             'client_notes' => $validated['client_notes'] ?? null,
+            'extra_days' => $validated['extra_days'] ?? null,
             'created_by' => auth()->user()->name ?? null,
             'co_date' => $validated['date'],
         ]);
@@ -301,6 +303,7 @@ class VariationController extends Controller
             'co_number' => 'required|string',
             'description' => 'required|string',
             'client_notes' => 'nullable|string',
+            'extra_days' => 'nullable|integer|min:0',
 
             'date' => 'required|date',
             'line_items' => 'required|array',
@@ -320,6 +323,7 @@ class VariationController extends Controller
             'co_number' => $validated['co_number'],
             'description' => $validated['description'],
             'client_notes' => $validated['client_notes'] ?? null,
+            'extra_days' => $validated['extra_days'] ?? null,
 
             'co_date' => $validated['date'],
         ]);
@@ -513,6 +517,7 @@ class VariationController extends Controller
             'ChangeOrderNumber' => $coNumber,
             'Description' => $variation->description,
             'ChangeOrderDate' => $variation->co_date,
+            'ExtraDays' => (int) ($variation->extra_days ?? 0),
             'ChangeOrderLines' => $lineItems,
         ];
 

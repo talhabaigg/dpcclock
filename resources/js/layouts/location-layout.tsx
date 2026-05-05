@@ -70,6 +70,7 @@ export type LocationBase = {
     external_id: string;
     variation_number_start: number | null;
     variation_next_number: number | null;
+    sell_multiplier_percentage: number | string | null;
     worktypes: Array<{
         id: number;
         name: string;
@@ -104,6 +105,11 @@ export default function LocationLayout({ location, activeTab, children }: Locati
     const [editingVarStart, setEditingVarStart] = useState(false);
     const [varStartInput, setVarStartInput] = useState(String(location.variation_number_start ?? ''));
     const [savingVarStart, setSavingVarStart] = useState(false);
+    const [editingSellMultiplier, setEditingSellMultiplier] = useState(false);
+    const [sellMultiplierInput, setSellMultiplierInput] = useState(
+        location.sell_multiplier_percentage != null ? String(location.sell_multiplier_percentage) : '',
+    );
+    const [savingSellMultiplier, setSavingSellMultiplier] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -159,6 +165,32 @@ export default function LocationLayout({ location, activeTab, children }: Locati
             );
         } catch {
             setSavingVarStart(false);
+        }
+    };
+
+    const handleSaveSellMultiplier = async () => {
+        const trimmed = sellMultiplierInput.trim();
+        const num = trimmed === '' ? null : parseFloat(trimmed);
+        if (num !== null && (isNaN(num) || num < 0)) {
+            toast.error('Please enter a valid percentage');
+            return;
+        }
+        setSavingSellMultiplier(true);
+        try {
+            await router.patch(
+                `/locations/${location.id}/sell-multiplier`,
+                { sell_multiplier_percentage: num },
+                {
+                    onSuccess: () => {
+                        setEditingSellMultiplier(false);
+                        toast.success('Sell multiplier updated');
+                    },
+                    onError: () => toast.error('Failed to update'),
+                    onFinish: () => setSavingSellMultiplier(false),
+                },
+            );
+        } catch {
+            setSavingSellMultiplier(false);
         }
     };
 
@@ -337,6 +369,64 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                                     onClick={() => {
                                                         setVarStartInput(String(location.variation_number_start ?? ''));
                                                         setEditingVarStart(true);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
+                                    <div className="text-muted-foreground text-sm">Default Sell Multiplier</div>
+                                    {editingSellMultiplier ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    className="h-7 w-24 pr-6 text-sm"
+                                                    value={sellMultiplierInput}
+                                                    onChange={(e) => setSellMultiplierInput(e.target.value)}
+                                                    autoFocus
+                                                    placeholder="220"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleSaveSellMultiplier();
+                                                        if (e.key === 'Escape') setEditingSellMultiplier(false);
+                                                    }}
+                                                />
+                                                <span className="text-muted-foreground pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs">%</span>
+                                            </div>
+                                            <Button size="sm" className="h-7 px-2" onClick={handleSaveSellMultiplier} disabled={savingSellMultiplier}>
+                                                Save
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingSellMultiplier(false)}>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            {location.sell_multiplier_percentage != null ? (
+                                                <code className="bg-muted rounded px-2 py-0.5 font-mono text-xs">
+                                                    {Number(location.sell_multiplier_percentage)}%
+                                                </code>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs italic">Not set</span>
+                                            )}
+                                            {auth.isAdmin && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 w-6 p-0"
+                                                    onClick={() => {
+                                                        setSellMultiplierInput(
+                                                            location.sell_multiplier_percentage != null
+                                                                ? String(location.sell_multiplier_percentage)
+                                                                : '',
+                                                        );
+                                                        setEditingSellMultiplier(true);
                                                     }}
                                                 >
                                                     <Pencil className="h-3.5 w-3.5" />
