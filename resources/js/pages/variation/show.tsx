@@ -1,12 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { ArrowLeft, Copy, Download, Eye, Pencil, Printer, Send } from 'lucide-react';
+import { ArrowLeft, Copy, Download, Eye, Info, Pencil, Printer, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -90,8 +89,17 @@ const isSentOrApproved = (status: string) => status === 'sent' || status === 'Ap
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
     return (
         <div>
-            <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">{label}</span>
-            <p className="mt-0.5 text-sm font-medium">{value || '\u2014'}</p>
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">{label}</span>
+            <p className="mt-0.5 text-xs font-medium">{value || '—'}</p>
+        </div>
+    );
+}
+
+function SectionHeading({ title, action }: { title: string; action?: React.ReactNode }) {
+    return (
+        <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
+            {action}
         </div>
     );
 }
@@ -116,7 +124,7 @@ export default function VariationShow({ variation, totals }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Variation ${variation.co_number}`} />
 
-            <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+            <div className="mx-auto w-full max-w-6xl space-y-6 p-4 text-xs sm:p-6">
                 {/* ── Header ──────────────────────────────────────────── */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
@@ -177,7 +185,7 @@ export default function VariationShow({ variation, totals }: Props) {
                     </div>
                 </div>
 
-                {/* ── Summary Cards ────────────────────────────────────── */}
+                {/* ── Summary tiles ────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="bg-card rounded-lg border p-3">
                         <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">Total Cost</div>
@@ -201,214 +209,210 @@ export default function VariationShow({ variation, totals }: Props) {
                     </div>
                 </div>
 
-                {/* ── Details Card ──────────────────────────────────────── */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Variation Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            <DetailField label="CO Number" value={variation.co_number} />
-                            <DetailField label="Type" value={variation.type} />
-                            <DetailField label="Date" value={variation.co_date ? new Date(variation.co_date + 'T00:00:00').toLocaleDateString('en-GB') : null} />
-                            <DetailField label="Location" value={variation.location?.name} />
-                            <DetailField label="Created By" value={variation.created_by} />
-                            {variation.updated_by && <DetailField label="Updated By" value={variation.updated_by} />}
-                            {variation.drawing && <DetailField label="Drawing" value={variation.drawing.name} />}
-                            {variation.premier_co_id && <DetailField label="Premier CO ID" value={variation.premier_co_id} />}
-                            {variation.markup_percentage != null && <DetailField label="Markup %" value={`${variation.markup_percentage}%`} />}
-                        </div>
-                        {variation.description && (
-                            <>
-                                <Separator className="my-4" />
-                                <div>
-                                    <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">Description</span>
-                                    <p className="mt-1 text-sm whitespace-pre-wrap">{variation.description}</p>
-                                </div>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
+                {/* ── Details ──────────────────────────────────────────── */}
+                <section className="space-y-3">
+                    <SectionHeading title="Variation Details" />
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <DetailField label="CO Number" value={variation.co_number} />
+                        <DetailField label="Type" value={variation.type} />
+                        <DetailField label="Date" value={variation.co_date ? new Date(variation.co_date + 'T00:00:00').toLocaleDateString('en-GB') : null} />
+                        <DetailField label="Location" value={variation.location?.name} />
+                        <DetailField label="Created By" value={variation.created_by} />
+                        {variation.updated_by && <DetailField label="Updated By" value={variation.updated_by} />}
+                        {variation.drawing && <DetailField label="Drawing" value={variation.drawing.name} />}
+                        {variation.premier_co_id && <DetailField label="Premier CO ID" value={variation.premier_co_id} />}
+                        {variation.markup_percentage != null && <DetailField label="Markup %" value={`${variation.markup_percentage}%`} />}
+                    </div>
+                    {variation.description && (
+                        <>
+                            <Separator />
+                            <div>
+                                <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Description</span>
+                                <p className="mt-1 text-xs whitespace-pre-wrap">{variation.description}</p>
+                            </div>
+                        </>
+                    )}
+                </section>
 
                 {/* ── Pricing Items ────────────────────────────────────── */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Pricing Items</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {variation.pricing_items.length === 0 ? (
-                            <p className="text-muted-foreground py-6 text-center text-sm">No pricing items</p>
-                        ) : (
-                            <div className="overflow-x-auto rounded-lg border">
-                                <table className="w-full min-w-[700px] text-sm">
-                                    <thead>
-                                        <tr className="bg-muted/50 border-b">
-                                            <th className="text-muted-foreground px-3 py-2 text-left font-medium">Description</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Qty</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-center font-medium">Unit</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Labour</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Material</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Total</th>
+                <section className="space-y-3">
+                    <SectionHeading title="Pricing Items" />
+                    {variation.pricing_items.length === 0 ? (
+                        <p className="text-muted-foreground py-6 text-center text-xs">No pricing items</p>
+                    ) : (
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full min-w-[700px] text-xs">
+                                <thead>
+                                    <tr className="bg-muted/50 border-b">
+                                        <th className="text-muted-foreground px-3 py-2 text-left font-medium">Description</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Qty</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-center font-medium">Unit</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Labour</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Material</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Total</th>
+                                        {hasSellRates && (
+                                            <>
+                                                <th className="text-muted-foreground px-3 py-2 text-right font-medium">Sell Rate</th>
+                                                <th className="text-muted-foreground px-3 py-2 text-right font-medium">Sell Total</th>
+                                            </>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {variation.pricing_items.map((item) => (
+                                        <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30">
+                                            <td className="px-3 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    {item.condition?.condition_type?.color && (
+                                                        <span
+                                                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                                            style={{ backgroundColor: item.condition.condition_type.color }}
+                                                        />
+                                                    )}
+                                                    <span className="truncate">{item.description}</span>
+                                                    {item.condition && (
+                                                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                                            Condition
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{Number(item.qty).toFixed(2)}</td>
+                                            <td className="px-3 py-2 text-center">{item.unit}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.labour_cost)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.material_cost)}</td>
+                                            <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(item.total_cost)}</td>
                                             {hasSellRates && (
                                                 <>
-                                                    <th className="text-muted-foreground px-3 py-2 text-right font-medium">Sell Rate</th>
-                                                    <th className="text-muted-foreground px-3 py-2 text-right font-medium">Sell Total</th>
+                                                    <td className="px-3 py-2 text-right tabular-nums">{item.sell_rate != null ? formatCurrency(item.sell_rate) : '—'}</td>
+                                                    <td className="px-3 py-2 text-right font-medium tabular-nums">{item.sell_total != null ? formatCurrency(item.sell_total) : '—'}</td>
                                                 </>
                                             )}
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {variation.pricing_items.map((item) => (
-                                            <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30">
-                                                <td className="px-3 py-2">
-                                                    <div className="flex items-center gap-2">
-                                                        {item.condition?.condition_type?.color && (
-                                                            <span
-                                                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                                                                style={{ backgroundColor: item.condition.condition_type.color }}
-                                                            />
-                                                        )}
-                                                        <span className="truncate">{item.description}</span>
-                                                        {item.condition && (
-                                                            <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                                                Condition
-                                                            </Badge>
-                                                        )}
-                                                    </div>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-muted/30 border-t font-semibold">
+                                        <td className="px-3 py-2" colSpan={3}>Totals</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.labour_cost), 0))}
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.material_cost), 0))}
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.total_cost), 0))}
+                                        </td>
+                                        {hasSellRates && (
+                                            <>
+                                                <td className="px-3 py-2"></td>
+                                                <td className="px-3 py-2 text-right tabular-nums">
+                                                    {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.sell_total || 0), 0))}
                                                 </td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{Number(item.qty).toFixed(2)}</td>
-                                                <td className="px-3 py-2 text-center">{item.unit}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.labour_cost)}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.material_cost)}</td>
-                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(item.total_cost)}</td>
-                                                {hasSellRates && (
-                                                    <>
-                                                        <td className="px-3 py-2 text-right tabular-nums">{item.sell_rate != null ? formatCurrency(item.sell_rate) : '\u2014'}</td>
-                                                        <td className="px-3 py-2 text-right font-medium tabular-nums">{item.sell_total != null ? formatCurrency(item.sell_total) : '\u2014'}</td>
-                                                    </>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="bg-muted/30 border-t font-semibold">
-                                            <td className="px-3 py-2" colSpan={3}>Totals</td>
-                                            <td className="px-3 py-2 text-right tabular-nums">
-                                                {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.labour_cost), 0))}
-                                            </td>
-                                            <td className="px-3 py-2 text-right tabular-nums">
-                                                {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.material_cost), 0))}
-                                            </td>
-                                            <td className="px-3 py-2 text-right tabular-nums">
-                                                {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.total_cost), 0))}
-                                            </td>
-                                            {hasSellRates && (
-                                                <>
-                                                    <td className="px-3 py-2"></td>
-                                                    <td className="px-3 py-2 text-right tabular-nums">
-                                                        {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.sell_total || 0), 0))}
-                                                    </td>
-                                                </>
-                                            )}
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                            </>
+                                        )}
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    )}
+                </section>
 
                 {/* ── Premier Line Items ────────────────────────────────── */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Premier Line Items</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {variation.line_items.length === 0 ? (
-                            <p className="text-muted-foreground py-6 text-center text-sm">No Premier line items generated yet</p>
-                        ) : (
-                            <div className="overflow-x-auto rounded-lg border">
-                                <table className="w-full min-w-[800px] text-sm">
-                                    <thead>
-                                        <tr className="bg-muted/50 border-b">
-                                            <th className="text-muted-foreground w-16 px-3 py-2 text-center font-medium">#</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-left font-medium">Cost Item</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-left font-medium">Type</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-left font-medium">Description</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Qty</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Unit Cost</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Total Cost</th>
-                                            <th className="text-muted-foreground px-3 py-2 text-right font-medium">Revenue</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {variation.line_items.map((item) => (
-                                            <tr
-                                                key={item.id}
-                                                className={cn(
-                                                    'border-b last:border-0 hover:bg-muted/30',
-                                                    item.cost_type === 'REV' && 'bg-emerald-50/50 dark:bg-emerald-950/20',
-                                                )}
-                                            >
-                                                <td className="px-3 py-2 text-center">
-                                                    <span className="bg-muted inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium">
-                                                        {item.line_number}
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-2 font-mono text-xs">{item.cost_item}</td>
-                                                <td className="px-3 py-2">
-                                                    <Badge variant="outline" className="text-[10px]">
-                                                        {item.cost_type}
-                                                    </Badge>
-                                                </td>
-                                                <td className="max-w-[250px] truncate px-3 py-2">{item.description}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{item.cost_type === 'REV' ? '\u2014' : Number(item.qty).toFixed(2)}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{item.cost_type === 'REV' ? '\u2014' : formatCurrency(item.unit_cost)}</td>
-                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{item.cost_type === 'REV' ? '\u2014' : formatCurrency(item.total_cost)}</td>
-                                                <td className="px-3 py-2 text-right font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-                                                    {Number(item.revenue) ? formatCurrency(item.revenue) : '\u2014'}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="bg-muted/30 border-t font-semibold">
-                                            <td className="px-3 py-2" colSpan={6}>Totals</td>
-                                            <td className="px-3 py-2 text-right tabular-nums">
-                                                {formatCurrency(variation.line_items.reduce((s, i) => s + (i.cost_type === 'REV' ? 0 : Number(i.total_cost)), 0))}
+                <section className="space-y-3">
+                    <SectionHeading title="Premier Line Items" />
+                    {variation.line_items.length > 0 && !variation.line_items.some((i) => i.cost_item === '99-99' && Number(i.revenue) > 0) && (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <p className="text-xs leading-relaxed">
+                                Revenue line must be added in Premier directly. It will appear here after sync.
+                            </p>
+                        </div>
+                    )}
+                    {variation.line_items.length === 0 ? (
+                        <p className="text-muted-foreground py-6 text-center text-xs">No Premier line items generated yet</p>
+                    ) : (
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full min-w-[800px] text-xs">
+                                <thead>
+                                    <tr className="bg-muted/50 border-b">
+                                        <th className="text-muted-foreground w-16 px-3 py-2 text-center font-medium">#</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-left font-medium">Cost Item</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-left font-medium">Type</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-left font-medium">Description</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Qty</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Unit Cost</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Total Cost</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {variation.line_items.map((item) => (
+                                        <tr
+                                            key={item.id}
+                                            className={cn(
+                                                'border-b last:border-0 hover:bg-muted/30',
+                                                item.cost_type === 'REV' && 'bg-emerald-50/50 dark:bg-emerald-950/20',
+                                            )}
+                                        >
+                                            <td className="px-3 py-2 text-center">
+                                                <span className="bg-muted inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-medium">
+                                                    {item.line_number}
+                                                </span>
                                             </td>
-                                            <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
-                                                {formatCurrency(variation.line_items.reduce((s, i) => s + Number(i.revenue || 0), 0))}
+                                            <td className="px-3 py-2 font-mono">{item.cost_item}</td>
+                                            <td className="px-3 py-2">
+                                                <Badge variant="outline" className="text-[10px]">
+                                                    {item.cost_type}
+                                                </Badge>
+                                            </td>
+                                            <td className="max-w-[250px] truncate px-3 py-2">{item.description}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{item.cost_type === 'REV' ? '—' : Number(item.qty).toFixed(2)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{item.cost_type === 'REV' ? '—' : formatCurrency(item.unit_cost)}</td>
+                                            <td className="px-3 py-2 text-right font-medium tabular-nums">{item.cost_type === 'REV' ? '—' : formatCurrency(item.total_cost)}</td>
+                                            <td className="px-3 py-2 text-right font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                                                {item.cost_item === '99-99' ? formatCurrency(item.revenue) : ''}
                                             </td>
                                         </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-muted/30 border-t font-semibold">
+                                        <td className="px-3 py-2" colSpan={6}>Totals</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            {formatCurrency(variation.line_items.reduce((s, i) => s + (i.cost_type === 'REV' ? 0 : Number(i.total_cost)), 0))}
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
+                                            {formatCurrency(variation.line_items.reduce((s, i) => s + Number(i.revenue || 0), 0))}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    )}
+                </section>
 
                 {/* ── Client Notes ──────────────────────────────────────── */}
                 {(variation.client_notes || hasSellRates) && (
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base">Client</CardTitle>
+                    <section className="space-y-3">
+                        <SectionHeading
+                            title="Client"
+                            action={
                                 <Button variant="outline" size="sm" asChild>
                                     <a href={`/variations/${variation.id}/client-quote`} target="_blank" rel="noopener noreferrer">
                                         <Eye className="mr-1.5 h-4 w-4" />
                                         Print Quote
                                     </a>
                                 </Button>
-                            </div>
-                        </CardHeader>
+                            }
+                        />
                         {variation.client_notes && (
-                            <CardContent>
-                                <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">Client Notes</span>
-                                <p className="mt-1 text-sm whitespace-pre-wrap">{variation.client_notes}</p>
-                            </CardContent>
+                            <div>
+                                <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Client Notes</span>
+                                <p className="mt-1 text-xs whitespace-pre-wrap">{variation.client_notes}</p>
+                            </div>
                         )}
-                    </Card>
+                    </section>
                 )}
             </div>
         </AppLayout>

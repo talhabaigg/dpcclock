@@ -560,6 +560,342 @@ class TakeoffConditionController extends Controller
         ]);
     }
 
+    /**
+     * Stream a CSV export of every detailed-priced condition in this location,
+     * in the exact shape that `bulkImportDetailed()` consumes. One row per
+     * condition_line_item; conditions with no line items still emit a single
+     * placeholder row (blank entry_type/code) so the parent shows up and
+     * round-trips on re-upload.
+     */
+    public function bulkExportDetailed(Location $location)
+    {
+        $conditions = TakeoffCondition::where('location_id', $location->id)
+            ->where('pricing_method', 'detailed')
+            ->with(['lineItems.materialItem', 'lineItems.labourCostCode'])
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+
+        $headers = [
+            'condition_id', 'condition_name', 'measurement_type',
+            'section', 'entry_type', 'code', 'description',
+            'qty_source', 'fixed_qty', 'oc_spacing', 'layers', 'waste_percentage',
+            'unit_cost', 'cost_source', 'uom', 'pack_size',
+            'hourly_rate', 'production_rate',
+        ];
+        $filename = 'conditions-detailed-' . $location->id . '-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($conditions, $headers) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $headers);
+
+            foreach ($conditions as $condition) {
+                $items = $condition->lineItems->sortBy('sort_order')->values();
+                if ($items->isEmpty()) {
+                    fputcsv($out, [
+                        $condition->id, $condition->name, $condition->type,
+                        '', '', '', '',
+                        '', '', '', '', '',
+                        '', '', '', '',
+                        '', '',
+                    ]);
+                    continue;
+                }
+                foreach ($items as $item) {
+                    $code = $item->entry_type === 'labour'
+                        ? ($item->labourCostCode->code ?? $item->item_code ?? '')
+                        : ($item->materialItem->code ?? $item->item_code ?? '');
+
+                    fputcsv($out, [
+                        $condition->id,
+                        $condition->name,
+                        $condition->type,
+                        $item->section,
+                        $item->entry_type,
+                        $code,
+                        $item->description,
+                        $item->qty_source,
+                        $item->fixed_qty,
+                        $item->oc_spacing,
+                        $item->layers,
+                        $item->waste_percentage,
+                        $item->unit_cost,
+                        $item->cost_source,
+                        $item->uom,
+                        $item->pack_size,
+                        $item->hourly_rate,
+                        $item->production_rate,
+                    ]);
+                }
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Bulk import: create or update detailed-priced conditions from a flat row
+     * list (one line item per row, parent fields repeated). Rows are grouped
+     * by `condition_id` when present, otherwise by trimmed `condition_name`.
+     * Material codes resolve against `material_items.code`; labour codes
+     * against this location's `labour_cost_codes.code`. Unmatched codes are
+     * skipped row-by-row; create-only names that already exist are skipped
+     * wholesale.
+     */
+    public function bulkImportDetailed(Request $request, Location $location)
+    {
+        $validated = $request->validate([
+            'rows' => 'required|array|min:1',
+            'rows.*.condition_id' => 'nullable|string',
+            'rows.*.condition_name' => 'required|string|max:255',
+            'rows.*.measurement_type' => 'required|string|in:linear,area,count',
+            'rows.*.section' => 'nullable|string|max:100',
+            'rows.*.entry_type' => 'nullable|string',
+            'rows.*.code' => 'nullable|string',
+            'rows.*.description' => 'nullable|string|max:500',
+            'rows.*.qty_source' => 'nullable|string',
+            'rows.*.fixed_qty' => 'nullable|string',
+            'rows.*.oc_spacing' => 'nullable|string',
+            'rows.*.layers' => 'nullable|string',
+            'rows.*.waste_percentage' => 'nullable|string',
+            'rows.*.unit_cost' => 'nullable|string',
+            'rows.*.cost_source' => 'nullable|string',
+            'rows.*.uom' => 'nullable|string|max:20',
+            'rows.*.pack_size' => 'nullable|string',
+            'rows.*.hourly_rate' => 'nullable|string',
+            'rows.*.production_rate' => 'nullable|string',
+        ]);
+
+        // 1) Group rows. condition_id wins as the grouping key when present
+        // (so a rename on round-trip still updates the same record); rows
+        // without an ID fall back to grouping by trimmed name.
+        $groups = [];
+        foreach ($validated['rows'] as $idx => $row) {
+            $name = trim($row['condition_name']);
+            if ($name === '') continue;
+
+            $rawId = trim((string) ($row['condition_id'] ?? ''));
+            $id = ($rawId !== '' && ctype_digit($rawId)) ? (int) $rawId : null;
+            $key = $id !== null ? "id:{$id}" : "name:{$name}";
+
+            $groups[$key] ??= [
+                'condition_id' => $id,
+                'name' => $name,
+                'type' => strtolower(trim($row['measurement_type'])),
+                'rows' => [],
+            ];
+            $groups[$key]['rows'][] = ['_idx' => $idx] + $row;
+        }
+
+        if (empty($groups)) {
+            return response()->json([
+                'created' => 0, 'updated' => 0,
+                'skipped_existing' => [], 'skipped_invalid_id' => [],
+                'unmatched_codes' => [], 'message' => 'No usable rows.',
+            ], 422);
+        }
+
+        // 2) Resolve provided condition_ids in this location. Anything not
+        // found here, in another location, or not detailed-priced is invalid
+        // for upsert and gets skipped with a warning rather than silently
+        // converted or accidentally clobbered.
+        $providedIds = array_values(array_filter(array_map(fn ($g) => $g['condition_id'], $groups)));
+        $existingById = $providedIds
+            ? TakeoffCondition::where('location_id', $location->id)
+                ->whereIn('id', $providedIds)
+                ->where('pricing_method', 'detailed')
+                ->get()
+                ->keyBy('id')
+            : collect();
+
+        // 3) For create-only groups (no ID), look up by name to skip dupes.
+        $createNames = [];
+        foreach ($groups as $g) {
+            if ($g['condition_id'] === null) $createNames[] = $g['name'];
+        }
+        $existingNamesSet = $createNames
+            ? array_flip(
+                TakeoffCondition::where('location_id', $location->id)
+                    ->whereIn('name', $createNames)
+                    ->pluck('name')
+                    ->all()
+            )
+            : [];
+
+        // 4) Resolve every code in two queries.
+        $labourCodes = [];
+        $materialCodes = [];
+        foreach ($groups as $g) {
+            if ($g['condition_id'] !== null && ! $existingById->has($g['condition_id'])) continue;
+            if ($g['condition_id'] === null && isset($existingNamesSet[$g['name']])) continue;
+            foreach ($g['rows'] as $r) {
+                $entryType = strtolower(trim((string) ($r['entry_type'] ?? '')));
+                $code = trim((string) ($r['code'] ?? ''));
+                if ($entryType === '' || $code === '') continue; // placeholder row
+                if ($entryType === 'labour') $labourCodes[$code] = true;
+                elseif ($entryType === 'material') $materialCodes[$code] = true;
+            }
+        }
+
+        $labourMap = $labourCodes
+            ? LabourCostCode::where('location_id', $location->id)
+                ->whereIn('code', array_keys($labourCodes))
+                ->get()
+                ->keyBy('code')
+            : collect();
+
+        $materialMap = $materialCodes
+            ? MaterialItem::whereIn('code', array_keys($materialCodes))
+                ->whereNull('deleted_at')
+                ->select('id', 'code', 'description', 'unit_cost')
+                ->get()
+                ->keyBy('code')
+            : collect();
+
+        // 5) Run create + update in a single transaction.
+        $createdIds = [];
+        $updatedIds = [];
+        $skippedExisting = [];
+        $skippedInvalidId = [];
+        $unmatchedCodes = [];
+
+        DB::transaction(function () use (
+            $groups, $existingById, $existingNamesSet, $labourMap, $materialMap, $location,
+            &$createdIds, &$updatedIds, &$skippedExisting, &$skippedInvalidId, &$unmatchedCodes
+        ) {
+            foreach ($groups as $g) {
+                $providedId = $g['condition_id'];
+
+                if ($providedId !== null) {
+                    $condition = $existingById->get($providedId);
+                    if (! $condition) {
+                        $skippedInvalidId[] = $providedId;
+                        continue;
+                    }
+                } else {
+                    if (isset($existingNamesSet[$g['name']])) {
+                        $skippedExisting[] = $g['name'];
+                        continue;
+                    }
+                    $condition = TakeoffCondition::create([
+                        'location_id' => $location->id,
+                        'name' => $g['name'],
+                        'type' => in_array($g['type'], ['linear', 'area', 'count'], true) ? $g['type'] : 'linear',
+                        'color' => '#3b82f6',
+                        'opacity' => 50,
+                        'pricing_method' => 'detailed',
+                        'labour_unit_rate' => null,
+                        'labour_rate_source' => 'manual',
+                    ]);
+                }
+
+                // Build the new line item list for this condition.
+                $lineItems = [];
+                $sortOrder = 0;
+                foreach ($g['rows'] as $r) {
+                    $entryType = strtolower(trim((string) ($r['entry_type'] ?? '')));
+                    $code = trim((string) ($r['code'] ?? ''));
+
+                    // Skip placeholder rows (parent-only, no item).
+                    if ($entryType === '' && $code === '') continue;
+
+                    if (! in_array($entryType, ['material', 'labour'], true)) {
+                        $unmatchedCodes[] = "invalid_entry_type:{$entryType}";
+                        continue;
+                    }
+
+                    $qtySource = strtolower(trim((string) ($r['qty_source'] ?? 'primary')));
+                    if (! in_array($qtySource, ['primary', 'secondary', 'fixed'], true)) {
+                        $qtySource = 'primary';
+                    }
+
+                    $costSource = strtolower(trim((string) ($r['cost_source'] ?? '')));
+                    if (! in_array($costSource, ['material', 'manual'], true)) {
+                        $costSource = $entryType === 'material' ? 'material' : 'manual';
+                    }
+
+                    $layersRaw = trim((string) ($r['layers'] ?? ''));
+                    $layers = is_numeric($layersRaw) ? max(1, min(99, (int) $layersRaw)) : 1;
+
+                    $row = [
+                        'sort_order' => $sortOrder++,
+                        'section' => trim((string) ($r['section'] ?? '')) ?: null,
+                        'entry_type' => $entryType,
+                        'item_code' => $code ?: null,
+                        'description' => trim((string) ($r['description'] ?? '')) ?: null,
+                        'qty_source' => $qtySource,
+                        'fixed_qty' => is_numeric($r['fixed_qty'] ?? '') ? (float) $r['fixed_qty'] : null,
+                        'oc_spacing' => is_numeric($r['oc_spacing'] ?? '') ? (float) $r['oc_spacing'] : null,
+                        'layers' => $layers,
+                        'waste_percentage' => is_numeric($r['waste_percentage'] ?? '') ? (float) $r['waste_percentage'] : 0,
+                        'unit_cost' => is_numeric($r['unit_cost'] ?? '') ? (float) $r['unit_cost'] : null,
+                        'cost_source' => $costSource,
+                        'uom' => trim((string) ($r['uom'] ?? '')) ?: null,
+                        'pack_size' => is_numeric($r['pack_size'] ?? '') ? (float) $r['pack_size'] : null,
+                        'hourly_rate' => is_numeric($r['hourly_rate'] ?? '') ? (float) $r['hourly_rate'] : null,
+                        'production_rate' => is_numeric($r['production_rate'] ?? '') ? (float) $r['production_rate'] : null,
+                        'material_item_id' => null,
+                        'labour_cost_code_id' => null,
+                    ];
+
+                    if ($entryType === 'labour') {
+                        if ($code === '') { $unmatchedCodes[] = 'labour:'; continue; }
+                        $lcc = $labourMap->get($code);
+                        if (! $lcc) { $unmatchedCodes[] = "labour:{$code}"; continue; }
+                        $row['labour_cost_code_id'] = $lcc->id;
+                        if ($row['production_rate'] === null) $row['production_rate'] = $lcc->default_production_rate;
+                        if ($row['hourly_rate'] === null) $row['hourly_rate'] = $lcc->default_hourly_rate;
+                    } else {
+                        if ($code === '') { $unmatchedCodes[] = 'material:'; continue; }
+                        $mat = $materialMap->get($code);
+                        if (! $mat) { $unmatchedCodes[] = "material:{$code}"; continue; }
+                        $row['material_item_id'] = $mat->id;
+                        if ($costSource === 'material' && $row['unit_cost'] === null) {
+                            $row['unit_cost'] = (float) $mat->unit_cost;
+                        }
+                    }
+
+                    $lineItems[] = $row;
+                }
+
+                // On update, push parent-field changes from the CSV (name + type).
+                if ($providedId !== null) {
+                    $type = in_array($g['type'], ['linear', 'area', 'count'], true) ? $g['type'] : $condition->type;
+                    $condition->update(['name' => $g['name'], 'type' => $type]);
+                    $updatedIds[] = $condition->id;
+                } else {
+                    $createdIds[] = $condition->id;
+                }
+
+                // Replace line items in place; sync labour codes from them.
+                $condition->lineItems()->delete();
+                $condition->boqItems()->delete();
+                $condition->costCodes()->delete();
+                foreach ($lineItems as $li) {
+                    $condition->lineItems()->create($li);
+                }
+                $this->syncLabourCodesFromLineItems($condition);
+            }
+        });
+
+        // 6) Reload all conditions so the client gets fresh state.
+        $conditions = TakeoffCondition::where('location_id', $location->id)
+            ->with($this->withRelations())
+            ->orderBy('condition_number')
+            ->orderBy('name')
+            ->get();
+        $this->appendLineItemEffectiveUnitCosts($conditions, $location->id);
+
+        return response()->json([
+            'created' => count($createdIds),
+            'updated' => count($updatedIds),
+            'skipped_existing' => array_values(array_unique($skippedExisting)),
+            'skipped_invalid_id' => array_values(array_unique($skippedInvalidId)),
+            'unmatched_codes' => array_values(array_unique($unmatchedCodes)),
+            'conditions' => $conditions,
+        ]);
+    }
+
     // ---- Condition Type CRUD ----
 
     public function indexTypes(Location $location)

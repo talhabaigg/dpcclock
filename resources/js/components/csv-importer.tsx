@@ -14,12 +14,21 @@ type CsvImporterDialogProps = {
     onSubmit: (mappedData: Record<string, string>[]) => void; // Callback to handle the mapped data
     /** Render the trigger as an icon-only button. Caller is responsible for providing a tooltip. */
     iconOnly?: boolean;
+    /** Controlled mode: when provided, the component renders no trigger and uses external open state. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 };
-function CsvImporterDialog({ requiredColumns, onSubmit, iconOnly }: CsvImporterDialogProps) {
+function CsvImporterDialog({ requiredColumns, onSubmit, iconOnly, open, onOpenChange }: CsvImporterDialogProps) {
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
     const [mappings, setMappings] = useState<Record<string, string>>({}); // { requiredColumn: mappedCsvHeader }
-    const [isOpen, setIsOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isControlled = open !== undefined;
+    const isOpen = isControlled ? !!open : internalOpen;
+    const setIsOpen = (next: boolean) => {
+        if (isControlled) onOpenChange?.(next);
+        else setInternalOpen(next);
+    };
 
     // Handle file drop or selection
     const handleFile = (file: File) => {
@@ -121,7 +130,7 @@ function CsvImporterDialog({ requiredColumns, onSubmit, iconOnly }: CsvImporterD
     return (
         <div className="dialog-backdrop">
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                {iconOnly ? (
+                {!isControlled && (iconOnly ? (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <DialogTrigger asChild>
@@ -139,7 +148,7 @@ function CsvImporterDialog({ requiredColumns, onSubmit, iconOnly }: CsvImporterD
                             Import
                         </Button>
                     </DialogTrigger>
-                )}
+                ))}
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Data Importer</DialogTitle>

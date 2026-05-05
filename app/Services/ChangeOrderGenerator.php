@@ -200,16 +200,19 @@ class ChangeOrderGenerator
     /**
      * Generate Premier line items from a variation's pricing items.
      *
-     * Labour: Quick Gen logic — totalLabour × each LAB cost code's variation_ratio.
+     * Labour: Quick Gen logic — totalLabour × each LAB cost code's variation_ratio
+     * (or dayworks_ratio when $mode === 'dayworks').
      * Material: Actual cost codes from conditions (aggregated), then MAT Quick Gen on total.
      * Manual pricing items contribute labour only; their material is excluded.
      *
      * Wipes existing line items and creates new ones.
      *
+     * @param  string  $mode  'standard' (uses variation_ratio) | 'dayworks' (uses dayworks_ratio)
      * @return array{line_items: array, summary: array}
      */
-    public function generateFromPricingItems(Variation $variation, Location $location): array
+    public function generateFromPricingItems(Variation $variation, Location $location, string $mode = 'standard'): array
     {
+        $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
         $variation->loadMissing('pricingItems');
 
         // ── Step 1: Collect costs from pricing items ──
@@ -269,14 +272,14 @@ class ChangeOrderGenerator
         $labourLinesEmitted = 0;
         if ($totalLabour > 0) {
             foreach ($locationCostCodes as $costCode) {
-                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
                 $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
 
-                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
                     continue;
                 }
 
-                $lineAmount = round($totalLabour * ($variationRatio / 100), 2);
+                $lineAmount = round($totalLabour * ($ratio / 100), 2);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
                     'description' => $costCode->description,
@@ -295,7 +298,9 @@ class ChangeOrderGenerator
             // variation_ratio fan-out, the labour total would otherwise be silently
             // dropped. Emit a single consolidated line using the first available
             // LAB-prelim cost code (or no cost_code mapping if none exists).
-            if ($labourLinesEmitted === 0) {
+            // Dayworks mode skips the fallback — when dayworks_ratio is unset, no
+            // ratio-driven labour lines should appear at all.
+            if ($labourLinesEmitted === 0 && $mode !== 'dayworks') {
                 $fallback = $this->findFallbackLabourCostCode($locationCostCodes);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
@@ -335,14 +340,14 @@ class ChangeOrderGenerator
         // ── Step 4: Material prelim lines (Quick Gen logic) ──
         if ($totalMaterial > 0) {
             foreach ($locationCostCodes as $costCode) {
-                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
                 $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
 
-                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
                     continue;
                 }
 
-                $lineAmount = round($totalMaterial * ($variationRatio / 100), 2);
+                $lineAmount = round($totalMaterial * ($ratio / 100), 2);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
                     'description' => $costCode->description,
@@ -380,10 +385,12 @@ class ChangeOrderGenerator
      * Same logic as generateFromPricingItems but does NOT save — returns line items only.
      *
      * @param  array  $pricingItems  Raw pricing item data from the request
+     * @param  string  $mode  'standard' (uses variation_ratio) | 'dayworks' (uses dayworks_ratio)
      * @return array{line_items: array, summary: array}
      */
-    public function previewFromPricingItems(array $pricingItems, Location $location): array
+    public function previewFromPricingItems(array $pricingItems, Location $location, string $mode = 'standard'): array
     {
+        $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
         $totalLabour = 0;
         $materialByCostCode = [];
 
@@ -432,14 +439,14 @@ class ChangeOrderGenerator
 
         if ($totalLabour > 0) {
             foreach ($locationCostCodes as $costCode) {
-                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
                 $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
 
-                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
                     continue;
                 }
 
-                $lineAmount = round($totalLabour * ($variationRatio / 100), 2);
+                $lineAmount = round($totalLabour * ($ratio / 100), 2);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
                     'description' => $costCode->description,
@@ -476,14 +483,14 @@ class ChangeOrderGenerator
 
         if ($totalMaterial > 0) {
             foreach ($locationCostCodes as $costCode) {
-                $variationRatio = (float) ($costCode->pivot->variation_ratio ?? 0);
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
                 $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
 
-                if ($variationRatio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
                     continue;
                 }
 
-                $lineAmount = round($totalMaterial * ($variationRatio / 100), 2);
+                $lineAmount = round($totalMaterial * ($ratio / 100), 2);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
                     'description' => $costCode->description,

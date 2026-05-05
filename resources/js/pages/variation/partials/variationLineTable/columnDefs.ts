@@ -34,6 +34,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 value: params.value || '',
                 costCodes: costCodes,
                 onValueChange: params.onValueChange,
+                api: params.api,
             }),
             valueFormatter: (params) => {
                 if (!params.value) return 'Select cost item...';
@@ -53,6 +54,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 value: params.value || '',
                 costTypes: costTypes,
                 onValueChange: params.onValueChange,
+                api: params.api,
             }),
             valueFormatter: (params) => {
                 if (!params.value) return 'Type...';
@@ -134,10 +136,11 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             flex: 0.8,
             minWidth: 80,
             maxWidth: 110,
-            editable: (params) => params.data?.cost_type === 'REV',
+            editable: (params) => params.data?.cost_item === '99-99',
             cellEditor: 'agNumberCellEditor',
             cellEditorParams: { min: 0, precision: 2 },
-            valueFormatter: currencyFormatter,
+            valueFormatter: (params: any) =>
+                params.data?.cost_item === '99-99' ? currencyFormatter(params) : '',
             type: 'numericColumn',
         },
         {

@@ -983,11 +983,16 @@ class VariationController extends Controller
             'pricing_items.*.material_cost' => 'required|numeric',
             'pricing_items.*.qty' => 'required|numeric',
             'pricing_items.*.takeoff_condition_id' => 'nullable|integer',
+            'mode' => 'nullable|string|in:standard,dayworks',
         ]);
 
         $location = Location::findOrFail($validated['location_id']);
         $generator = app(ChangeOrderGenerator::class);
-        $result = $generator->previewFromPricingItems($validated['pricing_items'], $location);
+        $result = $generator->previewFromPricingItems(
+            $validated['pricing_items'],
+            $location,
+            $validated['mode'] ?? 'standard',
+        );
 
         return response()->json($result);
     }
@@ -995,12 +1000,23 @@ class VariationController extends Controller
     /**
      * Generate Premier line items from pricing items.
      * Wipes existing line_items and regenerates from pricing item totals.
+     *
+     * Accepts an optional `mode` body field: 'standard' (default) uses
+     * variation_ratio for prelim/oncost lines; 'dayworks' uses dayworks_ratio.
      */
-    public function generatePremier(Variation $variation): JsonResponse
+    public function generatePremier(Request $request, Variation $variation): JsonResponse
     {
+        $validated = $request->validate([
+            'mode' => 'nullable|string|in:standard,dayworks',
+        ]);
+
         $variation->loadMissing('location');
         $generator = app(ChangeOrderGenerator::class);
-        $result = $generator->generateFromPricingItems($variation, $variation->location);
+        $result = $generator->generateFromPricingItems(
+            $variation,
+            $variation->location,
+            $validated['mode'] ?? 'standard',
+        );
 
         $variation->load('lineItems');
 

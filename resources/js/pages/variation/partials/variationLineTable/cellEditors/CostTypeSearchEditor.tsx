@@ -9,15 +9,16 @@ interface CostTypeSearchEditorProps {
     value: string;
     onValueChange: (value: string) => void;
     costTypes: CostType[];
+    api?: { stopEditing: () => void };
 }
 
-export function CostTypeSearchEditor({ value, onValueChange, costTypes = [] }: CostTypeSearchEditorProps) {
+export function CostTypeSearchEditor({ value, onValueChange, costTypes = [], api }: CostTypeSearchEditorProps) {
     const [open, setOpen] = useState(true);
 
     const selectedCostType = costTypes.find((type) => type.value === value);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) api?.stopEditing(); }}>
             <PopoverTrigger asChild>
                 <button
                     type="button"
@@ -41,6 +42,7 @@ export function CostTypeSearchEditor({ value, onValueChange, costTypes = [] }: C
                                     onSelect={() => {
                                         onValueChange(costType.value);
                                         setOpen(false);
+                                        api?.stopEditing();
                                     }}
                                 >
                                     <div className="flex flex-col">

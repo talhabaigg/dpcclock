@@ -9,11 +9,14 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { api } from '@/lib/api';
-import { Download, Loader2, Send } from 'lucide-react';
+import { ChevronDown, Download, Loader2, Send } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
+
+type GenerateMode = 'standard' | 'dayworks';
 
 interface LineItem {
     id?: number;
@@ -46,10 +49,12 @@ export default function PremierVariationTab({
     const [sending, setSending] = useState(false);
     const [confirmRegenerate, setConfirmRegenerate] = useState(false);
     const [confirmSend, setConfirmSend] = useState(false);
+    const [pendingMode, setPendingMode] = useState<GenerateMode>('standard');
+    const [modeMenuOpen, setModeMenuOpen] = useState(false);
 
     const hasExistingLines = lineItems.length > 0;
 
-    const handleGenerate = async () => {
+    const handleGenerate = async (mode: GenerateMode = pendingMode) => {
         if (pricingItems.length === 0) {
             toast.error('Add pricing items first');
             return;
@@ -58,10 +63,11 @@ export default function PremierVariationTab({
         try {
             if (variationId) {
                 const data = await api.post<{ variation: { line_items: LineItem[] }; summary: { line_count: number } }>(
-                    `/variations/${variationId}/generate-premier`, {}
+                    `/variations/${variationId}/generate-premier`,
+                    { mode }
                 );
                 onLineItemsChange(data.variation.line_items);
-                toast.success(`Generated ${data.summary.line_count} lines`);
+                toast.success(`Generated ${data.summary.line_count} ${mode === 'dayworks' ? 'dayworks' : ''} lines`.replace('  ', ' '));
             } else {
                 if (!locationId) {
                     toast.error('Select a location first');
@@ -72,6 +78,7 @@ export default function PremierVariationTab({
                     '/variations/preview-premier-lines',
                     {
                         location_id: Number(locationId),
+                        mode,
                         pricing_items: pricingItems.map((i) => ({
                             labour_cost: i.labour_cost,
                             material_cost: i.material_cost,
@@ -81,7 +88,7 @@ export default function PremierVariationTab({
                     }
                 );
                 onLineItemsChange(data.line_items);
-                toast.success(`Generated ${data.summary.line_count} lines`);
+                toast.success(`Generated ${data.summary.line_count} ${mode === 'dayworks' ? 'dayworks' : ''} lines`.replace('  ', ' '));
             }
             setConfirmRegenerate(false);
         } catch {
@@ -91,9 +98,11 @@ export default function PremierVariationTab({
         }
     };
 
-    const handleGenerateClick = () => {
+    const handleModeSelect = (mode: GenerateMode) => {
+        setModeMenuOpen(false);
+        setPendingMode(mode);
         if (hasExistingLines) setConfirmRegenerate(true);
-        else handleGenerate();
+        else handleGenerate(mode);
     };
 
     const handleSendToPremier = async () => {
@@ -113,16 +122,36 @@ export default function PremierVariationTab({
     return (
         <div>
             <div className="flex items-center gap-1.5">
-                <Button
-                    onClick={handleGenerateClick}
-                    disabled={generating || pricingItems.length === 0}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-xs"
-                >
-                    {generating && <Loader2 className="h-3 w-3 animate-spin" />}
-                    Generate
-                </Button>
+                <Popover open={modeMenuOpen} onOpenChange={setModeMenuOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            disabled={generating || pricingItems.length === 0}
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 text-xs"
+                        >
+                            {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                            Generate
+                            <ChevronDown className="h-3 w-3 opacity-60" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-32 p-0.5">
+                        <button
+                            type="button"
+                            onClick={() => handleModeSelect('standard')}
+                            className="block w-full rounded-sm px-2 py-1 text-left text-xs hover:bg-accent focus:bg-accent focus:outline-none"
+                        >
+                            Standard
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeSelect('dayworks')}
+                            className="block w-full rounded-sm px-2 py-1 text-left text-xs hover:bg-accent focus:bg-accent focus:outline-none"
+                        >
+                            Dayworks
+                        </button>
+                    </PopoverContent>
+                </Popover>
                 {variationId && hasExistingLines && (
                     <>
                         <Button
@@ -152,14 +181,17 @@ export default function PremierVariationTab({
             <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Regenerate lines?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            Regenerate lines{pendingMode === 'dayworks' ? ' (Dayworks)' : ''}?
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            This replaces all {lineItems.length} existing lines. Manual edits will be lost.
+                            This replaces all {lineItems.length} existing lines using{' '}
+                            {pendingMode === 'dayworks' ? 'dayworks' : 'standard variation'} ratios. Manual edits will be lost.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleGenerate} disabled={generating}>
+                        <AlertDialogAction onClick={() => handleGenerate(pendingMode)} disabled={generating}>
                             {generating ? 'Generating...' : 'Regenerate'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
