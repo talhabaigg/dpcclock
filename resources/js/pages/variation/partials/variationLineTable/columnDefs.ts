@@ -18,6 +18,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             editable: false,
             sortable: false,
             suppressMovable: true,
+            valueFormatter: (params) => (params.node?.rowPinned ? '' : params.value),
             cellStyle: () => ({
                 color: isDark() ? '#a1a1aa' : '#71717a',
                 fontWeight: 500,
@@ -37,6 +38,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 api: params.api,
             }),
             valueFormatter: (params) => {
+                if (params.node?.rowPinned) return '';
                 if (!params.value) return 'Select cost item...';
                 const costCode = costCodes.find((code) => code.code === params.value);
                 return costCode ? `${costCode.code} - ${costCode.description}` : params.value;
@@ -57,6 +59,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
                 api: params.api,
             }),
             valueFormatter: (params) => {
+                if (params.node?.rowPinned) return '';
                 if (!params.value) return 'Type...';
                 return params.value;
             },
@@ -84,6 +87,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             cellEditor: 'agNumberCellEditor',
             cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: (params) => {
+                if (params.node?.rowPinned) return '';
                 if (params.value == null) return '';
                 return parseFloat(params.value).toFixed(2);
             },
@@ -98,7 +102,10 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             editable: (params) => params.data?.cost_type !== 'REV',
             cellEditor: 'agNumberCellEditor',
             cellEditorParams: { min: 0, precision: 2 },
-            valueFormatter: currencyFormatter,
+            valueFormatter: (params) => {
+                if (params.node?.rowPinned) return '';
+                return currencyFormatter(params);
+            },
             type: 'numericColumn',
         },
         {
@@ -109,6 +116,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             maxWidth: 65,
             editable: false,
             valueFormatter: (params) => {
+                if (params.node?.rowPinned) return '';
                 if (params.value == null || params.value === '' || params.value === 0) return '-';
                 return `${params.value}%`;
             },
@@ -140,7 +148,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             cellEditor: 'agNumberCellEditor',
             cellEditorParams: { min: 0, precision: 2 },
             valueFormatter: (params: any) =>
-                params.data?.cost_item === '99-99' ? currencyFormatter(params) : '',
+                params.node?.rowPinned || params.data?.cost_item === '99-99' ? currencyFormatter(params) : '',
             type: 'numericColumn',
         },
         {
@@ -151,7 +159,7 @@ export const createColumnDefs = (costCodes: CostCode[], costTypes: CostType[], o
             editable: false,
             sortable: false,
             filter: false,
-            cellRenderer: ActionsCellRenderer,
+            cellRenderer: (params: any) => params.node?.rowPinned ? null : ActionsCellRenderer(params),
             cellRendererParams: {
                 onDelete: onDeleteRow,
                 canDelete: canDelete,

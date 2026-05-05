@@ -25,10 +25,12 @@ class Variation extends Model
         'premier_co_id',
         'markup_percentage',
         'client_notes',
+        'premier_lines_stale',
     ];
 
     protected $casts = [
         'markup_percentage' => 'float',
+        'premier_lines_stale' => 'boolean',
     ];
 
     public function lineItems(): HasMany

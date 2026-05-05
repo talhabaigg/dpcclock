@@ -155,6 +155,23 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
             }
         }, []);
 
+        // Pinned totals row at the bottom of the grid.
+        const totalsRow = useMemo<LineItem[]>(() => {
+            if (internalRowData.length === 0) return [];
+            const totalCost = internalRowData.reduce((s, r) => s + (Number(r.total_cost) || 0), 0);
+            const totalRevenue = internalRowData.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+            return [{
+                line_number: 0,
+                cost_item: '',
+                cost_type: '',
+                description: 'Total',
+                qty: 0,
+                unit_cost: 0,
+                total_cost: totalCost,
+                revenue: totalRevenue,
+            }];
+        }, [internalRowData]);
+
         // Grid options
         const gridOptions = useMemo(() => {
             return {
@@ -238,7 +255,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
 
         return (
             <div className="w-full [&_.ag-checkbox-input-wrapper]:ml-2 [&_.ag-cell-editor_input]:text-xs [&_.ag-text-field-input]:text-xs [&_.ag-overlay-no-rows-center]:text-xs" style={{ height: height || '500px', minHeight: '300px' }}>
-                <AgGridReact ref={gridRef} theme={appliedTheme} rowData={internalRowData} columnDefs={columnDefs} {...gridOptions} />
+                <AgGridReact ref={gridRef} theme={appliedTheme} rowData={internalRowData} pinnedBottomRowData={totalsRow} columnDefs={columnDefs} {...gridOptions} />
             </div>
         );
     },

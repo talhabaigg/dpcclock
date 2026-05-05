@@ -11,7 +11,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn, fmtCurrency, fmtPercent, round2 } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { ArrowDown, ArrowLeftRight, ExternalLink, Save } from 'lucide-react';
+import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ArrowDown, ArrowLeftRight, ExternalLink, GripVertical, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
@@ -25,6 +28,25 @@ interface ClientVariationTabProps {
 }
 
 type DisplayUnit = 'primary' | 'alternate';
+
+type DragHandleProps = {
+    attributes: ReturnType<typeof useSortable>['attributes'];
+    listeners: ReturnType<typeof useSortable>['listeners'];
+};
+
+function SortableRow({ id, children }: { id: string; children: (drag: DragHandleProps) => React.ReactNode }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
+    return (
+        <tr ref={setNodeRef} style={style} className="hover:bg-muted/30 border-b last:border-0">
+            {children({ attributes, listeners })}
+        </tr>
+    );
+}
 
 export default function ClientVariationTab({
     variationId,
@@ -65,6 +87,14 @@ export default function ClientVariationTab({
         setDisplayUnits((prev) => ({ ...prev, [key]: prev[key] === 'alternate' ? 'primary' : 'alternate' }));
     };
 
+    // Sell rate / multiplier are driven by premier cost (the realised cost basis
+     // including oncosts). Falls back to total_cost / qty when premier hasn't
+     // been generated yet.
+    const getRateBasis = (item: PricingItem): number => {
+        if (item.premier_cost_per_unit != null) return item.premier_cost_per_unit;
+        return item.qty > 0 ? item.total_cost / item.qty : 0;
+    };
+
     useEffect(() => {
         const rates: Record<string, string> = {};
         const mults: Record<string, string> = {};
@@ -72,8 +102,8 @@ export default function ClientVariationTab({
             const key = itemKey(item, idx);
             if (item.sell_rate != null) {
                 rates[key] = String(item.sell_rate);
-                const costRate = item.qty > 0 ? item.total_cost / item.qty : 0;
-                if (costRate > 0) mults[key] = ((item.sell_rate / costRate) * 100).toFixed(0);
+                const basis = getRateBasis(item);
+                if (basis > 0) mults[key] = ((item.sell_rate / basis) * 100).toFixed(0);
             }
         });
         setSellRates(rates);
@@ -115,9 +145,9 @@ export default function ClientVariationTab({
         for (let i = fromIdx + 1; i < pricingItems.length; i++) {
             const item = pricingItems[i];
             const key = itemKey(item, i);
-            const costRate = item.qty > 0 ? item.total_cost / item.qty : 0;
+            const basis = getRateBasis(item);
             newMults[key] = String(pct);
-            newRates[key] = costRate > 0 ? (costRate * (pct / 100)).toFixed(2) : '0.00';
+            newRates[key] = basis > 0 ? (basis * (pct / 100)).toFixed(2) : '0.00';
         }
         setSellRates(newRates);
         setMultipliers(newMults);
@@ -140,15 +170,17 @@ export default function ClientVariationTab({
     };
 
     const getSellTotal = (item: PricingItem, idx: number): number => item.qty * getSellRate(item, idx);
-    const getMargin = (item: PricingItem, idx: number): number => getSellTotal(item, idx) - item.total_cost;
+    const getPremierTotal = (item: PricingItem): number =>
+        item.premier_cost_per_unit != null ? item.premier_cost_per_unit * item.qty : item.total_cost;
+    const getMargin = (item: PricingItem, idx: number): number => getSellTotal(item, idx) - getPremierTotal(item);
     const getMarginPercent = (item: PricingItem, idx: number): number => {
         const sell = getSellTotal(item, idx);
         return sell > 0 ? (getMargin(item, idx) / sell) * 100 : 0;
     };
 
-    const totalCost = pricingItems.reduce((sum, i) => sum + i.total_cost, 0);
+    const totalPremier = pricingItems.reduce((sum, i) => sum + getPremierTotal(i), 0);
     const totalSell = pricingItems.reduce((sum, i, idx) => sum + getSellTotal(i, idx), 0);
-    const totalMargin = totalSell - totalCost;
+    const totalMargin = totalSell - totalPremier;
     const overallMarginPercent = totalSell > 0 ? (totalMargin / totalSell) * 100 : 0;
 
     const handleSaveSellRates = async () => {
@@ -200,6 +232,20 @@ export default function ClientVariationTab({
         }
     };
 
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+    const sortableIds = pricingItems.map((item, idx) => itemKey(item, idx));
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = sortableIds.indexOf(String(active.id));
+        const newIndex = sortableIds.indexOf(String(over.id));
+        if (oldIndex === -1 || newIndex === -1) return;
+        const updated = arrayMove([...pricingItems], oldIndex, newIndex);
+        updated.forEach((item, i) => { item.sort_order = i + 1; });
+        onPricingItemsChange(updated);
+    };
+
     if (pricingItems.length === 0) {
         return (
             <div className="space-y-4">
@@ -219,15 +265,18 @@ export default function ClientVariationTab({
 
     return (
         <div className="space-y-4">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="border-b">
+                            <th className="text-muted-foreground w-8 px-2 py-1.5 text-center font-medium">#</th>
+                            <th className="w-6 px-0.5 py-1.5"></th>
                             <th className="text-muted-foreground px-2 py-1.5 text-left font-medium">Description</th>
                             <th className="text-muted-foreground w-12 px-2 py-1.5 text-right font-medium">Qty</th>
                             <th className="text-muted-foreground w-12 px-2 py-1.5 text-center font-medium">Unit</th>
-                            <th className="text-muted-foreground w-20 px-2 py-1.5 text-right font-medium">Cost</th>
-                            <th className="text-muted-foreground w-20 px-2 py-1.5 text-right font-medium">Cost Rate</th>
+                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Cost</th>
+                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Premier Cost</th>
                             <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Multiplier</th>
                             <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Sell Rate</th>
                             <th className="text-muted-foreground w-20 px-2 py-1.5 text-right font-medium">Sell Total</th>
@@ -235,6 +284,7 @@ export default function ClientVariationTab({
                             <th className="text-muted-foreground w-12 px-2 py-1.5 text-right font-medium">%</th>
                         </tr>
                     </thead>
+                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                     <tbody>
                         {
                             pricingItems.map((item, idx) => {
@@ -242,7 +292,7 @@ export default function ClientVariationTab({
                                 const sellTotal = getSellTotal(item, idx);
                                 const margin = getMargin(item, idx);
                                 const marginPct = getMarginPercent(item, idx);
-                                const costRatePrimary = item.qty > 0 ? item.total_cost / item.qty : 0;
+                                const costRatePrimary = getRateBasis(item);
                                 const factor = getDisplayFactor(item, idx);
                                 const displayQty = item.qty * factor;
                                 const displayCostRate = factor > 0 && displayQty > 0 ? item.total_cost / displayQty : 0;
@@ -250,7 +300,19 @@ export default function ClientVariationTab({
                                 const hasToggle = canToggleUnit(item);
 
                                 return (
-                                    <tr key={item.id ?? idx} className="hover:bg-muted/30 border-b last:border-0">
+                                    <SortableRow key={key} id={key}>
+                                        {({ attributes, listeners }) => (<>
+                                        <td className="text-muted-foreground w-8 px-2 py-1.5 text-center text-[11px] tabular-nums">{idx + 1}</td>
+                                        <td className="w-6 px-0.5 py-1.5">
+                                            <button
+                                                type="button"
+                                                {...attributes}
+                                                {...listeners}
+                                                className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing rounded p-0.5"
+                                            >
+                                                <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                        </td>
                                         <td className="px-2 py-1.5">
                                             <div className="flex items-center gap-1.5">
                                                 {item.condition?.condition_type && (
@@ -276,9 +338,23 @@ export default function ClientVariationTab({
                                                 <span className="text-muted-foreground text-xs">{item.unit}</span>
                                             )}
                                         </td>
-                                        <td className="px-2 py-1.5 text-right tabular-nums">{fmtCurrency(item.total_cost)}</td>
-                                        <td className="text-muted-foreground px-2 py-1.5 text-right tabular-nums">
-                                            {fmtCurrency(displayCostRate)}<span className="text-muted-foreground/60">/{displayUnit}</span>
+                                        <td className="px-2 py-1.5 text-right tabular-nums">
+                                            <div>{fmtCurrency(item.total_cost)}</div>
+                                            <div className="text-muted-foreground text-[10px]">
+                                                {fmtCurrency(displayCostRate)}<span className="text-muted-foreground/60">/{displayUnit}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-1.5 text-right tabular-nums">
+                                            {item.premier_cost_per_unit != null ? (
+                                                <>
+                                                    <div>{fmtCurrency(item.premier_cost_per_unit * item.qty)}</div>
+                                                    <div className="text-muted-foreground text-[10px]">
+                                                        {fmtCurrency(item.premier_cost_per_unit / factor)}<span className="text-muted-foreground/60">/{displayUnit}</span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-muted-foreground/60">—</span>
+                                            )}
                                         </td>
                                         <td className="px-2 py-1.5 text-right">
                                             <div className="flex items-center justify-end gap-0.5">
@@ -325,13 +401,15 @@ export default function ClientVariationTab({
                                         <td className={cn('px-2 py-1.5 text-right tabular-nums', marginPct < 0 && 'text-red-600 dark:text-red-400')}>
                                             {fmtPercent(marginPct)}
                                         </td>
-                                    </tr>
+                                        </>)}
+                                    </SortableRow>
                                 );
                             })}
                     </tbody>
+                    </SortableContext>
                     <tfoot>
                             <tr className="border-t">
-                                <td colSpan={3} className="px-2 py-1.5">
+                                <td colSpan={5} className="px-2 py-1.5">
                                     <div className="flex items-center gap-1.5">
                                         <Button onClick={handleSaveSellRates} size="sm" disabled={saving} className="h-6 gap-1 px-2 text-xs">
                                             <Save className="h-3 w-3" />
@@ -368,6 +446,7 @@ export default function ClientVariationTab({
                         </tfoot>
                 </table>
             </div>
+            </DndContext>
 
             {/* Client Notes */}
             <div className="flex items-center gap-2">

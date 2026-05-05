@@ -9,7 +9,12 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
 import { ChevronDown, Download, Loader2, Send } from 'lucide-react';
 import { useState } from 'react';
@@ -35,7 +40,10 @@ interface PremierVariationTabProps {
     locationId?: number | string;
     pricingItems: PricingItem[];
     lineItems: LineItem[];
+    linesStale?: boolean;
     onLineItemsChange: (items: LineItem[]) => void;
+    onPricingItemsChange?: (items: PricingItem[]) => void;
+    onLinesGenerated?: () => void;
 }
 
 export default function PremierVariationTab({
@@ -43,7 +51,10 @@ export default function PremierVariationTab({
     locationId,
     pricingItems,
     lineItems,
+    linesStale = false,
     onLineItemsChange,
+    onPricingItemsChange,
+    onLinesGenerated,
 }: PremierVariationTabProps) {
     const [generating, setGenerating] = useState(false);
     const [sending, setSending] = useState(false);
@@ -62,11 +73,19 @@ export default function PremierVariationTab({
         setGenerating(true);
         try {
             if (variationId) {
-                const data = await api.post<{ variation: { line_items: LineItem[] }; summary: { line_count: number } }>(
+                const data = await api.post<{
+                    variation: { line_items: LineItem[] };
+                    pricing_items?: PricingItem[];
+                    summary: { line_count: number };
+                }>(
                     `/variations/${variationId}/generate-premier`,
                     { mode }
                 );
                 onLineItemsChange(data.variation.line_items);
+                if (data.pricing_items && onPricingItemsChange) {
+                    onPricingItemsChange(data.pricing_items);
+                }
+                onLinesGenerated?.();
                 toast.success(`Generated ${data.summary.line_count} ${mode === 'dayworks' ? 'dayworks' : ''} lines`.replace('  ', ' '));
             } else {
                 if (!locationId) {
@@ -74,7 +93,11 @@ export default function PremierVariationTab({
                     setGenerating(false);
                     return;
                 }
-                const data = await api.post<{ line_items: LineItem[]; summary: { line_count: number } }>(
+                const data = await api.post<{
+                    line_items: LineItem[];
+                    per_row_premier?: { index: number; premier_cost_per_unit: number }[];
+                    summary: { line_count: number };
+                }>(
                     '/variations/preview-premier-lines',
                     {
                         location_id: Number(locationId),
@@ -88,6 +111,14 @@ export default function PremierVariationTab({
                     }
                 );
                 onLineItemsChange(data.line_items);
+                if (data.per_row_premier && onPricingItemsChange) {
+                    const updated = pricingItems.map((item, idx) => {
+                        const match = data.per_row_premier!.find((r) => r.index === idx);
+                        return match ? { ...item, premier_cost_per_unit: match.premier_cost_per_unit } : item;
+                    });
+                    onPricingItemsChange(updated);
+                }
+                onLinesGenerated?.();
                 toast.success(`Generated ${data.summary.line_count} ${mode === 'dayworks' ? 'dayworks' : ''} lines`.replace('  ', ' '));
             }
             setConfirmRegenerate(false);
@@ -122,8 +153,8 @@ export default function PremierVariationTab({
     return (
         <div>
             <div className="flex items-center gap-1.5">
-                <Popover open={modeMenuOpen} onOpenChange={setModeMenuOpen}>
-                    <PopoverTrigger asChild>
+                <DropdownMenu open={modeMenuOpen} onOpenChange={setModeMenuOpen}>
+                    <DropdownMenuTrigger asChild>
                         <Button
                             disabled={generating || pricingItems.length === 0}
                             variant="outline"
@@ -134,24 +165,16 @@ export default function PremierVariationTab({
                             Generate
                             <ChevronDown className="h-3 w-3 opacity-60" />
                         </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-32 p-0.5">
-                        <button
-                            type="button"
-                            onClick={() => handleModeSelect('standard')}
-                            className="block w-full rounded-sm px-2 py-1 text-left text-xs hover:bg-accent focus:bg-accent focus:outline-none"
-                        >
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-28">
+                        <DropdownMenuItem onClick={() => handleModeSelect('standard')} className="text-xs">
                             Standard
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleModeSelect('dayworks')}
-                            className="block w-full rounded-sm px-2 py-1 text-left text-xs hover:bg-accent focus:bg-accent focus:outline-none"
-                        >
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleModeSelect('dayworks')} className="text-xs">
                             Dayworks
-                        </button>
-                    </PopoverContent>
-                </Popover>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 {variationId && hasExistingLines && (
                     <>
                         <Button
@@ -167,7 +190,8 @@ export default function PremierVariationTab({
                             variant="outline"
                             size="sm"
                             onClick={() => setConfirmSend(true)}
-                            disabled={sending}
+                            disabled={sending || linesStale}
+                            title={linesStale ? 'Pricing items have changed — regenerate before sending' : undefined}
                             className="h-6 gap-1 px-2 text-xs"
                         >
                             {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}

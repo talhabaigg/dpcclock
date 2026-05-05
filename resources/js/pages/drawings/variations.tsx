@@ -115,6 +115,7 @@ export default function DrawingVariations() {
 
     // Drag-select multi-selection (set when viewMode === 'select')
     const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<Set<number>>(new Set());
+    const [hoveredMeasurementId, setHoveredMeasurementId] = useState<number | null>(null);
     const [bulkDeleting, setBulkDeleting] = useState(false);
 
     const { confirm, dialogProps: confirmDialogProps } = useConfirm();
@@ -226,7 +227,15 @@ export default function DrawingVariations() {
 
     const handleActivateCondition = useCallback(
         (conditionId: number | null) => {
-            if (!canMeasure) return; // Block activation when read-only / no variation selected
+            if (!canMeasure) {
+                // Block activation when read-only / no variation selected.
+                // Surface the reason so the user understands why nothing
+                // happens when they click a condition.
+                if (!selectedVariationId) toast.error('Select a variation first.');
+                else if (isVariationLocked) toast.error('Variation is in Premier and cannot be modified.');
+                else toast.error('You don\'t have permission to edit measurements.');
+                return;
+            }
             setActiveConditionId(conditionId);
             if (conditionId) {
                 const condition = conditions.find((c) => c.id === conditionId);
@@ -238,7 +247,7 @@ export default function DrawingVariations() {
                 setViewMode('pan');
             }
         },
-        [conditions, canMeasure],
+        [conditions, canMeasure, selectedVariationId, isVariationLocked],
     );
 
     const handleMeasurementComplete = async (points: Point[], type: 'linear' | 'area' | 'count') => {
@@ -781,10 +790,15 @@ export default function DrawingVariations() {
                         activeConditionThickness={
                             activeCondition?.type === 'linear' ? (activeCondition?.thickness ?? null) : null
                         }
+                        activeConditionHeight={
+                            activeCondition?.type === 'linear' ? (activeCondition?.height ?? null) : null
+                        }
                         snapEnabled={snapEnabled}
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        onMeasurementHover={setHoveredMeasurementId}
+                        hoveredMeasurementId={hoveredMeasurementId}
                         boxSelectMode={viewMode === 'select'}
                         onBoxSelectComplete={handleBoxSelect}
                         activeColor={activeCondition?.color ?? null}

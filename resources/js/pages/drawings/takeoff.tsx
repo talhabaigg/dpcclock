@@ -913,6 +913,9 @@ export default function DrawingTakeoff() {
                         activeConditionThickness={
                             activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.thickness ?? null) : null
                         }
+                        activeConditionHeight={
+                            activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.height ?? null) : null
+                        }
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}

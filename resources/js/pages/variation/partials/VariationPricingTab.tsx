@@ -43,6 +43,7 @@ export interface PricingItem {
     labour_cost: number;
     material_cost: number;
     total_cost: number;
+    premier_cost_per_unit?: number | null;
     sell_rate?: number | null;
     sell_total?: number | null;
     sort_order: number;

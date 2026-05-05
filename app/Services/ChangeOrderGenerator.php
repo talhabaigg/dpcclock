@@ -368,6 +368,25 @@ class ChangeOrderGenerator
             $variation->lineItems()->create($item);
         }
 
+        // Per-row premier cost: simulate the fan-out per pricing item and
+        // persist the per-unit value. The Client tab uses this to surface the
+        // realised premier cost alongside the user's input cost.
+        foreach ($variation->pricingItems as $pricingItem) {
+            $perUnit = $this->perUnitPremierCost([
+                'labour_cost' => (float) $pricingItem->labour_cost,
+                'material_cost' => (float) $pricingItem->material_cost,
+                'qty' => (float) $pricingItem->qty,
+                'takeoff_condition_id' => $pricingItem->takeoff_condition_id,
+            ], $location, $mode);
+
+            $pricingItem->premier_cost_per_unit = $perUnit;
+            $pricingItem->save();
+        }
+
+        // Lines are now in sync with pricing items.
+        $variation->premier_lines_stale = false;
+        $variation->save();
+
         $totalCost = array_sum(array_column($lineItems, 'total_cost'));
 
         return [
@@ -379,6 +398,22 @@ class ChangeOrderGenerator
                 'line_count' => count($lineItems),
             ],
         ];
+    }
+
+    /**
+     * Compute the per-unit premier cost for a pricing item shape.
+     * Returns 0.0 when qty is non-positive to avoid divide-by-zero.
+     */
+    private function perUnitPremierCost(array $item, Location $location, string $mode): float
+    {
+        $qty = (float) ($item['qty'] ?? 0);
+        if ($qty <= 0) {
+            return 0.0;
+        }
+
+        $total = $this->computeRowPremierCost($item, $location, $mode);
+
+        return round($total / $qty, 4);
     }
 
     /**
@@ -507,8 +542,24 @@ class ChangeOrderGenerator
 
         $totalCost = array_sum(array_column($lineItems, 'total_cost'));
 
+        // Per-row premier cost (per unit), keyed by input order so the
+        // frontend can map results back to its local pricing-item array.
+        $perRow = [];
+        foreach ($pricingItems as $idx => $row) {
+            $perRow[] = [
+                'index' => $idx,
+                'premier_cost_per_unit' => $this->perUnitPremierCost([
+                    'labour_cost' => (float) ($row['labour_cost'] ?? 0),
+                    'material_cost' => (float) ($row['material_cost'] ?? 0),
+                    'qty' => (float) ($row['qty'] ?? 0),
+                    'takeoff_condition_id' => $row['takeoff_condition_id'] ?? null,
+                ], $location, $mode),
+            ];
+        }
+
         return [
             'line_items' => $lineItems,
+            'per_row_premier' => $perRow,
             'summary' => [
                 'labour_base' => round($totalLabour, 2),
                 'material_base' => round($totalMaterial, 2),
@@ -516,6 +567,103 @@ class ChangeOrderGenerator
                 'line_count' => count($lineItems),
             ],
         ];
+    }
+
+    /**
+     * Compute the per-row premier cost for a single pricing item.
+     *
+     * Runs the same fan-out logic as generateFromPricingItems but treats
+     * this item as if it were the only pricing item on the variation.
+     * Returns the total simulated cost (base labour/material + oncosts).
+     *
+     * For pricing items with a condition, the condition's cost-code material
+     * breakdown is used. For manual items, material is excluded (matching
+     * generateFromPricingItems behavior).
+     *
+     * @param  array{labour_cost: float, material_cost: float, qty: float, takeoff_condition_id: int|null}  $item
+     */
+    public function computeRowPremierCost(array $item, Location $location, string $mode = 'standard'): float
+    {
+        $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
+
+        $totalLabour = (float) ($item['labour_cost'] ?? 0);
+        $materialByCostCode = [];
+
+        $conditionId = $item['takeoff_condition_id'] ?? null;
+        if ($conditionId) {
+            $condition = TakeoffCondition::with([
+                'costCodes.costCode',
+                'boqItems.costCode',
+                'boqItems.labourCostCode',
+            ])->find($conditionId);
+
+            if ($condition) {
+                $costs = $this->calculator->compute($condition, (float) ($item['qty'] ?? 1));
+                foreach ($costs['breakdown']['cost_codes'] ?? [] as $cc) {
+                    $code = $cc['cost_code'] ?? null;
+                    if (! $code) {
+                        continue;
+                    }
+                    if (! isset($materialByCostCode[$code])) {
+                        $materialByCostCode[$code] = ['total' => 0];
+                    }
+                    $materialByCostCode[$code]['total'] += $cc['line_cost'];
+                }
+            }
+        }
+
+        $locationCostCodes = $location->costCodes()->with('costType')->distinct()->get();
+
+        $total = 0.0;
+
+        // Labour fan-out
+        $labourLinesEmitted = 0;
+        if ($totalLabour > 0) {
+            foreach ($locationCostCodes as $costCode) {
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
+                $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
+
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'LAB')) {
+                    continue;
+                }
+
+                $total += round($totalLabour * ($ratio / 100), 2);
+                $labourLinesEmitted++;
+            }
+
+            // Mirrors generateFromPricingItems fallback: if no LAB ratios fan out
+            // and we're not in dayworks, emit the labour total as a single line.
+            if ($labourLinesEmitted === 0 && $mode !== 'dayworks') {
+                $total += round($totalLabour, 2);
+            }
+        }
+
+        // Direct material lines (one per condition cost code)
+        $totalMaterial = 0.0;
+        foreach ($materialByCostCode as $data) {
+            $amount = round($data['total'], 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $totalMaterial += $amount;
+            $total += $amount;
+        }
+
+        // Material prelim fan-out
+        if ($totalMaterial > 0) {
+            foreach ($locationCostCodes as $costCode) {
+                $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
+                $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
+
+                if ($ratio <= 0 || ! str_starts_with($prelimType, 'MAT')) {
+                    continue;
+                }
+
+                $total += round($totalMaterial * ($ratio / 100), 2);
+            }
+        }
+
+        return round($total, 2);
     }
 
     private function findBaseCostCode($costCodes, string $type): string

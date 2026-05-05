@@ -35,6 +35,13 @@ export const getGridOptions = (): GridOptions => {
 };
 
 export const getRowStyle = (params: any) => {
+    if (params.node?.rowPinned) {
+        return {
+            backgroundColor: isDark() ? '#27272a' : '#f4f4f5',
+            fontWeight: 700,
+            borderTop: isDark() ? '1px solid #3f3f46' : '1px solid #d4d4d8',
+        };
+    }
     if (params.data?.cost_type === 'REV') {
         return {
             backgroundColor: isDark() ? '#052e1680' : '#f0fdf4',

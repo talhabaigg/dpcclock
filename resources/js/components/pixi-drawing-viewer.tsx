@@ -4,7 +4,7 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPagePr
 // pdf.worker — Safari/iPadOS doesn't ship that method yet and PDF.js v5 calls
 // it inside the worker. See resources/js/pdf-worker-with-polyfill.ts.
 import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
-import { Application, CanvasSource, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Application, CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './ui/button';
@@ -37,6 +37,10 @@ type Props = {
     /** Active condition's thickness in meters — used for the in-progress
      *  measure_line preview stroke so the user sees real width while drawing. */
     activeConditionThickness?: number | null;
+    /** Active condition's height in meters. When set on a linear condition,
+     *  the live measurement pill also shows length × height as m² so the
+     *  user sees both lm and the derived area while drawing. */
+    activeConditionHeight?: number | null;
     onCalibrationComplete?: (pointA: Point, pointB: Point) => void;
     onMeasurementComplete?: (points: Point[], type: 'linear' | 'area' | 'count') => void;
     onMeasurementClick?: (m: MeasurementData, event?: { clientX: number; clientY: number }) => void;
@@ -157,7 +161,6 @@ type LivePanelContent = {
     label: string;
     value: string;
     secondary?: string;
-    hint?: string;
 };
 
 // Distance from point P to segment AB
@@ -264,6 +267,7 @@ export function PixiDrawingViewer({
     conditionOpacities,
     conditionThicknesses,
     activeConditionThickness,
+    activeConditionHeight,
     onCalibrationComplete,
     onMeasurementComplete,
     onMeasurementClick,
@@ -361,10 +365,6 @@ export function PixiDrawingViewer({
                 autoDensity: true,
                 resolution: window.devicePixelRatio || 1,
                 preference: 'webgl',
-                // WebGL clears the drawing buffer after each present by default;
-                // we read pixels back via drawImage(pixiCanvas, …) to feed the
-                // measurement-panel magnifier, so the buffer must be preserved.
-                preserveDrawingBuffer: true,
             });
             if (cancelled) {
                 app.destroy(true, { children: true, texture: true });
@@ -1112,9 +1112,30 @@ export function PixiDrawingViewer({
         if (!calibration || !pdfDims) return null;
         const unit = calibration.unit || '';
 
-        // Preferred: pixels_per_unit lives in tile-pixel space at zoom 0;
-        // pdfDims.width / tileWidth is the conversion factor from tile pixels
-        // to PDF points along x (PDF rendering is isotropic, so x suffices).
+        // Preset method (e.g. "A1 1:100"): derive directly from drawing_scale.
+        // PDF natively encodes paper size in points (1pt = 1/72 in = 25.4/72 mm),
+        // so we don't need tileWidth or rasterized pixel counts. For "1:N":
+        //   1 paper-mm  ↔  N real-mm  →  pdf_points_per_real_meter
+        //     = (72/25.4) × (1000/N)
+        // Then scale by meters-per-unit for non-metric units.
+        if (calibration.method === 'preset' && calibration.drawing_scale) {
+            const m = calibration.drawing_scale.match(/(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)/);
+            if (m) {
+                const num = parseFloat(m[1]);
+                const den = parseFloat(m[2]);
+                if (num > 0 && den > 0) {
+                    const ratio = den / num; // for "1:100" → 100
+                    const metersPerUnit = METERS_PER_UNIT[unit] ?? 1;
+                    const pdfPointsPerMeter = (72 / 25.4) * (1000 / ratio);
+                    const pdfPointsPerUnit = pdfPointsPerMeter * metersPerUnit;
+                    if (pdfPointsPerUnit > 0) return { pdfPointsPerUnit, unit };
+                }
+            }
+        }
+
+        // pixels_per_unit + tileWidth: legacy tile-space calibration. Only
+        // works when the consumer supplies tileWidth; otherwise we fall
+        // through to the manual-points fallback.
         if (calibration.pixels_per_unit && tileWidth && tileWidth > 0) {
             const pdfPointsPerUnit = (calibration.pixels_per_unit * pdfDims.width) / tileWidth;
             if (pdfPointsPerUnit > 0) {
@@ -1535,7 +1556,7 @@ export function PixiDrawingViewer({
                 }
                 setHoverPoint(preview);
                 // Track cursor in canvas-relative px so the live measurement
-                // panel (DOM overlay with magnifier) can anchor to it.
+                // panel can anchor to it.
                 const rect = canvas.getBoundingClientRect();
                 setLivePanelPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
             } else {
@@ -2039,7 +2060,7 @@ export function PixiDrawingViewer({
                         };
                         const segG = new Graphics();
                         drawSegment(segG);
-                        segG.stroke({ color: segColor, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
+                        segG.stroke({ color: segColor, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'butt', join: 'round' });
                         layer.addChild(segG);
                         if (selectedSegments?.has(segKey)) {
                             const halo = new Graphics();
@@ -2050,7 +2071,7 @@ export function PixiDrawingViewer({
                     }
                 } else {
                     drawBezierPath(g, renderPoints, W, H, false);
-                    g.stroke({ color, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'round', join: 'round' });
+                    g.stroke({ color, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'butt', join: 'round' });
                     layer.addChild(g);
                 }
             }
@@ -2298,7 +2319,7 @@ export function PixiDrawingViewer({
                 const metersPerUnit = METERS_PER_UNIT[calibrationFactor.unit] ?? 1;
                 inProgressStrokeWidth = (activeConditionThickness / metersPerUnit) * calibrationFactor.pdfPointsPerUnit;
             }
-            g.stroke({ color: drawColor, width: inProgressStrokeWidth, cap: 'round', join: 'round' });
+            g.stroke({ color: drawColor, width: inProgressStrokeWidth, cap: 'butt', join: 'round' });
             layer.addChild(g);
 
             // Preview segment from last placed point to cursor for line mode
@@ -2418,9 +2439,8 @@ export function PixiDrawingViewer({
         }
 
         // The live measurement panel is rendered as a React DOM overlay
-        // (LiveMeasurementPanel below) so it can host an HTML <canvas>
-        // magnifier and use crisp DOM typography. See livePanelContent +
-        // <LiveMeasurementPanel> in the component's JSX.
+        // (LiveMeasurementPanel below) so it can use crisp DOM typography.
+        // See livePanelContent + <LiveMeasurementPanel> in the component's JSX.
     }, [
         drawingPoints,
         hoverPoint,
@@ -2443,27 +2463,6 @@ export function PixiDrawingViewer({
     // UI
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Re-render a slice of the world at a custom resolution and return the
-    // resulting canvas. Used by the live-measurement panel's magnifier so the
-    // loupe shows native-resolution PDF pixels instead of upscaled
-    // screen-rendered ones. Caller passes CSS-px coords + the loupe's target
-    // resolution; we let Pixi handle the GPU readback.
-    const extractMagnifierRegion = useCallback((cssX: number, cssY: number, cssSize: number, resolution: number): HTMLCanvasElement | null => {
-        const app = appRef.current;
-        if (!app || !app.renderer) return null;
-        try {
-            const result = app.renderer.extract.canvas({
-                target: app.stage,
-                frame: new Rectangle(cssX - cssSize / 2, cssY - cssSize / 2, cssSize, cssSize),
-                resolution,
-                antialias: true,
-            });
-            return result as HTMLCanvasElement;
-        } catch {
-            return null;
-        }
-    }, []);
-
     const showInProgressBanner = (viewMode === 'measure_line' || viewMode === 'measure_area') && drawingPoints.length > 0;
     const hoveredMeasurement = useMemo(
         () => (hoveredMeasurementId != null ? measurements.find((m) => m.id === hoveredMeasurementId) : undefined),
@@ -2475,84 +2474,89 @@ export function PixiDrawingViewer({
     // state. Memoized so the React panel only re-renders when relevant state
     // changes — not on every unrelated re-render.
     const livePanelContent = useMemo<LivePanelContent | null>(() => {
-        if (!hoverPoint) return null;
+        // Render the pill whenever the user is in a measure-mode tool, even
+        // before they've started hovering or placing points — gives them
+        // immediate visual confirmation that the tool is active. Falls back
+        // to '—' until we have enough data to compute a real value.
+        const isMeasureMode =
+            viewMode === 'measure_line' ||
+            viewMode === 'measure_area' ||
+            viewMode === 'measure_rectangle' ||
+            viewMode === 'calibrate';
+        if (!isMeasureMode) return null;
 
         if (viewMode === 'measure_line') {
-            const allPoints = [...drawingPoints, hoverPoint];
-            const segments = Math.max(0, allPoints.length - 1);
-            if (drawingPoints.length === 0) {
-                return { label: 'Length', value: '—', hint: 'Click to start measuring' };
-            }
+            const allPoints = hoverPoint ? [...drawingPoints, hoverPoint] : drawingPoints;
             // Tessellate any bezier segments so the live length matches the
             // rendered path when the user has dragged out handles.
-            const len = computeRealLength(tessellateBeziers(allPoints), false);
-            const lenStr = formatLength(len);
-            return {
-                label: 'Length',
-                value: lenStr ?? '(set scale to see length)',
-                secondary: segments > 1 ? `${segments} segments` : undefined,
-                hint: 'Double-click or Enter to finish · long-press a vertex to curve',
-            };
+            const len = allPoints.length < 2 ? null : computeRealLength(tessellateBeziers(allPoints), false);
+            const lenStr = formatLength(len) ?? '—';
+            // If the active condition has a real-world height (e.g. wall
+            // height), also surface the derived area (length × height) so
+            // the user sees both lm and m² while drawing.
+            let secondary: string | undefined;
+            if (len != null && activeConditionHeight && activeConditionHeight > 0 && calibrationFactor) {
+                const metersPerUnit = METERS_PER_UNIT[calibrationFactor.unit] ?? 1;
+                const heightInUnits = activeConditionHeight / metersPerUnit;
+                const areaStr = formatArea(len * heightInUnits);
+                if (areaStr) secondary = `Area ${areaStr}`;
+            }
+            return { label: 'Length', value: lenStr, secondary };
         }
 
         if (viewMode === 'measure_area') {
-            const allPoints = [...drawingPoints, hoverPoint];
-            if (allPoints.length >= 3) {
-                // Tessellate beziers so curved edges contribute correctly to
-                // both area and perimeter calculations.
-                const flat = tessellateBeziers(allPoints);
-                const area = computeRealArea(flat);
-                const perim = computeRealLength(flat, true);
-                const a = formatArea(area);
-                const p = formatLength(perim);
-                return {
-                    label: 'Area',
-                    value: a ?? `${allPoints.length} vertices`,
-                    secondary: p ? `Perimeter ${p}` : undefined,
-                    hint: 'Double-click to close polygon · long-press to curve',
-                };
-            }
+            const allPoints = hoverPoint ? [...drawingPoints, hoverPoint] : drawingPoints;
+            // Tessellate beziers so curved edges contribute correctly to
+            // both area and perimeter calculations.
+            const flat = allPoints.length >= 3 ? tessellateBeziers(allPoints) : null;
+            const a = flat ? formatArea(computeRealArea(flat)) : null;
+            const p = flat ? formatLength(computeRealLength(flat, true)) : null;
             return {
                 label: 'Area',
-                value: drawingPoints.length === 0 ? '—' : `${drawingPoints.length} of 3 vertices`,
-                hint: drawingPoints.length === 0 ? 'Click to start measuring' : 'Click to add another vertex',
+                value: a ?? '—',
+                secondary: p ? `Perimeter ${p}` : undefined,
             };
         }
 
-        if (viewMode === 'measure_rectangle' && rectDragStart) {
-            const rectPts: Point[] = [
-                rectDragStart,
-                { x: hoverPoint.x, y: rectDragStart.y },
-                hoverPoint,
-                { x: rectDragStart.x, y: hoverPoint.y },
-            ];
-            const w = Math.abs(hoverPoint.x - rectDragStart.x);
-            const h = Math.abs(hoverPoint.y - rectDragStart.y);
-            const aText = formatArea(computeRealArea(rectPts));
-            const pText = formatLength(computeRealLength(rectPts, true));
-            return {
-                label: 'Rectangle',
-                value: aText ?? `${(w * 100).toFixed(1)}% × ${(h * 100).toFixed(1)}%`,
-                secondary: pText ? `Perimeter ${pText}` : undefined,
-                hint: 'Hold Shift for square',
-            };
+        if (viewMode === 'measure_rectangle') {
+            if (rectDragStart && hoverPoint) {
+                const rectPts: Point[] = [
+                    rectDragStart,
+                    { x: hoverPoint.x, y: rectDragStart.y },
+                    hoverPoint,
+                    { x: rectDragStart.x, y: hoverPoint.y },
+                ];
+                const aText = formatArea(computeRealArea(rectPts));
+                const pText = formatLength(computeRealLength(rectPts, true));
+                return {
+                    label: 'Rectangle',
+                    value: aText ?? '—',
+                    secondary: pText ? `Perimeter ${pText}` : undefined,
+                };
+            }
+            return { label: 'Rectangle', value: '—' };
         }
 
         if (viewMode === 'calibrate') {
-            const allPoints = [...drawingPoints, hoverPoint];
-            if (allPoints.length < 2) {
-                return { label: 'Distance', value: '—', hint: 'Click first point of a known distance' };
-            }
-            const len = computeRealLength(allPoints, false);
-            return {
-                label: 'Distance',
-                value: len != null && calibrationFactor ? `${formatNumber(len)} ${calibrationFactor.unit}` : '—',
-                hint: 'Click to set scale',
-            };
+            const allPoints = hoverPoint ? [...drawingPoints, hoverPoint] : drawingPoints;
+            const len = allPoints.length >= 2 ? computeRealLength(allPoints, false) : null;
+            const value = len != null && calibrationFactor ? `${formatNumber(len)} ${calibrationFactor.unit}` : '—';
+            return { label: 'Distance', value };
         }
 
         return null;
-    }, [viewMode, drawingPoints, hoverPoint, rectDragStart, calibrationFactor, computeRealArea, computeRealLength, formatArea, formatLength]);
+    }, [
+        viewMode,
+        drawingPoints,
+        hoverPoint,
+        rectDragStart,
+        calibrationFactor,
+        activeConditionHeight,
+        computeRealArea,
+        computeRealLength,
+        formatArea,
+        formatLength,
+    ]);
 
     return (
         <div ref={containerRef} className={`relative h-full w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900 ${className ?? ''}`}>
@@ -2639,7 +2643,6 @@ export function PixiDrawingViewer({
                     cursorY={livePanelPos.y}
                     content={livePanelContent}
                     accentColor={activeColor ?? '#3b82f6'}
-                    extractRegion={extractMagnifierRegion}
                     containerRef={containerRef}
                 />
             )}
@@ -2676,12 +2679,12 @@ function HoverTooltip({ x, y, measurement }: { x: number; y: number; measurement
             <div className="mt-0.5 text-[13px] leading-tight font-bold tabular-nums">
                 {value != null ? `${value.toFixed(2)} ${unit}` : '—'}
             </div>
-            <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[10px]">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/80">
                 <span>{typeLabel}</span>
                 {perimeter != null && !isDeduction && (
                     <>
-                        <span className="text-white/30">·</span>
-                        <span>Perimeter {perimeter.toFixed(2)} {unit}</span>
+                        <span className="text-white/40">·</span>
+                        <span className="tabular-nums">Perimeter {perimeter.toFixed(2)} {unit}</span>
                     </>
                 )}
             </div>
@@ -2689,31 +2692,25 @@ function HoverTooltip({ x, y, measurement }: { x: number; y: number; measurement
     );
 }
 
-const LOUPE_SIZE = 88;
-const LOUPE_MAGNIFICATION = 3;
 const LIVE_PANEL_OFFSET = 18;
 // Approximate panel size for edge-clamp math. Conservative — real panel may
 // be slightly smaller; over-estimating just means we flip a touch early.
-const LIVE_PANEL_WIDTH = 270;
-const LIVE_PANEL_HEIGHT = 130;
+const LIVE_PANEL_WIDTH = 180;
+const LIVE_PANEL_HEIGHT = 80;
 
 function LiveMeasurementPanel({
     cursorX,
     cursorY,
     content,
     accentColor,
-    extractRegion,
     containerRef,
 }: {
     cursorX: number;
     cursorY: number;
     content: LivePanelContent;
     accentColor: string;
-    extractRegion: (cssX: number, cssY: number, cssSize: number, resolution: number) => HTMLCanvasElement | null;
     containerRef: React.RefObject<HTMLDivElement | null>;
 }) {
-    const loupeRef = useRef<HTMLCanvasElement | null>(null);
-
     // Edge-clamp: flip the panel to the opposite side of the cursor when it
     // would clip the canvas edge. Falls back to default down-right of cursor.
     const containerW = containerRef.current?.clientWidth ?? 0;
@@ -2729,95 +2726,25 @@ function LiveMeasurementPanel({
     left = Math.max(8, left);
     top = Math.max(8, top);
 
-    // Paint the magnifier by re-rendering the world at high resolution via
-    // Pixi's extract API. This pulls native-quality PDF pixels (the texture
-    // is rasterized at 3× quality) instead of upscaling the screen-rendered
-    // canvas — much sharper than drawImage(pixiCanvas, ...).
-    useEffect(() => {
-        const loupe = loupeRef.current;
-        if (!loupe) return;
-        const ctx = loupe.getContext('2d');
-        if (!ctx) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        if (loupe.width !== LOUPE_SIZE * dpr) loupe.width = LOUPE_SIZE * dpr;
-        if (loupe.height !== LOUPE_SIZE * dpr) loupe.height = LOUPE_SIZE * dpr;
-
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.imageSmoothingEnabled = true;
-        (ctx as CanvasRenderingContext2D & { imageSmoothingQuality?: ImageSmoothingQuality }).imageSmoothingQuality = 'high';
-
-        // Background fill in case extract fails or partially out of bounds.
-        ctx.fillStyle = '#0c0c0c';
-        ctx.fillRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
-
-        // Source size in CSS px; extract resolution chosen so the result
-        // canvas is at least dpr × LOUPE_SIZE pixels. Slight downscale to
-        // LOUPE_SIZE × dpr in the loupe = sharp.
-        const srcSizeCss = LOUPE_SIZE / LOUPE_MAGNIFICATION;
-        const extractResolution = Math.max(2, Math.ceil((LOUPE_SIZE * dpr) / srcSizeCss));
-        const extracted = extractRegion(cursorX, cursorY, srcSizeCss, extractResolution);
-        if (extracted) {
-            try {
-                ctx.drawImage(extracted, 0, 0, LOUPE_SIZE, LOUPE_SIZE);
-            } catch {
-                /* swallow */
-            }
-        }
-
-        // Crosshair + center dot in the accent color so the user sees their
-        // exact target.
-        const cx = LOUPE_SIZE / 2;
-        const cy = LOUPE_SIZE / 2;
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 1.5;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-        ctx.shadowBlur = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx - 10, cy);
-        ctx.lineTo(cx - 3, cy);
-        ctx.moveTo(cx + 3, cy);
-        ctx.lineTo(cx + 10, cy);
-        ctx.moveTo(cx, cy - 10);
-        ctx.lineTo(cx, cy - 3);
-        ctx.moveTo(cx, cy + 3);
-        ctx.lineTo(cx, cy + 10);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = accentColor;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-    }, [cursorX, cursorY, extractRegion, accentColor, content.value]);
-
     return (
         <div
-            className="pointer-events-none absolute z-20 flex items-stretch gap-3 overflow-hidden rounded-lg bg-zinc-900/95 p-2.5 shadow-xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-md"
+            className="pointer-events-none absolute z-20 flex flex-col gap-0.5 overflow-hidden rounded-lg bg-zinc-900/95 p-2.5 text-white shadow-xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-md"
             style={{
                 left,
                 top,
                 borderLeft: `3px solid ${accentColor}`,
                 fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+                minWidth: 150,
             }}
         >
-            <canvas
-                ref={loupeRef}
-                width={LOUPE_SIZE}
-                height={LOUPE_SIZE}
-                className="shrink-0 self-center rounded-md ring-1 ring-white/10"
-                style={{ width: LOUPE_SIZE, height: LOUPE_SIZE }}
-            />
-            <div className="flex min-w-[150px] flex-col justify-center gap-0.5 text-white">
-                <span className="text-[9px] font-bold tracking-[0.12em] text-white/55 uppercase">{content.label}</span>
-                <span
-                    className="text-[20px] leading-none font-bold tabular-nums"
-                    style={{ fontFamily: 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace' }}
-                >
-                    {content.value}
-                </span>
-                {content.secondary && <span className="mt-1 text-[11px] text-white/75 tabular-nums">{content.secondary}</span>}
-                {content.hint && <span className="mt-0.5 text-[10px] text-white/45">{content.hint}</span>}
-            </div>
+            <span className="text-[9px] font-bold tracking-[0.12em] text-white/55 uppercase">{content.label}</span>
+            <span
+                className="text-[20px] leading-none font-bold tabular-nums"
+                style={{ fontFamily: 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace' }}
+            >
+                {content.value}
+            </span>
+            {content.secondary && <span className="mt-1 text-[12px] font-medium text-white/90 tabular-nums">{content.secondary}</span>}
         </div>
     );
 }

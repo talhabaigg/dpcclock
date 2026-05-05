@@ -51,6 +51,7 @@ interface VariationData {
     status: string;
     description: string;
     client_notes: string | null;
+    premier_lines_stale?: boolean;
     amount: number | string;
     co_date: string;
     pricing_items?: PricingItem[];
@@ -136,6 +137,42 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const [pricingItems, setPricingItems] = useState<PricingItem[]>(variation?.pricing_items ?? []);
     const [saving, setSaving] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
+    // Tracks whether premier-affecting pricing-item fields have changed since the
+    // last successful Premier generation. Initialized from the server's persisted
+    // flag (so refreshing the page doesn't lose the stale state) and reset by
+    // PremierVariationTab on a successful regenerate. Only meaningful when there
+    // are line items — empty line_items means "never generated", not "stale".
+    const [linesStale, setLinesStale] = useState<boolean>(
+        !!variation?.premier_lines_stale && (variation?.line_items?.length ?? 0) > 0,
+    );
+
+    const premierAffectingFieldsEqual = useCallback((a: PricingItem[], b: PricingItem[]): boolean => {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            const x = a[i];
+            const y = b[i];
+            if (
+                (x.id ?? null) !== (y.id ?? null) ||
+                x.labour_cost !== y.labour_cost ||
+                x.material_cost !== y.material_cost ||
+                x.qty !== y.qty ||
+                (x.takeoff_condition_id ?? null) !== (y.takeoff_condition_id ?? null) ||
+                x.sort_order !== y.sort_order
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }, []);
+
+    const setPricingItemsTracked = useCallback((next: PricingItem[]) => {
+        setPricingItems((prev) => {
+            if (!premierAffectingFieldsEqual(prev, next)) {
+                setLinesStale(true);
+            }
+            return next;
+        });
+    }, [premierAffectingFieldsEqual]);
 
 
     // --- Grid resize state ---
@@ -170,6 +207,19 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const sortedLocations = useMemo(() => [...locations].sort((a, b) => a.name.localeCompare(b.name)), [locations]);
     const hasAutoNumbering = selectedLocation?.variation_next_number != null && variation?.status !== 'sent';
     const detailsComplete = !!(data.location_id && (hasAutoNumbering || data.co_number.trim()) && data.description.trim());
+
+    // Sync the auto-generated VA-XXX number into form state whenever the
+    // selected project changes. The header renders a badge for this case
+    // (no manual input), so without this sync `data.co_number` would stay
+    // empty and submit validation would falsely complain about an unfilled field.
+    useEffect(() => {
+        if (!hasAutoNumbering || selectedLocation?.variation_next_number == null) return;
+        const generated = `VA-${String(selectedLocation.variation_next_number).padStart(3, '0')}`;
+        if (data.co_number !== generated) {
+            setData('co_number', generated);
+        }
+     
+    }, [hasAutoNumbering, selectedLocation?.variation_next_number]);
 
 
     const pricingTotals = useMemo(() => {
@@ -463,7 +513,15 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
 
                         {/* Save */}
                         <div className="border-t px-3 py-2.5">
-                            <Button onClick={handleSubmit} disabled={saving} className="w-full h-8 text-xs" size="sm">
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={saving || (linesStale && data.line_items.length > 0)}
+                                title={linesStale && data.line_items.length > 0
+                                    ? 'Premier lines are stale — regenerate before saving'
+                                    : undefined}
+                                className="w-full h-8 text-xs"
+                                size="sm"
+                            >
                                 <Save className="mr-1.5 h-3.5 w-3.5" />
                                 {saving ? 'Saving...' : variation?.id ? 'Update' : 'Save'}
                             </Button>
@@ -673,7 +731,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 conditions={localConditions}
                                 locationId={data.location_id}
                                 pricingItems={pricingItems}
-                                onPricingItemsChange={setPricingItems}
+                                onPricingItemsChange={setPricingItemsTracked}
                             />
                         </section>
 
@@ -691,7 +749,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 pricingItems={pricingItems}
                                 clientNotes={data.client_notes}
                                 onClientNotesChange={(notes) => setData('client_notes', notes)}
-                                onPricingItemsChange={setPricingItems}
+                                onPricingItemsChange={setPricingItemsTracked}
                             />
                         </section>
 
@@ -710,9 +768,18 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     locationId={data.location_id}
                                     pricingItems={pricingItems}
                                     lineItems={data.line_items}
+                                    linesStale={linesStale}
                                     onLineItemsChange={(items) => setData('line_items', items)}
+                                    onPricingItemsChange={setPricingItemsTracked}
+                                    onLinesGenerated={() => setLinesStale(false)}
                                 />
                             </div>
+
+                            {linesStale && data.line_items.length > 0 && (
+                                <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                                    Pricing items have changed since lines were last generated. Regenerate before sending to Premier.
+                                </div>
+                            )}
 
                             {/* Line Items Grid */}
                             <div className="overflow-hidden rounded-lg border">

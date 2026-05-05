@@ -22,6 +22,7 @@ class VariationPricingItem extends Model
         'labour_cost',
         'material_cost',
         'total_cost',
+        'premier_cost_per_unit',
         'sell_rate',
         'sell_total',
         'sort_order',
@@ -33,6 +34,7 @@ class VariationPricingItem extends Model
         'labour_cost' => 'float',
         'material_cost' => 'float',
         'total_cost' => 'float',
+        'premier_cost_per_unit' => 'float',
         'sell_rate' => 'float',
         'sell_total' => 'float',
         'sort_order' => 'integer',
@@ -80,5 +82,39 @@ class VariationPricingItem extends Model
         }
 
         return $this->isUnpriced() ? 'unpriced' : 'aggregated';
+    }
+
+    /**
+     * Fields whose changes invalidate the parent variation's premier lines.
+     * sell_rate, sell_total, description, premier_cost_per_unit don't affect
+     * Premier output and are intentionally excluded.
+     */
+    private const PREMIER_AFFECTING_FIELDS = [
+        'labour_cost',
+        'material_cost',
+        'qty',
+        'takeoff_condition_id',
+        'sort_order',
+    ];
+
+    protected static function booted(): void
+    {
+        static::created(fn (self $item) => self::markVariationStale($item->variation_id));
+
+        static::updated(function (self $item) {
+            if ($item->wasChanged(self::PREMIER_AFFECTING_FIELDS)) {
+                self::markVariationStale($item->variation_id);
+            }
+        });
+
+        static::deleted(fn (self $item) => self::markVariationStale($item->variation_id));
+    }
+
+    private static function markVariationStale(?int $variationId): void
+    {
+        if (! $variationId) {
+            return;
+        }
+        Variation::whereKey($variationId)->update(['premier_lines_stale' => true]);
     }
 }

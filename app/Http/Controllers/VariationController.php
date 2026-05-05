@@ -289,6 +289,12 @@ class VariationController extends Controller
 
     public function update(Request $request, Variation $variation)
     {
+        if ($variation->premier_lines_stale && $variation->lineItems()->exists()) {
+            return back()->withErrors([
+                'premier_lines_stale' => 'Premier lines are out of sync with pricing items. Regenerate before saving.',
+            ]);
+        }
+
         $validated = $request->validate([
             'location_id' => 'required|exists:locations,id',
             'type' => 'required|string',
@@ -450,8 +456,16 @@ class VariationController extends Controller
 
     // }
 
-    public function sendToPremier(Variation $variation)
+    public function sendToPremier(Request $request, Variation $variation)
     {
+        if ($variation->premier_lines_stale) {
+            $msg = 'Premier lines are out of sync with pricing items. Regenerate before sending.';
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->with('error', $msg);
+        }
+
         $authService = new PremierAuthenticationService;
         $token = $authService->getAccessToken();
         $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
@@ -876,9 +890,11 @@ class VariationController extends Controller
             // mirrored from the measurement and ignored here.
             if (isset($validated['labour_cost'])) {
                 $item->labour_cost = round((float) $validated['labour_cost'], 2);
+                $item->premier_cost_per_unit = null;
             }
             if (isset($validated['material_cost'])) {
                 $item->material_cost = round((float) $validated['material_cost'], 2);
+                $item->premier_cost_per_unit = null;
             }
             $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
 
@@ -911,9 +927,11 @@ class VariationController extends Controller
 
         if (isset($validated['labour_cost']) && ! $item->takeoff_condition_id) {
             $item->labour_cost = round((float) $validated['labour_cost'], 2);
+            $item->premier_cost_per_unit = null;
         }
         if (isset($validated['material_cost']) && ! $item->takeoff_condition_id) {
             $item->material_cost = round((float) $validated['material_cost'], 2);
+            $item->premier_cost_per_unit = null;
         }
         if (isset($validated['labour_cost']) || isset($validated['material_cost'])) {
             $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
@@ -1018,10 +1036,11 @@ class VariationController extends Controller
             $validated['mode'] ?? 'standard',
         );
 
-        $variation->load('lineItems');
+        $variation->load(['lineItems', 'pricingItems.condition.conditionType', 'pricingItems.measurement']);
 
         return response()->json([
             'variation' => $variation,
+            'pricing_items' => $variation->pricingItems,
             'summary' => $result['summary'],
         ]);
     }
