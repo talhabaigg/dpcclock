@@ -1,5 +1,6 @@
 import AddressAutocomplete from '@/components/address-autocomplete';
 import BodyLocationCanvas from '@/components/injury-register/BodyLocationCanvas';
+import EmployeeOrCustomNameInput from '@/components/injury-register/EmployeeOrCustomNameInput';
 import MultiCheckboxSection from '@/components/injury-register/MultiCheckboxSection';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         emergency_services_details: injury?.emergency_services_details ?? '',
         treatment: injury?.treatment ?? true,
         treatment_type: injury?.treatment_type ?? '',
+        treatment_at: injury?.treatment_at ? injury.treatment_at.slice(0, 16) : '',
         treatment_details: injury?.treatment_details ?? '',
         no_treatment_reason: injury?.no_treatment_reason ?? '',
         follow_up: injury?.follow_up ?? false,
@@ -179,23 +181,24 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isEdit ? `Edit ${injury.id_formal}` : 'Report Incident / Injury'} />
 
-            <div className="mx-auto min-w-96 max-w-96 sm:min-w-2xl sm:max-w-2xl p-4">
-                {/* Progress Bar */}
-                <div className="mb-6">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                        <span className="font-medium">{STEPS[step]}</span>
-                        <span className="text-muted-foreground">{step + 1} / {STEPS.length}</span>
+            <div className="mx-auto flex h-[calc(100svh-4rem)] min-w-96 max-w-96 flex-col sm:min-w-2xl sm:max-w-2xl">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    {/* Progress Bar */}
+                    <div className="mb-6">
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                            <span className="font-medium">{STEPS[step]}</span>
+                            <span className="text-muted-foreground">{step + 1} / {STEPS.length}</span>
+                        </div>
+                        <div className="bg-muted h-2 rounded-full">
+                            <div
+                                className="bg-primary h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+                            />
+                        </div>
                     </div>
-                    <div className="bg-muted h-2 rounded-full">
-                        <div
-                            className="bg-primary h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-                        />
-                    </div>
-                </div>
 
-                {/* Step Content */}
-                <div className="min-h-[400px] space-y-4">
+                    {/* Step Content */}
+                    <div className="min-h-[400px] space-y-4">
                     {/* Step 0: Incident Type */}
                     {step === 0 && (
                         <section className="space-y-4">
@@ -267,7 +270,12 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Reported By</Label>
-                                <Input className={inputClass} value={data.reported_by} onChange={(e) => setData('reported_by', e.target.value)} />
+                                <EmployeeOrCustomNameInput
+                                    value={data.reported_by}
+                                    onChange={(v) => setData('reported_by', v)}
+                                    employees={employees}
+                                    placeholder="Type a name or pick an employee"
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Date & Time Reported</Label>
@@ -275,7 +283,12 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             </div>
                             <div className="space-y-2">
                                 <Label className={labelClass}>Reported To</Label>
-                                <Input className={inputClass} value={data.reported_to} onChange={(e) => setData('reported_to', e.target.value)} />
+                                <EmployeeOrCustomNameInput
+                                    value={data.reported_to}
+                                    onChange={(v) => setData('reported_to', v)}
+                                    employees={employees}
+                                    placeholder="Type a name or pick an employee"
+                                />
                             </div>
                         </section>
                     )}
@@ -316,7 +329,7 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                     {step === 4 && (
                         <section className="space-y-6">
                             <div className="space-y-4">
-                                <h2 className="text-lg font-semibold">Detailed Description</h2>
+                                <h2 className="text-lg font-semibold">Detailed account of what occured from the person involved in the incident</h2>
                                 <Textarea className={textareaClass} value={data.description} onChange={(e) => setData('description', e.target.value)} rows={5} placeholder="Describe what happened in detail..." />
                             </div>
 
@@ -387,6 +400,10 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                                 onValueChange={(v) => setData('treatment_type', v)}
                                                 className="h-12 text-base"
                                             />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className={labelClass}>Date & time treatment was provided</Label>
+                                            <DateTimePicker value={data.treatment_at} onChange={(v) => setData('treatment_at', v)} />
                                         </div>
                                         {data.treatment_type === 'first_aid' && (
                                             <div className="space-y-2">
@@ -516,8 +533,10 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                     )}
                 </div>
 
-                {/* Navigation */}
-                <div className="flex items-center justify-between border-t pt-6 pb-8 mt-6">
+                </div>
+
+                {/* Navigation — pinned at bottom of viewport */}
+                <div className="flex shrink-0 items-center justify-between border-t bg-background px-4 py-4">
                     <div>
                         {step > 0 ? (
                             <Button type="button" variant="outline" size="lg" className="h-12 px-6 text-base" onClick={goBack}>

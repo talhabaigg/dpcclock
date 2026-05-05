@@ -32,6 +32,7 @@ class StoreInjuryRequest extends FormRequest
             'work_cover_claim' => ['boolean'],
             'treatment' => ['nullable', 'boolean'],
             'treatment_type' => ['nullable', 'string', Rule::in(array_keys(Injury::TREATMENT_TYPE_OPTIONS))],
+            'treatment_at' => ['nullable', 'date'],
             'treatment_details' => ['nullable', 'string', 'max:500'],
             'no_treatment_reason' => ['nullable', 'string', 'max:1000'],
             'follow_up' => ['nullable', 'boolean'],

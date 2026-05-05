@@ -20,7 +20,7 @@ class Injury extends Model implements HasMedia
         'reported_at', 'reported_to', 'location_of_incident', 'description',
         'emergency_services', 'emergency_services_details', 'work_cover_claim',
         'claim_active', 'claim_type', 'claim_status', 'capacity', 'employment_status', 'claim_cost',
-        'treatment', 'treatment_type', 'treatment_details', 'no_treatment_reason',
+        'treatment', 'treatment_type', 'treatment_at', 'treatment_details', 'no_treatment_reason',
         'follow_up', 'follow_up_notes',
         'work_days_missed', 'days_suitable_duties', 'suitable_duties_from', 'suitable_duties_to', 'medical_expenses',
         'report_type', 'witnesses', 'witness_details',
@@ -36,6 +36,7 @@ class Injury extends Model implements HasMedia
     protected $casts = [
         'occurred_at' => 'datetime:Y-m-d\TH:i:s',
         'reported_at' => 'datetime:Y-m-d\TH:i:s',
+        'treatment_at' => 'datetime:Y-m-d\TH:i:s',
         'locked_at' => 'datetime:Y-m-d\TH:i:s',
         'emergency_services' => 'boolean',
         'treatment' => 'boolean',
@@ -141,6 +142,7 @@ class Injury extends Model implements HasMedia
     ];
 
     public const CLAIM_STATUS_OPTIONS = [
+        'pending' => 'Pending',
         'active' => 'Active',
         'denied' => 'Denied',
         'closed' => 'Closed',
@@ -157,6 +159,7 @@ class Injury extends Model implements HasMedia
         'part_time' => 'Part Time',
         'casual' => 'Casual',
         'contractor' => 'Contractor',
+        'employment_ended' => 'Employment Ended',
     ];
 
     public const CORRECTIVE_ACTION_OPTIONS = [
@@ -186,6 +189,7 @@ class Injury extends Model implements HasMedia
         'work_cover_claim' => 'WorkCover Claim',
         'treatment' => 'Treatment Provided',
         'treatment_type' => 'Type of Treatment Provided',
+        'treatment_at' => 'Date & Time Treatment Was Provided',
         'treatment_details' => 'Treatment Details',
         'no_treatment_reason' => 'Reason No Treatment',
         'follow_up' => 'Follow Up Required',

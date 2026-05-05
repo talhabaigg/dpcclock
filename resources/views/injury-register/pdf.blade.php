@@ -316,6 +316,12 @@
             <td class="label">Treatment Type</td>
             <td class="value">{{ $injury->treatment_type ? Injury::TREATMENT_TYPE_OPTIONS[$injury->treatment_type] ?? '—' : '—' }}</td>
         </tr>
+        @if($injury->treatment_at)
+        <tr>
+            <td class="label">Date &amp; Time Treatment Provided</td>
+            <td class="value">{{ Carbon::parse($injury->treatment_at)->format('d/m/Y h:i A') }}</td>
+        </tr>
+        @endif
         @if($injury->treatment_details)
         <tr>
             <td class="label">Details</td>

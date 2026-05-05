@@ -29,6 +29,7 @@ export interface Injury {
     medical_expenses: number;
     treatment: boolean | null;
     treatment_type: string | null;
+    treatment_at: string | null;
     treatment_details: string | null;
     no_treatment_reason: string | null;
     follow_up: boolean | null;
