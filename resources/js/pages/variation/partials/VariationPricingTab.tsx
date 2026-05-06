@@ -9,20 +9,13 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn, fmtCurrency, round2 } from '@/lib/utils';
+import { cn, round2 } from '@/lib/utils';
 import { api, ApiError } from '@/lib/api';
-import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useHttp } from '@inertiajs/react';
-import { Check, ChevronsUpDown, GripVertical, Link2, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { Loader2, Plus, RefreshCcw, Save, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { Condition } from './ConditionPricingPanel';
+import VariationPricingGrid from './variationPricingTable/VariationPricingGrid';
 
 let _clientKeyCounter = 0;
 export function nextClientKey() { return `ck-${++_clientKeyCounter}`; }
@@ -76,305 +69,6 @@ interface VariationPricingTabProps {
     onPricingItemsChange: (items: PricingItem[]) => void;
 }
 
-function FlavourBadge({ flavour }: { flavour: PricingItemFlavour }) {
-    if (flavour === 'manual') return null;
-
-    const isUnpriced = flavour === 'unpriced';
-    const label = isUnpriced ? 'From drawing — needs pricing' : 'From drawing';
-    const cls = isUnpriced
-        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
-        : 'bg-sky-100 text-sky-800 dark:bg-sky-950/30 dark:text-sky-300';
-
-    return (
-        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium', cls)}>
-            <Link2 className="h-2.5 w-2.5" />
-            {label}
-        </span>
-    );
-}
-
-function SortableRow({
-    id,
-    item,
-    idx,
-    isEditing,
-    editValues,
-    setEditValues,
-    startEditing,
-    saveEditing,
-    cancelEditing,
-    setDeleteTarget,
-    conditions,
-    onSelectCondition,
-    onAssignConditionToMeasurement,
-    isSelected,
-    onToggleSelect,
-    onQtyChangeForCondition,
-}: {
-    id: string;
-    item: PricingItem;
-    idx: number;
-    isEditing: boolean;
-    editValues: { description: string; qty: string; labour_cost: string; material_cost: string };
-    setEditValues: (v: any) => void;
-    startEditing: (idx: number) => void;
-    saveEditing: () => void;
-    cancelEditing: () => void;
-    setDeleteTarget: (t: { item: PricingItem; index: number } | null) => void;
-    conditions: Condition[];
-    onSelectCondition: (conditionId: number, idx: number) => void;
-    onAssignConditionToMeasurement: (drawingId: number, measurementId: number, conditionId: number | null) => void;
-    isSelected: boolean;
-    onToggleSelect: () => void;
-    onQtyChangeForCondition: (conditionId: number, qty: number) => void;
-}) {
-    const flavour = getFlavour(item);
-    const isAuto = flavour !== 'manual';
-    const isAggregated = flavour === 'aggregated';
-    const isUnpriced = flavour === 'unpriced';
-
-    // Editability per flavour:
-    //   manual     → everything editable, condition column triggers manual condition path
-    //   aggregated → nothing editable in this tab (sell_rate lives elsewhere)
-    //   unpriced   → labour/material editable, condition column updates the underlying measurement
-    const canEditDescription = !isAuto;
-    const canEditQty = !isAuto;
-    const canEditCosts = !isAggregated; // manual or unpriced
-    const canEditCondition = !isAggregated; // manual or unpriced
-
-    // For unpriced rows, restrict the picker to conditions matching the measurement's type.
-    const pickableConditions = isUnpriced && item.measurement?.type
-        ? conditions.filter((c) => c.type === item.measurement!.type)
-        : conditions;
-
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-        id,
-        disabled: isAuto,
-    });
-    const [popoverOpen, setPopoverOpen] = useState(false);
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-        <tr
-            ref={setNodeRef}
-            style={style}
-            className={cn(
-                'hover:bg-muted/30 border-b',
-                isAggregated && 'bg-sky-50/40 dark:bg-sky-950/10',
-                isUnpriced && 'bg-amber-50/40 dark:bg-amber-950/10',
-            )}
-        >
-            <td className="w-8 px-2 py-1.5">
-                <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={onToggleSelect}
-                    disabled={isAuto}
-                />
-            </td>
-            <td className="w-6 px-0.5 py-1.5">
-                {isAuto ? (
-                    <span className="text-muted-foreground/30 inline-block p-0.5">
-                        <GripVertical className="h-3.5 w-3.5" />
-                    </span>
-                ) : (
-                    <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing rounded p-0.5"
-                        {...attributes}
-                        {...listeners}
-                    >
-                        <GripVertical className="h-3.5 w-3.5" />
-                    </button>
-                )}
-            </td>
-            {/* Condition */}
-            <td className="px-2 py-1.5 text-left">
-                {(isEditing || isUnpriced) && canEditCondition ? (
-                    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="h-6 w-full justify-between px-1.5 text-xs font-normal">
-                                <span className="flex items-center gap-1.5 truncate">
-                                    {item.condition?.condition_type && (
-                                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.condition.condition_type.color }} />
-                                    )}
-                                    {item.takeoff_condition_id ? `#${item.takeoff_condition_id}` : isUnpriced ? 'Pick condition...' : 'Search condition...'}
-                                </span>
-                                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-72 p-0" align="start" side="bottom" sideOffset={4}>
-                            {pickableConditions.length === 0 ? (
-                                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                                    {isUnpriced && item.measurement?.type ? (
-                                        <>
-                                            No <span className="font-medium">{item.measurement.type}</span> conditions defined for this project yet.<br />
-                                            Open the drawing and use <span className="font-medium">Manage conditions</span> to add one.
-                                        </>
-                                    ) : (
-                                        <>No conditions defined for this project yet.</>
-                                    )}
-                                </div>
-                            ) : (
-                                <Command>
-                                    <CommandInput placeholder="Search..." className="h-7 text-xs" />
-                                    <CommandList>
-                                        <CommandEmpty className="py-2 text-center text-xs">No match</CommandEmpty>
-                                        <CommandGroup>
-                                            {pickableConditions.map((c) => (
-                                                <CommandItem
-                                                    key={c.id}
-                                                    value={`${c.id} ${c.name}`}
-                                                    className="data-selected:bg-transparent"
-                                                    onSelect={() => {
-                                                        if (isUnpriced && item.measurement) {
-                                                            onAssignConditionToMeasurement(item.measurement.drawing_id, item.measurement.id, c.id);
-                                                        } else {
-                                                            onSelectCondition(c.id, idx);
-                                                            setEditValues({ ...editValues, description: c.name });
-                                                        }
-                                                        setPopoverOpen(false);
-                                                    }}
-                                                >
-                                                    <div className="flex items-center gap-1.5 text-xs">
-                                                        {c.condition_type && (
-                                                            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c.condition_type.color }} />
-                                                        )}
-                                                        <span className="truncate font-medium">{c.name}</span>
-                                                        <span className="text-muted-foreground text-[10px] shrink-0">{c.condition_type?.unit ?? 'EA'}</span>
-                                                    </div>
-                                                    <Check className={cn('ml-auto h-3 w-3 shrink-0', item.takeoff_condition_id === c.id ? 'opacity-100' : 'opacity-0')} />
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            )}
-                        </PopoverContent>
-                    </Popover>
-                ) : (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {item.condition?.condition_type && (
-                            <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.condition.condition_type.color }} />
-                        )}
-                        <span className="truncate">{item.takeoff_condition_id ? `#${item.takeoff_condition_id}` : '—'}</span>
-                    </div>
-                )}
-            </td>
-            {/* Description */}
-            <td className="px-3 py-1.5">
-                <div className="flex flex-col gap-0.5">
-                    {isEditing && canEditDescription ? (
-                        <input
-                            value={editValues.description}
-                            onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
-                            disabled={!!item.takeoff_condition_id}
-                            className={cn(
-                                'w-full h-6 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:ring-1 focus:ring-ring',
-                                item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
-                            )}
-                            autoFocus={!item.takeoff_condition_id}
-                            placeholder="Description"
-                            onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                        />
-                    ) : (
-                        <span>{item.description || <span className="text-muted-foreground italic">empty</span>}</span>
-                    )}
-                    {isAuto && <FlavourBadge flavour={flavour} />}
-                </div>
-            </td>
-            <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing && canEditQty ? (
-                    <input type="number" step="0.01" value={editValues.qty} onChange={(e) => {
-                        const newQty = e.target.value;
-                        setEditValues({ ...editValues, qty: newQty });
-                        if (item.takeoff_condition_id && parseFloat(newQty) > 0) {
-                            onQtyChangeForCondition(item.takeoff_condition_id, parseFloat(newQty));
-                        }
-                    }} className="w-16 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring" onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
-                ) : item.qty}
-            </td>
-            <td className="text-muted-foreground px-3 py-1.5 text-center text-xs">{item.unit}</td>
-            <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing && canEditCosts ? (
-                    <input
-                        type="number" step="0.01"
-                        value={editValues.labour_cost}
-                        onChange={(e) => setEditValues({ ...editValues, labour_cost: e.target.value })}
-                        disabled={!isUnpriced && !!item.takeoff_condition_id}
-                        className={cn(
-                            'w-20 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring',
-                            !isUnpriced && item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
-                        )}
-                        autoFocus={isUnpriced}
-                        onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                    />
-                ) : fmtCurrency(item.labour_cost)}
-            </td>
-            <td className="px-3 py-1.5 text-right tabular-nums">
-                {isEditing && canEditCosts ? (
-                    <input
-                        type="number" step="0.01"
-                        value={editValues.material_cost}
-                        onChange={(e) => setEditValues({ ...editValues, material_cost: e.target.value })}
-                        disabled={!isUnpriced && !!item.takeoff_condition_id}
-                        className={cn(
-                            'w-20 h-6 rounded-md border border-input bg-background px-1.5 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring',
-                            !isUnpriced && item.takeoff_condition_id && 'opacity-50 cursor-not-allowed bg-muted',
-                        )}
-                        onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                    />
-                ) : fmtCurrency(item.material_cost)}
-            </td>
-            <td className="px-3 py-1.5 text-right font-medium tabular-nums">
-                {isEditing
-                    ? fmtCurrency(round2((parseFloat(editValues.labour_cost) || 0) + (parseFloat(editValues.material_cost) || 0)))
-                    : fmtCurrency(item.total_cost)}
-            </td>
-            <td className="px-2 py-1.5">
-                <div className="flex items-center gap-0.5">
-                    {isEditing ? (
-                        <>
-                            <button type="button" onClick={saveEditing} className="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"><Check className="h-3.5 w-3.5" /></button>
-                            <button type="button" onClick={cancelEditing} className="text-muted-foreground rounded p-1 hover:bg-muted hover:text-red-600"><X className="h-3.5 w-3.5" /></button>
-                        </>
-                    ) : isAggregated ? (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span className="text-muted-foreground/30 inline-block p-1"><Pencil className="h-3 w-3" /></span>
-                                </TooltipTrigger>
-                                <TooltipContent>Generated from drawing measurements. Edit on the drawing instead.</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    ) : (
-                        <>
-                            <button type="button" onClick={() => startEditing(idx)} className="text-muted-foreground rounded p-1 hover:bg-muted hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                            {!isAuto && (
-                                <button type="button" onClick={() => setDeleteTarget({ item, index: idx })} className="text-muted-foreground rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-3 w-3" /></button>
-                            )}
-                            {isUnpriced && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="text-muted-foreground/30 inline-block p-1"><Trash2 className="h-3 w-3" /></span>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Remove the measurement on the drawing to delete this row.</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
-                        </>
-                    )}
-                </div>
-            </td>
-        </tr>
-    );
-}
-
 export default function VariationPricingTab({
     variationId,
     conditions,
@@ -382,14 +76,10 @@ export default function VariationPricingTab({
     pricingItems,
     onPricingItemsChange,
 }: VariationPricingTabProps) {
-    const deleteHttp = useHttp({});
-
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Inline editing state
-    const [editingIdx, setEditingIdx] = useState<number | null>(null);
-    const [editValues, setEditValues] = useState({ description: '', qty: '', labour_cost: '', material_cost: '' });
 
     // Delete confirmation state
     const [deleteTarget, setDeleteTarget] = useState<{ item: PricingItem; index: number } | null>(null);
@@ -397,25 +87,7 @@ export default function VariationPricingTab({
 
     const getItemKey = (item: PricingItem) => item.id ? String(item.id) : (item._clientKey ?? 'unknown');
 
-    const toggleSelect = (key: string) => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(key)) next.delete(key);
-            else next.add(key);
-            return next;
-        });
-    };
-
     const manualItems = pricingItems.filter((item) => getFlavour(item) === 'manual');
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === manualItems.length) {
-            setSelectedIds(new Set());
-        } else {
-            // Only manual rows are selectable.
-            setSelectedIds(new Set(manualItems.map((item) => getItemKey(item))));
-        }
-    };
 
     const handleBulkDelete = () => {
         const selectedIndices = new Set<number>();
@@ -430,18 +102,59 @@ export default function VariationPricingTab({
             }
         });
 
-        selectedDbIds.forEach((id) => {
-            if (variationId) {
-                deleteHttp.destroy(`/variations/${variationId}/pricing-items/${id}`, {
-                    onError: () => toast.error(`Failed to delete item ${id}`),
+        if (variationId) {
+            selectedDbIds.forEach((id) => {
+                api.delete(`/variations/${variationId}/pricing-items/${id}`).catch(() => {
+                    toast.error(`Failed to delete item ${id}`);
                 });
-            }
-        });
+            });
+        }
 
         onPricingItemsChange(pricingItems.filter((_, idx) => !selectedIndices.has(idx)));
         setSelectedIds(new Set());
         setBulkDeleteOpen(false);
         toast.success(`${selectedIndices.size} item${selectedIndices.size !== 1 ? 's' : ''} removed`);
+    };
+
+    const [savingAll, setSavingAll] = useState(false);
+    // Persists any unsaved pricing items (rows added via Add Row but not yet
+    // sent to the server). Edits to already-saved rows auto-persist via
+    // handleGridCellEdit, so this only kicks new rows over the wall.
+    const handleSaveAll = async () => {
+        if (!variationId) {
+            toast.error('Save the variation first to persist pricing items.');
+            return;
+        }
+        const unsaved = pricingItems.filter((i) => !i.id);
+        if (unsaved.length === 0) return;
+
+        setSavingAll(true);
+        const persisted: PricingItem[] = pricingItems.filter((i) => !!i.id);
+        let failed = 0;
+        for (const item of unsaved) {
+            try {
+                const payload: Record<string, unknown> = {
+                    description: item.description || 'Manual item',
+                    qty: item.qty,
+                    unit: item.unit,
+                    labour_cost: item.labour_cost,
+                    material_cost: item.material_cost,
+                };
+                if (item.takeoff_condition_id) payload.takeoff_condition_id = item.takeoff_condition_id;
+                if (item.sell_rate != null && item.sell_rate > 0) payload.sell_rate = item.sell_rate;
+                const resp = await api.post<{ pricing_item: PricingItem }>(
+                    `/variations/${variationId}/pricing-items`,
+                    payload,
+                );
+                persisted.push(resp.pricing_item);
+            } catch {
+                failed++;
+            }
+        }
+        onPricingItemsChange(persisted);
+        setSavingAll(false);
+        if (failed > 0) toast.error(`${failed} item${failed === 1 ? '' : 's'} failed to save`);
+        else toast.success(`Saved ${unsaved.length} pricing item${unsaved.length === 1 ? '' : 's'}`);
     };
 
     const [refreshing, setRefreshing] = useState(false);
@@ -476,7 +189,6 @@ export default function VariationPricingTab({
                 `/variations/${variationId}/pricing-items`,
             );
             onPricingItemsChange(data.pricing_items);
-            setEditingIdx(null);
             toast.success(conditionId ? 'Condition assigned' : 'Condition cleared');
         } catch (err: unknown) {
             toast.error(err instanceof ApiError ? err.message : 'Failed to update condition');
@@ -495,29 +207,19 @@ export default function VariationPricingTab({
             sort_order: pricingItems.length + 1,
         };
         onPricingItemsChange([...pricingItems, newItem]);
-        // Start editing with fresh values directly
-        const newIdx = pricingItems.length;
-        setEditingIdx(newIdx);
-        setEditValues({
-            description: '',
-            qty: '1',
-            labour_cost: '0',
-            material_cost: '0',
-        });
     };
 
     const handleDelete = (item: PricingItem, index: number) => {
         if (item.id && variationId) {
-            deleteHttp.destroy(`/variations/${variationId}/pricing-items/${item.id}`, {
-                onSuccess: () => {
+            api.delete(`/variations/${variationId}/pricing-items/${item.id}`)
+                .then(() => {
                     onPricingItemsChange(pricingItems.filter((p) => p.id !== item.id));
                     toast.success('Item removed');
                     setDeleteTarget(null);
-                },
-                onError: () => {
-                    toast.error('Failed to delete item');
-                },
-            });
+                })
+                .catch((err: unknown) => {
+                    toast.error(err instanceof ApiError ? err.message : 'Failed to delete item');
+                });
         } else {
             onPricingItemsChange(pricingItems.filter((_, i) => i !== index));
             toast.success('Item removed');
@@ -525,29 +227,6 @@ export default function VariationPricingTab({
         }
     };
 
-    // --- Inline editing ---
-    const startEditing = (idx: number) => {
-        const item = pricingItems[idx];
-        if (getFlavour(item) === 'aggregated') return; // aggregated auto-rows are not editable here
-        setEditingIdx(idx);
-        setEditValues({
-            description: item.description,
-            qty: String(item.qty),
-            labour_cost: String(item.labour_cost),
-            material_cost: String(item.material_cost),
-        });
-    };
-
-    const cancelEditing = () => {
-        // If cancelling an empty unsaved row, remove it
-        if (editingIdx !== null) {
-            const item = pricingItems[editingIdx];
-            if (!item.id && !item.description && item.labour_cost === 0 && item.material_cost === 0) {
-                onPricingItemsChange(pricingItems.filter((_, i) => i !== editingIdx));
-            }
-        }
-        setEditingIdx(null);
-    };
 
     const getNaturalUnit = (c: Condition): string => {
         if (c.type === 'linear') return 'LM';
@@ -557,42 +236,55 @@ export default function VariationPricingTab({
 
     const filteredConditions = conditions.filter((c) => String(c.location_id) === locationId);
 
-    const qtyFetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    // AG Grid per-cell edit handler. Treats labour/material as unit rates for
+    // manual rows (so total = qty × (l + m)) — same convention the backend uses
+    // since the qty × labour fix.
+    const handleGridCellEdit = useCallback((rowIdx: number, field: 'description' | 'qty' | 'labour_cost' | 'material_cost', value: string | number) => {
+        const item = pricingItems[rowIdx];
+        if (!item) return;
+        const updated = [...pricingItems];
+        let nextItem: PricingItem = { ...item };
+        if (field === 'description') {
+            nextItem = { ...nextItem, description: String(value) };
+        } else {
+            const num = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+            if (field === 'qty') nextItem = { ...nextItem, qty: num };
+            if (field === 'labour_cost') nextItem = { ...nextItem, labour_cost: num };
+            if (field === 'material_cost') nextItem = { ...nextItem, material_cost: num };
+            // Recompute total locally so the grid updates immediately.
+            const q = nextItem.qty;
+            const l = nextItem.labour_cost;
+            const m = nextItem.material_cost;
+            nextItem.total_cost = nextItem.takeoff_condition_id ? round2(l + m) : round2(q * (l + m));
+        }
+        updated[rowIdx] = nextItem;
+        onPricingItemsChange(updated);
 
-     
-    const handleQtyChangeForCondition = useCallback((conditionId: number, qty: number) => {
-        clearTimeout(qtyFetchTimerRef.current);
-        qtyFetchTimerRef.current = setTimeout(() => {
-            if (!locationId) return;
-            api.post<{ preview: any }>(`/locations/${locationId}/variation-preview`, {
-                condition_id: conditionId,
-                qty,
-            }).then((data) => {
-                const preview = data.preview;
-                const labour = preview.labour_base || 0;
-                const material = preview.material_base || 0;
-                setEditValues((prev: any) => ({
-                    ...prev,
-                    labour_cost: String(labour),
-                    material_cost: String(material),
-                }));
-            }).catch(() => {});
-        }, 400);
-    }, [locationId]);
+        // Persist single-field change for saved rows.
+        if (item.id && variationId) {
+            const payload: Record<string, unknown> = {};
+            if (field === 'description') payload.description = String(value);
+            else payload[field] = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+            api.put<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items/${item.id}`, payload)
+                .then((data) => {
+                    const next = [...updated];
+                    next[rowIdx] = data.pricing_item;
+                    onPricingItemsChange(next);
+                })
+                .catch((err: unknown) => {
+                    toast.error(err instanceof ApiError ? err.message : 'Failed to update');
+                });
+        }
+    }, [pricingItems, variationId, onPricingItemsChange]);
 
     const handleSelectCondition = (conditionId: number, rowIdx: number) => {
         const condition = filteredConditions.find((c) => c.id === conditionId);
         if (!condition) return;
         const condUnit = getNaturalUnit(condition);
-        const currentQty = parseFloat(editValues.qty) || 1;
+        const currentQty = pricingItems[rowIdx]?.qty ?? 1;
 
-        // Update edit values immediately
-        setEditValues((prev: any) => ({
-            ...prev,
-            description: condition.name,
-        }));
-
-        // Update item with condition metadata
+        // Update item with condition metadata immediately so the row reflects
+        // the pick before the cost preview comes back.
         const updated = [...pricingItems];
         updated[rowIdx] = {
             ...updated[rowIdx],
@@ -610,7 +302,6 @@ export default function VariationPricingTab({
         };
         onPricingItemsChange(updated);
 
-        // Fetch costs from backend
         if (locationId) {
             api.post<{ preview: any }>(`/locations/${locationId}/variation-preview`, {
                 condition_id: condition.id,
@@ -619,14 +310,9 @@ export default function VariationPricingTab({
                 const preview = data.preview;
                 const labour = preview.labour_base || 0;
                 const material = preview.material_base || 0;
-                setEditValues((prev: any) => ({
-                    ...prev,
-                    labour_cost: String(labour),
-                    material_cost: String(material),
-                }));
-                const updatedAgain = [...pricingItems];
-                updatedAgain[rowIdx] = {
-                    ...updatedAgain[rowIdx],
+                const next = [...pricingItems];
+                next[rowIdx] = {
+                    ...next[rowIdx],
                     takeoff_condition_id: condition.id,
                     description: condition.name,
                     unit: condUnit,
@@ -635,77 +321,13 @@ export default function VariationPricingTab({
                     total_cost: round2(labour + material),
                     condition: updated[rowIdx].condition,
                 };
-                onPricingItemsChange(updatedAgain);
+                onPricingItemsChange(next);
             }).catch(() => {
                 toast.error('Failed to fetch condition pricing');
             });
         }
     };
 
-    const saveEditing = async () => {
-        if (editingIdx === null) return;
-        const item = pricingItems[editingIdx];
-        const newQty = parseFloat(editValues.qty) || 0;
-        const newLabour = parseFloat(editValues.labour_cost) || 0;
-        const newMaterial = parseFloat(editValues.material_cost) || 0;
-        const newTotal = round2(newLabour + newMaterial);
-
-        if (item.id && variationId) {
-            try {
-                const data = await api.put<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items/${item.id}`, {
-                    description: editValues.description,
-                    qty: newQty,
-                    labour_cost: newLabour,
-                    material_cost: newMaterial,
-                });
-                const updated = [...pricingItems];
-                updated[editingIdx] = data.pricing_item;
-                onPricingItemsChange(updated);
-                toast.success('Item updated');
-            } catch (err: unknown) {
-                toast.error(err instanceof ApiError ? err.message : 'Failed to update item');
-            }
-        } else {
-            const updated = [...pricingItems];
-            updated[editingIdx] = {
-                ...item,
-                description: editValues.description,
-                qty: newQty,
-                labour_cost: newLabour,
-                material_cost: newMaterial,
-                total_cost: newTotal,
-            };
-            onPricingItemsChange(updated);
-            toast.success('Item updated');
-        }
-        setEditingIdx(null);
-    };
-
-    // --- Drag reordering ---
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    );
-
-    const sortableIds = pricingItems.map((item) => getItemKey(item));
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) return;
-        const oldIndex = sortableIds.indexOf(String(active.id));
-        const newIndex = sortableIds.indexOf(String(over.id));
-        if (oldIndex === -1 || newIndex === -1) return;
-        const updated = arrayMove([...pricingItems], oldIndex, newIndex);
-        updated.forEach((item, i) => { item.sort_order = i + 1; });
-        onPricingItemsChange(updated);
-    };
-
-    // Totals — use editValues for the row being edited so footer is reactive
-    const grandTotal = pricingItems.reduce((sum, item, idx) => {
-        if (editingIdx === idx) {
-            return sum + round2((parseFloat(editValues.labour_cost) || 0) + (parseFloat(editValues.material_cost) || 0));
-        }
-        return sum + (item.total_cost || 0);
-    }, 0);
     const unsavedCount = pricingItems.filter((i) => !i.id).length;
     const aggregatedCount = pricingItems.filter((i) => getFlavour(i) === 'aggregated').length;
     const unpricedCount = pricingItems.filter((i) => getFlavour(i) === 'unpriced').length;
@@ -715,7 +337,8 @@ export default function VariationPricingTab({
         <div>
             {(aggregatedCount + unpricedCount + manualCount) > 0 && (
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-3">
+                    {/* Counts intentionally hidden — kept in code for quick re-enable. */}
+                    <div className="text-muted-foreground hidden flex-wrap items-center gap-3">
                         <span>From drawing: <span className="font-medium text-foreground">{aggregatedCount}</span> priced, <span className="font-medium text-foreground">{unpricedCount}</span> {unpricedCount === 1 ? 'needs' : 'need'} pricing</span>
                         <span>Manual: <span className="font-medium text-foreground">{manualCount}</span></span>
                     </div>
@@ -738,100 +361,56 @@ export default function VariationPricingTab({
                     {unpricedCount} measurement{unpricedCount === 1 ? '' : 's'} on the drawing {unpricedCount === 1 ? 'has' : 'have'} no condition assigned. Enter labour and material costs below.
                 </div>
             )}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="border-b">
-                                <th className="w-8 px-2 py-2">
-                                    <Checkbox
-                                        checked={manualCount > 0 && selectedIds.size === manualCount}
-                                        onCheckedChange={toggleSelectAll}
-                                        disabled={manualCount === 0}
-                                    />
-                                </th>
-                                <th className="w-6 px-0.5 py-2"></th>
-                                <th className="text-muted-foreground w-24 px-2 py-2 text-left text-xs font-medium">Condition</th>
-                                <th className="text-muted-foreground px-3 py-2 text-left text-xs font-medium">Description</th>
-                                <th className="text-muted-foreground w-20 px-3 py-2 text-right text-xs font-medium">Qty</th>
-                                <th className="text-muted-foreground w-16 px-3 py-2 text-center text-xs font-medium">Unit</th>
-                                <th className="text-muted-foreground w-24 px-3 py-2 text-right text-xs font-medium">Labour</th>
-                                <th className="text-muted-foreground w-24 px-3 py-2 text-right text-xs font-medium">Material</th>
-                                <th className="text-muted-foreground w-24 px-3 py-2 text-right text-xs font-medium">Total</th>
-                                <th className="w-16 px-2 py-2"></th>
-                            </tr>
-                        </thead>
-                        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                            <tbody>
-                                {pricingItems.length > 0 ? (
-                                    pricingItems.map((item, idx) => (
-                                        <SortableRow
-                                            key={getItemKey(item)}
-                                            id={getItemKey(item)}
-                                            item={item}
-                                            idx={idx}
-                                            isEditing={editingIdx === idx}
-                                            editValues={editValues}
-                                            setEditValues={setEditValues}
-                                            startEditing={startEditing}
-                                            saveEditing={saveEditing}
-                                            cancelEditing={cancelEditing}
-                                            setDeleteTarget={setDeleteTarget}
-                                            conditions={filteredConditions}
-                                            onSelectCondition={handleSelectCondition}
-                                            onAssignConditionToMeasurement={handleAssignConditionToMeasurement}
-                                            isSelected={selectedIds.has(getItemKey(item))}
-                                            onToggleSelect={() => toggleSelect(getItemKey(item))}
-                                            onQtyChangeForCondition={handleQtyChangeForCondition}
-                                        />
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={10} className="px-3 py-6 text-center text-xs text-muted-foreground">
-                                            No pricing items to display
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </SortableContext>
-
-                        {pricingItems.length > 0 && (
-                            <tfoot>
-                                <tr className="border-t">
-                                    <td colSpan={2} className="px-2 py-1.5">
-                                        {selectedIds.size > 0 && (
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => setBulkDeleteOpen(true)}
-                                                className="h-6 gap-1 px-2 text-xs"
-                                            >
-                                                <Trash2 className="h-3 w-3" />
-                                                Delete ({selectedIds.size})
-                                            </Button>
-                                        )}
-                                    </td>
-                                    <td colSpan={6} className="px-3 py-1.5 text-right text-xs text-muted-foreground">
-                                        {unsavedCount > 0 && <span className="mr-3">{unsavedCount} unsaved</span>}
-                                        Total
-                                    </td>
-                                    <td className="px-3 py-1.5 text-right font-bold tabular-nums">{fmtCurrency(grandTotal)}</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        )}
-                    </table>
+            <VariationPricingGrid
+                pricingItems={pricingItems}
+                conditions={filteredConditions}
+                onPricingItemsChange={onPricingItemsChange}
+                onCellEdit={handleGridCellEdit}
+                onPickCondition={(rowIdx, condition) => handleSelectCondition(condition.id, rowIdx)}
+                onAssignConditionToMeasurement={handleAssignConditionToMeasurement}
+                onDeleteRow={(rowIdx) => {
+                    const item = pricingItems[rowIdx];
+                    if (!item) return;
+                    setDeleteTarget({ item, index: rowIdx });
+                }}
+                onSelectionChange={setSelectedIds}
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddEmptyRow}
+                        className="h-6 gap-1 px-2 text-xs"
+                    >
+                        <Plus className="h-3 w-3" />
+                        Row
+                    </Button>
+                    {unsavedCount > 0 && (
+                        <Button
+                            size="sm"
+                            onClick={handleSaveAll}
+                            disabled={savingAll || !variationId}
+                            title={!variationId ? 'Save the variation first' : undefined}
+                            className="h-6 gap-1 px-2 text-xs"
+                        >
+                            {savingAll ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                            {savingAll ? 'Saving…' : `Save (${unsavedCount})`}
+                        </Button>
+                    )}
+                    {selectedIds.size > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setBulkDeleteOpen(true)}
+                            className="h-6 gap-1 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                        >
+                            <Trash2 className="h-3 w-3" />
+                            Delete ({selectedIds.size})
+                        </Button>
+                    )}
                 </div>
-            </DndContext>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAddEmptyRow}
-                className="mt-2 h-6 gap-1 px-2 text-xs"
-            >
-                <Plus className="h-3 w-3" />
-                Row
-            </Button>
+            </div>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

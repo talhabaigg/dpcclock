@@ -35,6 +35,8 @@ import { Condition } from './partials/ConditionPricingPanel';
 import PremierVariationTab from './partials/PremierVariationTab';
 import VariationLineGrid, { VariationLineGridRef } from './partials/variationLineTable/VariationLineGrid';
 import VariationPricingTab, { PricingItem } from './partials/VariationPricingTab';
+import DirectMaterialGrid, { DirectMaterialGridRef } from './partials/directMaterialTable/DirectMaterialGrid';
+import { DirectMaterialItem } from './partials/directMaterialTable/utils';
 
 interface Location {
     id: number;
@@ -67,6 +69,26 @@ interface VariationData {
         total_cost: number;
         revenue: number;
     }[];
+    direct_materials?: {
+        id: number;
+        line_number: number;
+        sort_order: number;
+        supplier_id: number | null;
+        material_item_id: number | null;
+        material_code: string | null;
+        material_description: string | null;
+        cost_code_id: number | null;
+        cost_type: string | null;
+        description: string | null;
+        qty: number;
+        unit_cost: number;
+        sell_markup_pct: number;
+        client_markup_pct: number;
+        sell_cost: number;
+        material_item?: { id: number; code: string; description: string } | null;
+        cost_code?: { id: number; code: string; description: string } | null;
+        supplier?: { id: number; code: string; name: string } | null;
+    }[];
 }
 
 const CostTypes = [
@@ -89,6 +111,7 @@ interface VariationCreateProps {
     conditions?: Condition[];
     selectedLocationId?: string | number;
     changeTypes?: string[];
+    suppliers?: { id: number; code: string; name: string }[];
 }
 
 const STEPS = [
@@ -106,8 +129,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const VariationCreate = ({ locations, costCodes, variation, conditions = [], selectedLocationId }: VariationCreateProps) => {
+const VariationCreate = ({ locations, costCodes, variation, conditions = [], selectedLocationId, suppliers = [] }: VariationCreateProps) => {
     const gridRef = useRef<VariationLineGridRef>(null);
+    const directMaterialGridRef = useRef<DirectMaterialGridRef>(null);
     const { data, setData, post, errors } = useForm({
         location_id: variation ? String(variation.location_id) : selectedLocationId ? String(selectedLocationId) : '',
         type: variation?.type ?? 'YET2SUBMIT',
@@ -138,6 +162,31 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const [showConditionManager, setShowConditionManager] = useState(false);
     const [locationOpen, setLocationOpen] = useState(false);
     const [pricingItems, setPricingItems] = useState<PricingItem[]>(variation?.pricing_items ?? []);
+    const [directMaterials, setDirectMaterials] = useState<DirectMaterialItem[]>(() =>
+        (variation?.direct_materials ?? []).map((row) => ({
+            id: row.id,
+            line_number: row.line_number,
+            sort_order: row.sort_order,
+            supplier_id: row.supplier_id,
+            supplier_label: row.supplier?.name ?? '',
+            material_item_id: row.material_item_id,
+            // Use snapshot first; fall back to relation in case of legacy rows
+            // saved before the snapshot columns existed.
+            material_code: row.material_code ?? row.material_item?.code ?? '',
+            material_description: row.material_description ?? row.material_item?.description ?? '',
+            description: row.description ?? '',
+            qty: Number(row.qty) || 0,
+            unit_cost: Number(row.unit_cost) || 0,
+            sell_markup_pct: Number(row.sell_markup_pct) || 0,
+            client_markup_pct: row.client_markup_pct != null ? Number(row.client_markup_pct) : 10,
+            sell_cost: Number(row.sell_cost) || 0,
+            cost_code_id: row.cost_code_id,
+            cost_code: row.cost_code?.code ?? '',
+            cost_type: row.cost_type ?? '',
+            in_price_list: true,
+        })),
+    );
+    const [directMaterialSelectedCount, setDirectMaterialSelectedCount] = useState(0);
     const [saving, setSaving] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
     // Tracks whether premier-affecting pricing-item fields have changed since the
@@ -399,6 +448,32 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                 await persistUnsavedPricingItems(varId);
             }
 
+            // Persist direct materials whenever we have a variation id. The grid
+            // sends the full set; backend wipe-and-recreates so deletions/reorder
+            // are handled in one round trip.
+            if (varId) {
+                try {
+                    await api.post(`/variations/${varId}/direct-materials/sync`, {
+                        items: directMaterials.map((row, idx) => ({
+                            supplier_id: row.supplier_id,
+                            material_item_id: row.material_item_id,
+                            material_code: row.material_code || null,
+                            material_description: row.material_description || null,
+                            cost_code_id: row.cost_code_id,
+                            cost_type: row.cost_type || null,
+                            description: row.description || null,
+                            qty: row.qty,
+                            unit_cost: row.unit_cost,
+                            sell_markup_pct: row.sell_markup_pct,
+                            client_markup_pct: row.client_markup_pct,
+                            line_number: row.line_number || idx + 1,
+                        })),
+                    });
+                } catch (err: unknown) {
+                    toast.error(err instanceof ApiError ? err.message : 'Failed to save direct materials');
+                }
+            }
+
             if (varId) {
                 post(`/variations/${varId}/update`, {
                     onFinish: () => setSaving(false),
@@ -571,12 +646,12 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             className="scroll-mt-4"
                         >
                             <div className="mb-4 flex items-center justify-between gap-4">
-                                <h2 className="text-sm font-bold">Variation Details</h2>
-                                <div className="flex items-center gap-3 shrink-0 text-sm">
+                                <h2 className="text-xs font-bold">Variation Details</h2>
+                                <div className="flex items-center gap-3 shrink-0 text-xs">
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-muted-foreground">Var #</span>
                                         {selectedLocation?.variation_next_number != null && variation?.status !== 'sent' ? (
-                                            <span className="bg-muted text-muted-foreground rounded-md border px-2.5 py-1 font-mono text-sm">
+                                            <span className="bg-muted text-muted-foreground rounded-md border px-2.5 py-1 font-mono text-xs">
                                                 VA-{String(selectedLocation.variation_next_number).padStart(3, '0')}
                                             </span>
                                         ) : (
@@ -585,7 +660,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                 value={data.co_number}
                                                 onChange={(e) => setData('co_number', e.target.value)}
                                                 placeholder="VAR-001"
-                                                className="h-7 w-24 text-sm"
+                                                className="h-7 w-24 text-xs placeholder:text-xs"
                                             />
                                         )}
                                     </div>
@@ -594,7 +669,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-7 gap-1.5 text-sm font-normal"
+                                                className="h-7 gap-1.5 text-xs font-normal"
                                             >
                                                 <CalendarDays className="h-3.5 w-3.5" />
                                                 {data.date
@@ -618,14 +693,14 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             </div>
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
-                                    <Label className="font-normal">Project</Label>
+                                    <Label className="text-xs font-normal">Project</Label>
                                     <Popover open={locationOpen} onOpenChange={setLocationOpen}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
                                                 aria-expanded={locationOpen}
-                                                className="w-full min-w-0 justify-between overflow-hidden font-normal"
+                                                className="w-full min-w-0 justify-between overflow-hidden text-xs font-normal"
                                                 disabled={!!selectedLocationId}
                                             >
                                                 <span className="min-w-0 truncate">{selectedLocation?.name || 'Search projects...'}</span>
@@ -634,15 +709,15 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                         </PopoverTrigger>
                                         <PopoverContent className="w-(--anchor-width) p-0" align="start">
                                             <Command>
-                                                <CommandInput placeholder="Search projects..." />
+                                                <CommandInput placeholder="Search projects..." className="text-xs placeholder:text-xs" />
                                                 <CommandList>
-                                                    <CommandEmpty>No project found.</CommandEmpty>
+                                                    <CommandEmpty className="py-2 text-center text-xs">No project found.</CommandEmpty>
                                                     <CommandGroup>
                                                         {sortedLocations.map((loc) => (
                                                             <CommandItem
                                                                 key={loc.id}
                                                                 value={loc.name}
-                                                                className="data-selected:bg-transparent"
+                                                                className="text-xs data-selected:bg-transparent"
                                                                 onSelect={() => {
                                                                     setData('location_id', String(loc.id));
                                                                     setLocationOpen(false);
@@ -665,19 +740,20 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="description" className="font-normal">Description</Label>
+                                    <Label htmlFor="description" className="text-xs font-normal">Description</Label>
                                     <Input
                                         id="description"
                                         value={data.description}
                                         onChange={(e) => setData('description', e.target.value)}
                                         placeholder="e.g. Additional waterproofing to Level 3 balcony"
+                                        className="text-xs placeholder:text-xs"
                                     />
                                 </div>
 
                                 {/* Change Type + Extra Days */}
                                 <div className="flex flex-wrap items-end gap-6">
                                     <div className="space-y-1.5">
-                                        <Label className="font-normal">Type</Label>
+                                        <Label className="text-xs font-normal">Type</Label>
                                         <div className="flex items-center gap-2">
                                             <div className="inline-flex rounded-md border">
                                                 {([
@@ -712,7 +788,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="extra_days" className="font-normal">Extra Days</Label>
+                                        <Label htmlFor="extra_days" className="text-xs font-normal">Extra Days</Label>
                                         <div className="relative">
                                             <Input
                                                 id="extra_days"
@@ -722,7 +798,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                                 value={data.extra_days}
                                                 onChange={(e) => setData('extra_days', e.target.value)}
                                                 placeholder="0"
-                                                className="h-7 w-24 text-sm"
+                                                className="h-7 w-24 text-xs placeholder:text-xs"
                                             />
                                         </div>
                                     </div>
@@ -739,7 +815,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             className="scroll-mt-4"
                         >
                             <div className="mb-4 flex items-center justify-between">
-                                <h2 className="text-sm font-bold">Variation Pricing</h2>
+                                <h2 className="text-xs font-bold">Variation Pricing</h2>
                                 {data.location_id && (
                                     <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setShowConditionManager(true)}>
                                         <Settings className="h-3 w-3" />
@@ -754,6 +830,60 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 pricingItems={pricingItems}
                                 onPricingItemsChange={setPricingItemsTracked}
                             />
+
+                            {/* ----- Direct Material ----- */}
+                            <div className="mt-8">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div className="flex min-w-0 items-baseline gap-2">
+                                        <h3 className="text-xs font-semibold">Direct Material</h3>
+                                        {directMaterials.length > 0 && (
+                                            <span className="text-muted-foreground text-xs tabular-nums">
+                                                {directMaterials.length} {directMaterials.length === 1 ? 'item' : 'items'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {directMaterialSelectedCount > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => directMaterialGridRef.current?.deleteSelectedRows()}
+                                            className="h-6 gap-1 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                            Delete ({directMaterialSelectedCount})
+                                        </Button>
+                                    )}
+                                </div>
+                                {!data.location_id ? (
+                                    <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+                                        Select a project to add direct materials.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="overflow-hidden rounded-lg border">
+                                            <DirectMaterialGrid
+                                                ref={directMaterialGridRef}
+                                                rows={directMaterials}
+                                                locationId={data.location_id}
+                                                costCodes={costData}
+                                                costTypes={CostTypes}
+                                                suppliers={suppliers}
+                                                onRowsChange={setDirectMaterials}
+                                                onSelectionChange={setDirectMaterialSelectedCount}
+                                            />
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => directMaterialGridRef.current?.addRow()}
+                                            className="mt-2 h-6 gap-1 px-2 text-xs"
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                            Row
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </section>
 
                         <Separator />
@@ -764,10 +894,11 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             data-section="client"
                             className="scroll-mt-4"
                         >
-                            <h2 className="mb-4 text-sm font-bold">Client Variation</h2>
+                            <h2 className="mb-4 text-xs font-bold">Client Variation</h2>
                             <ClientVariationTab
                                 variationId={savedVariationId}
                                 pricingItems={pricingItems}
+                                directMaterials={directMaterials}
                                 clientNotes={data.client_notes}
                                 defaultSellMultiplier={
                                     selectedLocation?.sell_multiplier_percentage != null
@@ -776,6 +907,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 }
                                 onClientNotesChange={(notes) => setData('client_notes', notes)}
                                 onPricingItemsChange={setPricingItemsTracked}
+                                onDirectMaterialsChange={setDirectMaterials}
                             />
                         </section>
 
@@ -788,7 +920,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                             className="scroll-mt-4"
                         >
                             <div className="mb-4 flex items-center justify-between">
-                                <h2 className="text-sm font-bold">Premier Variation</h2>
+                                <h2 className="text-xs font-bold">Premier Variation</h2>
                                 <PremierVariationTab
                                     variationId={savedVariationId}
                                     locationId={data.location_id}

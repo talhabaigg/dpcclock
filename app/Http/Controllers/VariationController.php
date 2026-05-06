@@ -6,9 +6,12 @@ use App\Jobs\LoadVariationsFromPremierJob;
 use App\Models\CostCode;
 use App\Models\Drawing;
 use App\Models\Location;
+use App\Models\MaterialItem;
 use App\Models\TakeoffCondition;
 use App\Models\Variation;
+use App\Models\VariationDirectMaterial;
 use App\Models\VariationPricingItem;
+use Illuminate\Support\Facades\DB;
 use App\Services\ChangeOrderGenerator;
 use App\Services\GetCompanyCodeService;
 use App\Services\PremierAuthenticationService;
@@ -179,18 +182,24 @@ class VariationController extends Controller
 
         $changeTypes = Variation::distinct()->whereNotNull('type')->pluck('type')->filter()->values()->toArray();
 
+        $suppliers = \App\Models\Supplier::query()
+            ->select('id', 'code', 'name')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('variation/create', [
             'locations' => $locations,
             'costCodes' => $costCodes,
             'conditions' => $conditions,
             'selectedLocationId' => request()->query('location_id'),
             'changeTypes' => $changeTypes,
+            'suppliers' => $suppliers,
         ]);
     }
 
     public function edit($id)
     {
-        $variation = Variation::with('lineItems', 'location', 'pricingItems.condition.conditionType', 'pricingItems.measurement')->findOrFail($id);
+        $variation = Variation::with('lineItems', 'location', 'pricingItems.condition.conditionType', 'pricingItems.measurement', 'directMaterials.materialItem:id,code,description', 'directMaterials.costCode:id,code,description', 'directMaterials.supplier:id,code,name')->findOrFail($id);
         $user = auth()->user();
         $locationsQuery = Location::open()->with([
             'costCodes.costType',
@@ -214,12 +223,18 @@ class VariationController extends Controller
 
         $changeTypes = Variation::distinct()->whereNotNull('type')->pluck('type')->filter()->values()->toArray();
 
+        $suppliers = \App\Models\Supplier::query()
+            ->select('id', 'code', 'name')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('variation/create', [
             'locations' => $locations,
             'costCodes' => $costCodes,
             'variation' => $variation,
             'conditions' => $conditions,
             'changeTypes' => $changeTypes,
+            'suppliers' => $suppliers,
         ]);
     }
 
@@ -832,7 +847,11 @@ class VariationController extends Controller
             $materialCost = round((float) ($validated['material_cost'] ?? 0), 2);
         }
 
-        $totalCost = round($labourCost + $materialCost, 2);
+        // Condition-driven costs are already qty-multiplied by the calculator;
+        // manual costs from the user are unit rates, so multiply by qty here.
+        $totalCost = $conditionId
+            ? round($labourCost + $materialCost, 2)
+            : round((float) $validated['qty'] * ($labourCost + $materialCost), 2);
         $maxSort = $variation->pricingItems()->max('sort_order') ?? 0;
 
         $sellRate = isset($validated['sell_rate']) ? round((float) $validated['sell_rate'], 2) : null;
@@ -892,7 +911,8 @@ class VariationController extends Controller
 
         if ($item->isUnpriced()) {
             // Unpriced rows: user fills labour/material/sell_rate. Description/qty/unit are
-            // mirrored from the measurement and ignored here.
+            // mirrored from the measurement and ignored here. labour/material are unit
+            // rates (no condition to pre-multiply by qty), so total = qty × (l + m).
             if (isset($validated['labour_cost'])) {
                 $item->labour_cost = round((float) $validated['labour_cost'], 2);
                 $item->premier_cost_per_unit = null;
@@ -901,7 +921,7 @@ class VariationController extends Controller
                 $item->material_cost = round((float) $validated['material_cost'], 2);
                 $item->premier_cost_per_unit = null;
             }
-            $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
+            $item->total_cost = round((float) $item->qty * ($item->labour_cost + $item->material_cost), 2);
 
             if (isset($validated['sell_rate'])) {
                 $item->sell_rate = round((float) $validated['sell_rate'], 2);
@@ -914,7 +934,9 @@ class VariationController extends Controller
             return response()->json(['pricing_item' => $item]);
         }
 
-        // Manual row — original behaviour.
+        // Manual row — condition-driven labour/material come from the calculator
+        // already qty-multiplied; manual labour/material are unit rates and need
+        // qty multiplication for total.
         if (isset($validated['qty']) && $item->takeoff_condition_id) {
             $condition = TakeoffCondition::findOrFail($item->takeoff_condition_id);
             $calculator = app(VariationCostCalculator::class);
@@ -926,7 +948,7 @@ class VariationController extends Controller
         } elseif (isset($validated['qty'])) {
             $item->qty = $validated['qty'];
             if (! isset($validated['labour_cost']) && ! isset($validated['material_cost'])) {
-                $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
+                $item->total_cost = round((float) $item->qty * ($item->labour_cost + $item->material_cost), 2);
             }
         }
 
@@ -939,7 +961,9 @@ class VariationController extends Controller
             $item->premier_cost_per_unit = null;
         }
         if (isset($validated['labour_cost']) || isset($validated['material_cost'])) {
-            $item->total_cost = round($item->labour_cost + $item->material_cost, 2);
+            $item->total_cost = $item->takeoff_condition_id
+                ? round($item->labour_cost + $item->material_cost, 2)
+                : round((float) $item->qty * ($item->labour_cost + $item->material_cost), 2);
         }
 
         if (isset($validated['sell_rate'])) {
@@ -1078,13 +1102,155 @@ class VariationController extends Controller
         return response()->json(['pricing_items' => $variation->pricingItems]);
     }
 
+    // ============================================
+    // DIRECT MATERIALS (Variation Pricing)
+    // ============================================
+
+    public function indexDirectMaterials(Variation $variation): JsonResponse
+    {
+        $items = $variation->directMaterials()
+            ->with('materialItem:id,code,description', 'costCode:id,code,description', 'supplier:id,code,name')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json(['direct_materials' => $items]);
+    }
+
+    /**
+     * Replace the variation's direct materials with the supplied list. The grid
+     * sends the full set on save; we wipe-and-recreate to keep ordering and
+     * deletions trivial. Each row's unit_cost should already be resolved client-side
+     * from the project price list.
+     */
+    public function syncDirectMaterials(Request $request, Variation $variation): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'array',
+            'items.*.supplier_id' => 'nullable|integer|exists:suppliers,id',
+            'items.*.material_item_id' => 'nullable|integer|exists:material_items,id',
+            'items.*.material_code' => 'nullable|string|max:100',
+            'items.*.material_description' => 'nullable|string|max:500',
+            'items.*.cost_code_id' => 'nullable|integer|exists:cost_codes,id',
+            'items.*.cost_type' => 'nullable|string|max:20',
+            'items.*.description' => 'nullable|string|max:255',
+            'items.*.qty' => 'nullable|numeric|min:0',
+            'items.*.unit_cost' => 'nullable|numeric|min:0',
+            'items.*.sell_markup_pct' => 'nullable|numeric|min:0',
+            'items.*.client_markup_pct' => 'nullable|numeric|min:0',
+            'items.*.line_number' => 'nullable|integer|min:1',
+        ]);
+
+        $rows = $validated['items'] ?? [];
+
+        DB::transaction(function () use ($variation, $rows) {
+            $variation->directMaterials()->delete();
+
+            foreach ($rows as $idx => $row) {
+                $qty = (float) ($row['qty'] ?? 0);
+                $unit = (float) ($row['unit_cost'] ?? 0);
+                $markup = (float) ($row['sell_markup_pct'] ?? 25);
+                // Sell cost = unit cost grossed up by the markup, then multiplied by qty.
+                $sellCost = round($qty * $unit * (1 + $markup / 100), 2);
+
+                $clientMarkup = (float) ($row['client_markup_pct'] ?? 10);
+
+                $variation->directMaterials()->create([
+                    'supplier_id' => $row['supplier_id'] ?? null,
+                    'material_item_id' => $row['material_item_id'] ?? null,
+                    'material_code' => $row['material_code'] ?? null,
+                    'material_description' => $row['material_description'] ?? null,
+                    'cost_code_id' => $row['cost_code_id'] ?? null,
+                    'cost_type' => $row['cost_type'] ?? null,
+                    'description' => $row['description'] ?? null,
+                    'qty' => $qty,
+                    'unit_cost' => round($unit, 2),
+                    'sell_markup_pct' => round($markup, 2),
+                    'client_markup_pct' => round($clientMarkup, 2),
+                    'sell_cost' => $sellCost,
+                    'line_number' => (int) ($row['line_number'] ?? ($idx + 1)),
+                    'sort_order' => $idx + 1,
+                ]);
+            }
+        });
+
+        $items = $variation->directMaterials()
+            ->with('materialItem:id,code,description', 'costCode:id,code,description', 'supplier:id,code,name')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json(['direct_materials' => $items]);
+    }
+
+    /**
+     * Search material items for the direct-material picker. Mirrors
+     * MaterialItemController::getMaterialItems but is gated by variations.edit
+     * instead of materials.view, so users editing a variation can pick
+     * materials without needing the broader materials catalog permission.
+     */
+    public function searchDirectMaterials(Request $request): JsonResponse
+    {
+        $search = $request->input('search');
+        $locationId = $request->input('location_id');
+        $supplierId = $request->input('supplier_id');
+        $limit = min((int) $request->input('limit', 100), 1000);
+
+        $query = MaterialItem::query()
+            ->select('material_items.id', 'material_items.code', 'material_items.description');
+
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($locationId) {
+            $query->leftJoin('location_favourite_materials as favs', function ($join) use ($locationId) {
+                $join->on('favs.material_item_id', '=', 'material_items.id')
+                    ->where('favs.location_id', '=', $locationId);
+            })->addSelect(DB::raw('CASE WHEN favs.id IS NULL THEN 0 ELSE 1 END as is_favourite'));
+
+            if (! $search) {
+                $query->orderByDesc('is_favourite');
+            }
+        }
+
+        return response()->json($query->limit($limit)->get());
+    }
+
+    /**
+     * Look up the project-specific unit cost for a material item.
+     * Falls back to 0 if no project price list entry exists (per spec).
+     */
+    public function directMaterialUnitCost(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'material_item_id' => 'required|integer|exists:material_items,id',
+            'location_id' => 'required|integer|exists:locations,id',
+        ]);
+
+        $price = DB::table('location_item_pricing')
+            ->where('material_item_id', $validated['material_item_id'])
+            ->where('location_id', $validated['location_id'])
+            ->value('unit_cost_override');
+
+        return response()->json([
+            'unit_cost' => $price !== null ? (float) $price : 0,
+            'in_price_list' => $price !== null,
+        ]);
+    }
+
     /**
      * Render printable client quote.
      * Accepts optional ?uom_m2[]=id query params to display specific items in m2 instead of LM.
      */
     public function clientQuote(Request $request, Variation $variation)
     {
-        $variation->load('pricingItems.condition.conditionType', 'pricingItems.measurement', 'location');
+        $variation->load('pricingItems.condition.conditionType', 'pricingItems.measurement', 'location', 'directMaterials');
 
         // IDs of pricing items the user toggled to m2 display
         $uomM2Ids = collect($request->input('uom_m2', []))->map(fn ($v) => (int) $v)->all();

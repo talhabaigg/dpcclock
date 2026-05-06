@@ -213,15 +213,39 @@ class ChangeOrderGenerator
     public function generateFromPricingItems(Variation $variation, Location $location, string $mode = 'standard'): array
     {
         $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
-        $variation->loadMissing('pricingItems');
+        $variation->loadMissing('pricingItems', 'directMaterials.costCode.costType');
 
         // ── Step 1: Collect costs from pricing items ──
         $totalLabour = 0;
         // materialByCostCode: keyed by cost_code string, value = [cost_code_id, description, total]
         $materialByCostCode = [];
 
+        // Direct material rows roll up by cost code → one Premier line per cost
+        // code with sum(qty × unit_cost). Lines are emitted at Step 3 (alongside
+        // condition-derived material lines).
+        foreach ($variation->directMaterials as $dm) {
+            $cc = $dm->costCode;
+            if (! $cc || ! $cc->code) {
+                continue;
+            }
+            $code = $cc->code;
+            if (! isset($materialByCostCode[$code])) {
+                $materialByCostCode[$code] = [
+                    'cost_code_id' => $cc->id,
+                    'description' => $cc->description ?: $code,
+                    'cost_type' => $cc->costType?->code ?? 'MAT',
+                    'total' => 0,
+                ];
+            }
+            $materialByCostCode[$code]['total'] += (float) $dm->qty * (float) $dm->unit_cost;
+        }
+
         foreach ($variation->pricingItems as $item) {
-            $totalLabour += $item->labour_cost;
+            // Manual rows: labour_cost is a unit rate → multiply by qty.
+            // Condition rows: labour_cost is already a line total (calculator pre-multiplied).
+            $totalLabour += $item->takeoff_condition_id
+                ? (float) $item->labour_cost
+                : (float) $item->labour_cost * (float) $item->qty;
 
             if (! $item->takeoff_condition_id) {
                 // Manual item — labour only, material excluded from Premier
@@ -268,7 +292,13 @@ class ChangeOrderGenerator
         $lineItems = [];
         $lineNumber = 1;
 
-        // ── Step 2: Labour lines (Quick Gen logic) ──
+        // ── Step 2: Labour lines ──
+        // Project convention: LAB-prefix cost codes' variation_ratios already
+        // capture both the base labour (e.g. 01-01 with ratio=100%) AND the
+        // oncosts on top. Sum of LAB ratios = total fan-out as a percentage of
+        // labour. Do NOT emit a separate base line — that would double-count.
+        // Fallback: if no LAB ratios fan out at all, emit the labour total as
+        // a single line so it isn't silently dropped (skipped in dayworks mode).
         $labourLinesEmitted = 0;
         if ($totalLabour > 0) {
             foreach ($locationCostCodes as $costCode) {
@@ -294,12 +324,6 @@ class ChangeOrderGenerator
                 $labourLinesEmitted++;
             }
 
-            // Fallback: if no LAB cost codes are configured for this location's
-            // variation_ratio fan-out, the labour total would otherwise be silently
-            // dropped. Emit a single consolidated line using the first available
-            // LAB-prelim cost code (or no cost_code mapping if none exists).
-            // Dayworks mode skips the fallback — when dayworks_ratio is unset, no
-            // ratio-driven labour lines should appear at all.
             if ($labourLinesEmitted === 0 && $mode !== 'dayworks') {
                 $fallback = $this->findFallbackLabourCostCode($locationCostCodes);
                 $lineItems[] = [
@@ -316,7 +340,7 @@ class ChangeOrderGenerator
             }
         }
 
-        // ── Step 3: Direct material lines (from conditions) ──
+        // ── Step 3: Direct material lines (from conditions and direct-material rows) ──
         $totalMaterial = 0;
         foreach ($materialByCostCode as $code => $data) {
             $amount = round($data['total'], 2);
@@ -331,7 +355,7 @@ class ChangeOrderGenerator
                 'unit_cost' => $amount,
                 'total_cost' => $amount,
                 'cost_item' => $code,
-                'cost_type' => 'MAT',
+                'cost_type' => $data['cost_type'] ?? 'MAT',
                 'revenue' => 0,
                 'cost_code_id' => $data['cost_code_id'],
             ];
@@ -430,9 +454,12 @@ class ChangeOrderGenerator
         $materialByCostCode = [];
 
         foreach ($pricingItems as $item) {
-            $totalLabour += (float) ($item['labour_cost'] ?? 0);
-
             $conditionId = $item['takeoff_condition_id'] ?? null;
+            // Manual rows store labour_cost as a unit rate; multiply by qty.
+            $totalLabour += $conditionId
+                ? (float) ($item['labour_cost'] ?? 0)
+                : (float) ($item['labour_cost'] ?? 0) * (float) ($item['qty'] ?? 1);
+
             if (! $conditionId) {
                 continue;
             }
@@ -586,10 +613,13 @@ class ChangeOrderGenerator
     {
         $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
 
-        $totalLabour = (float) ($item['labour_cost'] ?? 0);
-        $materialByCostCode = [];
-
         $conditionId = $item['takeoff_condition_id'] ?? null;
+        $rawLabour = (float) ($item['labour_cost'] ?? 0);
+        // Manual rows store labour_cost as a UNIT RATE (total = qty × labour),
+        // so we multiply by qty to get the line total. Condition rows store
+        // labour_cost as a LINE TOTAL already (the calculator pre-multiplies).
+        $totalLabour = $conditionId ? $rawLabour : $rawLabour * (float) ($item['qty'] ?? 1);
+        $materialByCostCode = [];
         if ($conditionId) {
             $condition = TakeoffCondition::with([
                 'costCodes.costCode',
@@ -616,7 +646,10 @@ class ChangeOrderGenerator
 
         $total = 0.0;
 
-        // Labour fan-out
+        // Labour fan-out — mirrors generateFromPricingItems.
+        // Project convention: LAB-prefix ratios already capture both base and
+        // oncosts, so no separate base line. Fallback for the no-ratios case
+        // emits totalLabour as a single line so it isn't dropped.
         $labourLinesEmitted = 0;
         if ($totalLabour > 0) {
             foreach ($locationCostCodes as $costCode) {
@@ -631,8 +664,6 @@ class ChangeOrderGenerator
                 $labourLinesEmitted++;
             }
 
-            // Mirrors generateFromPricingItems fallback: if no LAB ratios fan out
-            // and we're not in dayworks, emit the labour total as a single line.
             if ($labourLinesEmitted === 0 && $mode !== 'dayworks') {
                 $total += round($totalLabour, 2);
             }

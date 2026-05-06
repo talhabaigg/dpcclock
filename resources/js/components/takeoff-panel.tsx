@@ -1,16 +1,13 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ConditionsList } from '@/components/conditions-list';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { type TakeoffCondition } from './condition-manager';
 import {
     Box,
-    Calculator,
     ChevronDown,
     ChevronRight,
-    Copy,
     DollarSign,
     Eye,
     Hash,
@@ -19,10 +16,8 @@ import {
     Ruler,
     Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CalibrationData, MeasurementData } from './measurement-layer';
-import { api, ApiError } from '@/lib/api';
 
 type TakeoffPanelProps = {
     calibration: CalibrationData | null;
@@ -47,9 +42,7 @@ function fmtNum(val: number, decimals = 2): string {
     return val.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-const TYPE_LABELS = { linear: 'Linear', area: 'Area', count: 'Each' } as const;
-
-type TabId = 'takeoff' | 'conditions' | 'costs';
+type TabId = 'takeoff' | 'conditions';
 
 export function TakeoffPanel({
     calibration,
@@ -68,32 +61,10 @@ export function TakeoffPanel({
     quantityMultiplier = 1,
     readOnly = false,
 }: TakeoffPanelProps) {
-    const [activeTab, setActiveTab] = useState<TabId>('takeoff');
+    const [activeTab, setActiveTab] = useState<TabId>('conditions');
     const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-    const [collapsedCostGroups, setCollapsedCostGroups] = useState<Set<string>>(new Set());
-    const [multiplier, setMultiplier] = useState(quantityMultiplier);
-    const [savingMultiplier, setSavingMultiplier] = useState(false);
     const hasCalibration = !!calibration;
     const takeoffScrollRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        setMultiplier(quantityMultiplier);
-    }, [quantityMultiplier]);
-
-    const saveMultiplier = useCallback(async () => {
-        if (!drawingId || multiplier === quantityMultiplier) return;
-        setSavingMultiplier(true);
-        try {
-            await api.patch(`/drawings/${drawingId}`, { quantity_multiplier: multiplier });
-            toast.success(`Quantity multiplier set to ${multiplier}×`);
-        } catch (err) {
-            const msg = err instanceof ApiError ? err.message : 'Failed to save multiplier.';
-            toast.error(msg);
-            setMultiplier(quantityMultiplier);
-        } finally {
-            setSavingMultiplier(false);
-        }
-    }, [drawingId, multiplier, quantityMultiplier]);
 
     // Auto-scroll to selected measurement in the takeoff panel
     useEffect(() => {
@@ -118,9 +89,9 @@ export function TakeoffPanel({
         return a.localeCompare(b);
     });
 
-    // Pre-compute totals in a single pass
-    const { totalLinear, totalArea, totalCount, totalCost, totalMaterialCost, totalLabourCost } = useMemo(() => {
-        let linear = 0, area = 0, count = 0, cost = 0, material = 0, labour = 0;
+    // Pre-compute totals in a single pass (used by takeoff tab footer)
+    const { totalLinear, totalArea, totalCount, totalCost } = useMemo(() => {
+        let linear = 0, area = 0, count = 0, cost = 0;
         for (const m of measurements) {
             if (m.computed_value != null) {
                 if (m.type === 'linear') linear += m.computed_value || 0;
@@ -131,45 +102,15 @@ export function TakeoffPanel({
                 else if (m.type === 'count') count += m.computed_value || 0;
             }
             if (m.total_cost != null) cost += m.total_cost || 0;
-            if (m.material_cost != null) material += m.material_cost || 0;
-            if (m.labour_cost != null) labour += m.labour_cost || 0;
         }
-        return { totalLinear: linear, totalArea: area, totalCount: count, totalCost: cost, totalMaterialCost: material, totalLabourCost: labour };
+        return { totalLinear: linear, totalArea: area, totalCount: count, totalCost: cost };
     }, [measurements]);
 
     const linearUnit = calibration?.unit || '';
     const areaUnit = calibration ? `sq ${calibration.unit}` : '';
 
-    // Group conditions by condition type for the Costs tab
-    const conditionsByType: Record<string, TakeoffCondition[]> = useMemo(() => {
-        const out: Record<string, TakeoffCondition[]> = {};
-        for (const c of conditions) {
-            const typeName = c.condition_type?.name || 'Uncategorized';
-            if (!out[typeName]) out[typeName] = [];
-            out[typeName].push(c);
-        }
-        return out;
-    }, [conditions]);
-
-    const conditionTypeNames = useMemo(
-        () =>
-            Object.keys(conditionsByType).sort((a, b) => {
-                if (a === 'Uncategorized') return 1;
-                if (b === 'Uncategorized') return -1;
-                return a.localeCompare(b);
-            }),
-        [conditionsByType],
-    );
-
-    const hasCostData = useMemo(
-        () => conditions.length > 0 && measurements.some((m) => m.takeoff_condition_id != null),
-        [conditions.length, measurements],
-    );
-
     const TABS: { id: TabId; label: string; count?: number }[] = [
-        { id: 'takeoff', label: 'Measures', count: measurements.length },
         { id: 'conditions', label: 'Conditions', count: conditions.length },
-        { id: 'costs', label: 'Costs' },
     ];
 
     return (
@@ -474,240 +415,14 @@ export function TakeoffPanel({
                         hasCalibration={hasCalibration}
                         readOnly={readOnly}
                         onOpenConditionManager={!readOnly ? onOpenConditionManager : undefined}
+                        showCosts
+                        drawingId={drawingId}
+                        quantityMultiplier={quantityMultiplier}
+                        onMeasurementEdit={!readOnly ? onMeasurementEdit : undefined}
+                        onMeasurementHover={onMeasurementHover}
                     />
                 )}
 
-                {/* ===== COSTS TAB — drawing-scoped cost breakdown ===== */}
-                {activeTab === 'costs' && (
-                    <>
-                        <ScrollArea className="flex-1">
-                            <div className="min-w-[240px]">
-                                {!hasCostData ? (
-                                    <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-                                        <Calculator className="h-5 w-5 text-muted-foreground/40" />
-                                        <div>
-                                            <p className="text-xs font-medium text-muted-foreground">No cost data yet</p>
-                                            <p className="mt-0.5 text-xs text-muted-foreground/70">
-                                                {conditions.length === 0
-                                                    ? 'Create conditions with materials and labour rates to see cost breakdowns.'
-                                                    : 'Measure with a condition active to see costs for this drawing.'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* Sticky table header */}
-                                        <div className="sticky top-0 z-10 grid grid-cols-[22px_1fr_56px_56px_68px] items-center gap-1 border-b bg-muted/40 px-2 py-1">
-                                            <span className="text-xs text-muted-foreground">#</span>
-                                            <span className="text-xs text-muted-foreground">Condition</span>
-                                            <span className="text-right text-xs text-muted-foreground">Qty</span>
-                                            <span className="text-right text-xs text-muted-foreground">Rate</span>
-                                            <span className="text-right text-xs text-muted-foreground">Total</span>
-                                        </div>
-
-                                        {conditionTypeNames.map((typeName) => {
-                                            const typeConditions = conditionsByType[typeName];
-                                            if (!typeConditions?.length) return null;
-
-                                            // Only include conditions that have measurements on this drawing
-                                            const measuredConditions = typeConditions.filter((c) =>
-                                                measurements.some((m) => m.takeoff_condition_id === c.id),
-                                            );
-                                            if (!measuredConditions.length) return null;
-
-                                            const isGroupOpen = !collapsedCostGroups.has(typeName);
-
-                                            // Compute per-condition data + group subtotal
-                                            let groupTotalCost = 0;
-
-                                            const conditionRows = measuredConditions.map((c) => {
-                                                const condMeasurements = measurements.filter(
-                                                    (m) => m.takeoff_condition_id === c.id,
-                                                );
-                                                const measuredQty = condMeasurements.reduce(
-                                                    (sum, m) => sum + (m.computed_value || 0),
-                                                    0,
-                                                );
-                                                const totalCondCost = condMeasurements.reduce(
-                                                    (sum, m) => sum + (m.total_cost || 0),
-                                                    0,
-                                                );
-
-                                                // For unit_rate priced linear with height → m²
-                                                const isUnitRate = c.pricing_method === 'unit_rate';
-                                                const effectiveQtyMultiplier =
-                                                    isUnitRate && c.type === 'linear' && c.height && c.height > 0
-                                                        ? c.height
-                                                        : 1;
-                                                const effectiveMeasuredQty = measuredQty * effectiveQtyMultiplier;
-
-                                                const ratePerUnit =
-                                                    effectiveMeasuredQty > 0 ? totalCondCost / effectiveMeasuredQty : 0;
-
-                                                const unitLabel =
-                                                    isUnitRate && c.type === 'linear' && c.height && c.height > 0
-                                                        ? 'm²'
-                                                        : c.type === 'linear'
-                                                            ? linearUnit
-                                                            : c.type === 'area'
-                                                                ? areaUnit
-                                                                : 'ea';
-
-                                                groupTotalCost += totalCondCost;
-
-                                                return {
-                                                    condition: c,
-                                                    effectiveMeasuredQty,
-                                                    ratePerUnit,
-                                                    totalCondCost,
-                                                    unitLabel,
-                                                };
-                                            });
-
-                                            return (
-                                                <div key={typeName}>
-                                                    {/* Group header */}
-                                                    <button
-                                                        type="button"
-                                                        className="flex w-full items-center gap-1 border-b px-2 py-1 text-left transition-colors hover:bg-muted/30"
-                                                        onClick={() =>
-                                                            setCollapsedCostGroups((prev) => {
-                                                                const next = new Set(prev);
-                                                                if (isGroupOpen) next.add(typeName);
-                                                                else next.delete(typeName);
-                                                                return next;
-                                                            })
-                                                        }
-                                                    >
-                                                        {isGroupOpen ? (
-                                                            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                        ) : (
-                                                            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                        )}
-                                                        <span className="flex-1 truncate text-xs font-semibold text-muted-foreground">
-                                                            {typeName}
-                                                        </span>
-                                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                                            {measuredConditions.length}
-                                                        </span>
-                                                        <span className="ml-2 text-xs font-semibold tabular-nums">
-                                                            ${fmtNum(groupTotalCost, 0)}
-                                                        </span>
-                                                    </button>
-
-                                                    {/* Condition rows */}
-                                                    {isGroupOpen &&
-                                                        conditionRows.map(
-                                                            ({
-                                                                condition: c,
-                                                                effectiveMeasuredQty,
-                                                                ratePerUnit,
-                                                                totalCondCost,
-                                                                unitLabel,
-                                                            }) => (
-                                                                <div
-                                                                    key={c.id}
-                                                                    className="border-b border-border/40 px-2 py-[3px]"
-                                                                    style={{
-                                                                        borderLeftWidth: 3,
-                                                                        borderLeftColor: c.color,
-                                                                    }}
-                                                                >
-                                                                    <div className="grid grid-cols-[22px_1fr_56px_56px_68px] items-center gap-1">
-                                                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                                                            {c.condition_number ?? ''}
-                                                                        </span>
-                                                                        <div className="min-w-0">
-                                                                            <div className="truncate text-xs">
-                                                                                {c.name}
-                                                                            </div>
-                                                                            <div className="truncate text-xs text-muted-foreground">
-                                                                                {TYPE_LABELS[c.type]}
-                                                                            </div>
-                                                                        </div>
-                                                                        <span className="text-right text-xs tabular-nums">
-                                                                            {c.type === 'count'
-                                                                                ? Math.round(effectiveMeasuredQty)
-                                                                                : effectiveMeasuredQty.toFixed(1)}
-                                                                            <span className="ml-0.5 text-muted-foreground">
-                                                                                {unitLabel}
-                                                                            </span>
-                                                                        </span>
-                                                                        <span className="text-right text-xs tabular-nums">
-                                                                            ${fmtNum(ratePerUnit)}
-                                                                        </span>
-                                                                        <span
-                                                                            className={`text-right text-xs font-semibold tabular-nums ${
-                                                                                totalCondCost > 0
-                                                                                    ? ''
-                                                                                    : 'text-muted-foreground'
-                                                                            }`}
-                                                                        >
-                                                                            ${fmtNum(totalCondCost)}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            ),
-                                                        )}
-                                                </div>
-                                            );
-                                        })}
-                                    </>
-                                )}
-                            </div>
-                        </ScrollArea>
-
-                        {/* Quantity multiplier */}
-                        {drawingId && hasCostData && (
-                            <div className="flex items-center gap-2 border-t px-2 py-1.5">
-                                <Copy className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                <span className="whitespace-nowrap text-xs text-muted-foreground">
-                                    Qty multiplier
-                                </span>
-                                <Input
-                                    type="number"
-                                    min={0.01}
-                                    max={9999}
-                                    step={1}
-                                    value={multiplier}
-                                    onChange={(e) => setMultiplier(parseFloat(e.target.value) || 1)}
-                                    onBlur={saveMultiplier}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                    }}
-                                    disabled={readOnly || savingMultiplier}
-                                    className="h-5 w-16 px-1 text-right text-xs tabular-nums"
-                                />
-                                <span className="text-xs text-muted-foreground">×</span>
-                            </div>
-                        )}
-
-                        {/* Grand total */}
-                        {hasCostData && (
-                            <div className="border-t bg-muted/40 px-2 py-1.5">
-                                <div className="space-y-0.5">
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-muted-foreground">Materials</span>
-                                        <span className="font-medium tabular-nums">
-                                            ${fmtNum(totalMaterialCost)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-muted-foreground">Labour</span>
-                                        <span className="font-medium tabular-nums">
-                                            ${fmtNum(totalLabourCost)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between border-t pt-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                        <span>Total</span>
-                                        <span className="tabular-nums">${fmtNum(totalCost)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                    </>
-                )}
             </div>
         </TooltipProvider>
     );

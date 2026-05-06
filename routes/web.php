@@ -1070,6 +1070,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/variations/{variation}/client-quote', [VariationController::class, 'clientQuote'])->name('variations.client-quote')
         ->middleware('permission:variations.view');
 
+    // Variation Direct Materials (JSON API)
+    Route::get('/variations/{variation}/direct-materials', [VariationController::class, 'indexDirectMaterials'])->name('variations.direct-materials.index')
+        ->middleware('permission:variations.view');
+    Route::middleware('permission:variations.edit')->group(function () {
+        Route::post('/variations/{variation}/direct-materials/sync', [VariationController::class, 'syncDirectMaterials'])->name('variations.direct-materials.sync');
+        Route::get('/variations/direct-materials/unit-cost', [VariationController::class, 'directMaterialUnitCost'])->name('variations.direct-materials.unit-cost');
+        Route::get('/variations/direct-materials/search', [VariationController::class, 'searchDirectMaterials'])->name('variations.direct-materials.search');
+    });
+
     // ============================================
     // CREDIT CARD RECEIPTS
     // ============================================

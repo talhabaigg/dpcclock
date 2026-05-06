@@ -57,6 +57,23 @@ export type MeasurementData = {
 
 export type ViewMode = 'pan' | 'select' | 'calibrate' | 'measure_line' | 'measure_area' | 'measure_rectangle' | 'measure_count';
 
+/**
+ * Whether `mode` may be entered while a condition of `activeConditionType` is active.
+ * Pan / select / calibrate are always allowed; measurement tools are constrained
+ * to the active condition's geometry type so the user can't draw the wrong shape.
+ */
+export function isViewModeAllowedForCondition(
+    mode: ViewMode,
+    activeConditionType: 'linear' | 'area' | 'count' | null | undefined,
+): boolean {
+    if (!activeConditionType) return true;
+    if (mode === 'pan' || mode === 'select' || mode === 'calibrate') return true;
+    if (activeConditionType === 'linear') return mode === 'measure_line';
+    if (activeConditionType === 'area') return mode === 'measure_area' || mode === 'measure_rectangle';
+    if (activeConditionType === 'count') return mode === 'measure_count';
+    return false;
+}
+
 export function getSegmentColor(percent: number): string {
     if (percent >= 100) return '#22c55e';
     return '#3b82f6';

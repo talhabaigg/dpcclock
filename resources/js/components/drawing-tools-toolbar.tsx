@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import type { ViewMode } from '@/components/measurement-layer';
+import { isViewModeAllowedForCondition, type ViewMode } from '@/components/measurement-layer';
 import { cn } from '@/lib/utils';
 import { Hand, Hash, Magnet, Minus, MousePointer, Pentagon, Scale, Square } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -38,12 +38,14 @@ function ToolButton({
     title,
     icon,
     shortcut,
+    disabled = false,
 }: {
     isActive: boolean;
     onClick: () => void;
     title: string;
     icon: ReactNode;
     shortcut?: string;
+    disabled?: boolean;
 }) {
     return (
         <Button
@@ -52,6 +54,7 @@ function ToolButton({
             variant={isActive ? 'secondary' : 'ghost'}
             onClick={onClick}
             title={title}
+            disabled={disabled}
             className={cn(
                 'relative h-7 w-7 rounded-sm p-0',
                 // Stylus / touch: enlarge tap targets to ~44pt and hide the keyboard-shortcut kbd hint
@@ -88,6 +91,9 @@ export function DrawingToolsToolbar({
     // Tools that need calibration are only shown when we have it
     const showScaledMeasurements = canEdit && hasCalibration;
 
+    // When a condition is active, lock the toolbar to tools matching its geometry type.
+    const isLocked = (mode: ViewMode) => !isViewModeAllowedForCondition(mode, activeCondition?.type ?? null);
+
     return (
         <>
             {/* View Mode */}
@@ -103,8 +109,9 @@ export function DrawingToolsToolbar({
                     <ToolButton
                         isActive={viewMode === 'select'}
                         onClick={() => onViewModeChange(viewMode === 'select' ? 'pan' : 'select')}
-                        title={selectModeTitle}
+                        title={`${selectModeTitle} (S)`}
                         icon={<MousePointer className="h-3.5 w-3.5" />}
+                        shortcut="S"
                     />
                 )}
             </div>
@@ -117,41 +124,44 @@ export function DrawingToolsToolbar({
                         <ToolButton
                             isActive={viewMode === 'calibrate'}
                             onClick={() => toggleMode('calibrate')}
-                            title="Calibrate scale (S)"
+                            title="Calibrate scale"
                             icon={<Scale className="h-3.5 w-3.5" />}
-                            shortcut="S"
                         />
                         {showScaledMeasurements && (
                             <>
                                 <ToolButton
                                     isActive={viewMode === 'measure_line'}
                                     onClick={() => toggleMode('measure_line')}
-                                    title="Measure line (L) — long-press for curve"
+                                    title={isLocked('measure_line') ? `Locked to ${activeCondition?.type} condition` : 'Measure line (L) — long-press for curve'}
                                     icon={<Minus className="h-3.5 w-3.5" />}
                                     shortcut="L"
+                                    disabled={isLocked('measure_line')}
                                 />
                                 <ToolButton
                                     isActive={viewMode === 'measure_area'}
                                     onClick={() => toggleMode('measure_area')}
-                                    title="Measure area (A)"
+                                    title={isLocked('measure_area') ? `Locked to ${activeCondition?.type} condition` : 'Measure area (A)'}
                                     icon={<Pentagon className="h-3.5 w-3.5" />}
                                     shortcut="A"
+                                    disabled={isLocked('measure_area')}
                                 />
                                 <ToolButton
                                     isActive={viewMode === 'measure_rectangle'}
                                     onClick={() => toggleMode('measure_rectangle')}
-                                    title="Measure rectangle (R)"
+                                    title={isLocked('measure_rectangle') ? `Locked to ${activeCondition?.type} condition` : 'Measure rectangle (R)'}
                                     icon={<Square className="h-3.5 w-3.5" />}
                                     shortcut="R"
+                                    disabled={isLocked('measure_rectangle')}
                                 />
                             </>
                         )}
                         <ToolButton
                             isActive={viewMode === 'measure_count'}
                             onClick={() => toggleMode('measure_count')}
-                            title="Count items (C)"
+                            title={isLocked('measure_count') ? `Locked to ${activeCondition?.type} condition` : 'Count items (C)'}
                             icon={<Hash className="h-3.5 w-3.5" />}
                             shortcut="C"
+                            disabled={isLocked('measure_count')}
                         />
                     </div>
 

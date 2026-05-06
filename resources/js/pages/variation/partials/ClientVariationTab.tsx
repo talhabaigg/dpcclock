@@ -9,53 +9,39 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { cn, fmtCurrency, fmtPercent, round2 } from '@/lib/utils';
+import { round2 } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { ArrowDown, ArrowLeftRight, ExternalLink, GripVertical, Save } from 'lucide-react';
+import { ExternalLink, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
+import ClientVariationGrid, { ClientGroupRow } from './clientVariation/ClientVariationGrid';
+import DirectMaterialClientDetail from './clientVariation/DirectMaterialClientDetail';
+import ItemsClientGrid from './clientVariation/ItemsClientGrid';
+import { DirectMaterialItem } from './directMaterialTable/utils';
 
 interface ClientVariationTabProps {
     variationId?: number;
     pricingItems: PricingItem[];
+    directMaterials?: DirectMaterialItem[];
     clientNotes: string;
     defaultSellMultiplier?: number | null;
     onClientNotesChange: (notes: string) => void;
     onPricingItemsChange: (items: PricingItem[]) => void;
+    onDirectMaterialsChange?: (items: DirectMaterialItem[]) => void;
 }
 
 type DisplayUnit = 'primary' | 'alternate';
 
-type DragHandleProps = {
-    attributes: ReturnType<typeof useSortable>['attributes'];
-    listeners: ReturnType<typeof useSortable>['listeners'];
-};
-
-function SortableRow({ id, children }: { id: string; children: (drag: DragHandleProps) => React.ReactNode }) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.5 : 1,
-    };
-    return (
-        <tr ref={setNodeRef} style={style} className="hover:bg-muted/30 border-b last:border-0">
-            {children({ attributes, listeners })}
-        </tr>
-    );
-}
-
 export default function ClientVariationTab({
     variationId,
     pricingItems,
+    directMaterials = [],
     clientNotes,
     defaultSellMultiplier,
     onClientNotesChange,
     onPricingItemsChange,
+    onDirectMaterialsChange,
 }: ClientVariationTabProps) {
     const [sellRates, setSellRates] = useState<Record<string, string>>({});
     const [multipliers, setMultipliers] = useState<Record<string, string>>({});
@@ -69,20 +55,6 @@ export default function ClientVariationTab({
     const canToggleUnit = (item: PricingItem): boolean => {
         const c = item.condition;
         return c?.type === 'linear' && !!c.height && c.height > 0;
-    };
-
-    const getHeight = (item: PricingItem): number =>
-        item.condition?.height && item.condition.height > 0 ? item.condition.height : 1;
-
-    const getDisplayFactor = (item: PricingItem, idx: number): number => {
-        const key = itemKey(item, idx);
-        return displayUnits[key] === 'alternate' && canToggleUnit(item) ? getHeight(item) : 1;
-    };
-
-    const getDisplayUnit = (item: PricingItem, idx: number): string => {
-        const key = itemKey(item, idx);
-        if (canToggleUnit(item)) return displayUnits[key] === 'alternate' ? 'm2' : 'LM';
-        return item.unit;
     };
 
     const toggleUnit = (key: string) => {
@@ -169,24 +141,9 @@ export default function ClientVariationTab({
         return sellRates[key] !== undefined ? (parseFloat(sellRates[key]) || 0) : (item.sell_rate || 0);
     };
 
-    const getDisplaySellRate = (item: PricingItem, idx: number): string => {
-        const key = itemKey(item, idx);
-        const stored = sellRates[key];
-        if (stored === undefined || stored === '') return '';
-        const val = parseFloat(stored);
-        if (!val) return stored;
-        const factor = getDisplayFactor(item, idx);
-        return factor === 1 ? stored : (val / factor).toFixed(2);
-    };
-
     const getSellTotal = (item: PricingItem, idx: number): number => item.qty * getSellRate(item, idx);
     const getPremierTotal = (item: PricingItem): number =>
         item.premier_cost_per_unit != null ? item.premier_cost_per_unit * item.qty : item.total_cost;
-    const getMargin = (item: PricingItem, idx: number): number => getSellTotal(item, idx) - getPremierTotal(item);
-    const getMarginPercent = (item: PricingItem, idx: number): number => {
-        const sell = getSellTotal(item, idx);
-        return sell > 0 ? (getMargin(item, idx) / sell) * 100 : 0;
-    };
 
     const totalPremier = pricingItems.reduce((sum, i) => sum + getPremierTotal(i), 0);
     const totalSell = pricingItems.reduce((sum, i, idx) => sum + getSellTotal(i, idx), 0);
@@ -242,21 +199,7 @@ export default function ClientVariationTab({
         }
     };
 
-    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-    const sortableIds = pricingItems.map((item, idx) => itemKey(item, idx));
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) return;
-        const oldIndex = sortableIds.indexOf(String(active.id));
-        const newIndex = sortableIds.indexOf(String(over.id));
-        if (oldIndex === -1 || newIndex === -1) return;
-        const updated = arrayMove([...pricingItems], oldIndex, newIndex);
-        updated.forEach((item, i) => { item.sort_order = i + 1; });
-        onPricingItemsChange(updated);
-    };
-
-    if (pricingItems.length === 0) {
+    if (pricingItems.length === 0 && directMaterials.length === 0) {
         return (
             <div className="space-y-4">
                 <p className="text-xs text-muted-foreground">Add pricing items first</p>
@@ -273,190 +216,102 @@ export default function ClientVariationTab({
         );
     }
 
+    const itemsDetail = pricingItems.length > 0 ? (
+        <ItemsClientGrid
+            pricingItems={pricingItems}
+            sellRates={sellRates}
+            multipliers={multipliers}
+            displayUnits={displayUnits}
+            onSellRateChange={handleSellRateChange}
+            onMultiplierChange={handleMultiplierChange}
+            onToggleUnit={toggleUnit}
+            onApplyMultiplierDown={(idx) => setConfirmMultiplierIdx(idx)}
+            onPricingItemsChange={onPricingItemsChange}
+        />
+    ) : null;
+
+    // Direct material aggregates: true cost (price-list × qty) and final client
+    // sell (already includes both per-row sell markup and the per-row client markup).
+    const directMaterialCost = directMaterials.reduce(
+        (sum, m) => sum + (Number(m.qty) || 0) * (Number(m.unit_cost) || 0),
+        0,
+    );
+    const directMaterialClientTotal = directMaterials.reduce((sum, m) => {
+        const perUnitSell = (Number(m.unit_cost) || 0) * (1 + (Number(m.sell_markup_pct) || 0) / 100);
+        return sum + (Number(m.qty) || 0) * perUnitSell * (1 + (Number(m.client_markup_pct) || 0) / 100);
+    }, 0);
+    const directMaterialMargin = directMaterialClientTotal - directMaterialCost;
+    const directMaterialMarginPct = directMaterialClientTotal > 0
+        ? (directMaterialMargin / directMaterialClientTotal) * 100
+        : 0;
+
+    const directMaterialDetail = directMaterials.length > 0 ? (
+        <DirectMaterialClientDetail
+            items={directMaterials}
+            onItemsChange={(next) => onDirectMaterialsChange?.(next)}
+        />
+    ) : null;
+
+    const clientGroupRows: ClientGroupRow[] = [];
+    if (pricingItems.length > 0 && itemsDetail) {
+        clientGroupRows.push({
+            kind: 'items',
+            label: 'Items',
+            line_count: pricingItems.length,
+            // Cost basis for items = premier cost (already includes oncosts).
+            cost: totalPremier,
+            sell: totalSell,
+            margin: totalMargin,
+            margin_pct: overallMarginPercent,
+            detail: itemsDetail,
+        });
+    }
+    if (directMaterials.length > 0 && directMaterialDetail) {
+        clientGroupRows.push({
+            kind: 'direct_material',
+            label: 'Direct Material',
+            line_count: directMaterials.length,
+            cost: directMaterialCost,
+            sell: directMaterialClientTotal,
+            margin: directMaterialMargin,
+            margin_pct: directMaterialMarginPct,
+            detail: directMaterialDetail,
+        });
+    }
+
     return (
         <div className="space-y-4">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-xs">
-                    <thead>
-                        <tr className="border-b">
-                            <th className="text-muted-foreground w-8 px-2 py-1.5 text-center font-medium">#</th>
-                            <th className="w-6 px-0.5 py-1.5"></th>
-                            <th className="text-muted-foreground px-2 py-1.5 text-left font-medium">Description</th>
-                            <th className="text-muted-foreground w-12 px-2 py-1.5 text-right font-medium">Qty</th>
-                            <th className="text-muted-foreground w-12 px-2 py-1.5 text-center font-medium">Unit</th>
-                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Cost</th>
-                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Premier Cost</th>
-                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Multiplier</th>
-                            <th className="text-muted-foreground w-24 px-2 py-1.5 text-right font-medium">Sell Rate</th>
-                            <th className="text-muted-foreground w-20 px-2 py-1.5 text-right font-medium">Sell Total</th>
-                            <th className="text-muted-foreground w-20 px-2 py-1.5 text-right font-medium">Margin</th>
-                            <th className="text-muted-foreground w-12 px-2 py-1.5 text-right font-medium">%</th>
-                        </tr>
-                    </thead>
-                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                    <tbody>
-                        {
-                            pricingItems.map((item, idx) => {
-                                const key = itemKey(item, idx);
-                                const sellTotal = getSellTotal(item, idx);
-                                const margin = getMargin(item, idx);
-                                const marginPct = getMarginPercent(item, idx);
-                                const costRatePrimary = getRateBasis(item);
-                                const factor = getDisplayFactor(item, idx);
-                                const displayQty = item.qty * factor;
-                                const displayCostRate = factor > 0 && displayQty > 0 ? item.total_cost / displayQty : 0;
-                                const displayUnit = getDisplayUnit(item, idx);
-                                const hasToggle = canToggleUnit(item);
+            <ClientVariationGrid rows={clientGroupRows} />
 
-                                return (
-                                    <SortableRow key={key} id={key}>
-                                        {({ attributes, listeners }) => (<>
-                                        <td className="text-muted-foreground w-8 px-2 py-1.5 text-center text-[11px] tabular-nums">{idx + 1}</td>
-                                        <td className="w-6 px-0.5 py-1.5">
-                                            <button
-                                                type="button"
-                                                {...attributes}
-                                                {...listeners}
-                                                className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing rounded p-0.5"
-                                            >
-                                                <GripVertical className="h-3.5 w-3.5" />
-                                            </button>
-                                        </td>
-                                        <td className="px-2 py-1.5">
-                                            <div className="flex items-center gap-1.5">
-                                                {item.condition?.condition_type && (
-                                                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.condition.condition_type.color }} />
-                                                )}
-                                                <span>{item.description}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right tabular-nums">
-                                            {factor === 1 ? item.qty : displayQty.toFixed(2)}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center">
-                                            {hasToggle ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleUnit(key)}
-                                                    className="text-muted-foreground hover:bg-muted inline-flex items-center gap-0.5 rounded border px-1 py-0.5 text-[11px] transition-colors"
-                                                >
-                                                    <ArrowLeftRight className="h-2.5 w-2.5" />
-                                                    {displayUnit}
-                                                </button>
-                                            ) : (
-                                                <span className="text-muted-foreground text-xs">{item.unit}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right tabular-nums">
-                                            <div>{fmtCurrency(item.total_cost)}</div>
-                                            <div className="text-muted-foreground text-[10px]">
-                                                {fmtCurrency(displayCostRate)}<span className="text-muted-foreground/60">/{displayUnit}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right tabular-nums">
-                                            {item.premier_cost_per_unit != null ? (
-                                                <>
-                                                    <div>{fmtCurrency(item.premier_cost_per_unit * item.qty)}</div>
-                                                    <div className="text-muted-foreground text-[10px]">
-                                                        {fmtCurrency(item.premier_cost_per_unit / factor)}<span className="text-muted-foreground/60">/{displayUnit}</span>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <span className="text-muted-foreground/60">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right">
-                                            <div className="flex items-center justify-end gap-0.5">
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={multipliers[key] ?? ''}
-                                                        onChange={(e) => handleMultiplierChange(key, e.target.value, costRatePrimary)}
-                                                        placeholder="220"
-                                                        className="h-6 w-16 rounded-md border border-input bg-background pl-1.5 pr-5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
-                                                    />
-                                                    <span className="text-muted-foreground pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px]">%</span>
-                                                </div>
-                                                {idx < pricingItems.length - 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setConfirmMultiplierIdx(idx)}
-                                                        title="Apply to all rows below"
-                                                        className="text-muted-foreground hover:text-foreground rounded p-0.5"
-                                                    >
-                                                        <ArrowDown className="h-3 w-3" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right">
-                                            <div className="relative inline-block">
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={getDisplaySellRate(item, idx)}
-                                                    onChange={(e) => handleSellRateChange(key, e.target.value, costRatePrimary, factor)}
-                                                    placeholder="0.00"
-                                                    className="h-6 w-24 rounded-md border border-input bg-background pl-1.5 pr-8 text-right text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring"
-                                                />
-                                                <span className="text-muted-foreground pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px]">/{displayUnit}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-right font-medium tabular-nums">{fmtCurrency(sellTotal)}</td>
-                                        <td className={cn('px-2 py-1.5 text-right tabular-nums', margin < 0 && 'text-red-600 dark:text-red-400')}>
-                                            {fmtCurrency(margin)}
-                                        </td>
-                                        <td className={cn('px-2 py-1.5 text-right tabular-nums', marginPct < 0 && 'text-red-600 dark:text-red-400')}>
-                                            {fmtPercent(marginPct)}
-                                        </td>
-                                        </>)}
-                                    </SortableRow>
-                                );
-                            })}
-                    </tbody>
-                    </SortableContext>
-                    <tfoot>
-                            <tr className="border-t">
-                                <td colSpan={5} className="px-2 py-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <Button onClick={handleSaveSellRates} size="sm" disabled={saving} className="h-6 gap-1 px-2 text-xs">
-                                            <Save className="h-3 w-3" />
-                                            {saving ? 'Saving...' : 'Save Rates'}
-                                        </Button>
-                                        {variationId && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-6 gap-1 px-2 text-xs"
-                                                onClick={() => {
-                                                    const params = new URLSearchParams();
-                                                    pricingItems.forEach((item, idx) => {
-                                                        const key = itemKey(item, idx);
-                                                        if (item.id && displayUnits[key] === 'alternate' && canToggleUnit(item)) {
-                                                            params.append('uom_m2[]', String(item.id));
-                                                        }
-                                                    });
-                                                    const qs = params.toString();
-                                                    window.open(`/variations/${variationId}/client-quote${qs ? '?' + qs : ''}`, '_blank');
-                                                }}
-                                            >
-                                                <ExternalLink className="h-3 w-3" />
-                                                Quote
-                                            </Button>
-                                        )}
-                                    </div>
-                                </td>
-                                <td colSpan={4} className="px-2 py-1.5 text-right text-muted-foreground">Total</td>
-                                <td className="px-2 py-1.5 text-right font-bold tabular-nums">{fmtCurrency(totalSell)}</td>
-                                <td className="px-2 py-1.5 text-right font-bold tabular-nums">{fmtCurrency(totalMargin)}</td>
-                                <td className="px-2 py-1.5 text-right font-bold tabular-nums">{fmtPercent(overallMarginPercent)}</td>
-                            </tr>
-                        </tfoot>
-                </table>
-            </div>
-            </DndContext>
+            {pricingItems.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                    <Button onClick={handleSaveSellRates} size="sm" disabled={saving} className="h-7 gap-1 px-2 text-xs">
+                        <Save className="h-3 w-3" />
+                        {saving ? 'Saving...' : 'Save Rates'}
+                    </Button>
+                    {variationId && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => {
+                                const params = new URLSearchParams();
+                                pricingItems.forEach((item, idx) => {
+                                    const key = itemKey(item, idx);
+                                    if (item.id && displayUnits[key] === 'alternate' && canToggleUnit(item)) {
+                                        params.append('uom_m2[]', String(item.id));
+                                    }
+                                });
+                                const qs = params.toString();
+                                window.open(`/variations/${variationId}/client-quote${qs ? '?' + qs : ''}`, '_blank');
+                            }}
+                        >
+                            <ExternalLink className="h-3 w-3" />
+                            Quote
+                        </Button>
+                    )}
+                </div>
+            )}
 
             {/* Client Notes */}
             <div className="flex items-center gap-2">

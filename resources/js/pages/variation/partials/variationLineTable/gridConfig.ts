@@ -9,6 +9,8 @@ export const defaultColDef = {
     editable: false,
     flex: 1,
     minWidth: 100,
+    suppressHeaderMenuButton: true,
+    suppressHeaderFilterButton: true,
 };
 
 export const getGridOptions = (): GridOptions => {

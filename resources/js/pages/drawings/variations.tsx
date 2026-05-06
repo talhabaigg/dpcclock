@@ -3,8 +3,8 @@ import { ConditionManager, type TakeoffCondition } from '@/components/condition-
 import { ConditionsList } from '@/components/conditions-list';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
-import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
+import { isViewModeAllowedForCondition, type CalibrationData, type MeasurementData, type Point, type ViewMode } from '@/components/measurement-layer';
+import { PixiDrawingViewer, type DrawingControls } from '@/components/pixi-drawing-viewer';
 import { ScaleChip } from '@/components/scale-chip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ import { measurementIntersectsRect } from '@/lib/drawing-geometry';
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { usePage } from '@inertiajs/react';
 import { ArrowRight, FileText, GitBranch, Loader2, Lock, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 type Project = { id: number; name: string };
@@ -90,6 +90,9 @@ export default function DrawingVariations() {
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
     const [snapEnabled, setSnapEnabled] = useState(true);
 
+    // Tracks in-progress drawing handles for the staged Escape behaviour.
+    const drawingControlsRef = useRef<DrawingControls | null>(null);
+
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
     const [calibration, setCalibration] = useState<CalibrationData | null>(null);
     const [selectedMeasurementId, setSelectedMeasurementId] = useState<number | null>(null);
@@ -111,7 +114,7 @@ export default function DrawingVariations() {
     const [renamingDraft, setRenamingDraft] = useState(false);
     const [draftNameInput, setDraftNameInput] = useState('');
     const [showConditionManager, setShowConditionManager] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'measures' | 'conditions' | 'pricing'>('conditions');
+    const [sidebarTab, setSidebarTab] = useState<'conditions' | 'pricing'>('conditions');
 
     // Drag-select multi-selection (set when viewMode === 'select')
     const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<Set<number>>(new Set());
@@ -523,19 +526,46 @@ export default function DrawingVariations() {
     const selectableVariations = useMemo(() => variations.filter((v) => !/^\s*\(internal\)/i.test(v.description ?? '')), [variations]);
 
     // Keyboard shortcuts
+    const lockType = activeCondition?.type ?? null;
     const shortcuts = useMemo(
         () => [
             { key: 'p', handler: () => setViewMode('pan') },
-            { key: 'Escape', handler: () => setViewMode('pan') },
-            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canMeasure },
-            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canMeasure && !!calibration },
-            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canMeasure && !!calibration },
+            {
+                key: 'Escape',
+                handler: () => {
+                    const ctrl = drawingControlsRef.current;
+                    if (ctrl && ctrl.pointCount > 0) {
+                        ctrl.cancel();
+                        return;
+                    }
+                    if (activeConditionId !== null) {
+                        handleActivateCondition(null);
+                        return;
+                    }
+                    setViewMode('pan');
+                },
+            },
+            { key: 's', handler: () => setViewMode(viewMode === 'select' ? 'pan' : 'select'), enabled: canMeasure },
+            {
+                key: 'l',
+                handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'),
+                enabled: canMeasure && !!calibration && isViewModeAllowedForCondition('measure_line', lockType),
+            },
+            {
+                key: 'a',
+                handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'),
+                enabled: canMeasure && !!calibration && isViewModeAllowedForCondition('measure_area', lockType),
+            },
             {
                 key: 'r',
                 handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'),
-                enabled: canMeasure && !!calibration,
+                enabled: canMeasure && !!calibration && isViewModeAllowedForCondition('measure_rectangle', lockType),
             },
-            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canMeasure },
+            {
+                key: 'c',
+                handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'),
+                enabled: canMeasure && isViewModeAllowedForCondition('measure_count', lockType),
+            },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
@@ -545,16 +575,53 @@ export default function DrawingVariations() {
             { key: 'z', ctrl: true, handler: undo, enabled: canMeasure },
             { key: 'z', ctrl: true, shift: true, handler: redo, enabled: canMeasure },
             { key: 'y', ctrl: true, handler: redo, enabled: canMeasure },
+            {
+                key: 'Delete',
+                handler: () => {
+                    if (selectedMeasurementIds.size > 0) {
+                        handleBulkDelete();
+                        return;
+                    }
+                    if (selectedMeasurementId !== null) {
+                        const m = visibleMeasurements.find((mm) => mm.id === selectedMeasurementId);
+                        if (m) handleDeleteMeasurement(m);
+                    }
+                },
+                enabled: canMeasure,
+            },
+            {
+                key: 'Backspace',
+                handler: () => {
+                    if (selectedMeasurementIds.size > 0) {
+                        handleBulkDelete();
+                        return;
+                    }
+                    if (selectedMeasurementId !== null) {
+                        const m = visibleMeasurements.find((mm) => mm.id === selectedMeasurementId);
+                        if (m) handleDeleteMeasurement(m);
+                    }
+                },
+                enabled: canMeasure,
+            },
         ],
-        [viewMode, calibration, conditions, activeConditionId, handleActivateCondition, undo, redo, canMeasure],
+        [
+            viewMode,
+            calibration,
+            conditions,
+            activeConditionId,
+            handleActivateCondition,
+            undo,
+            redo,
+            canMeasure,
+            lockType,
+            selectedMeasurementId,
+            selectedMeasurementIds,
+            visibleMeasurements,
+            handleBulkDelete,
+            handleDeleteMeasurement,
+        ],
     );
     useKeyboardShortcuts(shortcuts);
-
-    const formatValue = (m: MeasurementData): string => {
-        if (m.type === 'count') return `${m.computed_value ?? m.points?.length ?? 0} ea`;
-        if (m.type === 'area') return m.computed_value ? `${m.computed_value.toFixed(2)} ${m.unit || 'sq m'}` : '--';
-        return m.computed_value ? `${m.computed_value.toFixed(2)} ${m.unit || 'm'}` : '--';
-    };
 
     return (
         <DrawingWorkspaceLayout
@@ -796,12 +863,20 @@ export default function DrawingVariations() {
                         snapEnabled={snapEnabled}
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
-                        onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        onMeasurementClick={(m) => {
+                            if (m.takeoff_condition_id && activeConditionId !== m.takeoff_condition_id) {
+                                handleActivateCondition(m.takeoff_condition_id);
+                            }
+                            setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id);
+                        }}
                         onMeasurementHover={setHoveredMeasurementId}
                         hoveredMeasurementId={hoveredMeasurementId}
                         boxSelectMode={viewMode === 'select'}
                         onBoxSelectComplete={handleBoxSelect}
                         activeColor={activeCondition?.color ?? null}
+                        onDrawingControlsChange={(state) => {
+                            drawingControlsRef.current = state;
+                        }}
                         className="absolute inset-0"
                     />
                 </div>
@@ -916,7 +991,6 @@ export default function DrawingVariations() {
                                 {(
                                     [
                                         { id: 'conditions', label: 'Conditions', count: conditions.length },
-                                        { id: 'measures', label: 'Measures', count: visibleMeasurements.length },
                                         { id: 'pricing', label: 'Pricing', count: pricingItems.length },
                                     ] as const
                                 ).map((tab) => {
@@ -952,50 +1026,6 @@ export default function DrawingVariations() {
                                         readOnly={!canEdit}
                                         onOpenConditionManager={canEdit ? () => setShowConditionManager(true) : undefined}
                                     />
-                                )}
-
-                                {sidebarTab === 'measures' && (
-                                    <div className="flex-1 overflow-y-auto">
-                                        {visibleMeasurements.length === 0 ? (
-                                            <div className="text-muted-foreground px-2 py-6 text-center text-[10px]">
-                                                No measurements yet. Activate a condition and start measuring.
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                {visibleMeasurements.map((m) => (
-                                                    <div
-                                                        key={m.id}
-                                                        className={`hover:bg-muted/50 flex cursor-pointer items-center gap-1.5 px-2 py-1.5 transition-colors duration-150 ${
-                                                            selectedMeasurementId === m.id ? 'bg-primary/5' : ''
-                                                        }`}
-                                                        onClick={() => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
-                                                    >
-                                                        <span
-                                                            className="h-2 w-2 shrink-0 rounded-full"
-                                                            style={{ backgroundColor: m.color || '#f59e0b' }}
-                                                        />
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="truncate text-xs font-medium">{m.name}</div>
-                                                            <div className="text-muted-foreground text-[10px]">{formatValue(m)}</div>
-                                                        </div>
-                                                        {canMeasure && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteMeasurement(m);
-                                                                }}
-                                                                className="text-muted-foreground/50 h-5 w-5 p-0 hover:text-red-500"
-                                                            >
-                                                                <Trash2 className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
                                 )}
 
                                 {sidebarTab === 'pricing' && (

@@ -59,4 +59,9 @@ class Variation extends Model
     {
         return $this->hasMany(VariationPricingItem::class)->orderBy('sort_order');
     }
+
+    public function directMaterials(): HasMany
+    {
+        return $this->hasMany(VariationDirectMaterial::class)->orderBy('sort_order');
+    }
 }

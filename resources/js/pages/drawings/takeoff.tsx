@@ -3,8 +3,8 @@ import CalibrationDialog from '@/components/calibration-dialog';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DrawingToolsToolbar } from '@/components/drawing-tools-toolbar';
-import type { CalibrationData, MeasurementData, Point, ViewMode } from '@/components/measurement-layer';
-import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
+import { isViewModeAllowedForCondition, type CalibrationData, type MeasurementData, type Point, type ViewMode } from '@/components/measurement-layer';
+import { PixiDrawingViewer, type DrawingControls } from '@/components/pixi-drawing-viewer';
 import { ScaleChip } from '@/components/scale-chip';
 import { TakeoffPanel } from '@/components/takeoff-panel';
 import { Button } from '@/components/ui/button';
@@ -77,6 +77,10 @@ export default function DrawingTakeoff() {
     const panelResizing = useRef(false);
     const panelStartX = useRef(0);
     const panelStartW = useRef(PANEL_DEFAULT_WIDTH);
+
+    // Tracks the in-progress drawing's cancel/finish handles + pointCount.
+    // Used by Escape: first press cancels in-progress points, next press deactivates the condition.
+    const drawingControlsRef = useRef<DrawingControls | null>(null);
 
     useEffect(() => {
         const onMouseMove = (e: MouseEvent) => {
@@ -573,19 +577,48 @@ export default function DrawingTakeoff() {
     const comparisonImageUrl = showCompareOverlay ? candidateImageUrl || undefined : undefined;
 
     // Keyboard shortcuts
+    const lockType = activeConditionDisplay?.type ?? null;
     const shortcuts = useMemo(
         () => [
             { key: 'p', handler: () => setViewMode('pan') },
-            { key: 'Escape', handler: () => setViewMode('pan') },
-            { key: 's', handler: () => setViewMode(viewMode === 'calibrate' ? 'pan' : 'calibrate'), enabled: canEditTakeoff },
-            { key: 'l', handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'), enabled: canEditTakeoff && !!calibration },
-            { key: 'a', handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'), enabled: canEditTakeoff && !!calibration },
+            {
+                key: 'Escape',
+                handler: () => {
+                    const ctrl = drawingControlsRef.current;
+                    if (ctrl && ctrl.pointCount > 0) {
+                        // First Escape — abandon the in-progress measurement, keep the condition active.
+                        ctrl.cancel();
+                        return;
+                    }
+                    if (activeConditionId !== null) {
+                        // Second Escape — deactivate the condition and fall back to pan.
+                        handleActivateCondition(null);
+                        return;
+                    }
+                    setViewMode('pan');
+                },
+            },
+            { key: 's', handler: () => setViewMode(viewMode === 'select' ? 'pan' : 'select'), enabled: canEditTakeoff },
+            {
+                key: 'l',
+                handler: () => setViewMode(viewMode === 'measure_line' ? 'pan' : 'measure_line'),
+                enabled: canEditTakeoff && !!calibration && isViewModeAllowedForCondition('measure_line', lockType),
+            },
+            {
+                key: 'a',
+                handler: () => setViewMode(viewMode === 'measure_area' ? 'pan' : 'measure_area'),
+                enabled: canEditTakeoff && !!calibration && isViewModeAllowedForCondition('measure_area', lockType),
+            },
             {
                 key: 'r',
                 handler: () => setViewMode(viewMode === 'measure_rectangle' ? 'pan' : 'measure_rectangle'),
-                enabled: canEditTakeoff && !!calibration,
+                enabled: canEditTakeoff && !!calibration && isViewModeAllowedForCondition('measure_rectangle', lockType),
             },
-            { key: 'c', handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'), enabled: canEditTakeoff },
+            {
+                key: 'c',
+                handler: () => setViewMode(viewMode === 'measure_count' ? 'pan' : 'measure_count'),
+                enabled: canEditTakeoff && isViewModeAllowedForCondition('measure_count', lockType),
+            },
             ...conditions.slice(0, 5).map((condition, i) => ({
                 key: String(i + 1),
                 handler: () => handleActivateCondition(activeConditionId === condition.id ? null : condition.id),
@@ -595,8 +628,51 @@ export default function DrawingTakeoff() {
             { key: 'z', ctrl: true, handler: undo, enabled: canEditTakeoff },
             { key: 'z', ctrl: true, shift: true, handler: redo, enabled: canEditTakeoff },
             { key: 'y', ctrl: true, handler: redo, enabled: canEditTakeoff },
+            {
+                key: 'Delete',
+                handler: () => {
+                    if (selectedMeasurementIds.size > 0) {
+                        handleBulkDelete();
+                        return;
+                    }
+                    if (selectedMeasurementId !== null) {
+                        const m = allMeasurements.find((mm) => mm.id === selectedMeasurementId);
+                        if (m) handleDeleteMeasurement(m);
+                    }
+                },
+                enabled: canEditTakeoff,
+            },
+            {
+                key: 'Backspace',
+                handler: () => {
+                    if (selectedMeasurementIds.size > 0) {
+                        handleBulkDelete();
+                        return;
+                    }
+                    if (selectedMeasurementId !== null) {
+                        const m = allMeasurements.find((mm) => mm.id === selectedMeasurementId);
+                        if (m) handleDeleteMeasurement(m);
+                    }
+                },
+                enabled: canEditTakeoff,
+            },
         ],
-        [viewMode, calibration, conditions, activeConditionId, handleActivateCondition, undo, redo, canEditTakeoff],
+        [
+            viewMode,
+            calibration,
+            conditions,
+            activeConditionId,
+            handleActivateCondition,
+            undo,
+            redo,
+            canEditTakeoff,
+            lockType,
+            selectedMeasurementId,
+            selectedMeasurementIds,
+            allMeasurements,
+            handleBulkDelete,
+            handleDeleteMeasurement,
+        ],
     );
     useKeyboardShortcuts(shortcuts);
 
@@ -918,7 +994,12 @@ export default function DrawingTakeoff() {
                         }
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
-                        onMeasurementClick={(m) => setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id)}
+                        onMeasurementClick={(m) => {
+                            if (m.takeoff_condition_id && activeConditionId !== m.takeoff_condition_id) {
+                                handleActivateCondition(m.takeoff_condition_id);
+                            }
+                            setSelectedMeasurementId(selectedMeasurementId === m.id ? null : m.id);
+                        }}
                         onMeasurementHover={setHoveredMeasurementId}
                         snapEnabled={snapEnabled}
                         hoveredMeasurementId={hoveredMeasurementId}
@@ -930,6 +1011,9 @@ export default function DrawingTakeoff() {
                         onVertexDelete={handleVertexDelete}
                         comparisonImageUrl={comparisonImageUrl}
                         comparisonOpacity={overlayOpacity}
+                        onDrawingControlsChange={(state) => {
+                            drawingControlsRef.current = state;
+                        }}
                         className="absolute inset-0"
                     />
                 </div>
