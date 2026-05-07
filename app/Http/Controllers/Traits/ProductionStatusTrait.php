@@ -117,15 +117,17 @@ trait ProductionStatusTrait
     }
 
     /**
-     * Build segment statuses for all segmented measurements (linear with 3+ points) as of a work date.
+     * Build segment statuses for the given measurements as of a work date.
+     * If $lccId is provided, only that LCC's segment progress is returned (per-LCC view).
+     * If null, includes all LCCs (used by aggregate views like budget hours).
+     *
      * Uses carry-forward: picks most recent record where work_date <= $workDate.
      *
      * @return array<string, int> "measurementId-segmentIndex" => percent_complete
      */
-    protected function buildAllSegmentStatusesForDate($measurements, string $workDate): array
+    protected function buildAllSegmentStatusesForDate($measurements, string $workDate, ?int $lccId = null): array
     {
         // Any linear measurement with at least 2 points has at least one segment (index 0).
-        // The schema (seg_status_unique_v2) supports per-segment status for all linears.
         $segmentedIds = $measurements->filter(function ($m) {
             return $m->type === 'linear' && is_array($m->points) && count($m->points) >= 2;
         })->pluck('id');
@@ -134,12 +136,15 @@ trait ProductionStatusTrait
             return [];
         }
 
-        $allRecords = MeasurementSegmentStatus::whereIn('drawing_measurement_id', $segmentedIds)
+        $query = MeasurementSegmentStatus::whereIn('drawing_measurement_id', $segmentedIds)
             ->where(function ($q) use ($workDate) {
                 $q->whereNull('work_date')
                   ->orWhere('work_date', '<=', $workDate);
-            })
-            ->get();
+            });
+        if ($lccId !== null) {
+            $query->where('labour_cost_code_id', $lccId);
+        }
+        $allRecords = $query->get();
 
         $statuses = [];
         foreach ($allRecords as $record) {

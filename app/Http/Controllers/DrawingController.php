@@ -904,6 +904,8 @@ class DrawingController extends Controller
     public function getProductionStatuses(Request $request, Drawing $drawing): JsonResponse
     {
         $workDate = $request->query('work_date', now()->toDateString());
+        $lccId = $request->query('lcc_id');
+        $lccId = $lccId !== null && $lccId !== '' ? (int) $lccId : null;
 
         $measurements = DrawingMeasurement::where('drawing_id', $drawing->id)
             ->where('scope', 'takeoff')
@@ -911,7 +913,7 @@ class DrawingController extends Controller
             ->get();
 
         $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
-        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate, $lccId);
         $lccSummary = $this->buildLccSummary($measurements, $statuses);
 
         return response()->json([
@@ -950,19 +952,17 @@ class DrawingController extends Controller
             return response()->json(['error' => 'Invalid segment index'], 422);
         }
 
-        // The unique key (seg_status_unique_v2) is (drawing_measurement_id,
-        // segment_index, work_date) — labour_cost_code_id is intentionally
-        // excluded so segment progress is LCC-agnostic per the v2 schema.
-        // We track the most-recently-used LCC for reference but key the
-        // updateOrCreate by the actual unique columns.
+        // Per-LCC segment progress (seg_status_unique_v3): each labour cost code
+        // tracks its own % per segment per date, mirroring the measurement-level
+        // status model so switching LCCs shows that trade's actual progress.
         MeasurementSegmentStatus::updateOrCreate(
             [
                 'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
                 'segment_index' => $validated['segment_index'],
                 'work_date' => $workDate,
             ],
             [
-                'labour_cost_code_id' => $validated['labour_cost_code_id'],
                 'percent_complete' => $validated['percent_complete'],
                 'updated_by' => auth()->id(),
             ]
@@ -978,7 +978,9 @@ class DrawingController extends Controller
             ->get();
 
         $allStatuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
-        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate);
+        // Return only the current LCC's segment statuses so the frontend's
+        // segmentStatuses map reflects this LCC's view.
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($measurements, $workDate, (int) $validated['labour_cost_code_id']);
 
         $this->syncProductionToBudget($drawing, $workDate);
 
@@ -1024,16 +1026,15 @@ class DrawingController extends Controller
             }
 
             if (isset($item['segment_index']) && $item['segment_index'] !== null) {
-                // Segment-level update — keyed by the v2 unique
-                // (measurement, segment_index, work_date); LCC is reference data.
+                // Per-LCC segment progress (v3 unique includes labour_cost_code_id).
                 MeasurementSegmentStatus::updateOrCreate(
                     [
                         'drawing_measurement_id' => $measurement->id,
+                        'labour_cost_code_id' => $lccId,
                         'segment_index' => $item['segment_index'],
                         'work_date' => $workDate,
                     ],
                     [
-                        'labour_cost_code_id' => $lccId,
                         'percent_complete' => $percent,
                         'updated_by' => auth()->id(),
                     ]
@@ -1070,7 +1071,7 @@ class DrawingController extends Controller
             ->get();
 
         $allStatuses = $this->buildStatusesForDate($allMeasurements->pluck('id'), $workDate);
-        $segmentStatuses = $this->buildAllSegmentStatusesForDate($allMeasurements, $workDate);
+        $segmentStatuses = $this->buildAllSegmentStatusesForDate($allMeasurements, $workDate, $lccId);
 
         $this->syncProductionToBudget($drawing, $workDate);
 

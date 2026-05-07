@@ -5,6 +5,7 @@ import { PixiDrawingViewer } from '@/components/pixi-drawing-viewer';
 import { ProductionPanel, type LccSummary } from '@/components/production-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
 import { usePage } from '@inertiajs/react';
@@ -607,41 +608,75 @@ export default function DrawingProduction() {
         [selectedLccId, visibleMeasurements, selectedItems, segmentIntersectsRect],
     );
 
-    // Handle work date change — reload statuses for the new date
-    const handleWorkDateChange = useCallback(
-        async (newDate: string) => {
-            setWorkDate(newDate);
-            setLoadingDate(true);
+    // Reload statuses (per-LCC + per-date) — used by both date and LCC changes.
+    const reloadStatuses = useCallback(
+        async (date: string, lccId: number | null) => {
             try {
-                const data = await api.get<{ statuses: Record<string, number>; segmentStatuses: Record<string, number>; lccSummary: LccSummary[] }>(
-                    `/drawings/${drawing.id}/production-statuses?work_date=${encodeURIComponent(newDate)}`,
-                );
+                const params = new URLSearchParams({ work_date: date });
+                if (lccId !== null) params.set('lcc_id', String(lccId));
+                const data = await api.get<{
+                    statuses: Record<string, number>;
+                    segmentStatuses: Record<string, number>;
+                    lccSummary: LccSummary[];
+                }>(`/drawings/${drawing.id}/production-statuses?${params.toString()}`);
                 setStatuses(data.statuses || {});
                 setSegmentStatuses(data.segmentStatuses || {});
                 setLccSummary(data.lccSummary || []);
             } catch {
-                toast.error('Failed to load statuses for date');
-            } finally {
-                setLoadingDate(false);
+                toast.error('Failed to load statuses');
             }
         },
         [drawing.id],
     );
 
-    // Keyboard: Escape clears selection
+    // Refetch segment statuses (LCC-scoped) whenever the selected LCC changes.
+    // Segment statuses are now per-LCC (seg_status_unique_v3), so the same
+    // segment can have different progress under different trades — we need
+    // fresh data for each LCC selection.
     useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                if (selectedItems.size > 0) {
-                    setSelectedItems(new Set());
-                } else if (percentDropdown) {
-                    setPercentDropdown(null);
-                }
+        if (!selectedLccId) return;
+        reloadStatuses(workDate, selectedLccId);
+         
+    }, [selectedLccId]);
+
+    const handleWorkDateChange = useCallback(
+        async (newDate: string) => {
+            setWorkDate(newDate);
+            setLoadingDate(true);
+            try {
+                await reloadStatuses(newDate, selectedLccId);
+            } finally {
+                setLoadingDate(false);
             }
-        };
-        document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
-    }, [selectedItems.size, percentDropdown]);
+        },
+        [reloadStatuses, selectedLccId],
+    );
+
+    // Keyboard shortcuts:
+    //   p — pan mode
+    //   s — toggle select mode
+    //   Escape — clear selection / close popup
+    useKeyboardShortcuts(
+        useMemo(
+            () => [
+                { key: 'p', handler: () => setSelectorMode(false) },
+                { key: 's', handler: () => setSelectorMode((prev) => !prev) },
+                {
+                    key: 'Escape',
+                    handler: () => {
+                        if (selectedItems.size > 0) {
+                            setSelectedItems(new Set());
+                        } else if (percentDropdown) {
+                            setPercentDropdown(null);
+                        } else if (selectorMode) {
+                            setSelectorMode(false);
+                        }
+                    },
+                },
+            ],
+            [selectedItems.size, percentDropdown, selectorMode],
+        ),
+    );
 
     return (
         <DrawingWorkspaceLayout

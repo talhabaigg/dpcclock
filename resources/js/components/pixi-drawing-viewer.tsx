@@ -1048,7 +1048,13 @@ export function PixiDrawingViewer({
                     }
                 } else {
                     // linear — tessellate any bezier segments for hit-testing.
-                    if (m.points.length < 2) continue;
+                    if (m.points.length === 0) continue;
+                    if (m.points.length === 1) {
+                        // Single-point linear (Reveals, Junctions): hit-test as a point marker.
+                        const p = m.points[0];
+                        if (Math.hypot(p.x - uv.x, p.y - uv.y) < tolUv * 2) return m;
+                        continue;
+                    }
                     const hitPoints = m.points.some(pointHasHandles) ? tessellateBeziers(m.points) : m.points;
                     for (let j = 0; j < hitPoints.length - 1; j++) {
                         if (distPointToSegment(uv, hitPoints[j], hitPoints[j + 1]) < tolUv) return m;
@@ -2044,7 +2050,21 @@ export function PixiDrawingViewer({
                     }
                 }
             } else {
-                if (renderPoints.length < 2) continue;
+                // Single-point "linear" measurements (e.g. Reveals, Junctions —
+                // OST-style placed symbols on a wall) need a visible marker
+                // so they're clickable for statusing. Color is m.color, which
+                // upstream (production page) already overrides per-LCC to
+                // blue/green via getSegmentColor — no extra mapping here.
+                if (renderPoints.length === 1) {
+                    const p = renderPoints[0];
+                    const px = p.x * W;
+                    const py = p.y * H;
+                    const radius = (isSelected ? 8 : 6) * invScale;
+                    g.circle(px, py, radius).fill({ color, alpha: conditionOpacity });
+                    g.stroke({ color: isSelected ? 0xfacc15 : 0xffffff, width: (isSelected ? 3 : 1.5) * invScale, alpha: 1 });
+                    layer.addChild(g);
+                    continue;
+                }
                 // Linear: if we have segment statuses for this measurement, render
                 // each segment with a status-based color (production tab).
                 const hasSegments = !!segmentStatuses && Object.keys(segmentStatuses).some((k) => k.startsWith(`${m.id}-`));
@@ -2078,11 +2098,12 @@ export function PixiDrawingViewer({
                         segG.stroke({ color: segColor, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'butt', join: 'round' });
                         layer.addChild(segG);
                         if (selectedSegments?.has(segKey)) {
-                            // Yellow halo BEHIND the segment so the status color stays
-                            // visible inside but the selection edge is clearly distinct.
+                            // Thick yellow halo behind the segment — the segment's
+                            // status color is still visible inside, framed by a
+                            // very obvious selection border.
                             const halo = new Graphics();
                             drawSegment(halo);
-                            halo.stroke({ color: 0xfacc15, width: linearStrokeWidth + 6 * invScale, alpha: 0.95 });
+                            halo.stroke({ color: 0xfacc15, width: linearStrokeWidth + 10 * invScale, alpha: 1.0 });
                             layer.addChildAt(halo, layer.children.length - 1);
                         }
                     }
@@ -2100,14 +2121,13 @@ export function PixiDrawingViewer({
                 layer.addChild(g);
             }
 
-            // Selection halo for line/area types — sized to whichever stroke
-            // the underlying shape used (real-world thickness for linears
-            // with a condition, screen-space otherwise).
+            // Selection halo for line/area types — thick yellow outline so the
+            // selected measurement is unmistakable on the production page.
             if (isSelected && m.type !== 'count' && renderPoints.length >= 2) {
                 const halo = new Graphics();
                 drawBezierPath(halo, renderPoints, W, H, m.type === 'area');
                 const baseWidth = m.type === 'linear' ? linearStrokeWidth : strokeWidth;
-                halo.stroke({ color: 0xffffff, width: baseWidth + 4 * invScale, alpha: 0.5 });
+                halo.stroke({ color: 0xfacc15, width: baseWidth + 10 * invScale, alpha: 1.0 });
                 layer.addChildAt(halo, layer.children.length - 1);
             }
 
@@ -2150,21 +2170,27 @@ export function PixiDrawingViewer({
                     ly = (sy / renderPoints.length) * H;
                 }
                 const chipColor = segmentStatusColor(productionPct ?? 0);
+                // Pixi-native crisp text: rasterize once at a high resolution
+                // multiplier so the glyph atlas has enough pixels for the
+                // deepest zoom we care about, then scale the Text down via
+                // .scale to fit world coordinates. No layout math needed.
                 const chipText = new Text({
                     text: productionText,
                     style: {
                         fontFamily: 'sans-serif',
-                        fontSize: 11 * invScale,
+                        fontSize: 22,
                         fill: 0xffffff,
                         fontWeight: '700',
                     },
+                    resolution: Math.max(4, (window.devicePixelRatio || 1) * 4),
                 });
                 chipText.anchor.set(0.5, 0.5);
-                chipText.x = lx;
-                chipText.y = ly;
-                // Background pill behind text
-                const padX = 6 * invScale,
-                    padY = 3 * invScale;
+                chipText.scale.set(invScale * 0.5);
+                chipText.position.set(lx, ly);
+
+                // Pill background drawn directly in world coords (Graphics is
+                // already vector — never blurs).
+                const padX = 6 * invScale, padY = 3 * invScale;
                 const tw = chipText.width;
                 const th = chipText.height;
                 const pill = new Graphics();
