@@ -69,11 +69,25 @@ class TakeoffCostCalculator
         $totalMat = 0;
         $totalLab = 0;
 
+        // For linear conditions with a wall height, the measurement is in lm
+        // but some line items are priced per m². Apply the height multiplier
+        // only when the line's UOM is area-based.
+        $heightMultiplier = $condition->unit_rate_multiplier; // typically wall height in m
+        $isAreaUom = function (?string $uom): bool {
+            $u = strtolower(trim((string) $uom));
+            return in_array($u, ['sm', 'm2', 'm²', 'sqm', 'sqft', 'sf'], true);
+        };
+
         foreach ($condition->lineItems as $line) {
+            $primaryQty = $measurement->computed_value ?? 0;
+            // If the line item is per-area and we have a height, lm → m².
+            if ($isAreaUom($line->uom) && $heightMultiplier > 1) {
+                $primaryQty *= $heightMultiplier;
+            }
             $baseQty = match ($line->qty_source) {
                 'secondary' => $measurement->perimeter_value ?? 0,
                 'fixed' => $line->fixed_qty ?? 0,
-                default => $measurement->computed_value ?? 0, // 'primary'
+                default => $primaryQty,
             };
 
             if ($baseQty <= 0) {

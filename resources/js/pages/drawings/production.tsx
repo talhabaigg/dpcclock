@@ -266,13 +266,14 @@ export default function DrawingProduction() {
             });
     }, [initialMeasurements, selectedLccId, statuses, segmentStatuses, hideComplete]);
 
+    // On the production page, force every condition to 100% opacity so measurements
+    // are vivid against the dimmed page. Per-condition opacity is a takeoff/editing
+    // affordance and isn't useful here.
     const conditionOpacities = useMemo(() => {
         const map: Record<number, number> = {};
         if (!initialMeasurements) return map;
         for (const m of initialMeasurements) {
-            if (m.takeoff_condition_id && m.condition) {
-                map[m.takeoff_condition_id] = (m.condition as { opacity?: number }).opacity ?? 50;
-            }
+            if (m.takeoff_condition_id) map[m.takeoff_condition_id] = 100;
         }
         return map;
     }, [initialMeasurements]);
@@ -713,6 +714,7 @@ export default function DrawingProduction() {
                         selectedSegments={selectedSegmentsSet.size > 0 ? selectedSegmentsSet : undefined}
                         boxSelectMode={selectorMode && !!selectedLccId}
                         onBoxSelectComplete={handleBoxSelect}
+                        pageOpacity={40}
                         className="absolute inset-0"
                     />
 

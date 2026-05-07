@@ -75,6 +75,6 @@ export function isViewModeAllowedForCondition(
 }
 
 export function getSegmentColor(percent: number): string {
-    if (percent >= 100) return '#22c55e';
-    return '#3b82f6';
+    if (percent >= 100) return '#16a34a'; // green-600 — slightly deeper than -500 for solidity
+    return '#1d4ed8'; // blue-700 — solid dark blue, more prominent on a faded plan
 }

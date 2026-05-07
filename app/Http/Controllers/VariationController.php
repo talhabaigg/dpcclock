@@ -93,6 +93,9 @@ class VariationController extends Controller
         // Type filter
         if ($request->filled('type')) {
             $query->where('type', $request->input('type'));
+        } elseif (! $request->boolean('internal')) {
+            // Hide internal types by default — only show the canonical workflow types
+            $query->whereIn('type', ['YET2SUBMIT', 'PENDING', 'APPROVED']);
         }
 
         $variations = $query->orderByDesc('id')->paginate(50)->withQueryString();
@@ -126,6 +129,7 @@ class VariationController extends Controller
                 'status' => $request->input('status', ''),
                 'location' => $request->input('location', ''),
                 'type' => $request->input('type', ''),
+                'internal' => $request->boolean('internal') ? '1' : '',
             ],
         ];
 
@@ -240,7 +244,16 @@ class VariationController extends Controller
 
     public function show(Variation $variation)
     {
-        $variation->load(['lineItems', 'location', 'pricingItems.condition.conditionType', 'pricingItems.measurement', 'drawing']);
+        $variation->load([
+            'lineItems',
+            'location',
+            'pricingItems.condition.conditionType',
+            'pricingItems.measurement',
+            'drawing',
+            'directMaterials.materialItem:id,code,description',
+            'directMaterials.costCode:id,code,description',
+            'directMaterials.supplier:id,code,name',
+        ]);
 
         return Inertia::render('variation/show', [
             'variation' => $variation,
@@ -249,6 +262,8 @@ class VariationController extends Controller
                 'revenue' => $variation->lineItems->sum('revenue'),
                 'pricing_cost' => $variation->pricingItems->sum('total_cost'),
                 'pricing_sell' => $variation->pricingItems->sum('sell_total'),
+                'direct_material_cost' => $variation->directMaterials->sum(fn ($m) => (float) $m->qty * (float) $m->unit_cost),
+                'direct_material_sell' => $variation->directMaterials->sum('sell_cost'),
             ],
         ]);
     }

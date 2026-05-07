@@ -22,12 +22,22 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
+
+function describeApiError(e: unknown): string {
+    if (!(e instanceof ApiError)) return e instanceof Error ? e.message : 'Unknown error';
+    const errors = e.data?.errors as Record<string, string[]> | undefined;
+    if (errors) {
+        const first = Object.values(errors).flat().filter(Boolean);
+        if (first.length > 0) return first.join(' ');
+    }
+    return e.message;
+}
 import { PANEL_DEFAULT_WIDTH, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PRESET_COLORS } from '@/lib/constants';
 import { measurementIntersectsRect } from '@/lib/drawing-geometry';
 import type { Drawing, Project, Revision } from '@/types/takeoff';
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { usePage } from '@inertiajs/react';
-import { FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, X } from 'lucide-react';
+import { FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -148,6 +158,13 @@ export default function DrawingTakeoff() {
     const [showConditionManager, setShowConditionManager] = useState(false);
     const [activeConditionId, setActiveConditionId] = useState<number | null>(null);
 
+    // OST CSV import
+    const [pdfDims, setPdfDims] = useState<{ width: number; height: number } | null>(null);
+    const ostImportInputRef = useRef<HTMLInputElement | null>(null);
+    const [ostImporting, setOstImporting] = useState(false);
+    const ostConditionsInputRef = useRef<HTMLInputElement | null>(null);
+    const [ostConditionsImporting, setOstConditionsImporting] = useState(false);
+
     // Bid Areas state
     const [bidAreas, setBidAreas] = useState<BidArea[]>([]);
     const [showBidAreaManager, setShowBidAreaManager] = useState(false);
@@ -245,6 +262,82 @@ export default function DrawingTakeoff() {
     useEffect(() => {
         fetchMeasurements();
     }, [fetchMeasurements]);
+
+    const handleOstConditionsImport = useCallback(
+        async (file: File) => {
+            const ok = await confirm({
+                title: 'Import OST conditions?',
+                description: `This replaces all line items on conditions matched by name from "${file.name}". Conditions not present in this location are skipped.`,
+                confirmLabel: 'Import',
+            });
+            if (!ok) return;
+
+            setOstConditionsImporting(true);
+            try {
+                const fd = new FormData();
+                fd.append('csv', file);
+                const res = await api.post<{
+                    conditions_updated: number;
+                    conditions_created: number;
+                    line_items_inserted: number;
+                    labour_codes_created: number;
+                }>(`/drawings/${drawing.id}/import-ost-conditions`, fd);
+                toast.success(
+                    `Updated ${res.conditions_updated} conditions, created ${res.conditions_created}, ` +
+                        `${res.line_items_inserted} line items, ${res.labour_codes_created} new labour codes.`,
+                );
+            } catch (e) {
+                toast.error(`OST conditions import failed: ${describeApiError(e)}`);
+            } finally {
+                setOstConditionsImporting(false);
+                if (ostConditionsInputRef.current) ostConditionsInputRef.current.value = '';
+            }
+        },
+        [confirm, drawing.id],
+    );
+
+    const handleOstImport = useCallback(
+        async (file: File) => {
+            if (!pdfDims) {
+                toast.error('PDF not loaded yet — wait for the drawing to render before importing.');
+                return;
+            }
+            const ok = await confirm({
+                title: 'Import OST takeoffs?',
+                description: `This will replace all existing takeoff measurements on this drawing with rows from "${file.name}". Conditions and bid areas are matched by name.`,
+                confirmLabel: 'Import',
+            });
+            if (!ok) return;
+
+            setOstImporting(true);
+            try {
+                const fd = new FormData();
+                fd.append('csv', file);
+                fd.append('pdf_width_pt', String(pdfDims.width));
+                fd.append('pdf_height_pt', String(pdfDims.height));
+                const res = await api.post<{
+                    measurements: number;
+                    conditions_created: number;
+                    bid_areas_created: number;
+                    curves: number;
+                    skipped: number;
+                }>(`/drawings/${drawing.id}/import-ost-takeoffs`, fd);
+                toast.success(
+                    `Imported ${res.measurements} takeoffs (${res.curves} curved). ` +
+                        `Created ${res.conditions_created} conditions, ${res.bid_areas_created} bid areas.` +
+                        (res.skipped > 0 ? ` Skipped ${res.skipped} rows with bad geometry.` : ''),
+                );
+                await fetchMeasurements();
+            } catch (e) {
+                const msg = describeApiError(e);
+                toast.error(`OST import failed: ${msg}`);
+            } finally {
+                setOstImporting(false);
+                if (ostImportInputRef.current) ostImportInputRef.current.value = '';
+            }
+        },
+        [confirm, drawing.id, fetchMeasurements, pdfDims],
+    );
 
     useEffect(() => {
         api.get<{ conditions: TakeoffCondition[] }>(`/locations/${projectId}/takeoff-conditions`)
@@ -882,6 +975,54 @@ export default function DrawingTakeoff() {
                                 <Settings className="size-3" />
                             </Button>
                         )}
+                        {canEditTakeoff && (
+                            <>
+                                <input
+                                    ref={ostImportInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleOstImport(file);
+                                    }}
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
+                                    title={pdfDims ? 'Import takeoffs from OST CSV' : 'Waiting for PDF to load…'}
+                                    disabled={!pdfDims || ostImporting}
+                                    onClick={() => ostImportInputRef.current?.click()}
+                                >
+                                    <Upload className="h-3 w-3" />
+                                    {ostImporting ? 'Importing…' : 'Import OST'}
+                                </Button>
+                                <input
+                                    ref={ostConditionsInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleOstConditionsImport(file);
+                                    }}
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
+                                    title="Import condition pricing/line items from OST CSV"
+                                    disabled={ostConditionsImporting}
+                                    onClick={() => ostConditionsInputRef.current?.click()}
+                                >
+                                    <Upload className="h-3 w-3" />
+                                    {ostConditionsImporting ? 'Importing…' : 'Import Conditions'}
+                                </Button>
+                            </>
+                        )}
                     </div>
 
                     {/* Compare Popover */}
@@ -1014,12 +1155,13 @@ export default function DrawingTakeoff() {
                         onDrawingControlsChange={(state) => {
                             drawingControlsRef.current = state;
                         }}
+                        onPdfDimsLoaded={setPdfDims}
                         className="absolute inset-0"
                     />
                 </div>
 
                 {/* Takeoff Side Panel */}
-                <div className="bg-background relative shrink-0 overflow-hidden border-l" style={{ width: panelWidth }}>
+                <div className="bg-background relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l" style={{ width: panelWidth }}>
                     <div
                         className="hover:bg-primary/20 active:bg-primary/30 group/handle absolute inset-y-0 left-0 z-10 flex w-5 cursor-col-resize items-center justify-center transition-colors"
                         onMouseDown={(e) => {

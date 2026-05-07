@@ -66,7 +66,7 @@ export function ProductionPanel({
         : 0;
 
     return (
-        <div className="flex h-full w-[320px] flex-col border-l bg-background">
+        <div className="flex h-full min-h-0 w-[320px] flex-col border-l bg-background">
             {/* Work date picker — prev | popover | next */}
             <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
                 <Button
@@ -153,7 +153,7 @@ export function ProductionPanel({
             )}
 
             {/* LCC List */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-px p-1">
                     {lccSummary.length === 0 && (
                         <div className="px-3 py-8 text-center text-xs text-muted-foreground">

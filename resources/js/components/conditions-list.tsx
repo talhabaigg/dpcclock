@@ -115,8 +115,8 @@ export function ConditionsList({
     const hasCostData = showCosts && totalCost > 0;
 
     return (
-        <>
-            <ScrollArea className="flex-1">
+        <div className="flex h-full min-h-0 flex-col">
+            <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-0">
                     {(onOpenConditionManager || !hasCalibration) && (
                         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
@@ -403,6 +403,6 @@ export function ConditionsList({
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 }

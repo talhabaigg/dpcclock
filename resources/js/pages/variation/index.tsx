@@ -1,6 +1,7 @@
 import LoadingDialog from '@/components/loading-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -59,6 +61,7 @@ interface Filters {
     status: string;
     location: string;
     type: string;
+    internal: string;
 }
 
 interface PageProps {
@@ -71,20 +74,8 @@ interface PageProps {
     [key: string]: unknown;
 }
 
-const statusVariants: Record<string, string> = {
-    draft: 'bg-muted text-muted-foreground border',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
-    sent: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
-    Approved: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
-    rejected: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-};
-
-function getStatusClasses(status: string) {
-    return statusVariants[status] ?? 'bg-muted text-muted-foreground border';
-}
-
 function formatCurrency(value: number | string) {
-    return `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
 }
 
 const isSentOrApproved = (status: string) => status === 'sent' || status === 'Approved';
@@ -347,7 +338,7 @@ function FilterSheetButton({
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="space-y-6 px-1 pt-4 pb-4">
+                <div className="space-y-6 p-4">
                     <FilterSection
                         label="Status"
                         value={filters.status}
@@ -386,6 +377,18 @@ function FilterSheetButton({
                             />
                         </FilterSection>
                     )}
+
+                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2.5">
+                        <div className="flex flex-col">
+                            <Label htmlFor="show-internal" className="text-sm font-medium">Show internal</Label>
+                            <span className="text-muted-foreground text-xs">Include variations outside the standard workflow</span>
+                        </div>
+                        <Switch
+                            id="show-internal"
+                            checked={filters.internal === '1'}
+                            onCheckedChange={(checked) => updateFilter('internal', checked ? '1' : null)}
+                        />
+                    </div>
                 </div>
             </SheetContent>
         </Sheet>
@@ -499,6 +502,7 @@ export default function VariationIndex() {
             if (merged.status) query.status = merged.status;
             if (!isLocationScoped && merged.location) query.location = merged.location;
             if (merged.type) query.type = merged.type;
+            if (merged.internal) query.internal = merged.internal;
             router.get(baseUrl, query, { preserveState: true, preserveScroll: true });
         },
         [filters, baseUrl, isLocationScoped],
@@ -547,38 +551,43 @@ export default function VariationIndex() {
             <Head title={isLocationScoped ? `${location.name} - Variations` : 'Variations'} />
             <LoadingDialog open={syncDialogOpen} setOpen={setSyncDialogOpen} />
 
-            <div className="@container flex min-w-0 flex-col gap-4 p-4">
-                {isLocationScoped && summaryCards && (
-                    <div className="grid grid-cols-2 gap-6 sm:gap-10">
-                        <div>
-                            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Approved revenue</p>
-                            <p className="mt-1 text-2xl font-semibold tabular-nums @md:text-3xl">
-                                {formatCurrency(summaryCards.approvedRevenue)}
-                            </p>
+            <div className="@container mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-5 p-4 sm:p-6">
+                <div className="flex min-w-0 flex-col gap-4">
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-3">
+                            {!isLocationScoped && (
+                                <h1 className="truncate text-xl font-semibold tracking-tight">Variations</h1>
+                            )}
+                            {isLocationScoped && summaryCards && (
+                                <>
+                                    <Card className="py-0">
+                                        <CardContent className="flex flex-col px-3 py-2">
+                                            <p className="text-muted-foreground text-xs">Approved</p>
+                                            <p className="text-sm font-semibold tabular-nums">
+                                                {formatCurrency(summaryCards.approvedRevenue)}
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="py-0">
+                                        <CardContent className="flex flex-col px-3 py-2">
+                                            <p className="text-muted-foreground text-xs">Pending</p>
+                                            <p className="text-sm font-semibold tabular-nums">
+                                                {formatCurrency(summaryCards.pendingRevenue)}
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </>
+                            )}
                         </div>
-                        <div>
-                            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Pending revenue</p>
-                            <p className="mt-1 text-2xl font-semibold tabular-nums @md:text-3xl">
-                                {formatCurrency(summaryCards.pendingRevenue)}
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                <div className="flex min-w-0 flex-col gap-3">
-                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                        <h1 className="text-xl font-semibold tracking-tight">
-                            {isLocationScoped ? `${location.name} — Variations` : 'Variations'}
-                        </h1>
                         <div className="flex items-center gap-2">
                             <Link href={syncUrl} onClick={() => setSyncDialogOpen(true)}>
-                                <Button variant="outline" className="gap-2">
+                                <Button variant="outline" size="sm" className="gap-2">
                                     <RefreshCcw className="h-4 w-4" />
                                     {isLocationScoped ? 'Sync' : 'Sync all'}
                                 </Button>
                             </Link>
                             <Link href={isLocationScoped ? `/variations/create?location_id=${location.id}` : '/variations/create'}>
-                                <Button className="gap-2">
+                                <Button size="sm" className="gap-2">
                                     <CirclePlus className="h-4 w-4" />
                                     New variation
                                 </Button>
@@ -638,10 +647,12 @@ export default function VariationIndex() {
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/variations/${variation.id}/show`} className="font-mono text-sm font-semibold hover:underline">
-                                                    {variation.co_number}
+                                                <Link href={`/variations/${variation.id}/show`} className="inline-block">
+                                                    <Badge variant="outline" className="font-mono text-[10px] font-semibold hover:bg-accent">
+                                                        {variation.co_number}
+                                                    </Badge>
                                                 </Link>
-                                                <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(variation.status))}>
+                                                <Badge variant="secondary" className="text-[10px] capitalize">
                                                     {variation.status}
                                                 </Badge>
                                             </div>
@@ -668,14 +679,14 @@ export default function VariationIndex() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="w-[100px] pl-4">VAR #</TableHead>
-                                        <TableHead>Location / Job</TableHead>
-                                        <TableHead className="hidden @4xl:table-cell">Date</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="hidden @4xl:table-cell">Description</TableHead>
-                                        <TableHead className="hidden @5xl:table-cell">Type</TableHead>
-                                        <TableHead className="text-right">Cost</TableHead>
-                                        <TableHead className="text-right">Revenue</TableHead>
+                                        <TableHead className="w-[100px] pl-4 text-xs">VAR #</TableHead>
+                                        {!isLocationScoped && <TableHead className="text-xs">Location / Job</TableHead>}
+                                        <TableHead className="hidden text-xs @4xl:table-cell">Date</TableHead>
+                                        <TableHead className="text-xs">Status</TableHead>
+                                        <TableHead className="hidden text-xs @4xl:table-cell">Description</TableHead>
+                                        <TableHead className="hidden text-xs @4xl:table-cell">Type</TableHead>
+                                        <TableHead className="text-right text-xs">Cost</TableHead>
+                                        <TableHead className="text-right text-xs">Revenue</TableHead>
                                         <TableHead className="w-[50px] pr-4"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -683,41 +694,45 @@ export default function VariationIndex() {
                                     {reqs.map((variation) => (
                                         <TableRow key={variation.id}>
                                             <TableCell className="pl-4">
-                                                <Link href={`/variations/${variation.id}/show`} className="font-mono text-xs font-semibold hover:underline">
-                                                    {variation.co_number}
+                                                <Link href={`/variations/${variation.id}/show`} className="inline-block">
+                                                    <Badge variant="outline" className="font-mono text-[10px] font-semibold hover:bg-accent">
+                                                        {variation.co_number}
+                                                    </Badge>
                                                 </Link>
                                             </TableCell>
 
-                                            <TableCell className="max-w-[180px]">
-                                                <TooltipProvider delayDuration={300}>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <span className="text-muted-foreground block truncate text-sm">
-                                                                {variation.location?.name || '-'}
-                                                            </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>{variation.location?.name || 'Not set'}</TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </TableCell>
+                                            {!isLocationScoped && (
+                                                <TableCell className="max-w-[180px]">
+                                                    <TooltipProvider delay={500}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="block truncate text-xs">
+                                                                    {variation.location?.name || '-'}
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>{variation.location?.name || 'Not set'}</TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </TableCell>
+                                            )}
 
                                             <TableCell className="hidden @4xl:table-cell">
-                                                <span className="text-muted-foreground tabular-nums text-sm">
+                                                <span className="text-muted-foreground text-xs tabular-nums">
                                                     {new Date(variation.co_date).toLocaleDateString('en-GB')}
                                                 </span>
                                             </TableCell>
 
                                             <TableCell>
-                                                <Badge variant="outline" className={cn('text-xs capitalize', getStatusClasses(variation.status))}>
+                                                <Badge variant="secondary" className="text-[10px] capitalize">
                                                     {variation.status}
                                                 </Badge>
                                             </TableCell>
 
                                             <TableCell className="hidden max-w-[200px] @4xl:table-cell">
-                                                <TooltipProvider delayDuration={300}>
+                                                <TooltipProvider delay={2000}>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                            <span className="text-muted-foreground block truncate text-xs">
                                                                 {variation.description || '-'}
                                                             </span>
                                                         </TooltipTrigger>
@@ -726,18 +741,24 @@ export default function VariationIndex() {
                                                 </TooltipProvider>
                                             </TableCell>
 
-                                            <TableCell className="hidden @5xl:table-cell">
-                                                <span className="text-muted-foreground text-sm">{variation.type || '-'}</span>
+                                            <TableCell className="hidden @4xl:table-cell">
+                                                {variation.type ? (
+                                                    <Badge variant="secondary" className="text-[10px] font-medium capitalize">
+                                                        {variation.type.toLowerCase()}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">-</span>
+                                                )}
                                             </TableCell>
 
                                             <TableCell className="text-right">
-                                                <span className="font-mono text-sm tabular-nums">
+                                                <span className="text-muted-foreground text-xs tabular-nums">
                                                     {formatCurrency(variation.line_items_sum_total_cost)}
                                                 </span>
                                             </TableCell>
 
                                             <TableCell className="text-right">
-                                                <span className="font-mono text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                                                <span className="text-xs font-semibold tabular-nums">
                                                     {formatCurrency(variation.line_items_sum_revenue)}
                                                 </span>
                                             </TableCell>
@@ -753,8 +774,8 @@ export default function VariationIndex() {
 
                         {/* Pagination */}
                         {variations.last_page > 1 && (
-                            <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-                                <p className="text-muted-foreground text-sm">
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-muted-foreground text-xs whitespace-nowrap">
                                     Page <span className="text-foreground font-medium">{variations.current_page}</span> of{' '}
                                     <span className="text-foreground font-medium">{variations.last_page}</span>
                                 </p>

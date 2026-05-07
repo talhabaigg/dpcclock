@@ -63,6 +63,9 @@ type Props = {
     /** Comparison overlay (revision diff). PDF or image URL. */
     comparisonImageUrl?: string;
     comparisonOpacity?: number;
+    /** Dim the underlying PDF page (0–100, default 100=fully visible). Lets DPC/production
+     * pages emphasize measurement strokes against a faded plan. */
+    pageOpacity?: number;
     /** Production tab: % complete per measurement id, rendered as a chip. */
     productionLabels?: Record<number, number>;
     /** Production tab: segment statusing — key "measId-segIdx" → percent. */
@@ -283,6 +286,7 @@ export function PixiDrawingViewer({
     tileWidth,
     comparisonImageUrl,
     comparisonOpacity = 50,
+    pageOpacity = 100,
     productionLabels,
     segmentStatuses,
     hiddenSegments,
@@ -298,6 +302,7 @@ export function PixiDrawingViewer({
     const worldRef = useRef<Container | null>(null);
     const pdfSpriteRef = useRef<Sprite | null>(null);
     const fallbackSpriteRef = useRef<Sprite | null>(null);
+    const pageLayerRef = useRef<Container | null>(null);
     const measurementsLayerRef = useRef<Container | null>(null);
     const drawingLayerRef = useRef<Container | null>(null);
     // Transient effects (click bursts, creation pulses). Lives above
@@ -379,9 +384,11 @@ export function PixiDrawingViewer({
             app.canvas.style.touchAction = 'none';
 
             const world = new Container();
+            const pageLayer = new Container();    // PDF tiles + fallback live here
             const measurementsLayer = new Container();
             const drawingLayer = new Container();
             const fxLayer = new Container();
+            world.addChild(pageLayer);
             world.addChild(measurementsLayer);
             world.addChild(drawingLayer);
             world.addChild(fxLayer);
@@ -389,6 +396,7 @@ export function PixiDrawingViewer({
 
             appRef.current = app;
             worldRef.current = world;
+            pageLayerRef.current = pageLayer;
             measurementsLayerRef.current = measurementsLayer;
             drawingLayerRef.current = drawingLayer;
             fxLayerRef.current = fxLayer;
@@ -625,7 +633,7 @@ export function PixiDrawingViewer({
                 fallbackSprite.width = pdfDims.width;
                 fallbackSprite.height = pdfDims.height;
                 fallbackSprite.roundPixels = true;
-                world.addChildAt(fallbackSprite, 0);
+                (pageLayerRef.current ?? world).addChildAt(fallbackSprite, 0);
                 fallbackSpriteRef.current = fallbackSprite;
             }
 
@@ -658,7 +666,7 @@ export function PixiDrawingViewer({
             sprite.roundPixels = true;
 
             const fallbackIndex = fallbackSpriteRef.current ? 1 : 0;
-            world.addChildAt(sprite, fallbackIndex);
+            (pageLayerRef.current ?? world).addChildAt(sprite, fallbackIndex);
 
             if (pdfSpriteRef.current) {
                 pdfSpriteRef.current.destroy({ texture: true, textureSource: true });
@@ -826,6 +834,13 @@ export function PixiDrawingViewer({
             cancelled = true;
         };
     }, [appReady, pdfDims, comparisonImageUrl, comparisonOpacity, makeMipmappedTexture]);
+
+    // Apply pageOpacity to the page layer (PDF tiles + fallback sprite).
+    useEffect(() => {
+        const layer = pageLayerRef.current;
+        if (!layer) return;
+        layer.alpha = Math.min(1, Math.max(0, pageOpacity / 100));
+    }, [pageOpacity, appReady]);
 
     // Update the existing comparison sprite's opacity without re-loading
     useEffect(() => {
@@ -2063,9 +2078,11 @@ export function PixiDrawingViewer({
                         segG.stroke({ color: segColor, width: linearStrokeWidth, alpha: strokeAlpha, cap: 'butt', join: 'round' });
                         layer.addChild(segG);
                         if (selectedSegments?.has(segKey)) {
+                            // Yellow halo BEHIND the segment so the status color stays
+                            // visible inside but the selection edge is clearly distinct.
                             const halo = new Graphics();
                             drawSegment(halo);
-                            halo.stroke({ color: 0xffffff, width: linearStrokeWidth + 4 * invScale, alpha: 0.5 });
+                            halo.stroke({ color: 0xfacc15, width: linearStrokeWidth + 6 * invScale, alpha: 0.95 });
                             layer.addChildAt(halo, layer.children.length - 1);
                         }
                     }

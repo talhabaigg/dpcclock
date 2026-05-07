@@ -124,9 +124,10 @@ trait ProductionStatusTrait
      */
     protected function buildAllSegmentStatusesForDate($measurements, string $workDate): array
     {
-        // Find measurements that qualify for segment statusing (linear, 3+ points = 2+ segments)
+        // Any linear measurement with at least 2 points has at least one segment (index 0).
+        // The schema (seg_status_unique_v2) supports per-segment status for all linears.
         $segmentedIds = $measurements->filter(function ($m) {
-            return $m->type === 'linear' && is_array($m->points) && count($m->points) >= 3;
+            return $m->type === 'linear' && is_array($m->points) && count($m->points) >= 2;
         })->pluck('id');
 
         if ($segmentedIds->isEmpty()) {

@@ -950,14 +950,19 @@ class DrawingController extends Controller
             return response()->json(['error' => 'Invalid segment index'], 422);
         }
 
+        // The unique key (seg_status_unique_v2) is (drawing_measurement_id,
+        // segment_index, work_date) — labour_cost_code_id is intentionally
+        // excluded so segment progress is LCC-agnostic per the v2 schema.
+        // We track the most-recently-used LCC for reference but key the
+        // updateOrCreate by the actual unique columns.
         MeasurementSegmentStatus::updateOrCreate(
             [
                 'drawing_measurement_id' => $measurement->id,
-                'labour_cost_code_id' => $validated['labour_cost_code_id'],
                 'segment_index' => $validated['segment_index'],
                 'work_date' => $workDate,
             ],
             [
+                'labour_cost_code_id' => $validated['labour_cost_code_id'],
                 'percent_complete' => $validated['percent_complete'],
                 'updated_by' => auth()->id(),
             ]
@@ -1019,15 +1024,16 @@ class DrawingController extends Controller
             }
 
             if (isset($item['segment_index']) && $item['segment_index'] !== null) {
-                // Segment-level update
+                // Segment-level update — keyed by the v2 unique
+                // (measurement, segment_index, work_date); LCC is reference data.
                 MeasurementSegmentStatus::updateOrCreate(
                     [
                         'drawing_measurement_id' => $measurement->id,
-                        'labour_cost_code_id' => $lccId,
                         'segment_index' => $item['segment_index'],
                         'work_date' => $workDate,
                     ],
                     [
+                        'labour_cost_code_id' => $lccId,
                         'percent_complete' => $percent,
                         'updated_by' => auth()->id(),
                     ]

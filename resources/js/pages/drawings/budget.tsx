@@ -460,10 +460,10 @@ export default function DrawingBudget() {
                 </>
             }
         >
-            <div className="relative flex flex-1 overflow-hidden">
+            <div className="relative flex flex-1 min-h-0 overflow-hidden">
                 {/* Budget Chart + Grid */}
-                <div className="flex flex-1 flex-col overflow-hidden">
-                    <ScrollArea className="flex-1">
+                <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+                    <ScrollArea className="flex-1 min-h-0">
                         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3">
                             {/* Variance Chart card */}
                             {gridRows.length > 0 && (

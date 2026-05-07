@@ -6,6 +6,9 @@ use App\Models\Drawing;
 use App\Models\DrawingMeasurement;
 use App\Models\DrawingScaleCalibration;
 use App\Models\Variation;
+use App\Models\Location;
+use App\Services\Ost\OstConditionsImporter;
+use App\Services\Ost\OstTakeoffImporter;
 use App\Services\TakeoffCostCalculator;
 use App\Support\MeasurementGeometry;
 use Illuminate\Http\Request;
@@ -430,5 +433,58 @@ class DrawingMeasurementController extends Controller
         $mmPerUnit = self::MM_PER_UNIT[$unit] ?? 1;
 
         return $pixelsPerRealMm * $mmPerUnit;
+    }
+
+    /**
+     * Import takeoffs from an OST CSV export. Wipes existing scope='takeoff' measurements
+     * on the drawing and inserts fresh from the CSV. Conditions and bid areas are
+     * matched by name and created if missing.
+     */
+    public function importOstTakeoffs(Request $request, Drawing $drawing, OstTakeoffImporter $importer)
+    {
+        if (! $request->hasFile('csv')) {
+            return response()->json(['message' => 'No CSV file received in request.'], 422);
+        }
+        $file = $request->file('csv');
+        if (! $file->isValid()) {
+            return response()->json(['message' => 'Uploaded CSV is not a valid file. Error: ' . $file->getErrorMessage()], 422);
+        }
+        if ($file->getSize() > 10 * 1024 * 1024) {
+            return response()->json(['message' => 'CSV exceeds 10 MB limit.'], 422);
+        }
+        $w = (float) $request->input('pdf_width_pt');
+        $h = (float) $request->input('pdf_height_pt');
+        if ($w < 1 || $h < 1) {
+            return response()->json(['message' => "PDF dimensions invalid (got {$w} × {$h})."], 422);
+        }
+
+        try {
+            $result = $importer->import($drawing, $file->getRealPath(), $w, $h);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Import condition pricing/line items from an OST conditions CSV. Replaces
+     * line items per matched condition (by name within the drawing's location).
+     */
+    public function importOstConditions(Request $request, Drawing $drawing, OstConditionsImporter $importer)
+    {
+        $request->validate([
+            'csv' => 'required|file|max:10240',
+        ]);
+
+        $location = Location::findOrFail($drawing->project_id);
+
+        try {
+            $result = $importer->import($location, $request->file('csv')->getRealPath());
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
     }
 }

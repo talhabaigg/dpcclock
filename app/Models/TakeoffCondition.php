@@ -115,15 +115,13 @@ class TakeoffCondition extends Model
     }
 
     /**
-     * Get the multiplier for converting measured quantity to pricing quantity.
-     * For unit_rate + linear type with height, converts lm to m2.
+     * Multiplier for converting measured quantity to pricing quantity.
+     * For linear walls (type=linear with a wall height), converts lm → m².
+     * Applies to both unit_rate and detailed pricing — line-item UOMs in
+     * either method are typically per-m² for area-based wall pricing.
      */
     public function getUnitRateMultiplierAttribute(): float
     {
-        if ($this->pricing_method !== 'unit_rate') {
-            return 1.0;
-        }
-
         if ($this->type === 'linear' && $this->height && $this->height > 0) {
             return $this->height;
         }

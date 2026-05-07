@@ -20,39 +20,11 @@ export interface Variation {
 
 const isSentOrApproved = (status: string) => status === 'sent' || status === 'Approved';
 
-const statusConfig: Record<string, { label: string; classes: string }> = {
-    pending: {
-        label: 'Pending',
-        classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800',
-    },
-    sent: {
-        label: 'Sent',
-        classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800',
-    },
-    Approved: {
-        label: 'Approved',
-        classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800',
-    },
-    draft: {
-        label: 'Draft',
-        classes: 'bg-muted text-muted-foreground border',
-    },
-    rejected: {
-        label: 'Rejected',
-        classes: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-    },
-};
-
-function getStatus(status: string) {
-    return statusConfig[status] ?? { label: status, classes: 'bg-muted text-muted-foreground border' };
-}
-
 function formatCurrency(value: number | string) {
-    return `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
 }
 
 const VariationCard = ({ variation }: { variation: Variation }) => {
-    const status = getStatus(variation.status);
     const locked = isSentOrApproved(variation.status);
     const cost = Number(variation.line_items_sum_total_cost) || 0;
     const revenue = Number(variation.line_items_sum_revenue) || 0;
@@ -67,8 +39,8 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                         <span className="font-mono text-xs font-bold">
                             {variation.co_number}
                         </span>
-                        <Badge variant="outline" className={cn('text-[10px] capitalize', status.classes)}>
-                            {status.label}
+                        <Badge variant="secondary" className="text-[10px] capitalize">
+                            {variation.status}
                         </Badge>
                     </div>
 

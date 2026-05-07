@@ -1167,6 +1167,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/drawings/{drawing}/measurements/{measurement}', [DrawingMeasurementController::class, 'destroy'])->name('drawings.measurements.destroy');
         Route::post('/drawings/{drawing}/measurements/{measurement}/restore', [DrawingMeasurementController::class, 'restore'])->name('drawings.measurements.restore');
         Route::post('/drawings/{drawing}/measurements/recalculate-costs', [DrawingMeasurementController::class, 'recalculateCosts'])->name('drawings.measurements.recalculate-costs');
+        Route::post('/drawings/{drawing}/import-ost-takeoffs', [DrawingMeasurementController::class, 'importOstTakeoffs'])->name('drawings.import-ost-takeoffs');
+        Route::post('/drawings/{drawing}/import-ost-conditions', [DrawingMeasurementController::class, 'importOstConditions'])->name('drawings.import-ost-conditions');
         // Calibration (write)
         Route::post('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'calibrate'])->name('drawings.calibration.store');
         Route::delete('/drawings/{drawing}/calibration', [DrawingMeasurementController::class, 'deleteCalibration'])->name('drawings.calibration.destroy');
