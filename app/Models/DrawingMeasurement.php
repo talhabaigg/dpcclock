@@ -14,6 +14,8 @@ class DrawingMeasurement extends Model
 
     protected $fillable = [
         'watermelon_id',
+        'ost_guid',
+        'ost_uid',
         'drawing_id',
         'name',
         'type',

@@ -37,7 +37,7 @@ import { measurementIntersectsRect } from '@/lib/drawing-geometry';
 import type { Drawing, Project, Revision } from '@/types/takeoff';
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
 import { usePage } from '@inertiajs/react';
-import { FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, Upload, X } from 'lucide-react';
+import { Download, FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -164,6 +164,8 @@ export default function DrawingTakeoff() {
     const [ostImporting, setOstImporting] = useState(false);
     const ostConditionsInputRef = useRef<HTMLInputElement | null>(null);
     const [ostConditionsImporting, setOstConditionsImporting] = useState(false);
+    const ostProductionInputRef = useRef<HTMLInputElement | null>(null);
+    const [ostProductionImporting, setOstProductionImporting] = useState(false);
 
     // Bid Areas state
     const [bidAreas, setBidAreas] = useState<BidArea[]>([]);
@@ -291,6 +293,46 @@ export default function DrawingTakeoff() {
             } finally {
                 setOstConditionsImporting(false);
                 if (ostConditionsInputRef.current) ostConditionsInputRef.current.value = '';
+            }
+        },
+        [confirm, drawing.id],
+    );
+
+    const handleOstProductionImport = useCallback(
+        async (file: File) => {
+            const ok = await confirm({
+                title: 'Import OST production?',
+                description: `This applies progress from "${file.name}" to takeoff measurements matched by GUID. Existing values for the same (GUID, work date, LCC) will be overwritten.`,
+                confirmLabel: 'Import',
+            });
+            if (!ok) return;
+
+            setOstProductionImporting(true);
+            try {
+                const fd = new FormData();
+                fd.append('csv', file);
+                const res = await api.post<{
+                    created: number;
+                    updated: number;
+                    skipped: number;
+                    errors: string[];
+                    affected_dates: string[];
+                }>(`/drawings/${drawing.id}/import-ost-production`, fd);
+
+                const errSuffix = res.errors.length > 0 ? ` Errors: ${res.errors.slice(0, 3).join('; ')}` : '';
+                const datesSuffix = res.affected_dates.length > 0 ? ` across ${res.affected_dates.length} date(s)` : '';
+                const msg =
+                    `Production imported: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped${datesSuffix}.${errSuffix}`;
+                if (res.skipped > 0 || res.errors.length > 0) {
+                    toast.warning(msg);
+                } else {
+                    toast.success(msg);
+                }
+            } catch (e) {
+                toast.error(`OST production import failed: ${describeApiError(e)}`);
+            } finally {
+                setOstProductionImporting(false);
+                if (ostProductionInputRef.current) ostProductionInputRef.current.value = '';
             }
         },
         [confirm, drawing.id],
@@ -999,6 +1041,14 @@ export default function DrawingTakeoff() {
                                     <Upload className="h-3 w-3" />
                                     {ostImporting ? 'Importing…' : 'Import OST'}
                                 </Button>
+                                <a
+                                    href="/drawings/import-templates/takeoff"
+                                    download
+                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    title="Download OST takeoff CSV template"
+                                >
+                                    <Download className="h-3 w-3" />
+                                </a>
                                 <input
                                     ref={ostConditionsInputRef}
                                     type="file"
@@ -1021,6 +1071,44 @@ export default function DrawingTakeoff() {
                                     <Upload className="h-3 w-3" />
                                     {ostConditionsImporting ? 'Importing…' : 'Import Conditions'}
                                 </Button>
+                                <a
+                                    href="/drawings/import-templates/conditions"
+                                    download
+                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    title="Download OST conditions CSV template"
+                                >
+                                    <Download className="h-3 w-3" />
+                                </a>
+                                <input
+                                    ref={ostProductionInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleOstProductionImport(file);
+                                    }}
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 gap-1 rounded-sm px-1.5 text-[11px]"
+                                    title="Import object-level production progress from CSV (matched by GUID)"
+                                    disabled={ostProductionImporting}
+                                    onClick={() => ostProductionInputRef.current?.click()}
+                                >
+                                    <Upload className="h-3 w-3" />
+                                    {ostProductionImporting ? 'Importing…' : 'Import Production'}
+                                </Button>
+                                <a
+                                    href="/drawings/import-templates/production"
+                                    download
+                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    title="Download production CSV template"
+                                >
+                                    <Download className="h-3 w-3" />
+                                </a>
                             </>
                         )}
                     </div>

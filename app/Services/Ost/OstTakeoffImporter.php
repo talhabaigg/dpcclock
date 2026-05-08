@@ -142,8 +142,13 @@ class OstTakeoffImporter
                     $computed = round($lengthM, 4);
                 }
 
+                $guid = $this->normalizeGuid($row['GUID'] ?? null);
+                $uid = isset($row['UID']) && $row['UID'] !== '' ? (int) $row['UID'] : null;
+
                 $rowsToInsert[] = [
                     'drawing_id' => $drawing->id,
+                    'ost_guid' => $guid,
+                    'ost_uid' => $uid,
                     'name' => $tc->name,
                     'type' => $myType,
                     'color' => $tc->color,
@@ -183,7 +188,7 @@ class OstTakeoffImporter
         $header = fgetcsv($fh, 0, ',', '"', '\\');
         if (! $header) throw new RuntimeException('CSV is empty or unreadable');
 
-        $required = ['BidConditionUID','ConditionName','CondUOM','AreaName','Position','Curve'];
+        $required = ['BidConditionUID','GUID','UID','ConditionName','CondUOM','AreaName','Position','Curve'];
         $missing = array_diff($required, $header);
         if (! empty($missing)) {
             fclose($fh);
@@ -212,6 +217,17 @@ class OstTakeoffImporter
     {
         if ($kind === 'Linear' && $uom === 'EA') return 'count';
         return 'linear';
+    }
+
+    /**
+     * Normalize an OST GUID. OST emits braced UUIDs like "{623EAC83-...}";
+     * we strip braces and lowercase so lookups are case- and format-insensitive.
+     */
+    private function normalizeGuid(?string $raw): ?string
+    {
+        if ($raw === null) return null;
+        $g = trim($raw, " \t\n\r\0\x0B{}");
+        return $g === '' ? null : strtolower($g);
     }
 
     private function extractHeightMm(string $name): ?int

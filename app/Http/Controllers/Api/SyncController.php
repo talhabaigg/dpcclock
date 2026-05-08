@@ -453,6 +453,7 @@ class SyncController extends Controller
             'color' => $m->color,
             'takeoff_condition_id' => $m->takeoff_condition_id,
             'condition_name' => $m->condition?->name ?? '',
+            'thickness' => $m->condition?->thickness !== null ? (float) $m->condition->thickness : null,
             'bid_area_id' => $m->bid_area_id,
             'parent_measurement_id' => $parentWatermelonId,
             'scope' => $m->scope ?? 'takeoff',
@@ -516,6 +517,9 @@ class SyncController extends Controller
             'server_id' => $s->id,
             'drawing_server_id' => $s->measurement?->drawing_id,
             'measurement_server_id' => $s->drawing_measurement_id,
+            // labour_cost_code_id is part of the natural key (seg_status_unique_v3) —
+            // each LCC tracks its own % per segment per date.
+            'labour_cost_code_id' => $s->labour_cost_code_id,
             'segment_index' => (int) $s->segment_index,
             'percent_complete' => (int) $s->percent_complete,
             'work_date' => $s->work_date?->toDateString(),
@@ -834,15 +838,24 @@ class SyncController extends Controller
 
     /**
      * Push segment_statuses from mobile.
-     * Upsert by natural key: (drawing_measurement_id, segment_index, work_date).
+     * Upsert by natural key: (drawing_measurement_id, labour_cost_code_id, segment_index, work_date).
+     * Each LCC tracks its own % per segment per date — see seg_status_unique_v3.
+     * Mobile clients MUST include labour_cost_code_id in each record; records without it
+     * are skipped to avoid creating orphan rows that violate the per-LCC invariant.
      */
     private function pushSegmentStatuses(array $changes): void
     {
         // Created
         foreach ($changes['created'] ?? [] as $record) {
+            $lccId = $record['labour_cost_code_id'] ?? null;
+            if ($lccId === null) {
+                Log::warning('[Sync] Skipping segment_status without labour_cost_code_id', ['record' => $record]);
+                continue;
+            }
             MeasurementSegmentStatus::updateOrCreate(
                 [
                     'drawing_measurement_id' => $record['measurement_server_id'],
+                    'labour_cost_code_id' => $lccId,
                     'segment_index' => $record['segment_index'],
                     'work_date' => $record['work_date'],
                 ],
@@ -864,10 +877,16 @@ class SyncController extends Controller
                     'updated_by' => auth()->id(),
                 ]);
             } else {
+                $lccId = $record['labour_cost_code_id'] ?? null;
+                if ($lccId === null) {
+                    Log::warning('[Sync] Skipping segment_status update without labour_cost_code_id', ['record' => $record]);
+                    continue;
+                }
                 // Fallback: upsert by natural key
                 MeasurementSegmentStatus::updateOrCreate(
                     [
                         'drawing_measurement_id' => $record['measurement_server_id'],
+                        'labour_cost_code_id' => $lccId,
                         'segment_index' => $record['segment_index'],
                         'work_date' => $record['work_date'],
                     ],

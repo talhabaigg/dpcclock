@@ -7,7 +7,9 @@ use App\Models\DrawingMeasurement;
 use App\Models\DrawingScaleCalibration;
 use App\Models\Variation;
 use App\Models\Location;
+use App\Http\Controllers\Traits\ProductionStatusTrait;
 use App\Services\Ost\OstConditionsImporter;
+use App\Services\Ost\OstProductionImporter;
 use App\Services\Ost\OstTakeoffImporter;
 use App\Services\TakeoffCostCalculator;
 use App\Support\MeasurementGeometry;
@@ -15,6 +17,8 @@ use Illuminate\Http\Request;
 
 class DrawingMeasurementController extends Controller
 {
+    use ProductionStatusTrait;
+
     private const PAPER_SIZES_MM = [
         'A0' => [1189, 841],
         'A1' => [841, 594],
@@ -483,6 +487,90 @@ class DrawingMeasurementController extends Controller
             $result = $importer->import($location, $request->file('csv')->getRealPath());
         } catch (\RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Stream a CSV template (header + one example row) for the given import type.
+     * Templates are generated in code so they stay in sync with the importers'
+     * required columns; if a header changes, this endpoint changes with it.
+     */
+    public function downloadOstTemplate(string $type)
+    {
+        $templates = [
+            'takeoff' => [
+                'filename' => 'ost-takeoff-template.csv',
+                'headers' => [
+                    'BidConditionUID', 'GUID', 'UID', 'No', 'ConditionName', 'ConditionType',
+                    'Kind', 'CondUOM', 'AreaName', 'LayerName', 'Position', 'Curve',
+                ],
+                'example' => [
+                    '12345', '{623EAC83-C6F7-4F9B-B966-B2F9C257937A}', '28570', '28570',
+                    '01-100-A - Stud Wall 92mm', 'Internal Walls', 'Linear', 'LM',
+                    'Level 1', 'A-WALL', '100,200;500,200;500,800', '0',
+                ],
+            ],
+            'conditions' => [
+                'filename' => 'ost-conditions-template.csv',
+                'headers' => [
+                    'ConditionName', 'Sequence', 'Code', 'Description', 'ItemUOM',
+                    'UnitMatRate', 'PricedBy', 'LabProd_HrsPerUOM',
+                ],
+                'example' => [
+                    '01-100-A - Stud Wall 92mm', '1', 'MAT-001', 'Stud 92x35 H2 MGP10',
+                    'EA', '8.50', '1', '0',
+                ],
+            ],
+            'production' => [
+                'filename' => 'ost-production-template.csv',
+                'headers' => ['GUID', 'UID', 'LccCode', 'WorkDate', 'PercentComplete'],
+                'example' => [
+                    '{623EAC83-C6F7-4F9B-B966-B2F9C257937A}', '28570',
+                    '01-100-A', '2026-05-08', '75',
+                ],
+            ],
+        ];
+
+        if (! isset($templates[$type])) {
+            abort(404);
+        }
+
+        $tpl = $templates[$type];
+
+        return response()->streamDownload(function () use ($tpl) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $tpl['headers']);
+            fputcsv($out, $tpl['example']);
+            fclose($out);
+        }, $tpl['filename'], [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Import object-level production progress from an OST production CSV.
+     * Project-scoped match by ost_guid; last-write-wins on
+     * (drawing_measurement_id, labour_cost_code_id, work_date).
+     */
+    public function importOstProduction(Request $request, Drawing $drawing, OstProductionImporter $importer)
+    {
+        $request->validate([
+            'csv' => 'required|file|max:10240',
+        ]);
+
+        try {
+            $result = $importer->import($drawing, $request->file('csv')->getRealPath());
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        // Sync each affected work date to budget_hours_entries so the budget tab
+        // reflects the imported progress. Done outside the importer so the
+        // service stays free of the trait's controller-bound dependencies.
+        foreach ($result['affected_dates'] as $workDate) {
+            $this->syncProductionToBudget($drawing, $workDate);
         }
 
         return response()->json($result);

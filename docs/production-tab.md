@@ -52,7 +52,9 @@ CREATE TABLE measurement_statuses (
 
 ### 2.2 `measurement_segment_statuses`
 
-Stores percent complete per-segment for segmented linear measurements (3+ points).
+Stores percent complete per-segment per-LCC for linear measurements (2+ points).
+Unique key is `seg_status_unique_v3` on `(drawing_measurement_id, labour_cost_code_id,
+segment_index, work_date)` — each labour cost code keeps independent progress.
 
 ```sql
 CREATE TABLE measurement_segment_statuses (
@@ -101,9 +103,14 @@ drawing_measurements
 
 ## 3. Segmentation Rules
 
-A measurement qualifies for per-segment statusing when:
+Backend segment statusing applies to any linear measurement with at least 1 segment:
 - `type === 'linear'`
-- `points.length >= 3` (meaning 2+ segments)
+- `points.length >= 2` (1+ segments — single 2-point walls are statusable per-segment)
+
+The frontend (`production.tsx`) currently exposes the segment-level UI only when
+`points.length >= 3` (multi-segment polylines, e.g. curved walls split into
+multiple Bezier sub-segments). Whole 2-point linears get the measurement-level
+% control. The backend permits both, so future UI flows can address either.
 
 **Segment geometry:**
 - N points → N-1 segments (0-indexed)
@@ -111,8 +118,14 @@ A measurement qualifies for per-segment statusing when:
 - Segment length = Euclidean distance between normalized points: `sqrt(dx² + dy²)`
 - Points are stored as normalized coordinates (0–1 range relative to drawing dimensions)
 
-**Non-segmented measurements** (areas, counts, 2-point lines):
+**Non-segmented measurements** (areas, counts):
 - Use whole-measurement statusing via `measurement_statuses`
+
+**Per-LCC progress:** both `measurement_statuses` and `measurement_segment_statuses`
+are unique on `(measurement, labour_cost_code_id, [segment_index,] work_date)`.
+Each labour cost code tracks its own % independently; switching the selected LCC
+on the production page shows that trade's specific progress (a wall framed 100%
+under `INT_FRM` shows 0% under `SHEET` until separately statused).
 
 ---
 
@@ -288,11 +301,19 @@ All require `drawings.view` permission.
 | `lccSummary` | `LccSummary[]` | Aggregated stats per LCC |
 | `workDate` | `string` | ISO date string |
 
-### 8.2 `GET /drawings/{drawing}/production-statuses?work_date=YYYY-MM-DD`
+### 8.2 `GET /drawings/{drawing}/production-statuses?work_date=YYYY-MM-DD&lcc_id={int}`
 
-**Purpose:** AJAX reload when user changes work date.
+**Purpose:** Reload statuses without a full page navigation. Called when the user
+changes the work date OR switches the selected labour cost code on the page.
 
-**Response:** `{ statuses, segmentStatuses, lccSummary }` (same format as above)
+**Query params:**
+- `work_date` (required) — ISO date for carry-forward
+- `lcc_id` (optional) — when supplied, `segmentStatuses` in the response is
+  filtered to only that LCC's progress (per-LCC semantics; same key shape
+  `measId-segIdx`, but the values are scoped to the LCC). Omit for the
+  cross-LCC view used by aggregate consumers.
+
+**Response:** `{ statuses, segmentStatuses, lccSummary }`
 
 ### 8.3 `POST /drawings/{drawing}/measurement-status`
 
@@ -643,8 +664,26 @@ Before going to site, download:
 
 When back online, push:
 - New/updated `measurement_statuses` rows
-- New/updated `measurement_segment_statuses` rows
+- New/updated `measurement_segment_statuses` rows — **must include `labour_cost_code_id`**
 - Server then runs `syncSegmentToMeasurementStatus()` + `syncProductionToBudget()` for each affected measurement
+
+**WatermelonDB sync contract** (`Api/SyncController`):
+
+- Pull: `formatSegmentStatus()` returns `{ id, server_id, drawing_server_id,
+  measurement_server_id, labour_cost_code_id, segment_index, percent_complete,
+  work_date, created_at, updated_at }` — `labour_cost_code_id` **must** be
+  persisted on the device side.
+- Push: `pushSegmentStatuses()` upserts using
+  `(drawing_measurement_id, labour_cost_code_id, segment_index, work_date)` as the
+  natural key. Records that arrive without `labour_cost_code_id` are skipped
+  with a server log warning to avoid violating the per-LCC invariant.
+
+Mobile schema must add a `labour_cost_code_id` column (with a FK or just a
+plain int reference) on `measurement_segment_statuses`. Existing rows from the
+v2 (LCC-agnostic) era should be migrated either by:
+- Backfilling from the user-active LCC at the time the segment was statused
+  (if you've kept that audit), or
+- Marking them as needing re-statusing (set to `null` and exclude from carry-forward).
 
 ### 16.3 Computations to run on-device
 
