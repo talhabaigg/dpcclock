@@ -1170,7 +1170,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/import-ost-takeoffs', [DrawingMeasurementController::class, 'importOstTakeoffs'])->name('drawings.import-ost-takeoffs');
         Route::post('/drawings/{drawing}/import-ost-conditions', [DrawingMeasurementController::class, 'importOstConditions'])->name('drawings.import-ost-conditions');
         Route::post('/drawings/{drawing}/import-ost-production', [DrawingMeasurementController::class, 'importOstProduction'])->name('drawings.import-ost-production');
-        Route::get('/drawings/import-templates/{type}', [DrawingMeasurementController::class, 'downloadOstTemplate'])
+        Route::get('/drawing-import-templates/{type}', [DrawingMeasurementController::class, 'downloadOstTemplate'])
             ->where('type', 'takeoff|conditions|production')
             ->name('drawings.import-templates.download');
         // Calibration (write)

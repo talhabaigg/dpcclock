@@ -1042,7 +1042,7 @@ export default function DrawingTakeoff() {
                                     {ostImporting ? 'Importing…' : 'Import OST'}
                                 </Button>
                                 <a
-                                    href="/drawings/import-templates/takeoff"
+                                    href="/drawing-import-templates/takeoff"
                                     download
                                     className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
                                     title="Download OST takeoff CSV template"
@@ -1072,7 +1072,7 @@ export default function DrawingTakeoff() {
                                     {ostConditionsImporting ? 'Importing…' : 'Import Conditions'}
                                 </Button>
                                 <a
-                                    href="/drawings/import-templates/conditions"
+                                    href="/drawing-import-templates/conditions"
                                     download
                                     className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
                                     title="Download OST conditions CSV template"
@@ -1102,7 +1102,7 @@ export default function DrawingTakeoff() {
                                     {ostProductionImporting ? 'Importing…' : 'Import Production'}
                                 </Button>
                                 <a
-                                    href="/drawings/import-templates/production"
+                                    href="/drawing-import-templates/production"
                                     download
                                     className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
                                     title="Download production CSV template"
