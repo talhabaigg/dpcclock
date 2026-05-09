@@ -29,7 +29,8 @@ class Injury extends Model implements HasMedia
         'agencies', 'agencies_comments',
         'contributions', 'contributions_comments',
         'corrective_actions', 'corrective_actions_comments',
-        'worker_signature', 'representative_signature', 'representative_id',
+        'worker_signature', 'worker_signed_at',
+        'representative_signature', 'representative_signed_at', 'representative_id',
         'body_location_image', 'locked_at', 'created_by', 'updated_by',
     ];
 
@@ -37,6 +38,8 @@ class Injury extends Model implements HasMedia
         'occurred_at' => 'datetime:Y-m-d\TH:i:s',
         'reported_at' => 'datetime:Y-m-d\TH:i:s',
         'treatment_at' => 'datetime:Y-m-d\TH:i:s',
+        'worker_signed_at' => 'datetime:Y-m-d\TH:i:s',
+        'representative_signed_at' => 'datetime:Y-m-d\TH:i:s',
         'locked_at' => 'datetime:Y-m-d\TH:i:s',
         'emergency_services' => 'boolean',
         'treatment' => 'boolean',
@@ -204,7 +207,9 @@ class Injury extends Model implements HasMedia
 
     protected static array $ignoredFields = [
         'id_formal', 'created_by', 'updated_by', 'updated_at',
-        'worker_signature', 'representative_signature', 'body_location_image',
+        'worker_signature', 'worker_signed_at',
+        'representative_signature', 'representative_signed_at',
+        'body_location_image',
         'natures', 'natures_comments', 'mechanisms', 'mechanisms_comments',
         'agencies', 'agencies_comments', 'contributions', 'contributions_comments',
         'corrective_actions', 'corrective_actions_comments',

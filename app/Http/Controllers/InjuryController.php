@@ -137,6 +137,14 @@ class InjuryController extends Controller
 
         unset($data['files'], $data['witness_files']);
 
+        // Stamp signature timestamps when signatures are present on initial create
+        if (!empty($data['worker_signature'] ?? null)) {
+            $data['worker_signed_at'] = now();
+        }
+        if (!empty($data['representative_signature'] ?? null)) {
+            $data['representative_signed_at'] = now();
+        }
+
         $injury = Injury::create($data);
 
         if ($request->hasFile('files')) {
@@ -239,6 +247,22 @@ class InjuryController extends Controller
         $data['updated_by'] = auth()->id();
 
         unset($data['files'], $data['witness_files']);
+
+        // Stamp signature timestamps when a signature is added, changed, or cleared
+        if (array_key_exists('worker_signature', $data)) {
+            $incoming = $data['worker_signature'] ?? '';
+            $existing = $injury->worker_signature ?? '';
+            if ($incoming !== $existing) {
+                $data['worker_signed_at'] = $incoming !== '' ? now() : null;
+            }
+        }
+        if (array_key_exists('representative_signature', $data)) {
+            $incoming = $data['representative_signature'] ?? '';
+            $existing = $injury->representative_signature ?? '';
+            if ($incoming !== $existing) {
+                $data['representative_signed_at'] = $incoming !== '' ? now() : null;
+            }
+        }
 
         $injury->update($data);
 

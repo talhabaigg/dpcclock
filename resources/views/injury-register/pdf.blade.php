@@ -310,23 +310,34 @@
     </table>
 
     {{-- Treatment --}}
-    <h2>Type of Treatment Provided</h2>
+    <h2>Treatment</h2>
     <table class="fields">
         <tr>
-            <td class="label">Treatment Type</td>
-            <td class="value">{{ $injury->treatment_type ? Injury::TREATMENT_TYPE_OPTIONS[$injury->treatment_type] ?? '—' : '—' }}</td>
+            <td class="label">Was treatment provided?</td>
+            <td class="value">{!! $boolVal($injury->treatment) !!}</td>
         </tr>
-        @if($injury->treatment_at)
-        <tr>
-            <td class="label">Date &amp; Time Treatment Provided</td>
-            <td class="value">{{ Carbon::parse($injury->treatment_at)->format('d/m/Y h:i A') }}</td>
-        </tr>
-        @endif
-        @if($injury->treatment_details)
-        <tr>
-            <td class="label">Details</td>
-            <td class="value">{{ $injury->treatment_details }}</td>
-        </tr>
+        @if($injury->treatment)
+            <tr>
+                <td class="label">Treatment Type</td>
+                <td class="value">{{ $injury->treatment_type ? Injury::TREATMENT_TYPE_OPTIONS[$injury->treatment_type] ?? '—' : '—' }}</td>
+            </tr>
+            @if($injury->treatment_at)
+            <tr>
+                <td class="label">Date &amp; Time Treatment Provided</td>
+                <td class="value">{{ Carbon::parse($injury->treatment_at)->format('d/m/Y h:i A') }}</td>
+            </tr>
+            @endif
+            @if($injury->treatment_details)
+            <tr>
+                <td class="label">Details</td>
+                <td class="value">{{ $injury->treatment_details }}</td>
+            </tr>
+            @endif
+        @elseif($injury->no_treatment_reason)
+            <tr>
+                <td class="label">Reason No Treatment</td>
+                <td class="value">{{ $injury->no_treatment_reason }}</td>
+            </tr>
         @endif
     </table>
 
@@ -338,24 +349,26 @@
 
     {{-- Worker Signature --}}
     @if($injury->worker_signature)
+    @php $workerSignedAt = $injury->worker_signed_at ?? $injury->created_at; @endphp
     <h2>Worker Signature</h2>
     <div class="signature-block">
         <img src="{{ $injury->worker_signature }}" />
         <div class="sig-meta">
             {{ $employee?->preferred_name ?? $employee?->name ?? 'Worker' }}
-            &bull; Signed {{ $injury->created_at ? Carbon::parse($injury->created_at)->format('d/m/Y h:i A') : '' }}
+            &bull; Signed {{ $workerSignedAt ? Carbon::parse($workerSignedAt)->format('d/m/Y h:i A') : '' }}
         </div>
     </div>
     @endif
 
     {{-- SWCP Representative Signature --}}
     @if($injury->representative_signature)
+    @php $repSignedAt = $injury->representative_signed_at ?? $injury->created_at; @endphp
     <h2>SWCP Representative Sign-off</h2>
     <div class="signature-block">
         <img src="{{ $injury->representative_signature }}" />
         <div class="sig-meta">
             {{ $injury->representative?->preferred_name ?? $injury->representative?->name ?? 'Representative' }}
-            &bull; Signed {{ $injury->created_at ? Carbon::parse($injury->created_at)->format('d/m/Y h:i A') : '' }}
+            &bull; Signed {{ $repSignedAt ? Carbon::parse($repSignedAt)->format('d/m/Y h:i A') : '' }}
         </div>
     </div>
     @endif

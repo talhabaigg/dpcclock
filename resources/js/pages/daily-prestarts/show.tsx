@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +9,7 @@ import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { CheckCircle2, Download, GraduationCap, MessageSquare, Pencil } from 'lucide-react';
+import { CheckCircle2, Download, GraduationCap, Lock, MessageSquare, Pencil, Trash2, Unlock } from 'lucide-react';
 import { useState } from 'react';
 
 interface MediaItem {
@@ -82,6 +83,13 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
     const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
     const [noteText, setNoteText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    const confirmDelete = () => {
+        router.delete(`/daily-prestarts/${prestart.id}`, {
+            onFinish: () => setShowDeleteConfirm(false),
+        });
+    };
 
     const openNoteEditor = (employee: UnsignedEmployee) => {
         setEditingEmployeeId(employee.id);
@@ -146,8 +154,37 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                 PDF
                             </a>
                         </Button>
+                        {can('prestarts.edit') && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.post(`/daily-prestarts/${prestart.id}/${prestart.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
+                            >
+                                {prestart.is_locked ? <Unlock className="mr-1.5 h-3.5 w-3.5" /> : <Lock className="mr-1.5 h-3.5 w-3.5" />}
+                                {prestart.is_locked ? 'Unlock' : 'Lock'}
+                            </Button>
+                        )}
+                        {can('prestarts.delete') && !prestart.is_locked && (
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setShowDeleteConfirm(true)}>
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                Delete
+                            </Button>
+                        )}
                     </div>
                 </div>
+
+                <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete Prestart</DialogTitle>
+                        </DialogHeader>
+                        <p>Are you sure you want to delete the prestart for {prestart.work_date_formatted ?? prestart.work_date}? This will also delete all signatures.</p>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Weather */}
                 <WeatherWidget weather={prestart.weather as any} />

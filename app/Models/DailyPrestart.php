@@ -26,6 +26,7 @@ class DailyPrestart extends Model implements HasMedia
         'safety_concerns',
         'is_active',
         'locked_at',
+        'manually_unlocked_at',
         'created_by',
     ];
 
@@ -35,6 +36,7 @@ class DailyPrestart extends Model implements HasMedia
         'weather' => 'array',
         'is_active' => 'boolean',
         'locked_at' => 'datetime',
+        'manually_unlocked_at' => 'datetime',
     ];
 
     protected $appends = ['work_date_formatted', 'is_locked'];
@@ -43,6 +45,11 @@ class DailyPrestart extends Model implements HasMedia
     {
         if ($this->locked_at) {
             return true;
+        }
+
+        // Explicit unlock overrides the past-date auto-lock below
+        if ($this->manually_unlocked_at) {
+            return false;
         }
 
         if (! $this->work_date) {

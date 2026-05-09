@@ -401,14 +401,20 @@ class DailyPrestartController extends Controller
 
     public function lock(DailyPrestart $dailyPrestart)
     {
-        $dailyPrestart->update(['locked_at' => now()]);
+        $dailyPrestart->update([
+            'locked_at' => now(),
+            'manually_unlocked_at' => null,
+        ]);
 
         return redirect()->back()->with('success', 'Prestart locked.');
     }
 
     public function unlock(DailyPrestart $dailyPrestart)
     {
-        $dailyPrestart->update(['locked_at' => null]);
+        $dailyPrestart->update([
+            'locked_at' => null,
+            'manually_unlocked_at' => now(),
+        ]);
 
         return redirect()->back()->with('success', 'Prestart unlocked.');
     }
