@@ -97,62 +97,103 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
     const repPadRef = useRef<SignaturePad | null>(null);
     const sigInitialized = useRef(false);
 
-    const initPad = (canvasRef: React.RefObject<HTMLCanvasElement | null>, padRef: React.MutableRefObject<SignaturePad | null>, existing?: string) => {
+    // Existing signatures are locked into a read-only preview on edit. The user
+    // must click "Clear & Re-sign" to unlock the pad. This guarantees the server
+    // only sees a signature in the payload when the user explicitly chose to change it.
+    const [workerSigLocked, setWorkerSigLocked] = useState(isEdit && !!injury?.worker_signature);
+    const [repSigLocked, setRepSigLocked] = useState(isEdit && !!injury?.representative_signature);
+
+    // Dirty = the user touched the pad (or chose Replace). Drives the submit gate.
+    const workerSigDirty = useRef(false);
+    const repSigDirty = useRef(false);
+
+    const initPad = (canvasRef: React.RefObject<HTMLCanvasElement | null>, padRef: React.MutableRefObject<SignaturePad | null>, dirtyRef: React.MutableRefObject<boolean>) => {
         if (!canvasRef.current || padRef.current) return;
         const canvas = canvasRef.current;
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
         canvas.width = canvas.offsetWidth * ratio;
         canvas.height = canvas.offsetHeight * ratio;
         canvas.getContext('2d')?.scale(ratio, ratio);
-        padRef.current = new SignaturePad(canvas, {
+        const pad = new SignaturePad(canvas, {
             backgroundColor: 'rgb(255, 255, 255)',
             penColor: 'rgb(0, 0, 0)',
             minWidth: 1.5,
             maxWidth: 3,
         });
-        if (existing) {
-            padRef.current.fromDataURL(existing);
-        }
+        padRef.current = pad;
+        // beginStroke fires only on actual user input
+        pad.addEventListener('beginStroke', () => {
+            dirtyRef.current = true;
+        });
     };
 
-    // Init signature pads when we reach step 6 (signatures)
+    // Init signature pads when their canvas is mounted (step 6 reached and pad is unlocked)
     useEffect(() => {
-        if (step === 6 && !sigInitialized.current) {
-            // Small delay to ensure canvas is rendered
-            const t = setTimeout(() => {
-                initPad(workerCanvasRef, workerPadRef, injury?.worker_signature ?? undefined);
-                initPad(repCanvasRef, repPadRef, injury?.representative_signature ?? undefined);
-                sigInitialized.current = true;
-            }, 100);
-            return () => clearTimeout(t);
-        }
-    }, [step]);
+        if (step !== 6) return;
+        const t = setTimeout(() => {
+            if (!workerSigLocked) initPad(workerCanvasRef, workerPadRef, workerSigDirty);
+            if (!repSigLocked) initPad(repCanvasRef, repPadRef, repSigDirty);
+            sigInitialized.current = true;
+        }, 100);
+        return () => clearTimeout(t);
+    }, [step, workerSigLocked, repSigLocked]);
 
-    const clearPad = useCallback((padRef: React.MutableRefObject<SignaturePad | null>) => {
+    const replaceSignature = (
+        setLocked: (v: boolean) => void,
+        padRef: React.MutableRefObject<SignaturePad | null>,
+        dirtyRef: React.MutableRefObject<boolean>,
+    ) => {
+        // Tear down the old pad so the next render can mount a fresh canvas + pad
+        padRef.current = null;
+        dirtyRef.current = true;
+        setLocked(false);
+    };
+
+    const clearPad = useCallback((padRef: React.MutableRefObject<SignaturePad | null>, dirtyRef: React.MutableRefObject<boolean>) => {
         padRef.current?.clear();
+        // Clearing is itself a meaningful change to a previously-saved signature
+        dirtyRef.current = true;
     }, []);
 
-    const undoPad = useCallback((padRef: React.MutableRefObject<SignaturePad | null>) => {
+    const undoPad = useCallback((padRef: React.MutableRefObject<SignaturePad | null>, dirtyRef: React.MutableRefObject<boolean>) => {
         const pad = padRef.current;
         if (!pad) return;
         const d = pad.toData();
         if (d.length > 0) {
             d.pop();
             pad.fromData(d);
+            dirtyRef.current = true;
         }
     }, []);
 
     const handleSubmit = () => {
-        const formData = {
-            ...data,
-            worker_signature: workerPadRef.current && !workerPadRef.current.isEmpty() ? workerPadRef.current.toDataURL('image/png') : '',
-            representative_signature: repPadRef.current && !repPadRef.current.isEmpty() ? repPadRef.current.toDataURL('image/png') : '',
-        };
+        // Build payload, deliberately excluding signature keys unless the user
+        // actually modified them this session. Absent key = "leave as-is" on the server.
+        const formData: Record<string, unknown> = { ...data };
+        delete formData.worker_signature;
+        delete formData.representative_signature;
+
+        if (workerSigDirty.current) {
+            formData.worker_signature = workerPadRef.current && !workerPadRef.current.isEmpty()
+                ? workerPadRef.current.toDataURL('image/png')
+                : '';
+        } else if (!isEdit) {
+            // Create flow with no signature drawn — send empty so the column persists as null
+            formData.worker_signature = '';
+        }
+
+        if (repSigDirty.current) {
+            formData.representative_signature = repPadRef.current && !repPadRef.current.isEmpty()
+                ? repPadRef.current.toDataURL('image/png')
+                : '';
+        } else if (!isEdit) {
+            formData.representative_signature = '';
+        }
 
         if (isEdit) {
-            router.post(`/injury-register/${injury.id}`, { ...formData, _method: 'PUT' }, { forceFormData: true });
+            router.post(`/injury-register/${injury.id}`, { ...formData, _method: 'PUT' } as never, { forceFormData: true });
         } else {
-            router.post('/injury-register', formData, { forceFormData: true });
+            router.post('/injury-register', formData as never, { forceFormData: true });
         }
     };
 
@@ -480,18 +521,34 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                 <div className="bg-muted/50 rounded-md border px-4 py-3 text-sm">
                                     <strong>NOTE:</strong> By signing below you agree that the information provided in this report is correct and an accurate account of the incident / injury being reported.
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-sm">Draw signature below</Label>
-                                    <div className="flex gap-2">
-                                        <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(workerPadRef)}>
-                                            <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
-                                        </Button>
-                                        <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(workerPadRef)}>
-                                            <Trash2 className="mr-1.5 h-4 w-4" /> Clear
-                                        </Button>
+                                {workerSigLocked ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-sm text-muted-foreground">Signed — locked</Label>
+                                            <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => replaceSignature(setWorkerSigLocked, workerPadRef, workerSigDirty)}>
+                                                <Trash2 className="mr-1.5 h-4 w-4" /> Clear &amp; Re-sign
+                                            </Button>
+                                        </div>
+                                        <div className="h-44 w-full rounded-md border bg-white p-2">
+                                            <img src={injury?.worker_signature ?? ''} alt="Worker signature" className="h-full w-full object-contain" />
+                                        </div>
                                     </div>
-                                </div>
-                                <canvas ref={workerCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-sm">Draw signature below</Label>
+                                            <div className="flex gap-2">
+                                                <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(workerPadRef, workerSigDirty)}>
+                                                    <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
+                                                </Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(workerPadRef, workerSigDirty)}>
+                                                    <Trash2 className="mr-1.5 h-4 w-4" /> Clear
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <canvas ref={workerCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
+                                    </>
+                                )}
                             </div>
 
                             <div className="space-y-4">
@@ -507,18 +564,34 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm">Representative signature</Label>
-                                        <div className="flex gap-2">
-                                            <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(repPadRef)}>
-                                                <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
-                                            </Button>
-                                            <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(repPadRef)}>
-                                                <Trash2 className="mr-1.5 h-4 w-4" /> Clear
-                                            </Button>
+                                    {repSigLocked ? (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm text-muted-foreground">Signed — locked</Label>
+                                                <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => replaceSignature(setRepSigLocked, repPadRef, repSigDirty)}>
+                                                    <Trash2 className="mr-1.5 h-4 w-4" /> Clear &amp; Re-sign
+                                                </Button>
+                                            </div>
+                                            <div className="h-44 w-full rounded-md border bg-white p-2">
+                                                <img src={injury?.representative_signature ?? ''} alt="Representative signature" className="h-full w-full object-contain" />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <canvas ref={repCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm">Representative signature</Label>
+                                                <div className="flex gap-2">
+                                                    <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => undoPad(repPadRef, repSigDirty)}>
+                                                        <RotateCcw className="mr-1.5 h-4 w-4" /> Undo
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => clearPad(repPadRef, repSigDirty)}>
+                                                        <Trash2 className="mr-1.5 h-4 w-4" /> Clear
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <canvas ref={repCanvasRef} className="h-44 w-full rounded-md border bg-white dark:invert" style={{ touchAction: 'none' }} />
+                                        </>
+                                    )}
                                 </div>
                             </div>
 

@@ -248,20 +248,13 @@ class InjuryController extends Controller
 
         unset($data['files'], $data['witness_files']);
 
-        // Stamp signature timestamps when a signature is added, changed, or cleared
+        // The frontend only includes signature keys when the user explicitly drew or
+        // cleared. Presence of the key is the source of truth for "this is a change."
         if (array_key_exists('worker_signature', $data)) {
-            $incoming = $data['worker_signature'] ?? '';
-            $existing = $injury->worker_signature ?? '';
-            if ($incoming !== $existing) {
-                $data['worker_signed_at'] = $incoming !== '' ? now() : null;
-            }
+            $data['worker_signed_at'] = !empty($data['worker_signature']) ? now() : null;
         }
         if (array_key_exists('representative_signature', $data)) {
-            $incoming = $data['representative_signature'] ?? '';
-            $existing = $injury->representative_signature ?? '';
-            if ($incoming !== $existing) {
-                $data['representative_signed_at'] = $incoming !== '' ? now() : null;
-            }
+            $data['representative_signed_at'] = !empty($data['representative_signature']) ? now() : null;
         }
 
         $injury->update($data);
