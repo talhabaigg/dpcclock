@@ -13,8 +13,13 @@ trait ProductionStatusTrait
     /**
      * Build aggregated Labour Cost Code summary for production tracking.
      *
-     * Per LCC: quantity-weighted % = Sum(qty × %) / Sum(qty)
-     * Budget hours = Sum(qty / production_rate) for each measurement
+     * Earned hours must be summed PER MEASUREMENT, not derived from a total
+     * budget × an overall qty-weighted percent. Rates vary across takeoffs
+     * within the same LCC, so the latter formula gives the wrong answer:
+     *   Σ(qty_i × pct_i / rate_i) ≠ (Σ qty_i / rate_i) × Σ(qty_i × pct_i)/Σ qty_i
+     *
+     * Aggregate percent_complete is then back-derived as earned/budget so it
+     * stays consistent with the displayed earned and budget figures.
      */
     protected function buildLccSummary($measurements, array $statuses): array
     {
@@ -45,31 +50,29 @@ trait ProductionStatusTrait
                         'unit' => $lcc->unit,
                         'total_qty' => 0,
                         'budget_hours' => 0,
-                        'weighted_qty_percent' => 0,
+                        'earned_hours' => 0,
                         'measurement_count' => 0,
                     ];
                 }
 
                 $percent = $statuses[$measurement->id.'-'.$lccId] ?? 0;
-                // Use condition-level override, fallback to LCC default
                 $productionRate = (float) ($clc->production_rate ?? $lcc->default_production_rate ?? 0);
-                $budgetHours = $productionRate > 0 ? $qty / $productionRate : 0;
+                $perTakeoffBudget = $productionRate > 0 ? $qty / $productionRate : 0;
+                $perTakeoffEarned = $perTakeoffBudget * ($percent / 100);
 
                 $summary[$lccId]['total_qty'] += $qty;
-                $summary[$lccId]['budget_hours'] += $budgetHours;
-                $summary[$lccId]['weighted_qty_percent'] += $qty * $percent;
+                $summary[$lccId]['budget_hours'] += $perTakeoffBudget;
+                $summary[$lccId]['earned_hours'] += $perTakeoffEarned;
                 $summary[$lccId]['measurement_count']++;
             }
         }
 
-        // Calculate final weighted percent and earned hours
         foreach ($summary as &$item) {
-            $item['weighted_percent'] = $item['total_qty'] > 0
-                ? round($item['weighted_qty_percent'] / $item['total_qty'], 1)
+            $item['weighted_percent'] = $item['budget_hours'] > 0
+                ? round($item['earned_hours'] / $item['budget_hours'] * 100, 1)
                 : 0;
-            $item['earned_hours'] = round($item['budget_hours'] * ($item['weighted_percent'] / 100), 2);
+            $item['earned_hours'] = round($item['earned_hours'], 2);
             $item['budget_hours'] = round($item['budget_hours'], 2);
-            unset($item['weighted_qty_percent']);
         }
 
         return $summary;
@@ -254,7 +257,11 @@ trait ProductionStatusTrait
 
         $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
 
-        // Aggregate percent_complete per (bid_area_id, lcc_id)
+        // Aggregate per (bid_area_id, lcc_id). Earned must be summed per
+        // measurement (not budget × overall pct) — same correctness rule as
+        // buildBudgetRows. The percent stored is back-derived from
+        // earned/budget so the budget page shows numbers consistent with the
+        // controller's calc when this map is used as a frontend override.
         $agg = [];
         foreach ($measurements as $measurement) {
             if (! $measurement->condition || ! $measurement->condition->conditionLabourCodes) {
@@ -276,20 +283,28 @@ trait ProductionStatusTrait
 
                 $key = $bidAreaId.'-'.$lcc->id;
                 $percent = $statuses[$measurement->id.'-'.$lcc->id] ?? 0;
+                $rate = (float) ($clc->production_rate ?? $lcc->default_production_rate ?? 0);
+                $perTakeoffBudget = $rate > 0 ? $qty / $rate : 0;
+                $perTakeoffEarned = $perTakeoffBudget * ($percent / 100);
 
                 if (! isset($agg[$key])) {
-                    $agg[$key] = ['bid_area_id' => $bidAreaId ?: null, 'lcc_id' => $lcc->id, 'total_qty' => 0, 'weighted' => 0];
+                    $agg[$key] = [
+                        'bid_area_id' => $bidAreaId ?: null,
+                        'lcc_id' => $lcc->id,
+                        'budget_hrs' => 0,
+                        'earned_hrs' => 0,
+                    ];
                 }
 
-                $agg[$key]['total_qty'] += $qty;
-                $agg[$key]['weighted'] += $qty * $percent;
+                $agg[$key]['budget_hrs'] += $perTakeoffBudget;
+                $agg[$key]['earned_hrs'] += $perTakeoffEarned;
             }
         }
 
         // Write aggregated percent_complete to budget_hours_entries
         foreach ($agg as $item) {
-            $percentComplete = $item['total_qty'] > 0
-                ? round($item['weighted'] / $item['total_qty'], 1)
+            $percentComplete = $item['budget_hrs'] > 0
+                ? round($item['earned_hrs'] / $item['budget_hrs'] * 100, 1)
                 : 0;
 
             BudgetHoursEntry::updateOrCreate(

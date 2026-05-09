@@ -13,6 +13,8 @@ use RuntimeException;
 
 class OstProductionImporter
 {
+    use \App\Http\Controllers\Traits\ProductionStatusTrait;
+
     /**
      * Import object-level production progress from a CSV.
      *
@@ -151,6 +153,13 @@ class OstProductionImporter
                 $affectedDates[$workDate] = true;
             }
         });
+
+        // Refresh BudgetHoursEntry.percent_complete for every affected date so
+        // the budget page reflects the new measurement_statuses. Without this,
+        // stale auto-written zeros mask the real measurement-derived percentages.
+        foreach (array_keys($affectedDates) as $date) {
+            $this->syncProductionToBudget($drawing, $date);
+        }
 
         return [
             'created' => $created,

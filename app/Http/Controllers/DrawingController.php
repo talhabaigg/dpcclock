@@ -1288,30 +1288,32 @@ class DrawingController extends Controller
                         'variation_co_number' => $variationCoNumber,
                         'qty' => 0,
                         'budget_hours' => 0,
-                        'weighted_qty_percent' => 0,
+                        'earned_hours' => 0,
                         'measurement_count' => 0,
                     ];
                 }
 
                 $percent = $statuses[$measurement->id.'-'.$lcc->id] ?? 0;
                 $productionRate = (float) ($clc->production_rate ?? $lcc->default_production_rate ?? 0);
-                $budgetHours = $productionRate > 0 ? $qty / $productionRate : 0;
+                $perTakeoffBudget = $productionRate > 0 ? $qty / $productionRate : 0;
+                // earned MUST be summed per-measurement (not budget × overall %),
+                // because rates vary across takeoffs within the same (area, LCC).
+                // Σ(qty_i × pct_i / rate_i) ≠ (Σ qty_i/rate_i) × Σ(qty_i × pct_i)/Σ qty_i
+                $perTakeoffEarned = $perTakeoffBudget * ($percent / 100);
 
                 $rows[$key]['qty'] += $qty;
-                $rows[$key]['budget_hours'] += $budgetHours;
-                $rows[$key]['weighted_qty_percent'] += $qty * $percent;
+                $rows[$key]['budget_hours'] += $perTakeoffBudget;
+                $rows[$key]['earned_hours'] += $perTakeoffEarned;
                 $rows[$key]['measurement_count']++;
             }
         }
 
-        // Calculate final weighted percent and earned hours
         foreach ($rows as &$row) {
-            $row['percent_complete'] = $row['qty'] > 0
-                ? round($row['weighted_qty_percent'] / $row['qty'], 1)
+            $row['percent_complete'] = $row['budget_hours'] > 0
+                ? round($row['earned_hours'] / $row['budget_hours'] * 100, 1)
                 : 0;
-            $row['earned_hours'] = round($row['budget_hours'] * ($row['percent_complete'] / 100), 2);
+            $row['earned_hours'] = round($row['earned_hours'], 2);
             $row['budget_hours'] = round($row['budget_hours'], 2);
-            unset($row['weighted_qty_percent']);
         }
 
         return array_values($rows);

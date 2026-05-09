@@ -242,17 +242,22 @@ export default function DrawingBudget() {
             const totalQty = rows.reduce((s, r) => s + r.qty, 0);
             const estHrs = rows.reduce((s, r) => s + r.budget_hours, 0);
 
-            // Measurement-derived percent complete (default/fallback)
-            const measurementPct = totalQty > 0
-                ? rows.reduce((s, r) => s + r.qty * r.percent_complete, 0) / totalQty
-                : 0;
+            // Sum the per-row earned hours from the server. The server computes
+            // earned per measurement (qty × pct / rate) and that's the only
+            // mathematically correct rollup when rates vary across takeoffs in
+            // the same (area, lcc). Do NOT recompute as estHrs × pct/100.
+            const serverEarned = rows.reduce((s, r) => s + (r.earned_hours ?? 0), 0);
 
-            // Date-specific override from percentCompleteMap (if present)
-            const pctComplete = key in percentCompleteMap
-                ? percentCompleteMap[key]
-                : measurementPct;
+            // The percent shown follows from earned/budget so it stays
+            // consistent with the displayed earned figure.
+            const measurementPct = estHrs > 0 ? (serverEarned / estHrs) * 100 : 0;
 
-            const earnedHrs = estHrs * (pctComplete / 100);
+            // Date-specific override from percentCompleteMap (if user manually
+            // set a percent on the budget page for this work_date).
+            const hasOverride = key in percentCompleteMap;
+            const pctComplete = hasOverride ? percentCompleteMap[key] : measurementPct;
+            const earnedHrs = hasOverride ? estHrs * (pctComplete / 100) : serverEarned;
+
             const installedQty = totalQty * (pctComplete / 100);
             const usedHrs = usedHoursMap[key] || 0;
             const projected = computeProjected(estHrs, earnedHrs, usedHrs);
