@@ -20,6 +20,7 @@ class Employee extends Model implements ProvidesSigningPlaceholders
         'preferred_name',
         'external_id',
         'email',
+        'mobile_number',
         'pin',
         'employment_type',
         'employment_agreement',

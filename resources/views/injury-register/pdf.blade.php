@@ -155,11 +155,11 @@
         </tr>
         <tr>
             <td class="label">Date of Birth</td>
-            <td class="value">—</td>
+            <td class="value">{{ $employee?->date_of_birth ? Carbon::parse($employee->date_of_birth)->format('d/m/Y') : '—' }}</td>
         </tr>
         <tr>
             <td class="label">Phone</td>
-            <td class="value">—</td>
+            <td class="value">{{ $employee?->mobile_number ?? '—' }}</td>
         </tr>
         <tr>
             <td class="label">Email</td>

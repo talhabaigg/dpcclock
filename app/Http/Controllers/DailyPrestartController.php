@@ -517,6 +517,15 @@ class DailyPrestartController extends Controller
             ]);
         }
 
+        // First sign-on of the day: refresh weather so the snapshot reflects
+        // morning-of conditions (prestarts are often created the night before).
+        if ($prestart->signatures()->doesntExist()) {
+            $freshWeather = $this->fetchWeatherForLocation($prestart->location_id);
+            if ($freshWeather) {
+                $prestart->update(['weather' => $freshWeather]);
+            }
+        }
+
         $trainings = Training::with('employees')
             ->forLocation($location->id)
             ->forDate(now('Australia/Brisbane')->toDateString())

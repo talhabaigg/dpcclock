@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Link, router } from '@inertiajs/react';
-import { Copy, Download, EllipsisVertical, Eye, MapPin, Pencil, Send, Trash } from 'lucide-react';
+import { Copy, Download, EllipsisVertical, Eye, MapPin, Pencil, Send, Trash2 } from 'lucide-react';
 
 export interface Variation {
     id: number;
@@ -13,19 +13,20 @@ export interface Variation {
     status: string;
     description: string;
     type: string;
+    premier_co_id: number | string | null;
     line_items_sum_total_cost: number | string;
     line_items_sum_revenue: number | string;
     location?: { name: string };
 }
 
-const isSentOrApproved = (status: string) => status === 'sent' || status === 'Approved';
+const isInPremier = (variation: Pick<Variation, 'premier_co_id'>) => !!variation.premier_co_id;
 
 function formatCurrency(value: number | string) {
     return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
 }
 
-const VariationCard = ({ variation }: { variation: Variation }) => {
-    const locked = isSentOrApproved(variation.status);
+const VariationCard = ({ variation, hideLocation = false }: { variation: Variation; hideLocation?: boolean }) => {
+    const locked = isInPremier(variation);
     const cost = Number(variation.line_items_sum_total_cost) || 0;
     const revenue = Number(variation.line_items_sum_revenue) || 0;
     const margin = revenue - cost;
@@ -70,7 +71,7 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                     {/* Row 4: Location + Date + Actions */}
                     <div className="flex items-center justify-between gap-2 pt-0.5">
                         <div className="flex min-w-0 flex-1 items-center gap-x-2 text-[11px] text-muted-foreground">
-                            {variation.location && (
+                            {!hideLocation && variation.location && (
                                 <span className="flex items-center gap-1 truncate">
                                     <MapPin className="h-3 w-3 shrink-0" />
                                     {variation.location.name}
@@ -96,30 +97,25 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                                         <EllipsisVertical className="h-3.5 w-3.5" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                    <DropdownMenuItem
-                                        className="gap-2"
-                                        onClick={() => router.visit(`/variations/${variation.id}/show`)}
-                                    >
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => router.visit(`/variations/${variation.id}/show`)}>
                                         <Eye className="h-4 w-4" />
                                         View
                                     </DropdownMenuItem>
-                                    <a href={`/variations/${variation.id}/download/excel`}>
-                                        <DropdownMenuItem className="gap-2">
+                                    <DropdownMenuItem asChild>
+                                        <a href={`/variations/${variation.id}/download/excel`}>
                                             <Download className="h-4 w-4" />
                                             Download Excel
-                                        </DropdownMenuItem>
-                                    </a>
+                                        </a>
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled={locked}
-                                        className="gap-2"
                                         onClick={() => router.visit(`/variations/${variation.id}/edit`)}
                                     >
                                         <Pencil className="h-4 w-4" />
                                         Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                        className="gap-2"
                                         onClick={() => {
                                             if (confirm('Are you sure you want to duplicate this variation?')) {
                                                 router.visit(`/variations/${variation.id}/duplicate`);
@@ -131,8 +127,8 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled={locked}
-                                        className="gap-2"
                                         onClick={() => {
+                                            if (locked) return;
                                             if (confirm('Are you sure you want to send this variation to Premier?')) {
                                                 router.visit(`/variations/${variation.id}/send-to-premier`);
                                             }
@@ -143,14 +139,14 @@ const VariationCard = ({ variation }: { variation: Variation }) => {
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
-                                        className="gap-2 text-red-600 focus:text-red-600"
+                                        variant="destructive"
                                         onClick={() => {
                                             if (confirm('Are you sure you want to delete this variation?')) {
                                                 router.visit(`/variations/${variation.id}`);
                                             }
                                         }}
                                     >
-                                        <Trash className="h-4 w-4" />
+                                        <Trash2 className="h-4 w-4" />
                                         Delete
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>

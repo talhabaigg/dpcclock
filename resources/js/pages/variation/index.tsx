@@ -36,6 +36,7 @@ interface Variation {
     status: string;
     description: string;
     type: string;
+    premier_co_id: number | string | null;
     line_items_sum_total_cost: number | string;
     line_items_sum_revenue: number | string;
     location?: { name: string };
@@ -78,11 +79,11 @@ function formatCurrency(value: number | string) {
     return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
 }
 
-const isSentOrApproved = (status: string) => status === 'sent' || status === 'Approved';
+const isInPremier = (variation: Pick<Variation, 'premier_co_id'>) => !!variation.premier_co_id;
 
 // ── Actions dropdown (desktop) ────────────────────────────────────────
 function VariationActions({ variation }: { variation: Variation }) {
-    const locked = isSentOrApproved(variation.status);
+    const locked = isInPremier(variation);
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -150,7 +151,7 @@ function VariationActions({ variation }: { variation: Variation }) {
 
 // ── Actions sheet (mobile) ────────────────────────────────────────────
 function VariationActionsMobile({ variation }: { variation: Variation }) {
-    const locked = isSentOrApproved(variation.status);
+    const locked = isInPremier(variation);
     return (
         <Sheet>
             <SheetTrigger asChild>
@@ -831,7 +832,7 @@ export default function VariationIndex() {
                         {reqs.length === 0 ? (
                             <VariationsEmpty hasFilters={totalActiveFilters > 0 || !!searchInput} onClear={clearAllFilters} />
                         ) : (
-                            <VariationCardsIndex filteredVariations={reqs} />
+                            <VariationCardsIndex filteredVariations={reqs} hideLocation={isLocationScoped} />
                         )}
                     </TabsContent>
                 </Tabs>

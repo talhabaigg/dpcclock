@@ -30,11 +30,13 @@ const SortableColumn = ({
     label,
     count,
     cards,
+    hideLocation = false,
 }: {
     id: string;
     label: string;
     count: number;
     cards: Variation[];
+    hideLocation?: boolean;
 }) => {
     const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition } = useSortable({ id });
 
@@ -75,7 +77,7 @@ const SortableColumn = ({
                         Empty
                     </div>
                 ) : (
-                    cards.map((variation) => <VariationCard key={variation.id} variation={variation} />)
+                    cards.map((variation) => <VariationCard key={variation.id} variation={variation} hideLocation={hideLocation} />)
                 )}
             </div>
         </div>
@@ -84,7 +86,7 @@ const SortableColumn = ({
 
 const STORAGE_KEY = 'variation-type-column-settings-v3';
 
-const VariationCardsIndex = ({ filteredVariations }: { filteredVariations: Variation[] }) => {
+const VariationCardsIndex = ({ filteredVariations, hideLocation = false }: { filteredVariations: Variation[]; hideLocation?: boolean }) => {
     const [columnOrder, setColumnOrder] = useState<string[]>(allLaneKeys);
 
     const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor));
@@ -140,6 +142,7 @@ const VariationCardsIndex = ({ filteredVariations }: { filteredVariations: Varia
                                     label={config.label}
                                     count={cards.length}
                                     cards={cards}
+                                    hideLocation={hideLocation}
                                 />
                             );
                         })}
