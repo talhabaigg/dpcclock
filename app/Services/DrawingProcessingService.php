@@ -41,6 +41,114 @@ class DrawingProcessingService
     }
 
     /**
+     * Probe a drawing's source for its native PDF user-space dimensions in points
+     * (1pt = 1/72in). For PDFs, Imagick at 72 DPI gives pixels-per-point = 1, so the
+     * pixel geometry equals the point geometry. For raster sources (PNG/JPG/TIFF),
+     * we treat the pixel dimensions as the coordinate basis since there's no
+     * intrinsic point size; this matches the OST coordinate convention used elsewhere.
+     *
+     * Returns [0, 0] if the source can't be located or probed.
+     *
+     * @return array{0: float, 1: float}
+     */
+    public function probePdfPointDimensions(Drawing $drawing): array
+    {
+        $source = $drawing->getFirstMedia('source');
+        if (! $source) {
+            return [0.0, 0.0];
+        }
+
+        $sourcePath = $this->resolveLocalSourcePath($source);
+        if (! $sourcePath) {
+            return [0.0, 0.0];
+        }
+
+        $ext = Str::lower(pathinfo($source->file_name, PATHINFO_EXTENSION));
+        $isPdf = $ext === 'pdf' || str_contains(strtolower($source->mime_type ?? ''), 'pdf');
+
+        if (! $isPdf) {
+            $dims = $this->probeImageDimensions($sourcePath);
+            return $dims ? [(float) $dims[0], (float) $dims[1]] : [0.0, 0.0];
+        }
+
+        if (extension_loaded('imagick')) {
+            try {
+                $imagick = new \Imagick;
+                $imagick->setResolution(72, 72);
+                $imagick->readImage($sourcePath.'[0]');
+                $w = (float) $imagick->getImageWidth();
+                $h = (float) $imagick->getImageHeight();
+                $imagick->clear();
+                $imagick->destroy();
+                if ($w > 0 && $h > 0) {
+                    return [$w, $h];
+                }
+            } catch (\Throwable $e) {
+                Log::debug('Imagick PDF point probe failed', [
+                    'drawing_id' => $drawing->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Fallback: parse `pdfinfo` output. Available alongside pdftoppm.
+        $pdfinfo = $this->findExecutable(['pdfinfo']);
+        if ($pdfinfo) {
+            $cmd = escapeshellarg($pdfinfo).' '.escapeshellarg($sourcePath);
+            exec($cmd.' 2>&1', $output, $returnCode);
+            if ($returnCode === 0) {
+                foreach ($output as $line) {
+                    if (preg_match('/^Page size:\s*([0-9.]+)\s*x\s*([0-9.]+)\s*pts/i', $line, $m)) {
+                        return [(float) $m[1], (float) $m[2]];
+                    }
+                }
+            }
+        }
+
+        // Fallback: ImageMagick CLI. `-density 72` makes pixel dims equal PDF points
+        // (1pt = 1/72in = 1px at 72dpi).
+        $magick = $this->findExecutable(['magick', 'identify']);
+        if ($magick) {
+            $isMagick7 = str_contains(strtolower(basename($magick)), 'magick');
+            $cmd = $isMagick7
+                ? escapeshellarg($magick).' identify -density 72 -format "%w %h" '.escapeshellarg($sourcePath.'[0]')
+                : escapeshellarg($magick).' -density 72 -format "%w %h" '.escapeshellarg($sourcePath.'[0]');
+            $out = [];
+            exec($cmd.' 2>&1', $out, $returnCode);
+            if ($returnCode === 0 && ! empty($out)) {
+                $parts = preg_split('/\s+/', trim((string) $out[0]));
+                if (is_array($parts) && count($parts) >= 2 && (float) $parts[0] > 0 && (float) $parts[1] > 0) {
+                    return [(float) $parts[0], (float) $parts[1]];
+                }
+            }
+        }
+
+        // Fallback: Ghostscript bbox device. Reports the bounding box in PDF points
+        // on stderr; the high-resolution `%%HiResBoundingBox` line is most accurate.
+        $gs = $this->findExecutable(['gs', 'gswin64c', 'gswin32c']);
+        if ($gs) {
+            $cmd = escapeshellarg($gs).' -dNOPAUSE -dBATCH -dQUIET -sDEVICE=bbox '
+                .'-dFirstPage=1 -dLastPage=1 '.escapeshellarg($sourcePath);
+            $out = [];
+            exec($cmd.' 2>&1', $out, $returnCode);
+            if ($returnCode === 0) {
+                foreach ($out as $line) {
+                    if (preg_match('/^%%HiResBoundingBox:\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/i', $line, $m)) {
+                        return [(float) $m[3] - (float) $m[1], (float) $m[4] - (float) $m[2]];
+                    }
+                }
+                foreach ($out as $line) {
+                    if (preg_match('/^%%BoundingBox:\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/i', $line, $m)) {
+                        return [(float) $m[3] - (float) $m[1], (float) $m[4] - (float) $m[2]];
+                    }
+                }
+            }
+        }
+
+        return [0.0, 0.0];
+    }
+
+    /**
      * Probe the source PDF/image for its native pixel dimensions and persist them.
      * These are used by DrawingMeasurementController for normalized→real coordinate math.
      * Renders the PDF at a fixed DPI so the values are reproducible.

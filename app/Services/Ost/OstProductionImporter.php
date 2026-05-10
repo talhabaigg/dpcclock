@@ -6,7 +6,7 @@ use App\Models\ConditionLabourCode;
 use App\Models\Drawing;
 use App\Models\DrawingMeasurement;
 use App\Models\LabourCostCode;
-use App\Models\MeasurementStatus;
+use App\Models\Location;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -18,11 +18,15 @@ class OstProductionImporter
     /**
      * Import object-level production progress from a CSV.
      *
-     * Natural key per row: (GUID, WorkDate, LccCode) — last write wins on the
+     * Natural key per row: (UID, WorkDate, LccCode) — last write wins on the
      * existing measurement_statuses unique (drawing_measurement_id,
-     * labour_cost_code_id, work_date). GUID is matched against
-     * drawing_measurements.ost_guid (stamped during takeoff import); LccCode
+     * labour_cost_code_id, work_date). UID is matched against
+     * drawing_measurements.ost_uid (stamped during takeoff import); LccCode
      * against labour_cost_codes.code within the drawing's project location.
+     *
+     * The CSV's `GUID` column is a per-measurement OST identifier that's
+     * unrelated to the condition-level `ost_guid` we store, so we ignore it
+     * for matching — `UID` is the per-measurement integer that lines up.
      *
      * Lookup is project-scoped (drawing.project_id) so one CSV can cover all
      * drawings in the project. The drawing argument is only used to resolve
@@ -32,26 +36,57 @@ class OstProductionImporter
      *   created: int,
      *   updated: int,
      *   skipped: int,
+     *   unmatched_guids: int,
+     *   sample_unmatched: array<int, string>,
+     *   missing_lcc_codes: array<int, array{code: string, count: int}>,
+     *   unconfigured_pairs: array<int, array{condition_id: int, condition_name: string, lcc_code: string, count: int}>,
      *   errors: array<int, string>,
      *   affected_dates: array<int, string>,
+     *   budget_sync_queued: bool,
      * }
      */
     public function import(Drawing $drawing, string $csvPath): array
+    {
+        $location = Location::findOrFail($drawing->project_id);
+
+        return $this->importProject($location, $csvPath);
+    }
+
+    /**
+     * Project-level entry point. Identical fan-out logic as `import()` — rows
+     * still match across every drawing in the project by `ost_guid` — but the
+     * caller passes the location directly so the UI doesn't need to pick a
+     * representative drawing.
+     *
+     * @return array{
+     *   created: int,
+     *   updated: int,
+     *   skipped: int,
+     *   unmatched_guids: int,
+     *   sample_unmatched: array<int, string>,
+     *   missing_lcc_codes: array<int, array{code: string, count: int}>,
+     *   unconfigured_pairs: array<int, array{condition_id: int, condition_name: string, lcc_code: string, count: int}>,
+     *   errors: array<int, string>,
+     *   affected_dates: array<int, string>,
+     *   budget_sync_queued: bool,
+     * }
+     */
+    public function importProject(Location $location, string $csvPath): array
     {
         if (! is_readable($csvPath)) {
             throw new RuntimeException("CSV file not readable: {$csvPath}");
         }
 
         $rows = $this->readCsv($csvPath);
-        $locationId = $drawing->project_id;
+        $locationId = $location->id;
 
-        // Pre-load every takeoff measurement in the project keyed by ost_guid.
-        // ost_guid is stored normalized (lowercase, no braces) by the takeoff importer.
+        // Pre-load every takeoff measurement in the project keyed by ost_uid.
+        // UID is per-measurement (integer), unique per measurement row.
         $projectDrawingIds = Drawing::where('project_id', $locationId)->pluck('id');
-        $measurementsByGuid = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
-            ->whereNotNull('ost_guid')
+        $measurementsByUid = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
+            ->whereNotNull('ost_uid')
             ->get()
-            ->keyBy('ost_guid');
+            ->keyBy(fn ($m) => (int) $m->ost_uid);
 
         // Pre-load LCCs for this location, keyed by code.
         $lccsByCode = LabourCostCode::where('location_id', $locationId)
@@ -60,7 +95,7 @@ class OstProductionImporter
 
         // Pre-load condition_labour_codes once so we can verify the (measurement, LCC)
         // pair without a DB hit per row.
-        $conditionIds = $measurementsByGuid->pluck('takeoff_condition_id')->filter()->unique()->all();
+        $conditionIds = $measurementsByUid->pluck('takeoff_condition_id')->filter()->unique()->all();
         $clcByConditionLcc = ConditionLabourCode::whereIn('takeoff_condition_id', $conditionIds)
             ->get()
             ->groupBy('takeoff_condition_id')
@@ -70,103 +105,172 @@ class OstProductionImporter
         $updated = 0;
         $skipped = 0;
         $errors = [];
+        $unmatchedUids = []; // distinct UIDs in CSV with no matching takeoff
+        $missingLccCodes = []; // distinct LCC codes referenced but absent from this location
+        $unconfiguredPairs = []; // (condition, lcc) pairs that aren't linked in condition_labour_codes
         $affectedDates = [];
 
-        DB::transaction(function () use (
-            $rows,
-            $measurementsByGuid,
-            $lccsByCode,
-            $clcByConditionLcc,
-            &$created,
-            &$updated,
-            &$skipped,
-            &$errors,
-            &$affectedDates,
-        ) {
-            foreach ($rows as $rowNum => $row) {
-                $guid = $this->normalizeGuid($row['GUID'] ?? null);
-                $lccCode = strtoupper(trim((string) ($row['LccCode'] ?? '')));
-                $workDate = $this->parseDate($row['WorkDate'] ?? null);
-                $percent = $this->parsePercent($row['PercentComplete'] ?? null);
+        // First pass: validate every row and collect the rows we'll actually upsert.
+        // No DB writes here so cheap to short-circuit on bad input. Each row
+        // becomes a flat array ready for `DB::table()->upsert()` so we can
+        // skip Eloquent's per-row overhead in the second pass.
+        $now = now();
+        $updatedBy = auth()->id();
+        $rowsToUpsert = [];
 
-                if (! $guid) {
-                    $errors[] = "Row {$rowNum}: missing GUID";
-                    $skipped++;
-                    continue;
-                }
-                if ($lccCode === '') {
-                    $errors[] = "Row {$rowNum}: missing LccCode";
-                    $skipped++;
-                    continue;
-                }
-                if (! $workDate) {
-                    $errors[] = "Row {$rowNum}: invalid WorkDate";
-                    $skipped++;
-                    continue;
-                }
-                if ($percent === null) {
-                    $errors[] = "Row {$rowNum}: PercentComplete must be 0-100";
-                    $skipped++;
-                    continue;
-                }
+        foreach ($rows as $rowNum => $row) {
+            $uidRaw = trim((string) ($row['UID'] ?? ''));
+            $uid = ($uidRaw !== '' && is_numeric($uidRaw)) ? (int) $uidRaw : null;
+            $lccCode = strtoupper(trim((string) ($row['LccCode'] ?? '')));
+            $workDate = $this->parseDate($row['WorkDate'] ?? null);
+            $percent = $this->parsePercent($row['PercentComplete'] ?? null);
 
-                $measurement = $measurementsByGuid->get($guid);
-                if (! $measurement) {
-                    $errors[] = "Row {$rowNum}: GUID {$guid} not found in takeoffs (re-import takeoff first)";
-                    $skipped++;
-                    continue;
-                }
+            if ($uid === null) {
+                $errors[] = "Row {$rowNum}: missing or non-numeric UID";
+                $skipped++;
+                continue;
+            }
+            if ($lccCode === '') {
+                $errors[] = "Row {$rowNum}: missing LccCode";
+                $skipped++;
+                continue;
+            }
+            if (! $workDate) {
+                $errors[] = "Row {$rowNum}: invalid WorkDate";
+                $skipped++;
+                continue;
+            }
+            if ($percent === null) {
+                $errors[] = "Row {$rowNum}: PercentComplete must be 0-100";
+                $skipped++;
+                continue;
+            }
 
-                $lcc = $lccsByCode->get($lccCode);
-                if (! $lcc) {
-                    $errors[] = "Row {$rowNum}: LccCode '{$lccCode}' not found in this location";
-                    $skipped++;
-                    continue;
-                }
+            $measurement = $measurementsByUid->get($uid);
+            if (! $measurement) {
+                // Orphan: takeoff exists in OST but not in dpcclock (e.g. drawing
+                // never uploaded). Tracked separately from real errors so the UI
+                // can present it as informational rather than destructive.
+                $unmatchedUids[$uid] = true;
+                $skipped++;
+                continue;
+            }
 
-                $allowedLccIds = $clcByConditionLcc->get($measurement->takeoff_condition_id, []);
-                if (! in_array($lcc->id, $allowedLccIds, true)) {
-                    $errors[] = "Row {$rowNum}: LccCode '{$lccCode}' is not configured on condition for GUID {$guid}";
-                    $skipped++;
-                    continue;
-                }
+            $lcc = $lccsByCode->get($lccCode);
+            if (! $lcc) {
+                // LCC code referenced by OST doesn't exist in this project's
+                // labour_cost_codes. Common when project setup hasn't seeded all
+                // OST codes yet. Group by code so the user sees one entry per
+                // missing code rather than one per row.
+                $missingLccCodes[$lccCode] = ($missingLccCodes[$lccCode] ?? 0) + 1;
+                $skipped++;
+                continue;
+            }
 
-                // Last-write-wins on the natural key. updateOrCreate returns
-                // wasRecentlyCreated so we can split the create/update counts.
-                $status = MeasurementStatus::updateOrCreate(
-                    [
-                        'drawing_measurement_id' => $measurement->id,
-                        'labour_cost_code_id' => $lcc->id,
-                        'work_date' => $workDate,
-                    ],
-                    [
-                        'percent_complete' => $percent,
-                        'updated_by' => auth()->id(),
-                    ]
+            $allowedLccIds = $clcByConditionLcc->get($measurement->takeoff_condition_id, []);
+            if (! in_array($lcc->id, $allowedLccIds, true)) {
+                // The condition has no link to this LCC in condition_labour_codes —
+                // typically because the conditions CSV import hasn't run for these
+                // conditions yet. Group by (condition, lcc) so the UI shows one
+                // entry per missing pair, not one per measurement.
+                $conditionId = $measurement->takeoff_condition_id ?? 0;
+                $key = $conditionId . '|' . $lcc->id;
+                if (! isset($unconfiguredPairs[$key])) {
+                    $unconfiguredPairs[$key] = [
+                        'condition_id' => $conditionId,
+                        'condition_name' => $measurement->condition?->name ?? '(unknown condition)',
+                        'lcc_code' => $lccCode,
+                        'count' => 0,
+                    ];
+                }
+                $unconfiguredPairs[$key]['count']++;
+                $skipped++;
+                continue;
+            }
+
+            $rowsToUpsert[] = [
+                'drawing_measurement_id' => $measurement->id,
+                'labour_cost_code_id' => $lcc->id,
+                'work_date' => $workDate,
+                'percent_complete' => $percent,
+                'updated_by' => $updatedBy,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+            $affectedDates[$workDate] = true;
+        }
+
+        // Pre-query existing keys so we can split created vs updated counts
+        // without per-row updateOrCreate overhead. We narrow with whereIn on
+        // (drawing_measurement_id, work_date) — over-fetches a bit (rows for the
+        // same drawing/date but a different LCC) but the lookup uses the full
+        // triple via the in-memory set so the count stays correct.
+        $measurementIds = array_unique(array_column($rowsToUpsert, 'drawing_measurement_id'));
+        $workDates = array_unique(array_column($rowsToUpsert, 'work_date'));
+        $existingKeySet = [];
+        if (! empty($rowsToUpsert)) {
+            $existingKeySet = DB::table('measurement_statuses')
+                ->whereIn('drawing_measurement_id', $measurementIds)
+                ->whereIn('work_date', $workDates)
+                ->get(['drawing_measurement_id', 'labour_cost_code_id', 'work_date'])
+                ->mapWithKeys(fn ($r) => ["{$r->drawing_measurement_id}|{$r->labour_cost_code_id}|{$r->work_date}" => true])
+                ->all();
+        }
+        foreach ($rowsToUpsert as $r) {
+            $key = "{$r['drawing_measurement_id']}|{$r['labour_cost_code_id']}|{$r['work_date']}";
+            if (isset($existingKeySet[$key])) {
+                $updated++;
+            } else {
+                $created++;
+            }
+        }
+
+        // Bulk upsert in chunks. ~30 queries for 14k rows instead of 28k+.
+        DB::transaction(function () use ($rowsToUpsert) {
+            foreach (array_chunk($rowsToUpsert, 500) as $chunk) {
+                DB::table('measurement_statuses')->upsert(
+                    $chunk,
+                    ['drawing_measurement_id', 'labour_cost_code_id', 'work_date'],
+                    ['percent_complete', 'updated_by', 'updated_at'],
                 );
-
-                if ($status->wasRecentlyCreated) {
-                    $created++;
-                } else {
-                    $updated++;
-                }
-                $affectedDates[$workDate] = true;
             }
         });
 
-        // Refresh BudgetHoursEntry.percent_complete for every affected date so
-        // the budget page reflects the new measurement_statuses. Without this,
-        // stale auto-written zeros mask the real measurement-derived percentages.
-        foreach (array_keys($affectedDates) as $date) {
-            $this->syncProductionToBudget($drawing, $date);
+        // Defer the BudgetHoursEntry recompute to a queue job. The
+        // measurement_statuses upsert above is what actually persists the
+        // production data; budget rows are a derived aggregation that the
+        // budget page can wait a few seconds for. Doing it inline blew past
+        // the request timeout on large imports because each date reloads
+        // 30k+ eager-loaded measurements.
+        $budgetSyncQueued = false;
+        if (! empty($affectedDates)) {
+            \App\Jobs\SyncProductionToBudgetJob::dispatch(
+                $locationId,
+                array_keys($affectedDates),
+                auth()->id(),
+            );
+            $budgetSyncQueued = true;
         }
+
+        // Sort unconfigured pairs by row count desc so the UI shows the
+        // highest-impact gaps first.
+        uasort($unconfiguredPairs, fn ($a, $b) => $b['count'] <=> $a['count']);
 
         return [
             'created' => $created,
             'updated' => $updated,
             'skipped' => $skipped,
+            'unmatched_guids' => count($unmatchedUids),
+            'sample_unmatched' => array_map('strval', array_slice(array_keys($unmatchedUids), 0, 5)),
+            'missing_lcc_codes' => array_map(
+                fn ($code, $count) => ['code' => $code, 'count' => $count],
+                array_keys($missingLccCodes),
+                array_values($missingLccCodes),
+            ),
+            'unconfigured_pairs' => array_values($unconfiguredPairs),
             'errors' => array_slice($errors, 0, 50),
             'affected_dates' => array_keys($affectedDates),
+            'budget_sync_queued' => $budgetSyncQueued,
         ];
     }
 
@@ -183,7 +287,7 @@ class OstProductionImporter
             throw new RuntimeException('CSV is empty or unreadable');
         }
 
-        $required = ['GUID', 'LccCode', 'WorkDate', 'PercentComplete'];
+        $required = ['UID', 'LccCode', 'WorkDate', 'PercentComplete'];
         $missing = array_diff($required, $header);
         if (! empty($missing)) {
             fclose($fh);
@@ -201,16 +305,6 @@ class OstProductionImporter
         fclose($fh);
 
         return $rows;
-    }
-
-    private function normalizeGuid(?string $raw): ?string
-    {
-        if ($raw === null) {
-            return null;
-        }
-        $g = trim($raw, " \t\n\r\0\x0B{}");
-
-        return $g === '' ? null : strtolower($g);
     }
 
     /** Accepts ISO (YYYY-MM-DD) or common locale formats. Returns YYYY-MM-DD or null. */

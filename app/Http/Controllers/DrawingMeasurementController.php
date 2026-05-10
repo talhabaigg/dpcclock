@@ -8,6 +8,7 @@ use App\Models\DrawingScaleCalibration;
 use App\Models\Variation;
 use App\Models\Location;
 use App\Http\Controllers\Traits\ProductionStatusTrait;
+use App\Services\DrawingProcessingService;
 use App\Services\Ost\OstConditionsImporter;
 use App\Services\Ost\OstProductionImporter;
 use App\Services\Ost\OstTakeoffImporter;
@@ -472,6 +473,69 @@ class DrawingMeasurementController extends Controller
     }
 
     /**
+     * Project-level OST takeoffs import. One CSV covers many drawings; rows are
+     * routed to drawings by matching `PageName` against `drawings.title` within
+     * the project. Per-drawing PDF dimensions are probed server-side rather than
+     * passed by the client.
+     */
+    public function importOstTakeoffsForProject(
+        Request $request,
+        Location $location,
+        OstTakeoffImporter $importer,
+        DrawingProcessingService $processing,
+    ) {
+        if (! $request->hasFile('csv')) {
+            return response()->json(['message' => 'No CSV file received in request.'], 422);
+        }
+        $file = $request->file('csv');
+        if (! $file->isValid()) {
+            return response()->json(['message' => 'Uploaded CSV is not a valid file. Error: ' . $file->getErrorMessage()], 422);
+        }
+        if ($file->getSize() > 50 * 1024 * 1024) {
+            return response()->json(['message' => 'CSV exceeds 50 MB limit.'], 422);
+        }
+
+        // Probing PDFs is slow (one Imagick load per drawing) and a many-drawing
+        // import can blow past the default 30s.
+        set_time_limit(600);
+
+        try {
+            $result = $importer->importProject(
+                $location,
+                $file->getRealPath(),
+                fn (Drawing $d) => $processing->probePdfPointDimensions($d),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Project-level OST production import. One CSV updates progress across every
+     * drawing in the project — rows are routed to measurements by `ost_guid`,
+     * which is project-scoped already, so no PageName matching is needed here.
+     */
+    public function importOstProductionForProject(Request $request, Location $location, OstProductionImporter $importer)
+    {
+        $request->validate([
+            'csv' => 'required|file|max:10240',
+        ]);
+
+        // Bulk upserts + per-date budget sync can run long for large imports.
+        set_time_limit(600);
+
+        try {
+            $result = $importer->importProject($location, $request->file('csv')->getRealPath());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
      * Import condition pricing/line items from an OST conditions CSV. Replaces
      * line items per matched condition (by name within the drawing's location).
      */
@@ -503,11 +567,13 @@ class DrawingMeasurementController extends Controller
             'takeoff' => [
                 'filename' => 'ost-takeoff-template.csv',
                 'headers' => [
-                    'BidConditionUID', 'GUID', 'UID', 'No', 'ConditionName', 'ConditionType',
-                    'Kind', 'CondUOM', 'AreaName', 'LayerName', 'Position', 'Curve',
+                    'SheetNo', 'PageName', 'PageUID', 'BidConditionUID', 'GUID', 'UID', 'No',
+                    'ConditionName', 'ConditionType', 'Kind', 'CondUOM', 'AreaName', 'LayerName',
+                    'Position', 'Curve',
                 ],
                 'example' => [
-                    '12345', '{623EAC83-C6F7-4F9B-B966-B2F9C257937A}', '28570', '28570',
+                    '00100', 'A-100 Ground Floor Plan', '3559', '12345',
+                    '{623EAC83-C6F7-4F9B-B966-B2F9C257937A}', '28570', '28570',
                     '01-100-A - Stud Wall 92mm', 'Internal Walls', 'Linear', 'LM',
                     'Level 1', 'A-WALL', '100,200;500,200;500,800', '0',
                 ],
@@ -525,6 +591,8 @@ class DrawingMeasurementController extends Controller
             ],
             'production' => [
                 'filename' => 'ost-production-template.csv',
+                // UID is the per-measurement identifier used to match rows; GUID is
+                // included only because OST's exporter writes it, and is ignored.
                 'headers' => ['GUID', 'UID', 'LccCode', 'WorkDate', 'PercentComplete'],
                 'example' => [
                     '{623EAC83-C6F7-4F9B-B966-B2F9C257937A}', '28570',

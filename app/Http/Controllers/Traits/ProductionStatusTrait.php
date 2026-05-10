@@ -246,14 +246,20 @@ trait ProductionStatusTrait
     /**
      * Sync aggregated production percent_complete to budget_hours_entries for a work date.
      * Computes weighted avg percent per (bid_area, LCC) from all project measurements and writes to budget table.
+     *
+     * Pass `$preloadedMeasurements` when calling in a tight loop (e.g. bulk
+     * import) to avoid reloading the 30k+ eager-loaded measurements per call.
      */
-    protected function syncProductionToBudget(Drawing $drawing, string $workDate): void
+    protected function syncProductionToBudget(Drawing $drawing, string $workDate, ?\Illuminate\Support\Collection $preloadedMeasurements = null): void
     {
-        $projectDrawingIds = Drawing::where('project_id', $drawing->project_id)->pluck('id');
-
-        $measurements = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
-            ->with(['condition.conditionLabourCodes.labourCostCode'])
-            ->get();
+        if ($preloadedMeasurements !== null) {
+            $measurements = $preloadedMeasurements;
+        } else {
+            $projectDrawingIds = Drawing::where('project_id', $drawing->project_id)->pluck('id');
+            $measurements = DrawingMeasurement::whereIn('drawing_id', $projectDrawingIds)
+                ->with(['condition.conditionLabourCodes.labourCostCode'])
+                ->get();
+        }
 
         $statuses = $this->buildStatusesForDate($measurements->pluck('id'), $workDate);
 
