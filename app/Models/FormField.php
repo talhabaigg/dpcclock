@@ -16,6 +16,7 @@ class FormField extends Model
         'options',
         'placeholder',
         'help_text',
+        'default_value',
     ];
 
     protected function casts(): array

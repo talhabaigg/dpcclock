@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -20,6 +21,7 @@ import { Head, router } from '@inertiajs/react';
 import {
     AlertCircle,
     AlignLeft,
+    Braces,
     Calendar,
     ChevronDown,
     ChevronRight,
@@ -34,11 +36,12 @@ import {
     Mail,
     Phone,
     Plus,
+    Search,
     Trash2,
     Type,
     XCircle,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,6 +53,14 @@ interface FieldItem {
     options: string[];
     placeholder: string;
     help_text: string;
+    default_value: string;
+}
+
+interface PlaceholderToken {
+    token: string;
+    label: string;
+    sample: string;
+    group: string;
 }
 
 interface Template {
@@ -109,12 +120,117 @@ function getFieldMeta(type: string) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function emptyField(): FieldItem {
-    return { label: '', type: 'text', is_required: false, options: [], placeholder: '', help_text: '' };
+    return { label: '', type: 'text', is_required: false, options: [], placeholder: '', help_text: '', default_value: '' };
 }
 
 /** Generate a stable sort key for each field based on its index (used by dnd-kit). */
 function fieldSortId(index: number) {
     return `field-${index}`;
+}
+
+// ─── Placeholder Picker ──────────────────────────────────────────────────────
+
+interface PlaceholderPickerProps {
+    tokens: PlaceholderToken[];
+    onInsert: (token: string) => void;
+}
+
+function PlaceholderPicker({ tokens, onInsert }: PlaceholderPickerProps) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return tokens;
+        return tokens.filter(
+            (t) => t.token.toLowerCase().includes(q) || t.label.toLowerCase().includes(q) || t.sample.toLowerCase().includes(q),
+        );
+    }, [tokens, search]);
+
+    const grouped = useMemo(() => {
+        const groups: Record<string, PlaceholderToken[]> = {};
+        for (const t of filtered) {
+            (groups[t.group] ??= []).push(t);
+        }
+        return groups;
+    }, [filtered]);
+
+    if (tokens.length === 0) return null;
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    aria-label="Insert placeholder"
+                >
+                    <Braces className="h-3 w-3" />
+                    Insert placeholder
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-0">
+                <div className="border-b p-2">
+                    <div className="relative">
+                        <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search placeholders..."
+                            className="h-8 pl-7 text-sm"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+                <div className="max-h-72 overflow-y-auto py-1">
+                    {Object.keys(grouped).length === 0 ? (
+                        <p className="px-3 py-4 text-xs text-muted-foreground">No matches.</p>
+                    ) : (
+                        Object.entries(grouped).map(([group, items]) => (
+                            <div key={group} className="px-1 py-1">
+                                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                    {group}
+                                </div>
+                                {items.map((t) => (
+                                    <button
+                                        key={t.token}
+                                        type="button"
+                                        onClick={() => {
+                                            onInsert(t.token);
+                                            setOpen(false);
+                                            setSearch('');
+                                        }}
+                                        className="flex w-full items-start justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-muted"
+                                    >
+                                        <span className="flex flex-col items-start">
+                                            <span className="font-medium">{t.label}</span>
+                                            <code className="text-[10px] text-muted-foreground">{`{{${t.token}}}`}</code>
+                                        </span>
+                                        <span className="shrink-0 text-[10px] text-muted-foreground/70">{t.sample}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function resolvePreview(template: string, tokens: PlaceholderToken[]): { preview: string; unknown: string[] } {
+    if (!template) return { preview: '', unknown: [] };
+    const sampleMap = Object.fromEntries(tokens.map((t) => [t.token, t.sample]));
+    const known = new Set(tokens.map((t) => t.token));
+    const unknown: string[] = [];
+    const preview = template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, token) => {
+        if (!known.has(token)) {
+            unknown.push(token);
+            return `{{${token}}}`;
+        }
+        return sampleMap[token] ?? '';
+    });
+    return { preview, unknown: Array.from(new Set(unknown)) };
 }
 
 // ─── Sortable Field Card ─────────────────────────────────────────────────────
@@ -124,6 +240,7 @@ interface SortableFieldCardProps {
     index: number;
     totalFields: number;
     isOpen: boolean;
+    tokens: PlaceholderToken[];
     onToggle: (index: number) => void;
     onUpdate: (index: number, updates: Partial<FieldItem>) => void;
     onRemove: (index: number) => void;
@@ -138,6 +255,7 @@ function SortableFieldCard({
     index,
     totalFields,
     isOpen,
+    tokens,
     onToggle,
     onUpdate,
     onRemove,
@@ -146,6 +264,35 @@ function SortableFieldCard({
     onUpdateOption,
     onRemoveOption,
 }: SortableFieldCardProps) {
+    const defaultValueRef = useRef<HTMLInputElement>(null);
+    const labelRef = useRef<HTMLTextAreaElement>(null);
+
+    function insertAtCursor(
+        ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
+        currentValue: string,
+        token: string,
+        onChange: (next: string) => void,
+    ) {
+        const el = ref.current;
+        const tokenStr = `{{${token}}}`;
+        if (!el) {
+            onChange(currentValue + tokenStr);
+            return;
+        }
+        const start = el.selectionStart ?? currentValue.length;
+        const end = el.selectionEnd ?? currentValue.length;
+        const next = currentValue.slice(0, start) + tokenStr + currentValue.slice(end);
+        onChange(next);
+        setTimeout(() => {
+            el.focus();
+            const caret = start + tokenStr.length;
+            el.setSelectionRange(caret, caret);
+        }, 0);
+    }
+
+    const defaultPreview = useMemo(() => resolvePreview(field.default_value, tokens), [field.default_value, tokens]);
+    const labelPreview = useMemo(() => resolvePreview(field.label, tokens), [field.label, tokens]);
+
     const sortId = fieldSortId(index);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortId });
 
@@ -311,32 +458,48 @@ function SortableFieldCard({
 
                                 {/* Label */}
                                 <div>
-                                    <div className="mb-1 flex items-center justify-between">
+                                    <div className="mb-1 flex items-center justify-between gap-2">
                                         <Label className="text-xs text-muted-foreground">
                                             {isDisplay ? (field.type === 'heading' ? 'Heading Text' : 'Paragraph Text') : 'Label'}
                                         </Label>
-                                        <span className={`text-[10px] tabular-nums ${field.label.length > 1000 ? 'text-red-500' : 'text-muted-foreground/60'}`}>
-                                            {field.label.length}/1000
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {isDisplay && (
+                                                <PlaceholderPicker
+                                                    tokens={tokens}
+                                                    onInsert={(t) =>
+                                                        insertAtCursor(labelRef, field.label, t, (next) => onUpdate(index, { label: next }))
+                                                    }
+                                                />
+                                            )}
+                                            <span className={`text-[10px] tabular-nums ${field.label.length > 1000 ? 'text-red-500' : 'text-muted-foreground/60'}`}>
+                                                {field.label.length}/1000
+                                            </span>
+                                        </div>
                                     </div>
-                                    {field.type === 'paragraph' ? (
-                                        <Textarea
-                                            value={field.label}
-                                            onChange={(e) => onUpdate(index, { label: e.target.value })}
-                                            placeholder="Enter informational text..."
-                                            className="min-h-[36px] resize-y text-sm"
-                                            maxLength={1000}
-                                            rows={2}
-                                        />
-                                    ) : (
-                                        <Textarea
-                                            value={field.label}
-                                            onChange={(e) => onUpdate(index, { label: e.target.value })}
-                                            placeholder={field.type === 'heading' ? 'Section title' : 'Field label'}
-                                            className="min-h-[36px] resize-y text-sm"
-                                            maxLength={1000}
-                                            rows={1}
-                                        />
+                                    <Textarea
+                                        ref={labelRef}
+                                        value={field.label}
+                                        onChange={(e) => onUpdate(index, { label: e.target.value })}
+                                        placeholder={
+                                            field.type === 'paragraph'
+                                                ? 'Enter informational text...'
+                                                : field.type === 'heading'
+                                                  ? 'Section title'
+                                                  : 'Field label'
+                                        }
+                                        className="min-h-[36px] resize-y text-sm"
+                                        maxLength={1000}
+                                        rows={field.type === 'paragraph' ? 2 : 1}
+                                    />
+                                    {isDisplay && labelPreview.preview && labelPreview.preview !== field.label && (
+                                        <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                                            <span className="font-medium text-foreground/70">Preview:</span> {labelPreview.preview}
+                                        </div>
+                                    )}
+                                    {isDisplay && labelPreview.unknown.length > 0 && (
+                                        <p className="mt-1 text-[11px] text-red-500">
+                                            Unknown placeholder{labelPreview.unknown.length > 1 ? 's' : ''}: {labelPreview.unknown.map((t) => `{{${t}}}`).join(', ')}
+                                        </p>
                                     )}
                                 </div>
 
@@ -361,6 +524,59 @@ function SortableFieldCard({
                                             value={field.help_text}
                                             onChange={(e) => onUpdate(index, { help_text: e.target.value })}
                                             placeholder="Help text (optional)"
+                                            className="h-9 text-sm"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Default value with placeholder support (input types only, not option-based) */}
+                                {!isDisplay && !hasOptions && (
+                                    <div>
+                                        <div className="mb-1 flex items-center justify-between gap-2">
+                                            <Label className="text-xs text-muted-foreground">Default value</Label>
+                                            <PlaceholderPicker
+                                                tokens={tokens}
+                                                onInsert={(t) =>
+                                                    insertAtCursor(defaultValueRef, field.default_value, t, (next) =>
+                                                        onUpdate(index, { default_value: next }),
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <Input
+                                            ref={defaultValueRef}
+                                            value={field.default_value}
+                                            onChange={(e) => onUpdate(index, { default_value: e.target.value })}
+                                            placeholder='Optional. Use {{token}} to pull from the application.'
+                                            className="h-9 text-sm"
+                                        />
+                                        {defaultPreview.preview && defaultPreview.preview !== field.default_value && (
+                                            <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                                                <span className="font-medium text-foreground/70">Preview:</span> {defaultPreview.preview}
+                                            </div>
+                                        )}
+                                        {defaultPreview.unknown.length > 0 && (
+                                            <p className="mt-1 text-[11px] text-red-500">
+                                                Unknown placeholder{defaultPreview.unknown.length > 1 ? 's' : ''}: {defaultPreview.unknown.map((t) => `{{${t}}}`).join(', ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Default option (select/radio/checkbox) */}
+                                {!isDisplay && hasOptions && (
+                                    <div>
+                                        <Label className="mb-1 text-xs text-muted-foreground">
+                                            Default {field.type === 'checkbox' ? 'options (comma separated)' : 'option'}
+                                        </Label>
+                                        <Input
+                                            value={field.default_value}
+                                            onChange={(e) => onUpdate(index, { default_value: e.target.value })}
+                                            placeholder={
+                                                field.type === 'checkbox'
+                                                    ? 'e.g. Option 1, Option 2'
+                                                    : 'Must exactly match one of the options above'
+                                            }
                                             className="h-9 text-sm"
                                         />
                                     </div>
@@ -518,7 +734,7 @@ export default function FormTemplateForm({ template }: PageProps) {
         template?.model_type === 'App\\Models\\EmploymentApplication' ? 'employment_application' : '',
     );
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
-    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '' })) : [emptyField()]);
+    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '' })) : [emptyField()]);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [openFields, setOpenFields] = useState<Record<number, boolean>>(() => {
@@ -526,6 +742,23 @@ export default function FormTemplateForm({ template }: PageProps) {
         (template?.fields?.length ? template.fields : [emptyField()]).forEach((_, i) => { init[i] = true; });
         return init;
     });
+    const [tokens, setTokens] = useState<PlaceholderToken[]>([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const url = route('form-templates.placeholders') + (modelType ? `?model_type=${encodeURIComponent(modelType)}` : '');
+        fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            .then((r) => (r.ok ? r.json() : { tokens: [] }))
+            .then((data) => {
+                if (!cancelled) setTokens(data.tokens ?? []);
+            })
+            .catch(() => {
+                if (!cancelled) setTokens([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [modelType]);
 
     function toggleField(index: number) {
         setOpenFields((prev) => ({ ...prev, [index]: !prev[index] }));
@@ -651,6 +884,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                 options: TYPES_WITH_OPTIONS.includes(f.type) ? (f.options ?? []).filter((o) => o?.trim()) : null,
                 placeholder: (f.placeholder ?? '').trim() || null,
                 help_text: (f.help_text ?? '').trim() || null,
+                default_value: (f.default_value ?? '').trim() || null,
             })),
         };
 
@@ -848,6 +1082,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     index={index}
                                                     totalFields={fields.length}
                                                     isOpen={openFields[index] ?? true}
+                                                    tokens={tokens}
                                                     onToggle={toggleField}
                                                     onUpdate={updateField}
                                                     onRemove={removeField}

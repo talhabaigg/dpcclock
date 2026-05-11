@@ -13,6 +13,7 @@ use App\Models\EmploymentApplication;
 use App\Models\Location;
 use App\Models\Skill;
 use App\Models\WorkerScreening;
+use App\Services\ApplicationPhaseFormService;
 use App\Services\EmploymentHeroService;
 use App\Services\GetCompanyCodeService;
 use Illuminate\Http\RedirectResponse;
@@ -447,8 +448,11 @@ class EmploymentApplicationController extends Controller
     /**
      * Update application status.
      */
-    public function updateStatus(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
-    {
+    public function updateStatus(
+        Request $request,
+        EmploymentApplication $employmentApplication,
+        ApplicationPhaseFormService $phaseFormService,
+    ): RedirectResponse {
         $request->validate([
             'status' => ['required', 'string', 'in:' . implode(',', EmploymentApplication::STATUSES)],
         ]);
@@ -498,6 +502,14 @@ class EmploymentApplicationController extends Controller
 
         $oldStatus = $employmentApplication->status;
 
+        // Gate: block forward transitions if required phase forms on the
+        // current status haven't been submitted yet.
+        $blockers = $phaseFormService->blockersForLeaving($employmentApplication, $oldStatus);
+        if (! empty($blockers)) {
+            $list = implode(', ', $blockers);
+            return back()->withErrors(['status' => "Cannot move on: required form(s) not yet submitted — {$list}"]);
+        }
+
         $employmentApplication->update([
             'status' => $newStatus,
             // Clear declined fields if reopening
@@ -510,6 +522,8 @@ class EmploymentApplicationController extends Controller
             "Changed status from **{$oldStatus}** to **{$newStatus}**",
             ['status_change' => ['from' => $oldStatus, 'to' => $newStatus]],
         );
+
+        $phaseFormService->dispatchFormsFor($employmentApplication, $newStatus, $request->user());
 
         return back();
     }

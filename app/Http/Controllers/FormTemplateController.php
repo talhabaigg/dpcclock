@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\FormTemplate;
+use App\Services\FormPlaceholderResolver;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -26,6 +28,47 @@ class FormTemplateController extends Controller
         ]);
     }
 
+    /**
+     * Return the available placeholder tokens for a given model_type. Used by
+     * the form-builder token picker.
+     */
+    public function placeholders(Request $request, FormPlaceholderResolver $resolver): JsonResponse
+    {
+        $request->validate([
+            'model_type' => 'nullable|string',
+        ]);
+
+        $modelClass = $this->resolveModelType($request->input('model_type'));
+
+        $definitions = $resolver->definitionsFor($modelClass);
+        $samples = $resolver->samplesFor($modelClass);
+
+        $tokens = [];
+        foreach ($definitions as $token => $label) {
+            $tokens[] = [
+                'token' => $token,
+                'label' => $label,
+                'sample' => $samples[$token] ?? '',
+                'group' => $this->tokenGroup($token),
+            ];
+        }
+
+        return response()->json(['tokens' => $tokens]);
+    }
+
+    private function tokenGroup(string $token): string
+    {
+        $prefix = explode('.', $token)[0] ?? 'other';
+
+        return match ($prefix) {
+            'applicant' => 'Applicant',
+            'application' => 'Application',
+            'current_user' => 'Form filler',
+            'today', 'now' => 'Date & time',
+            default => 'Other',
+        };
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -41,8 +84,12 @@ class FormTemplateController extends Controller
             'fields.*.options' => 'nullable|array',
             'fields.*.placeholder' => 'nullable|string|max:255',
             'fields.*.help_text' => 'nullable|string|max:500',
+            'fields.*.default_value' => 'nullable|string|max:1000',
         ]);
 
+        $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
+
+        // Continue with creation
         $template = FormTemplate::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -61,6 +108,7 @@ class FormTemplateController extends Controller
                 'options' => $field['options'] ?? null,
                 'placeholder' => $field['placeholder'] ?? null,
                 'help_text' => $field['help_text'] ?? null,
+                'default_value' => $field['default_value'] ?? null,
             ]);
         }
 
@@ -92,7 +140,10 @@ class FormTemplateController extends Controller
             'fields.*.options' => 'nullable|array',
             'fields.*.placeholder' => 'nullable|string|max:255',
             'fields.*.help_text' => 'nullable|string|max:500',
+            'fields.*.default_value' => 'nullable|string|max:1000',
         ]);
+
+        $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
 
         $formTemplate->update([
             'name' => $validated['name'],
@@ -117,6 +168,7 @@ class FormTemplateController extends Controller
                     'options' => $field['options'] ?? null,
                     'placeholder' => $field['placeholder'] ?? null,
                     'help_text' => $field['help_text'] ?? null,
+                    'default_value' => $field['default_value'] ?? null,
                 ]);
             } else {
                 $formTemplate->fields()->create([
@@ -127,6 +179,7 @@ class FormTemplateController extends Controller
                     'options' => $field['options'] ?? null,
                     'placeholder' => $field['placeholder'] ?? null,
                     'help_text' => $field['help_text'] ?? null,
+                    'default_value' => $field['default_value'] ?? null,
                 ]);
             }
         }
@@ -145,7 +198,34 @@ class FormTemplateController extends Controller
     {
         return match ($value) {
             'employment_application' => \App\Models\EmploymentApplication::class,
+            \App\Models\EmploymentApplication::class => \App\Models\EmploymentApplication::class,
             default => null,
         };
+    }
+
+    /**
+     * Reject the save if any placeholder token in default_value / label /
+     * placeholder isn't registered for the template's model_type.
+     */
+    private function validatePlaceholderTokens(array $validated, FormPlaceholderResolver $resolver): void
+    {
+        $modelClass = $this->resolveModelType($validated['model_type'] ?? null);
+        $available = array_keys($resolver->definitionsFor($modelClass));
+
+        $unknown = [];
+        foreach ($validated['fields'] ?? [] as $i => $field) {
+            foreach (['label', 'placeholder', 'default_value'] as $attr) {
+                $value = $field[$attr] ?? null;
+                foreach ($resolver->extractTokens($value) as $token) {
+                    if (! in_array($token, $available, true)) {
+                        $unknown["fields.{$i}.{$attr}"] = "Unknown placeholder token: {{ {$token} }}";
+                    }
+                }
+            }
+        }
+
+        if (! empty($unknown)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($unknown);
+        }
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FormRequest;
+use App\Services\FormPlaceholderResolver;
 use App\Services\FormService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -11,6 +12,7 @@ class FormRequestController extends Controller
 {
     public function __construct(
         private FormService $formService,
+        private FormPlaceholderResolver $placeholderResolver,
     ) {}
 
     // ─── Public actions (token-based, no auth) ───────────────
@@ -52,13 +54,32 @@ class FormRequestController extends Controller
                 ->get();
         }
 
+        $fields = $this->resolveFieldPlaceholders(
+            $formRequest->formTemplate->fields,
+            $formRequest->formable,
+        );
+
         return view('forms.fill', [
             'formRequest' => $formRequest,
-            'fields' => $formRequest->formTemplate->fields,
+            'fields' => $fields,
             'token' => $token,
             'pendingDocuments' => $pendingDocuments,
             'pendingForms' => $pendingForms,
         ]);
+    }
+
+    /**
+     * Interpolate placeholder tokens in each field's display strings against
+     * the parent formable. Returns the same collection with `label`,
+     * `default_value`, and `placeholder` resolved.
+     */
+    private function resolveFieldPlaceholders($fields, ?\Illuminate\Database\Eloquent\Model $formable)
+    {
+        return $fields->each(function ($field) use ($formable) {
+            $field->label = $this->placeholderResolver->interpolate($field->label, $formable);
+            $field->placeholder = $this->placeholderResolver->interpolate($field->placeholder, $formable);
+            $field->default_value = $this->placeholderResolver->interpolate($field->default_value, $formable);
+        });
     }
 
     public function submit(string $token, Request $request)

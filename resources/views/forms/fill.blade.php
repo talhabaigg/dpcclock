@@ -128,35 +128,45 @@
                                     @endif
                                 </label>
 
+                                @php
+                                    $defaultValue = $field->default_value ?? '';
+                                    $defaultArray = array_filter(array_map('trim', explode(',', $defaultValue)), fn ($v) => $v !== '');
+                                @endphp
+
                                 @if($field->type === 'text')
                                     <input type="text" id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         placeholder="{{ $field->placeholder }}"
+                                        value="{{ $defaultValue }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                 @elseif($field->type === 'email')
                                     <input type="email" id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         placeholder="{{ $field->placeholder }}"
+                                        value="{{ $defaultValue }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                 @elseif($field->type === 'number')
                                     <input type="number" id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         placeholder="{{ $field->placeholder }}"
+                                        value="{{ $defaultValue }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                 @elseif($field->type === 'phone')
                                     <input type="tel" id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         placeholder="{{ $field->placeholder }}"
+                                        value="{{ $defaultValue }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                 @elseif($field->type === 'date')
                                     <input type="date" id="field_{{ $field->id }}" name="field_{{ $field->id }}"
+                                        value="{{ $defaultValue }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                 @elseif($field->type === 'textarea')
                                     <textarea id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         placeholder="{{ $field->placeholder }}"
-                                        {{ $field->is_required ? 'required' : '' }}></textarea>
+                                        {{ $field->is_required ? 'required' : '' }}>{{ $defaultValue }}</textarea>
                                 @elseif($field->type === 'select')
                                     <select id="field_{{ $field->id }}" name="field_{{ $field->id }}"
                                         {{ $field->is_required ? 'required' : '' }}>
                                         <option value="">Select an option</option>
                                         @foreach($field->options ?? [] as $option)
-                                            <option value="{{ $option }}">{{ $option }}</option>
+                                            <option value="{{ $option }}" {{ $option === $defaultValue ? 'selected' : '' }}>{{ $option }}</option>
                                         @endforeach
                                     </select>
                                 @elseif($field->type === 'radio')
@@ -164,6 +174,7 @@
                                         @foreach($field->options ?? [] as $option)
                                             <label class="option-item">
                                                 <input type="radio" name="field_{{ $field->id }}" value="{{ $option }}"
+                                                    {{ $option === $defaultValue ? 'checked' : '' }}
                                                     {{ $field->is_required ? 'required' : '' }}>
                                                 {{ $option }}
                                             </label>
@@ -173,7 +184,8 @@
                                     <div class="option-list">
                                         @foreach($field->options ?? [] as $option)
                                             <label class="option-item">
-                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option }}">
+                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option }}"
+                                                    {{ in_array($option, $defaultArray, true) ? 'checked' : '' }}>
                                                 {{ $option }}
                                             </label>
                                         @endforeach
