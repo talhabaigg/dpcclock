@@ -376,6 +376,8 @@ function renderIncomeTable(d: ManagementReportData): string {
         { label: 'Remaining Balance', data: d.projectIncomeData.remainingBalance },
     ];
 
+    const markupPct = (cost: number, profit: number) => (cost > 0 ? (profit / cost) * 100 : 0);
+
     return `
     <div class="section-title">Project Income Summary</div>
     <table class="data">
@@ -384,8 +386,8 @@ function renderIncomeTable(d: ManagementReportData): string {
                 <th>Period</th>
                 <th>Income</th>
                 <th>Cost</th>
-                <th>Profit</th>
-                <th>Margin %</th>
+                <th>Markup</th>
+                <th>Markup %</th>
             </tr>
         </thead>
         <tbody>
@@ -395,7 +397,7 @@ function renderIncomeTable(d: ManagementReportData): string {
                     <td>${$(r.data.income)}</td>
                     <td>${$(r.data.cost)}</td>
                     <td>${$(r.data.profit)}</td>
-                    <td>${pct(r.data.profitPercent)}</td>
+                    <td>${pct(markupPct(n(r.data.cost), n(r.data.profit)))}</td>
                 </tr>`).join('')}
         </tbody>
     </table>`;

@@ -49,6 +49,8 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
         return { income: data.thisMonth.income, cost, profit, profitPercent };
     }, [data.thisMonth, canIncludeCommitments, includeCommitments, poCommitments]);
 
+    const markupPct = (row: IncomeRow) => (row.cost > 0 ? (row.profit / row.cost) * 100 : 0);
+
     return (
         <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
             <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
@@ -64,8 +66,8 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                 <th className="text-left py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b"></th>
                                 <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Income</th>
                                 <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Cost</th>
-                                <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Profit</th>
-                                <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Profit %</th>
+                                <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Markup</th>
+                                <th className="text-right py-1 px-2 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground border-b">Markup %</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -79,7 +81,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.originalContractSum.income)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.originalContractSum.cost)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.originalContractSum.profit)}</td>
-                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(data.originalContractSum.profitPercent)}</td>
+                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(markupPct(data.originalContractSum))}</td>
                             </tr>
                             <tr className="border-b bg-muted/15 hover:bg-muted/30 transition-colors">
                                 <td className="py-1 px-2 font-medium">
@@ -91,7 +93,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.currentContractSum.income)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.currentContractSum.cost)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums">{formatCurrency(data.currentContractSum.profit)}</td>
-                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(data.currentContractSum.profitPercent)}</td>
+                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(markupPct(data.currentContractSum))}</td>
                             </tr>
                             <tr className="border-b hover:bg-muted/30 transition-colors">
                                 <td className="py-1 px-2 font-medium">
@@ -131,7 +133,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                     {hasNoClaimThisMonth ? (
                                         <span className="text-muted-foreground">-</span>
                                     ) : (
-                                        formatPercent(thisMonth.profitPercent)
+                                        formatPercent(markupPct(thisMonth))
                                     )}
                                 </td>
                             </tr>
@@ -152,7 +154,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                     {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatCurrency(data.previousMonth.profit)}
                                 </td>
                                 <td className="text-right py-1 px-2 tabular-nums">
-                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatPercent(data.previousMonth.profitPercent)}
+                                    {hasNoPrevMonth ? <span className="text-muted-foreground">-</span> : formatPercent(markupPct(data.previousMonth))}
                                 </td>
                             </tr>
                             <tr className="border-b hover:bg-muted/30 transition-colors">
@@ -170,7 +172,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                 )}>
                                     {formatCurrency(data.projectToDate.profit)}
                                 </td>
-                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(data.projectToDate.profitPercent)}</td>
+                                <td className="text-right py-1 px-2 tabular-nums">{formatPercent(markupPct(data.projectToDate))}</td>
                             </tr>
                         </tbody>
                         <tfoot>
@@ -184,7 +186,7 @@ export default function ProjectIncomeCard({ data, isEditing, asOfDate, poCommitm
                                 <td className="text-right py-1 px-2 tabular-nums font-bold">{formatCurrency(data.remainingBalance.income)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums font-bold">{formatCurrency(data.remainingBalance.cost)}</td>
                                 <td className="text-right py-1 px-2 tabular-nums font-bold">{formatCurrency(data.remainingBalance.profit)}</td>
-                                <td className="text-right py-1 px-2 tabular-nums font-bold">{formatPercent(data.remainingBalance.profitPercent)}</td>
+                                <td className="text-right py-1 px-2 tabular-nums font-bold">{formatPercent(markupPct(data.remainingBalance))}</td>
                             </tr>
                         </tfoot>
                     </table>
