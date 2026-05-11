@@ -22,6 +22,10 @@ class SafetyDashboardController extends Controller
             'currentMonth' => $request->filled('month') ? (int) $request->month : $now->month,
             'currentYear' => $request->filled('year') ? (int) $request->year : $now->year,
             'totalRecords' => Injury::count(),
+            'activeWcqCount' => Injury::where('claim_status', 'active')->count(),
+            'activeCommonLawCount' => Injury::where('claim_status', 'active')
+                ->where('claim_type', 'common_law')
+                ->count(),
         ]);
     }
 
@@ -255,6 +259,7 @@ class SafetyDashboardController extends Controller
                 'injuries' => 0,
                 'lti' => 0,
                 'near_miss' => 0,
+                'wcq' => 0,
             ];
             $cursor->addMonth();
         }
@@ -267,6 +272,9 @@ class SafetyDashboardController extends Controller
                 }
                 if ($injury->incident === 'near_miss') {
                     $trend[$key]['near_miss']++;
+                }
+                if ($injury->work_cover_claim) {
+                    $trend[$key]['wcq']++;
                 }
             }
         }

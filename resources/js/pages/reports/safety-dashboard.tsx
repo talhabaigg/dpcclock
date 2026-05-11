@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, Printer, ShieldAlert, Activity, Flame } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, Printer } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts';
 
@@ -68,6 +68,8 @@ type PageProps = {
     currentMonth: number;
     currentYear: number;
     totalRecords: number;
+    activeWcqCount: number;
+    activeCommonLawCount: number;
 };
 
 const INCIDENT_COLORS = {
@@ -94,6 +96,7 @@ const trendConfig = {
     injuries: { label: 'Injuries', color: '#3b82f6' },
     lti: { label: 'LTI', color: '#ef4444' },
     near_miss: { label: 'Near Miss', color: '#6b7280' },
+    wcq: { label: 'Workcover', color: '#8b5cf6' },
 } satisfies ChartConfig;
 
 function formatCurrency(value: number): string {
@@ -104,21 +107,18 @@ function formatNumber(value: number): string {
     return new Intl.NumberFormat('en-AU').format(value);
 }
 
-function StatCard({ label, value, icon: Icon, href }: { label: string; value: string | number; icon: typeof AlertTriangle; href?: string }) {
+function ClaimStat({ label, value, href }: { label: string; value: number; href?: string }) {
     const content = (
-        <div className={`rounded-md border border-input shadow-xs px-4 py-3 flex items-center gap-3 transition-colors ${href ? 'hover:bg-muted/30 cursor-pointer' : ''}`}>
-            <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-            <div className="min-w-0">
-                <p className="text-lg font-semibold leading-none tabular-nums">{value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{label}</p>
-            </div>
+        <div className={`rounded-md border border-input shadow-xs px-4 py-3 transition-colors ${href ? 'hover:bg-muted/30 cursor-pointer' : ''}`}>
+            <p className="text-lg font-semibold leading-none tabular-nums">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
         </div>
     );
-    return href ? <a href={href}>{content}</a> : content;
+    return href ? <a href={href} className="block">{content}</a> : content;
 }
 
 export default function SafetyDashboard() {
-    const { currentMonth, currentYear } = usePage<{ props: PageProps }>().props as unknown as PageProps;
+    const { currentMonth, currentYear, activeWcqCount, activeCommonLawCount } = usePage<{ props: PageProps }>().props as unknown as PageProps;
 
     const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth]);
     const [selectedYear, setSelectedYear] = useState(String(currentYear));
@@ -129,7 +129,7 @@ export default function SafetyDashboard() {
     const [fyTotals, setFyTotals] = useState<Totals | null>(null);
     const [fyLabel, setFyLabel] = useState('');
     const [fyLoading, setFyLoading] = useState(false);
-    const [fyTrend, setFyTrend] = useState<{ month: string; injuries: number; lti: number; near_miss: number }[]>([]);
+    const [fyTrend, setFyTrend] = useState<{ month: string; injuries: number; lti: number; near_miss: number; wcq: number }[]>([]);
 
     const years = useMemo(() => Array.from({ length: 10 }, (_, i) => String(currentYear - 5 + i)), [currentYear]);
 
@@ -302,20 +302,22 @@ export default function SafetyDashboard() {
                     </div>
                 </div>
 
-                {/* Summary stat cards */}
-                {monthlyTotals && !monthlyLoading && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <StatCard
-                            label="Reported Injuries"
-                            value={monthlyTotals.reported_injuries}
-                            icon={AlertTriangle}
-                            href={monthlyTotals.reported_injuries > 0 ? `/injury-register?year=${selectedYear}&months=${selectedMonths.join(',')}` : undefined}
+                {/* Open Claims — current-state metrics not duplicated elsewhere */}
+                <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Open Claims</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <ClaimStat
+                            label="Active WCQ"
+                            value={activeWcqCount}
+                            href={activeWcqCount > 0 ? `/injury-register?claim_status=active` : undefined}
                         />
-                        <StatCard label="LTIs" value={monthlyTotals.lti_count} icon={ShieldAlert} />
-                        <StatCard label="Near Misses" value={monthlyTotals.near_miss_count} icon={Activity} />
-                        <StatCard label="First Aid" value={monthlyTotals.first_aid_count} icon={Flame} />
+                        <ClaimStat
+                            label="Active Common Law"
+                            value={activeCommonLawCount}
+                            href={activeCommonLawCount > 0 ? `/injury-register?claim_status=active&claim_type=common_law` : undefined}
+                        />
                     </div>
-                )}
+                </div>
 
                 {/* Charts */}
                 {!monthlyLoading && !fyLoading && monthlyTotals && (() => {
@@ -456,6 +458,7 @@ export default function SafetyDashboard() {
                                     <ChartTooltip content={<ChartTooltipContent />} />
                                     <Area dataKey="injuries" name="Injuries" type="monotone" stroke="var(--color-injuries)" fill="url(#fillInjuries)" strokeWidth={2} />
                                     <Area dataKey="lti" name="LTI" type="monotone" stroke="var(--color-lti)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+                                    <Area dataKey="wcq" name="Workcover" type="monotone" stroke="var(--color-wcq)" fill="transparent" strokeWidth={2} strokeDasharray="2 3" />
                                 </AreaChart>
                             </ChartContainer>
                         </div>

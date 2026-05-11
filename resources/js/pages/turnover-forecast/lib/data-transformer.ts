@@ -116,9 +116,11 @@ export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): U
     // Build per-company aggregate rows so the company group level shows meaningful
     // totals before the user expands it. Each company row lives at path [companyKey],
     // matching the filler group node AG Grid would otherwise synthesize.
+    // Forecast projects are always bucketed into one "Forecast Projects" group so they
+    // don't intermix with real Locations sharing the same company code.
     const companyBuckets = new Map<string, TurnoverRow[]>();
     data.forEach((job) => {
-        const key = job.company || 'Other';
+        const key = job.type === 'forecast_project' ? 'Forecast Projects' : (job.company || 'Other');
         const bucket = companyBuckets.get(key);
         if (bucket) bucket.push(job);
         else companyBuckets.set(key, [job]);
@@ -171,7 +173,7 @@ export function transformToUnifiedRows(data: TurnoverRow[], months: string[]): U
 
     data.forEach((job) => {
         const parentKey = `${job.type}-${job.id}`;
-        const companyKey = job.company || 'Other';
+        const companyKey = job.type === 'forecast_project' ? 'Forecast Projects' : (job.company || 'Other');
 
         const isActualMonth: Record<string, boolean> = {};
 
