@@ -3,7 +3,14 @@ import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -15,13 +22,16 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowUpDown,
+    CalendarDays,
     ChartColumnIncreasing,
     CheckCircle2,
     Clock,
+    ClockAlert,
+    Download,
     EllipsisVertical,
     FileImage,
+    FlaskConical,
     GitBranch,
-    History,
     Loader2,
     Lock,
     MapPin,
@@ -53,28 +63,36 @@ const companyTabs = [
 ];
 
 type LocationAction = 'close' | 'reopen' | 'resync';
-type ActionItem = {
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    action?: LocationAction;
-    destructive?: boolean;
-};
+type IconType = React.ComponentType<{ className?: string }>;
+type ActionItem =
+    | { kind: 'separator' }
+    | { kind: 'label'; text: string }
+    | { kind: 'link'; href: string; icon: IconType; label: string; isExternal?: boolean }
+    | { kind: 'action'; icon: IconType; label: string; action: LocationAction; destructive?: boolean };
 
 function getActions(location: Location, canClose: boolean): ActionItem[] {
     const items: ActionItem[] = [
-        { href: `/location/${location.id}/job-forecast`, icon: ChartColumnIncreasing, label: 'Job Forecast' },
-        { href: `/projects/${location.id}/drawings`, icon: FileImage, label: 'Drawings' },
-        { href: `/locations/${location.id}/variations`, icon: GitBranch, label: 'Variations' },
-        { href: `/location/${location.id}/material-item-price-list-uploads`, icon: History, label: 'Audit Uploads' },
-        { href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Requisition Header' },
-        { href: '#resync', icon: Clock, label: 'Resync Timesheets', action: 'resync' },
+        { kind: 'link', href: `/locations/${location.id}/dashboard`, icon: ChartColumnIncreasing, label: 'Project Dashboard' },
+        { kind: 'separator' },
+        { kind: 'link', href: `/location/${location.id}/job-forecast`, icon: ChartColumnIncreasing, label: 'Job Forecast' },
+        { kind: 'link', href: `/projects/${location.id}/drawings`, icon: FileImage, label: 'Drawings' },
+        { kind: 'link', href: `/locations/${location.id}/variations`, icon: GitBranch, label: 'Variations' },
+        { kind: 'link', href: `/locations/${location.id}/schedule`, icon: CalendarDays, label: 'Schedule' },
+        { kind: 'separator' },
+        { kind: 'link', href: `/locations/${location.id}/sds`, icon: FlaskConical, label: 'SDS Register' },
+        { kind: 'link', href: `/locations/${location.id}/sds/download`, icon: Download, label: 'Download SDS PDF', isExternal: true },
+        { kind: 'separator' },
+        { kind: 'label', text: 'Admin' },
+        { kind: 'link', href: `/location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
+        { kind: 'link', href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Requisition Header' },
+        { kind: 'action', icon: Clock, label: 'Resync Timesheets', action: 'resync' },
     ];
     if (canClose) {
         items.push(
+            { kind: 'separator' },
             location.closed_at
-                ? { href: '#reopen', icon: RotateCcw, label: 'Reopen Project', action: 'reopen' }
-                : { href: '#close', icon: Lock, label: 'Close Project', action: 'close', destructive: true },
+                ? { kind: 'action', icon: RotateCcw, label: 'Reopen Project', action: 'reopen' }
+                : { kind: 'action', icon: Lock, label: 'Close Project', action: 'close', destructive: true },
         );
     }
     return items;
@@ -90,8 +108,6 @@ function LocationActions({
     onAction: (location: Location, action: LocationAction) => void;
 }) {
     const items = getActions(location, canClose);
-    const lastIndex = items.length - 1;
-    const lastIsClose = items[lastIndex]?.action === 'close' || items[lastIndex]?.action === 'reopen';
 
     return (
         <DropdownMenu>
@@ -101,28 +117,42 @@ function LocationActions({
                     <EllipsisVertical className="h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-                {items.map((item, i) => (
-                    <div key={item.label}>
-                        {lastIsClose && i === lastIndex && <DropdownMenuSeparator />}
-                        {item.action ? (
+            <DropdownMenuContent align="end" className="min-w-52">
+                {items.map((item, i) => {
+                    if (item.kind === 'separator') return <DropdownMenuSeparator key={`sep-${i}`} />;
+                    if (item.kind === 'label')
+                        return (
+                            <DropdownMenuLabel key={`label-${i}`} className="text-muted-foreground text-xs">
+                                {item.text}
+                            </DropdownMenuLabel>
+                        );
+                    if (item.kind === 'action')
+                        return (
                             <DropdownMenuItem
+                                key={item.label}
                                 className={`gap-2 ${item.destructive ? 'text-destructive focus:text-destructive' : ''}`}
-                                onClick={() => onAction(location, item.action!)}
+                                onClick={() => onAction(location, item.action)}
                             >
                                 <item.icon className="h-4 w-4" />
                                 {item.label}
                             </DropdownMenuItem>
-                        ) : (
-                            <Link href={item.href}>
-                                <DropdownMenuItem className="gap-2">
+                        );
+                    return (
+                        <DropdownMenuItem key={item.label} asChild>
+                            {item.isExternal ? (
+                                <a href={item.href} className="gap-2">
                                     <item.icon className="h-4 w-4" />
                                     {item.label}
-                                </DropdownMenuItem>
-                            </Link>
-                        )}
-                    </div>
-                ))}
+                                </a>
+                            ) : (
+                                <Link href={item.href} className="gap-2">
+                                    <item.icon className="h-4 w-4" />
+                                    {item.label}
+                                </Link>
+                            )}
+                        </DropdownMenuItem>
+                    );
+                })}
             </DropdownMenuContent>
         </DropdownMenu>
     );
@@ -295,7 +325,7 @@ export default function LocationsList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Locations" />
 
-            <div className="@container mx-auto flex max-w-5xl min-w-0 min-w-full flex-col gap-4 p-4 sm:w-full">
+            <div className="@container mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-4 p-4">
                 {flash.success && (
                     <Alert>
                         <CheckCircle2 className="h-4 w-4" />

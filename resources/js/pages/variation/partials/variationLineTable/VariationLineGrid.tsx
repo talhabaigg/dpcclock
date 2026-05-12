@@ -58,6 +58,12 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
             onDataChange(rowData);
         }, [onDataChange]);
 
+        // Cell edits mutate row objects in place, so the internalRowData reference
+        // never changes — a useMemo keyed only on it would never recompute the
+        // totals. Bump this tick on every change to invalidate the memo.
+        const [totalsTick, setTotalsTick] = useState(0);
+        const bumpTotals = useCallback(() => setTotalsTick((t) => t + 1), []);
+
         // Handle selection changes
         const onSelectionChanged = useCallback(() => {
             const gridApi = gridRef.current?.api;
@@ -119,8 +125,9 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
 
                 // Sync changes back to parent
                 syncDataToParent();
+                bumpTotals();
             },
-            [costCodes, syncDataToParent],
+            [costCodes, syncDataToParent, bumpTotals],
         );
 
         // Handle row deletion
@@ -134,8 +141,9 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
                 });
 
                 syncDataToParent();
+                bumpTotals();
             },
-            [syncDataToParent],
+            [syncDataToParent, bumpTotals],
         );
 
         // Check if deletion is allowed
@@ -153,13 +161,36 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
             if (gridApi) {
                 gridApi.sizeColumnsToFit();
             }
-        }, []);
+            // Initial totals after the grid is populated.
+            bumpTotals();
+        }, [bumpTotals]);
 
-        // Pinned totals row at the bottom of the grid.
+        // Pinned totals row at the bottom of the grid. Reads from the grid api so
+        // rows added/removed via transactions are reflected. `totalsTick` is the
+        // invalidation handle since cell edits mutate row objects in place.
         const totalsRow = useMemo<LineItem[]>(() => {
-            if (internalRowData.length === 0) return [];
-            const totalCost = internalRowData.reduce((s, r) => s + (Number(r.total_cost) || 0), 0);
-            const totalRevenue = internalRowData.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+            const gridApi = gridRef.current?.api;
+            let totalCost = 0;
+            let totalRevenue = 0;
+            let count = 0;
+
+            if (gridApi) {
+                gridApi.forEachNode((node) => {
+                    if (node.data) {
+                        totalCost += Number(node.data.total_cost) || 0;
+                        totalRevenue += Number(node.data.revenue) || 0;
+                        count++;
+                    }
+                });
+            } else {
+                for (const r of internalRowData) {
+                    totalCost += Number(r.total_cost) || 0;
+                    totalRevenue += Number(r.revenue) || 0;
+                    count++;
+                }
+            }
+
+            if (count === 0) return [];
             return [{
                 line_number: 0,
                 cost_item: '',
@@ -170,7 +201,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
                 total_cost: totalCost,
                 revenue: totalRevenue,
             }];
-        }, [internalRowData]);
+        }, [internalRowData, totalsTick]);
 
         // Grid options
         const gridOptions = useMemo(() => {
@@ -209,6 +240,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
                 });
 
                 syncDataToParent();
+                bumpTotals();
             },
             deleteSelectedRows: () => {
                 const gridApi = gridRef.current?.api;
@@ -224,6 +256,7 @@ const VariationLineGrid = forwardRef<VariationLineGridRef, VariationLineGridProp
                 });
 
                 syncDataToParent();
+                bumpTotals();
             },
             getSelectedRows: () => {
                 const gridApi = gridRef.current?.api;

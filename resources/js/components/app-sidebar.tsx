@@ -20,7 +20,6 @@ import {
     Database,
     DollarSign,
     FileBarChart,
-    FileDiff,
     FileSpreadsheet,
     FileText,
     FlaskConical,
@@ -91,12 +90,6 @@ const projects = [
                 url: '/project-dashboard',
                 icon: LayoutDashboard,
                 permission: 'project-dashboard.view',
-            },
-            {
-                name: 'Variations',
-                url: '/variations',
-                icon: FileDiff,
-                permission: 'variations.view',
             },
             {
                 name: 'Labour Forecast',

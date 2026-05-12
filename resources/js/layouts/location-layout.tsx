@@ -21,6 +21,7 @@ import {
     CalendarDays,
     ChartColumnIncreasing,
     CirclePlus,
+    Clock,
     ClockAlert,
     Code2,
     DollarSign,
@@ -29,8 +30,12 @@ import {
     FileImage,
     FlaskConical,
     FolderTree,
+    GitBranch,
     Heart,
+    Loader2,
+    Lock,
     Pencil,
+    RotateCcw,
     Star,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -68,6 +73,7 @@ export type LocationBase = {
     eh_location_id: string;
     eh_parent_id: string;
     external_id: string;
+    closed_at?: string | null;
     variation_number_start: number | null;
     variation_next_number: number | null;
     sell_multiplier_percentage: number | string | null;
@@ -99,8 +105,21 @@ interface LocationLayoutProps {
     children: ReactNode;
 }
 
+type ConfirmState = {
+    title: string;
+    description: ReactNode;
+    confirmLabel: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+};
+
 export default function LocationLayout({ location, activeTab, children }: LocationLayoutProps) {
-    const { flash, auth } = usePage<{ flash: { success?: string }; auth: { isAdmin: boolean } }>().props;
+    const { flash, auth, can } = usePage<{
+        flash: { success?: string };
+        auth: { isAdmin: boolean };
+        can?: { closeProjects?: boolean };
+    }>().props;
+    const canClose = can?.closeProjects ?? false;
     const [openDialog, setOpenDialog] = useState(false);
     const [editingVarStart, setEditingVarStart] = useState(false);
     const [varStartInput, setVarStartInput] = useState(String(location.variation_number_start ?? ''));
@@ -110,6 +129,62 @@ export default function LocationLayout({ location, activeTab, children }: Locati
         location.sell_multiplier_percentage != null ? String(location.sell_multiplier_percentage) : '',
     );
     const [savingSellMultiplier, setSavingSellMultiplier] = useState(false);
+    const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+    const [busyMessage, setBusyMessage] = useState<string | null>(null);
+
+    const handleClose = () => {
+        setConfirm({
+            title: 'Close Project',
+            description: (
+                <>
+                    Close <strong>{location.name}</strong>? This hides the project and its data from listing views. You can reopen it later.
+                </>
+            ),
+            confirmLabel: 'Close Project',
+            destructive: true,
+            onConfirm: () => {
+                setConfirm(null);
+                setBusyMessage('Closing project...');
+                router.post(
+                    `/locations/${location.id}/close`,
+                    {},
+                    {
+                        preserveScroll: true,
+                        onFinish: () => setBusyMessage(null),
+                    },
+                );
+            },
+        });
+    };
+
+    const handleReopen = () => {
+        setBusyMessage('Reopening project...');
+        router.post(
+            `/locations/${location.id}/reopen`,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setBusyMessage(null),
+            },
+        );
+    };
+
+    const handleResync = () => {
+        setConfirm({
+            title: 'Resync Timesheets',
+            description: (
+                <>
+                    Queue a full backfill of timesheets from Employment Hero for <strong>{location.name}</strong>? This pulls the entire history and
+                    may take a while.
+                </>
+            ),
+            confirmLabel: 'Queue Resync',
+            onConfirm: () => {
+                setConfirm(null);
+                router.post(`/locations/${location.id}/load-timesheets`, {}, { preserveScroll: true });
+            },
+        });
+    };
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -259,7 +334,7 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                         <EllipsisVertical className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="min-w-48">
+                                <DropdownMenuContent align="end" className="min-w-52">
                                     <DropdownMenuItem asChild>
                                         <Link href={`/locations/${location.id}/dashboard`} className="gap-2">
                                             <ChartColumnIncreasing className="h-4 w-4" />
@@ -277,6 +352,18 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                         <Link href={`/projects/${location.id}/drawings`} className="gap-2">
                                             <FileImage className="h-4 w-4" />
                                             Drawings
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link href={`/locations/${location.id}/variations`} className="gap-2">
+                                            <GitBranch className="h-4 w-4" />
+                                            Variations
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link href={`/locations/${location.id}/schedule`} className="gap-2">
+                                            <CalendarDays className="h-4 w-4" />
+                                            Schedule
                                         </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -311,6 +398,29 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                                             Requisition Header
                                         </Link>
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem className="gap-2" onClick={handleResync}>
+                                        <Clock className="h-4 w-4" />
+                                        Resync Timesheets
+                                    </DropdownMenuItem>
+                                    {canClose && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            {location.closed_at ? (
+                                                <DropdownMenuItem className="gap-2" onClick={handleReopen}>
+                                                    <RotateCcw className="h-4 w-4" />
+                                                    Reopen Project
+                                                </DropdownMenuItem>
+                                            ) : (
+                                                <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive gap-2"
+                                                    onClick={handleClose}
+                                                >
+                                                    <Lock className="h-4 w-4" />
+                                                    Close Project
+                                                </DropdownMenuItem>
+                                            )}
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </CardHeader>
@@ -509,6 +619,32 @@ export default function LocationLayout({ location, activeTab, children }: Locati
                     {children}
                 </div>
             </div>
+
+            {busyMessage && (
+                <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="bg-background flex flex-col items-center gap-2 rounded-lg border p-6 shadow-lg">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <p className="text-sm font-medium">{busyMessage}</p>
+                    </div>
+                </div>
+            )}
+
+            {confirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-background w-full max-w-md rounded-lg border p-6 shadow-lg">
+                        <h2 className="text-lg font-semibold">{confirm.title}</h2>
+                        <p className="text-muted-foreground mt-2 text-sm">{confirm.description}</p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setConfirm(null)}>
+                                Cancel
+                            </Button>
+                            <Button variant={confirm.destructive ? 'destructive' : 'default'} onClick={confirm.onConfirm}>
+                                {confirm.confirmLabel}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }
