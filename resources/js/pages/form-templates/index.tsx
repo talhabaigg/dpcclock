@@ -52,23 +52,7 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Form Templates" />
 
-            <div className="mx-auto max-w-4xl p-4 lg:p-6">
-                {/* Header */}
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Form Templates</h1>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            {templates.length} template{templates.length !== 1 ? 's' : ''}
-                        </p>
-                    </div>
-                    <Link href={route('form-templates.create')}>
-                        <Button size="sm">
-                            <Plus className="mr-1.5 h-4 w-4" />
-                            New Template
-                        </Button>
-                    </Link>
-                </div>
-
+            <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
                 {templates.length === 0 ? (
                     /* Empty state -- shown only when there are truly no templates */
                     <Card className="py-2 gap-2">
@@ -90,15 +74,23 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                     </Card>
                 ) : (
                     <>
-                        {/* Search */}
-                        <div className="relative mb-4 max-w-xs">
-                            <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2" />
-                            <Input
-                                placeholder="Search templates..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="h-9 pl-8 text-sm"
-                            />
+                        {/* Search + new-template, justified between */}
+                        <div className="mb-4 flex items-center justify-between gap-2">
+                            <div className="relative max-w-xs flex-1">
+                                <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2" />
+                                <Input
+                                    placeholder="Search templates..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="h-9 pl-8 text-sm"
+                                />
+                            </div>
+                            <Link href={route('form-templates.create')} className="shrink-0">
+                                <Button size="sm">
+                                    <Plus className="h-4 w-4 sm:mr-1.5" />
+                                    <span className="hidden sm:inline">New Template</span>
+                                </Button>
+                            </Link>
                         </div>
 
                         {/* Table */}
@@ -108,17 +100,16 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent">
                                             <TableHead className="pl-4">Name</TableHead>
-                                            <TableHead>Category</TableHead>
-                                            <TableHead className="text-center">Fields</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Category</TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead>Created</TableHead>
+                                            <TableHead className="hidden md:table-cell">Created</TableHead>
                                             <TableHead className="w-[80px] pr-4 text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {filtered.length === 0 ? (
                                             <TableRow className="hover:bg-transparent">
-                                                <TableCell colSpan={6} className="py-10 text-center">
+                                                <TableCell colSpan={5} className="py-10 text-center">
                                                     <p className="text-muted-foreground text-sm">
                                                         No templates match "{search}"
                                                     </p>
@@ -135,13 +126,19 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                                                         <div className="min-w-0">
                                                             <span className="font-medium">{t.name}</span>
                                                             {t.description && (
-                                                                <p className="text-muted-foreground mt-0.5 max-w-xs truncate text-xs">
+                                                                <p className="text-muted-foreground mt-0.5 max-w-[14rem] truncate text-xs sm:max-w-xs">
                                                                     {t.description}
                                                                 </p>
                                                             )}
+                                                            {/* Mobile-only: surface category inline since the column is hidden */}
+                                                            {t.category && (
+                                                                <span className="mt-1 inline-block text-[11px] text-muted-foreground sm:hidden">
+                                                                    {t.category}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="hidden sm:table-cell">
                                                         {t.category ? (
                                                             <Badge variant="outline" className="font-normal">
                                                                 {t.category}
@@ -150,23 +147,12 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                                                             <span className="text-muted-foreground text-xs">--</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-center">
-                                                        <span className="text-muted-foreground tabular-nums">
-                                                            {t.fields_count}
-                                                        </span>
-                                                    </TableCell>
                                                     <TableCell>
-                                                        {t.is_active ? (
-                                                            <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/10 border-emerald-500/20 shadow-none">
-                                                                Active
-                                                            </Badge>
-                                                        ) : (
-                                                            <Badge variant="secondary" className="shadow-none">
-                                                                Inactive
-                                                            </Badge>
-                                                        )}
+                                                        <Badge variant="outline" className="font-normal shadow-none">
+                                                            {t.is_active ? 'Active' : 'Inactive'}
+                                                        </Badge>
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="hidden md:table-cell">
                                                         <span className="text-muted-foreground text-xs">
                                                             {formatDate(t.created_at)}
                                                         </span>

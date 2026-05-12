@@ -20,7 +20,16 @@ class EmployeeTransferController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = EmployeeTransfer::with(['currentKiosk', 'proposedKiosk', 'currentForeman', 'receivingForeman', 'initiator']);
+        $query = EmployeeTransfer::with([
+            'currentKiosk',
+            'proposedKiosk',
+            'currentForeman',
+            'receivingForeman',
+            'initiator',
+            // Include name + preferred_name because the Employee model appends a
+            // display_name accessor that reads them; omitting would null-error.
+            'employee:id,name,preferred_name,employment_agreement',
+        ]);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);

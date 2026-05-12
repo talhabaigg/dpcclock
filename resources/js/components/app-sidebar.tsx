@@ -25,6 +25,7 @@ import {
     FlaskConical,
     FolderOpen,
     FolderTree,
+    FormInput,
     GitCompare,
     GraduationCap,
     Hammer,
@@ -440,6 +441,12 @@ const configuration = [
                 name: 'Document Templates',
                 url: '/document-templates',
                 icon: NotepadText,
+                permission: 'document-templates.manage',
+            },
+            {
+                name: 'Form Templates',
+                url: '/form-templates',
+                icon: FormInput,
                 permission: 'document-templates.manage',
             },
             {
