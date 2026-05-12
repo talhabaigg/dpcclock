@@ -11,7 +11,7 @@ import { format, parse, startOfMonth, subMonths } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AnnualLeaveTrend, { type AnnualLeaveTrendPoint } from './annual-leave-trend';
-import HoursMatrixTable, { type HoursMatrixRow } from './hours-matrix-table';
+import HoursMatrixTable, { type HoursMatrixRow, type NonStandardBreakdownItem } from './hours-matrix-table';
 import LeaveBalanceTable, { type LeaveBalanceRow } from './leave-balance-table';
 import SickLeaveEmployees, { type SickLeaveEmployee } from './sick-leave-employees';
 import SickLeaveIndicators, { type SickLeaveIndicatorRow } from './sick-leave-indicators';
@@ -77,6 +77,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
     const [dateFrom, setDateFrom] = useState<Date>(initial.dateFrom);
     const [dateTo, setDateTo] = useState<Date>(initial.dateTo);
     const [data, setData] = useState<HoursMatrixRow[]>([]);
+    const [nonStandardBreakdown, setNonStandardBreakdown] = useState<NonStandardBreakdownItem[]>([]);
     const [sickLeaveData, setSickLeaveData] = useState<{ weekly_trend: { week: string; month: string; hours: number }[]; project_trend: Record<string, string | number>[]; project_names: string[]; employee_summary: SickLeaveEmployee[] }>({ weekly_trend: [], project_trend: [], project_names: [], employee_summary: [] });
     const [annualLeaveData, setAnnualLeaveData] = useState<AnnualLeaveTrendPoint[]>([]);
     const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceRow[]>([]);
@@ -91,7 +92,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         location_ids: number[];
         date_from: string;
         date_to: string;
-    }, HoursMatrixRow[]>({
+    }, { rows: HoursMatrixRow[]; non_standard_breakdown: NonStandardBreakdownItem[] }>({
         location_ids: initial.locationIds,
         date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
         date_to: format(initial.dateTo, 'yyyy-MM-dd'),
@@ -176,7 +177,12 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         };
 
         form.post('/labour-dashboard/data', {
-            onSuccess: (response: HoursMatrixRow[]) => { if (response) setData(response); },
+            onSuccess: (response: { rows: HoursMatrixRow[]; non_standard_breakdown: NonStandardBreakdownItem[] }) => {
+                if (response) {
+                    setData(response.rows ?? []);
+                    setNonStandardBreakdown(response.non_standard_breakdown ?? []);
+                }
+            },
         });
 
         sickLeaveHttp.setData(payload);
@@ -326,7 +332,13 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
 
                 {/* Visuals */}
                 <TimeRatiosBar data={data} />
-                <HoursMatrixTable data={data} />
+                <HoursMatrixTable
+                    data={data}
+                    nonStandardBreakdown={nonStandardBreakdown}
+                    dateFrom={format(dateFrom, 'yyyy-MM-dd')}
+                    dateTo={format(dateTo, 'yyyy-MM-dd')}
+                    allLocationIds={selectedLocationIds}
+                />
                 <SickLeaveTrend weeklyTrend={sickLeaveData.weekly_trend} projectTrend={sickLeaveData.project_trend} projectNames={sickLeaveData.project_names}>
                     <SickLeaveEmployees data={sickLeaveData.employee_summary} />
                 </SickLeaveTrend>

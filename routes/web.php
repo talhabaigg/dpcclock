@@ -973,6 +973,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Labour Dashboard
     Route::middleware('permission:labour-dashboard.view')->group(function () {
         Route::get('/labour-dashboard', [LabourDashboardController::class, 'index'])->name('labour-dashboard.index');
+        Route::get('/labour-dashboard/timesheets', [LabourDashboardController::class, 'timesheets'])->name('labour-dashboard.timesheets');
         Route::post('/labour-dashboard/data', [LabourDashboardController::class, 'getData'])->name('labour-dashboard.data');
         Route::post('/labour-dashboard/sick-leave-trend', [LabourDashboardController::class, 'getSickLeaveTrend'])->name('labour-dashboard.sick-leave-trend');
         Route::post('/labour-dashboard/annual-leave-trend', [LabourDashboardController::class, 'getAnnualLeaveTrend'])->name('labour-dashboard.annual-leave-trend');

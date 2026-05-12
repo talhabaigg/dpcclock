@@ -206,6 +206,9 @@ class LabourDashboardController extends Controller
             // --- Total available hours (all work types) ---
             $totalAvailableHours = $locationClocks->sum('hours_worked');
 
+            // --- Non-standard hours (everything in Available not captured by Worked or Lost) ---
+            $nonStandardHours = $totalAvailableHours - $totalHoursWorked - $totalHoursLost;
+
             // --- Head count (unique employees) ---
             $headCount = $locationClocks->pluck('eh_employee_id')->unique()->count();
 
@@ -228,13 +231,222 @@ class LabourDashboardController extends Controller
                 'rdo_hours' => round($rdoHours, 2),
                 'public_holiday_hours' => round($publicHolidayHours, 2),
                 'total_hours_lost' => round($totalHoursLost, 2),
+                'non_standard_hours' => round($nonStandardHours, 2),
                 'total_available_hours' => round($totalAvailableHours, 2),
                 'head_count' => $headCount,
                 'efficiency' => $efficiency,
             ];
         }
 
-        return response()->json($results);
+        // --- Aggregate "Non-Standard" breakdown across selected projects ---
+        // These are clocks NOT in Worked (normal-work types outside weather/safety) and NOT in any Lost bucket.
+        $bucketedWorkTypeIds = array_merge(
+            $normalWorkTypeIds,
+            $annualLeaveWorkTypeIds,
+            $sickLeaveWorkTypeIds,
+            $rdoWorkTypeIds,
+            $publicHolidayWorkTypeIds,
+        );
+        $allWeatherSafetyEhIds = collect($weatherEhIdsByParent)
+            ->merge($safetyEhIdsByParent)
+            ->flatten()
+            ->unique()
+            ->toArray();
+
+        $nonStandardClocks = $clocks
+            ->whereNotIn('eh_worktype_id', $bucketedWorkTypeIds)
+            ->whereNotIn('eh_location_id', $allWeatherSafetyEhIds);
+
+        $nonStandardWorktypeIds = $nonStandardClocks->pluck('eh_worktype_id')->unique()->toArray();
+        $worktypeLookup = Worktype::whereIn('eh_worktype_id', $nonStandardWorktypeIds)
+            ->get(['eh_worktype_id', 'name', 'mapping_type'])
+            ->keyBy('eh_worktype_id');
+
+        $nonStandardBreakdown = $nonStandardClocks
+            ->groupBy('eh_worktype_id')
+            ->map(function ($group, $ehWorktypeId) use ($worktypeLookup) {
+                $worktype = $worktypeLookup->get($ehWorktypeId);
+                return [
+                    'eh_worktype_id' => $ehWorktypeId,
+                    'name' => $worktype?->name ?: '(no work type set)',
+                    'mapping_type' => $worktype?->mapping_type,
+                    'hours' => round($group->sum('hours_worked'), 2),
+                ];
+            })
+            ->sortByDesc('hours')
+            ->values()
+            ->all();
+
+        return response()->json([
+            'rows' => $results,
+            'non_standard_breakdown' => $nonStandardBreakdown,
+        ]);
+    }
+
+    /**
+     * Drill-through: list the underlying timesheets (clocks) for a given category in the Hours Matrix.
+     */
+    public function timesheets(Request $request)
+    {
+        $request->validate([
+            'location_ids' => 'required|string',
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+            'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available',
+        ]);
+
+        $user = $request->user();
+        $rawIds = array_filter(array_map('intval', explode(',', $request->input('location_ids'))));
+        $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
+        $category = $request->input('category');
+
+        // Scope to user's permitted locations if they lack view-all
+        $locationQuery = Location::whereIn('id', $rawIds);
+        if (!$user->can('labour-dashboard.view-all')) {
+            $managedEhIds = $user->managedKiosks()->with('location')->get()
+                ->pluck('location.eh_location_id')->filter()->unique();
+            $locationQuery->whereIn('eh_location_id', $managedEhIds);
+        }
+        $selectedLocations = $locationQuery->get();
+
+        $parentLocationMap = [];
+        foreach ($selectedLocations as $location) {
+            $subEhIds = Location::where('eh_parent_id', $location->eh_location_id)
+                ->pluck('eh_location_id')->toArray();
+            $parentLocationMap[] = [
+                'id' => $location->id,
+                'name' => $location->name,
+                'eh_location_ids' => array_merge([$location->eh_location_id], $subEhIds),
+            ];
+        }
+        $allEhLocationIds = collect($parentLocationMap)->pluck('eh_location_ids')->flatten()->unique()->toArray();
+
+        // Worktype buckets — same definitions as getData()
+        $normalIds = Worktype::whereIn('eh_external_id', self::NORMAL_WORK_CODES)->pluck('eh_worktype_id')->toArray();
+        $sickIds = Worktype::where('name', 'like', '%Personal%Carer%Leave%')->pluck('eh_worktype_id')->toArray();
+        $alIds = Worktype::where('name', 'like', '%Annual Leave%')->pluck('eh_worktype_id')->toArray();
+        $rdoIds = Worktype::where(function ($q) {
+            $q->where('name', 'like', '%RDO Taken%')->orWhere('name', 'like', '%Rostered Day Off Taken%');
+        })->pluck('eh_worktype_id')->toArray();
+        $phIds = Worktype::where('name', 'like', '%Public Holiday%')->pluck('eh_worktype_id')->toArray();
+        $wcIds = Worktype::where('name', 'like', '%Workcover%')->pluck('eh_worktype_id')->toArray();
+
+        // Weather/Safety sub-locations
+        $weatherEhIds = [];
+        $safetyEhIds = [];
+        foreach ($parentLocationMap as $p) {
+            $weatherEhIds = array_merge($weatherEhIds, Location::where('eh_parent_id', $p['eh_location_ids'][0])
+                ->where(function ($q) {
+                    $q->where('name', 'like', '%Inclement Weather%')->orWhere('name', 'like', '%Weather%');
+                })->pluck('eh_location_id')->toArray());
+            $safetyEhIds = array_merge($safetyEhIds, Location::where('eh_parent_id', $p['eh_location_ids'][0])
+                ->where('name', 'like', '%Safety%')->where('name', 'not like', '%Data%')
+                ->pluck('eh_location_id')->toArray());
+        }
+        $weatherSafetyEhIds = array_merge($weatherEhIds, $safetyEhIds);
+        $bucketedIds = array_merge($normalIds, $alIds, $sickIds, $rdoIds, $phIds);
+
+        $query = Clock::whereIn('eh_location_id', $allEhLocationIds)
+            ->where('clock_in', '>=', $dateFrom)
+            ->where('clock_in', '<=', $dateTo)
+            ->whereIn('status', ['Processed', 'Approved'])
+            ->whereNotIn('eh_worktype_id', $wcIds)
+            ->whereNotNull('hours_worked')
+            ->where('hours_worked', '>', 0);
+
+        match ($category) {
+            'available' => null,
+            'worked', 'nt', 'ot' => $query->whereIn('eh_worktype_id', $normalIds)
+                ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
+            'weather' => $query->whereIn('eh_location_id', $weatherEhIds),
+            'safety' => $query->whereIn('eh_location_id', $safetyEhIds),
+            'al' => $query->whereIn('eh_worktype_id', $alIds),
+            'sick' => $query->whereIn('eh_worktype_id', $sickIds),
+            'rdo' => $query->whereIn('eh_worktype_id', $rdoIds),
+            'ph' => $query->whereIn('eh_worktype_id', $phIds),
+            'lost' => $query->where(function ($q) use ($weatherSafetyEhIds, $alIds, $sickIds, $rdoIds, $phIds) {
+                $q->whereIn('eh_location_id', $weatherSafetyEhIds)
+                  ->orWhereIn('eh_worktype_id', array_merge($alIds, $sickIds, $rdoIds, $phIds));
+            }),
+            'non_standard' => $query->whereNotIn('eh_worktype_id', $bucketedIds)
+                ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
+        };
+
+        $clocks = $query->orderBy('clock_in')->limit(10000)->get();
+
+        // For OT category, keep only days where the employee's daily normal-work total exceeded the threshold
+        if ($category === 'ot') {
+            $grouped = $clocks->groupBy(fn ($c) => $c->eh_employee_id . '|' . Carbon::parse($c->clock_in)->toDateString());
+            $clocks = $grouped->filter(fn ($g) => $g->sum('hours_worked') > self::DAILY_HOURS_THRESHOLD)
+                ->flatten(1)->values();
+        }
+
+        // Hydrate names
+        $empLookup = Employee::whereIn('eh_employee_id', $clocks->pluck('eh_employee_id')->unique())
+            ->get(['eh_employee_id', 'name', 'preferred_name'])->keyBy('eh_employee_id');
+        $locLookup = Location::whereIn('eh_location_id', $clocks->pluck('eh_location_id')->unique())
+            ->get(['eh_location_id', 'name'])->keyBy('eh_location_id');
+        $wtLookup = Worktype::whereIn('eh_worktype_id', $clocks->pluck('eh_worktype_id')->unique())
+            ->get(['eh_worktype_id', 'name', 'eh_external_id', 'mapping_type'])->keyBy('eh_worktype_id');
+
+        // Daily totals for NT/OT split when relevant
+        $dailyTotals = null;
+        if (in_array($category, ['nt', 'ot', 'worked'], true)) {
+            $dailyTotals = $clocks
+                ->groupBy(fn ($c) => $c->eh_employee_id . '|' . Carbon::parse($c->clock_in)->toDateString())
+                ->map(fn ($g) => $g->sum('hours_worked'));
+        }
+
+        $rows = $clocks->map(function ($c) use ($empLookup, $locLookup, $wtLookup, $dailyTotals, $category) {
+            $emp = $empLookup->get($c->eh_employee_id);
+            $loc = $locLookup->get($c->eh_location_id);
+            $wt = $wtLookup->get($c->eh_worktype_id);
+            $dt = Carbon::parse($c->clock_in);
+
+            $row = [
+                'id' => $c->id,
+                'employee_name' => $emp?->display_name ?: $emp?->name ?: ('(unknown ' . $c->eh_employee_id . ')'),
+                'eh_employee_id' => $c->eh_employee_id,
+                'date' => $dt->format('Y-m-d'),
+                'day' => $dt->format('D'),
+                'clock_in' => $dt->format('Y-m-d H:i'),
+                'clock_out' => $c->clock_out ? Carbon::parse($c->clock_out)->format('Y-m-d H:i') : null,
+                'hours' => round((float) $c->hours_worked, 2),
+                'worktype_name' => $wt?->name ?: '(no work type)',
+                'worktype_external_id' => $wt?->eh_external_id,
+                'worktype_mapping_type' => $wt?->mapping_type,
+                'location_name' => $loc?->name ?: ('(eh_loc ' . $c->eh_location_id . ')'),
+                'eh_location_id' => $c->eh_location_id,
+                'status' => $c->status,
+            ];
+
+            if ($dailyTotals !== null) {
+                $key = $c->eh_employee_id . '|' . $dt->toDateString();
+                $dayTotal = (float) ($dailyTotals[$key] ?? 0);
+                $ntPortion = min($dayTotal, self::DAILY_HOURS_THRESHOLD);
+                $otPortion = max(0, $dayTotal - self::DAILY_HOURS_THRESHOLD);
+                if ($dayTotal > 0) {
+                    $row['nt_hours'] = round($row['hours'] * ($ntPortion / $dayTotal), 2);
+                    $row['ot_hours'] = round($row['hours'] * ($otPortion / $dayTotal), 2);
+                } else {
+                    $row['nt_hours'] = 0.0;
+                    $row['ot_hours'] = 0.0;
+                }
+            }
+
+            return $row;
+        })->values();
+
+        return Inertia::render('labour-dashboard/timesheets', [
+            'rows' => $rows,
+            'category' => $category,
+            'date_from' => $dateFrom->format('Y-m-d'),
+            'date_to' => $dateTo->format('Y-m-d'),
+            'project_names' => collect($parentLocationMap)->pluck('name')->all(),
+            'project_ids' => array_values($selectedLocations->pluck('id')->all()),
+            'truncated' => $clocks->count() >= 10000,
+        ]);
     }
 
     public function getSickLeaveTrend(Request $request)
