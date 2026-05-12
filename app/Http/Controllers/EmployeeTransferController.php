@@ -20,6 +20,11 @@ class EmployeeTransferController extends Controller
 {
     public function index(Request $request): Response
     {
+        $perPage = (int) $request->input('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+
         $query = EmployeeTransfer::with([
             'currentKiosk',
             'proposedKiosk',
@@ -50,11 +55,11 @@ class EmployeeTransferController extends Controller
             });
         }
 
-        $transfers = $query->latest()->paginate(25)->withQueryString();
+        $transfers = $query->latest()->paginate($perPage)->withQueryString();
 
         return Inertia::render('employee-transfers/index', [
             'transfers' => $transfers,
-            'filters' => $request->only(['status', 'search', 'kiosk_id']),
+            'filters' => $request->only(['status', 'search', 'kiosk_id', 'per_page']),
             'kiosks' => Kiosk::where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }

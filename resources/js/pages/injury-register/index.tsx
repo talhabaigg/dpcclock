@@ -9,14 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Check, ChevronsUpDown, Download, ListFilter, Loader2, Lock, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, Upload, X } from 'lucide-react';
+import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, Download, EllipsisVertical, ListFilter, Loader2, Lock, Menu, Plus, Search, SlidersHorizontal, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
@@ -25,10 +25,22 @@ interface PaginatedInjuries {
     data: Injury[];
     current_page: number;
     last_page: number;
+    per_page: number;
     total: number;
     links: { url: string | null; label: string; active: boolean }[];
     prev_page_url: string | null;
     next_page_url: string | null;
+}
+
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
 }
 
 interface Props {
@@ -135,6 +147,14 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
         );
     };
 
+    const navigate = (overrides: { page?: number; per_page?: number }) => {
+        router.get(
+            '/injury-register',
+            { ...filters, page: overrides.page, per_page: overrides.per_page ?? injuries.per_page },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
     const resetFilters = () => {
         setSearchValue('');
         router.get('/injury-register', {}, { preserveState: true });
@@ -149,7 +169,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
             {flash?.success && <SuccessAlertFlash message={flash.success} />}
             {flash?.error && <ErrorAlertFlash error={{ message: flash.error }} />}
 
-            <div className="space-y-4 p-4">
+            <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
                 {/* Filters + Report Button */}
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="relative w-72">
@@ -376,10 +396,10 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                 </Link>
                             </Button>
                         )}
-                        <DropdownMenu modal={false}>
+                        <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -418,7 +438,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
 
                 {/* Table */}
                 <div className="rounded-md border">
-                    <Table>
+                    <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
@@ -429,7 +449,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                 <TableHead>WorkCover</TableHead>
                                 <TableHead>Days Lost</TableHead>
                                 <TableHead>Report Type</TableHead>
-                                <TableHead className="w-10" />
+                                <TableHead className="w-12 text-right" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -459,18 +479,26 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                             <div className="text-muted-foreground text-xs">{injury.employee.employment_type}</div>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-sm">{injury.location?.name ?? '—'}</TableCell>
+                                    <TableCell>
+                                        {injury.location ? (
+                                            <span title={injury.location.name} className="font-mono">
+                                                {injury.location.external_id ?? injury.location.name}
+                                            </span>
+                                        ) : (
+                                            '—'
+                                        )}
+                                    </TableCell>
                                     <TableCell><Badge variant="secondary" className="text-xs">{injury.incident_label}</Badge></TableCell>
                                     <TableCell className="text-sm">{injury.work_cover_claim ? 'Yes' : 'No'}</TableCell>
                                     <TableCell className="text-sm">{injury.work_days_missed}</TableCell>
                                     <TableCell>
                                         <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
                                     </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu modal={false}>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                    <MoreHorizontal className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                    <EllipsisVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
@@ -529,42 +557,114 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                 </div>
 
                 {/* Pagination */}
-                {injuries.last_page > 1 && (
-                    <div className="flex items-center justify-between">
-                        <p className="text-muted-foreground text-sm">
-                            Page <span className="font-medium">{injuries.current_page}</span> of{' '}
-                            <span className="font-medium">{injuries.last_page}</span> ({injuries.total} records)
-                        </p>
-                        <Pagination>
-                            <PaginationContent className="gap-1">
-                                <PaginationItem>
-                                    <PaginationPrevious href={injuries.prev_page_url ?? undefined} />
-                                </PaginationItem>
-                                {(() => {
-                                    const current = injuries.current_page;
-                                    const last = injuries.last_page;
-                                    const start = Math.max(1, current - 1);
-                                    const end = Math.min(last, current + 1);
-                                    const pages = [];
-                                    for (let page = start; page <= end; page++) {
-                                        const url = injuries.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
-                                        pages.push(
-                                            <PaginationItem key={page}>
-                                                <PaginationLink href={url} isActive={current === page}>
-                                                    {page}
-                                                </PaginationLink>
-                                            </PaginationItem>,
-                                        );
-                                    }
-                                    return pages;
-                                })()}
-                                <PaginationItem>
-                                    <PaginationNext href={injuries.next_page_url ?? undefined} />
-                                </PaginationItem>
-                            </PaginationContent>
-                        </Pagination>
-                    </div>
-                )}
+                {(() => {
+                    const fromRow = injuries.total === 0 ? 0 : (injuries.current_page - 1) * injuries.per_page + 1;
+                    const toRow = Math.min(injuries.current_page * injuries.per_page, injuries.total);
+                    const pageWindow = getPageWindow(injuries.current_page, injuries.last_page);
+                    const atFirst = injuries.current_page <= 1;
+                    const atLast = injuries.current_page >= injuries.last_page;
+
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-muted-foreground text-xs sm:text-sm">
+                                {injuries.total > 0 ? `${fromRow}–${toRow} of ${injuries.total.toLocaleString()} items` : 'No items'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                    <Select
+                                        value={String(injuries.per_page)}
+                                        onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                                    >
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={atFirst}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atFirst) navigate({ page: 1 });
+                                                }}
+                                                className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={atFirst}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atFirst) navigate({ page: injuries.current_page - 1 });
+                                                }}
+                                                className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === injuries.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            navigate({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={atLast}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atLast) navigate({ page: injuries.current_page + 1 });
+                                                }}
+                                                className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={atLast}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atLast) navigate({ page: injuries.last_page });
+                                                }}
+                                                className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Import Legacy Dialog */}

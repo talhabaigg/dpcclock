@@ -171,7 +171,7 @@ export default function UpdatePricing() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Update Pricing" />
 
-            <div className="m-4 space-y-4">
+            <div className="mx-auto w-full max-w-5xl space-y-4 p-3 sm:p-4">
                 <Card>
                     <CardHeader>
                         <CardTitle>Update Material Pricing</CardTitle>
@@ -278,7 +278,7 @@ export default function UpdatePricing() {
                         <CardContent>
                             <div className="max-h-96 overflow-auto rounded border">
                                 <Table>
-                                    <TableHeader className="bg-muted sticky top-0">
+                                    <TableHeader className="bg-background sticky top-0">
                                         <TableRow>
                                             <TableHead>Code</TableHead>
                                             <TableHead>Description</TableHead>

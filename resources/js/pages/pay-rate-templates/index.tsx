@@ -1,12 +1,14 @@
 import LoadingDialog from '@/components/loading-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ChevronDown, ChevronRight, RefreshCcw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Menu, RefreshCcw, Search } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -98,29 +100,9 @@ export default function PayRateTemplatesIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pay Rate Templates" />
 
-            <div className="p-4">
-                {/* Header with sync buttons */}
-                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Link href={route('pay-rate-templates.sync-categories')}>
-                            <Button variant="outline" onClick={() => setOpen(true)}>
-                                <RefreshCcw className="mr-2 h-4 w-4" />
-                                Sync Categories
-                            </Button>
-                        </Link>
-                        <Link href={route('pay-rate-templates.sync-templates')}>
-                            <Button variant="outline" onClick={() => setOpen(true)}>
-                                <RefreshCcw className="mr-2 h-4 w-4" />
-                                Sync Templates
-                            </Button>
-                        </Link>
-                        <Link href={route('pay-rate-templates.sync-all')}>
-                            <Button onClick={() => setOpen(true)}>
-                                <RefreshCcw className="mr-2 h-4 w-4" />
-                                Sync All
-                            </Button>
-                        </Link>
-                    </div>
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
+                {/* Toolbar: search on the left, primary + burger menu on the right */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative w-full sm:w-72">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         <Input
@@ -131,37 +113,62 @@ export default function PayRateTemplatesIndex() {
                             className="pl-10"
                         />
                     </div>
+                    <div className="flex items-center gap-2">
+                        <Link href={route('pay-rate-templates.sync-all')}>
+                            <Button onClick={() => setOpen(true)}>
+                                <RefreshCcw className="mr-2 h-4 w-4" />
+                                Sync All
+                            </Button>
+                        </Link>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <Link href={route('pay-rate-templates.sync-categories')} onClick={() => setOpen(true)}>
+                                        <RefreshCcw className="mr-2 h-4 w-4" />
+                                        Sync Categories
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href={route('pay-rate-templates.sync-templates')} onClick={() => setOpen(true)}>
+                                        <RefreshCcw className="mr-2 h-4 w-4" />
+                                        Sync Templates
+                                    </Link>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 {/* Flash messages */}
                 {flash.success && (
-                    <div className="mb-4 rounded-lg bg-green-50 p-3 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                    <div className="rounded-lg bg-green-50 p-3 text-green-700 dark:bg-green-900/20 dark:text-green-400">
                         {flash.success}
                     </div>
                 )}
                 {flash.error && (
-                    <div className="mb-4 rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
+                    <div className="rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>
                 )}
-
-                {/* Tab buttons */}
-                <div className="mb-4 flex gap-2">
-                    <Button variant={activeTab === 'templates' ? 'default' : 'outline'} onClick={() => setActiveTab('templates')}>
-                        Pay Rate Templates ({payRateTemplates.length})
-                    </Button>
-                    <Button variant={activeTab === 'categories' ? 'default' : 'outline'} onClick={() => setActiveTab('categories')}>
-                        Pay Categories ({payCategories.length})
-                    </Button>
-                </div>
 
                 <LoadingDialog open={open} setOpen={setOpen} />
 
-                {activeTab === 'templates' && (
-                    <Card className="overflow-hidden p-0">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'templates' | 'categories')}>
+                    <TabsList>
+                        <TabsTrigger value="templates">Pay Rate Templates ({payRateTemplates.length})</TabsTrigger>
+                        <TabsTrigger value="categories">Pay Categories ({payCategories.length})</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="templates">
+                        <Card className="overflow-hidden p-0">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-10"></TableHead>
-                                    <TableHead>Name</TableHead>
+                                    <TableHead className="w-[240px]">Name</TableHead>
                                     <TableHead>EH ID</TableHead>
                                     <TableHead>External ID</TableHead>
                                     <TableHead>Super Threshold</TableHead>
@@ -192,13 +199,15 @@ export default function PayRateTemplatesIndex() {
                                                             <ChevronRight className="h-4 w-4" />
                                                         ))}
                                                 </TableCell>
-                                                <TableCell className="font-medium">{template.name}</TableCell>
+                                                <TableCell className="w-[240px] max-w-[240px] font-medium whitespace-normal break-words">
+                                                    {template.name}
+                                                </TableCell>
                                                 <TableCell>{template.eh_id}</TableCell>
                                                 <TableCell>{template.external_id || '-'}</TableCell>
                                                 <TableCell>{formatCurrency(template.super_threshold_amount)}</TableCell>
                                                 <TableCell>{formatCurrency(template.maximum_quarterly_super_contributions_base)}</TableCell>
                                                 <TableCell>
-                                                    <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                    <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground">
                                                         {template.pay_categories.length}
                                                     </span>
                                                 </TableCell>
@@ -244,54 +253,57 @@ export default function PayRateTemplatesIndex() {
                             </TableBody>
                         </Table>
                     </Card>
-                )}
+                    </TabsContent>
 
-                {activeTab === 'categories' && (
-                    <Card className="overflow-hidden p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>EH ID</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Rate Unit</TableHead>
-                                    <TableHead>Primary</TableHead>
-                                    <TableHead>Default Super Rate</TableHead>
-                                    <TableHead>External ID</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredCategories.length === 0 ? (
+                    <TabsContent value="categories">
+                        <Card className="overflow-hidden p-0">
+                            <Table>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell colSpan={7} className="py-8 text-center text-gray-500">
-                                            No pay categories found. Click "Sync Categories" to fetch from Employment Hero.
-                                        </TableCell>
+                                        <TableHead className="w-[240px]">Name</TableHead>
+                                        <TableHead>EH ID</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Rate Unit</TableHead>
+                                        <TableHead>Primary</TableHead>
+                                        <TableHead>Default Super Rate</TableHead>
+                                        <TableHead>External ID</TableHead>
                                     </TableRow>
-                                ) : (
-                                    filteredCategories.map((category) => (
-                                        <TableRow key={category.id}>
-                                            <TableCell className="font-medium">{category.name}</TableCell>
-                                            <TableCell>{category.eh_id}</TableCell>
-                                            <TableCell>{category.pay_category_type || '-'}</TableCell>
-                                            <TableCell>{category.rate_unit || '-'}</TableCell>
-                                            <TableCell>
-                                                {category.is_primary ? (
-                                                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                        Yes
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400">-</span>
-                                                )}
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredCategories.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="py-8 text-center text-gray-500">
+                                                No pay categories found. Click "Sync Categories" to fetch from Employment Hero.
                                             </TableCell>
-                                            <TableCell>{formatPercent(category.default_super_rate)}</TableCell>
-                                            <TableCell>{category.external_id || '-'}</TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                )}
+                                    ) : (
+                                        filteredCategories.map((category) => (
+                                            <TableRow key={category.id}>
+                                                <TableCell className="w-[240px] max-w-[240px] font-medium whitespace-normal break-words">
+                                                    {category.name}
+                                                </TableCell>
+                                                <TableCell>{category.eh_id}</TableCell>
+                                                <TableCell>{category.pay_category_type || '-'}</TableCell>
+                                                <TableCell>{category.rate_unit || '-'}</TableCell>
+                                                <TableCell>
+                                                    {category.is_primary ? (
+                                                        <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground">
+                                                            Yes
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{formatPercent(category.default_super_rate)}</TableCell>
+                                                <TableCell>{category.external_id || '-'}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </AppLayout>
     );

@@ -1,11 +1,12 @@
 import CsvImporterDialog from '@/components/csv-importer';
 import InputSearch from '@/components/inputSearch';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Download } from 'lucide-react';
+import { Download, Menu, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ export default function CostTypesIndex() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     const filteredCostTypes = useMemo(() => {
         if (!searchQuery) return costTypes;
@@ -64,20 +66,32 @@ export default function CostTypesIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cost Types" />
 
-            <div className="flex flex-col gap-4 p-3 sm:p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 {/* Toolbar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative w-full sm:max-w-xs">
                         <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="code or description" />
                     </div>
                     <div className="flex items-center gap-2">
-                        <CsvImporterDialog requiredColumns={csvImportHeaders} onSubmit={handleCsvSubmit} />
-                        <a href="/cost-types/download">
-                            <Button variant="outline" size="sm" className="gap-2">
-                                <Download className="h-4 w-4" />
-                                Export
-                            </Button>
-                        </a>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setImportOpen(true)}>
+                                    <Upload className="h-4 w-4" />
+                                    Import CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <a href="/cost-types/download">
+                                        <Download className="h-4 w-4" />
+                                        Export
+                                    </a>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 
@@ -103,7 +117,7 @@ export default function CostTypesIndex() {
                 <div className="hidden overflow-hidden rounded-lg border sm:block">
                     <Table>
                         <TableHeader>
-                            <TableRow className="bg-muted/50">
+                            <TableRow>
                                 <TableHead className="px-3">Code</TableHead>
                                 <TableHead className="px-3">Description</TableHead>
                             </TableRow>
@@ -134,6 +148,13 @@ export default function CostTypesIndex() {
                     </Table>
                 </div>
             </div>
+
+            <CsvImporterDialog
+                requiredColumns={csvImportHeaders}
+                onSubmit={handleCsvSubmit}
+                open={importOpen}
+                onOpenChange={setImportOpen}
+            />
         </AppLayout>
     );
 }

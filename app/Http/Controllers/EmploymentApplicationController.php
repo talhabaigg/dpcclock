@@ -201,10 +201,15 @@ class EmploymentApplicationController extends Controller
 
         $view = $request->input('view', 'list');
 
+        $perPage = (int) $request->input('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+
         if ($view === 'kanban' || $view === 'map') {
             $applications = ['data' => $query->latest()->get()];
         } else {
-            $applications = $query->latest()->paginate(25)->withQueryString();
+            $applications = $query->latest()->paginate($perPage)->withQueryString();
         }
 
         // Get distinct occupations for filter dropdown
@@ -216,7 +221,7 @@ class EmploymentApplicationController extends Controller
 
         return Inertia::render('employment-applications/index', [
             'applications' => $applications,
-            'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only', 'apprentice', 'apprentice_year']),
+            'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only', 'apprentice', 'apprentice_year', 'per_page']),
             'statuses' => EmploymentApplication::STATUSES,
             'occupations' => $occupations,
             'view' => $view,

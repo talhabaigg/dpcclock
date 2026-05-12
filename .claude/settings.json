@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(Select-String -Pattern \"Budget Summary|calculateForecastByPrefix\")"
+      "Bash(Select-String -Pattern \"Budget Summary|calculateForecastByPrefix\")",
+      "Edit(/.claude/skills/shadcn-clean-index-design/**)",
+      "PowerShell(npm run lint -- resources/js/pages/daily-prestarts/index.tsx)",
+      "PowerShell(npm run lint -- resources/js/pages/sds/index.tsx)"
     ]
   }
 }

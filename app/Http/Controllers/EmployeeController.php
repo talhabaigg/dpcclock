@@ -36,6 +36,9 @@ class EmployeeController extends Controller
             ? $request->query('sort')
             : 'name';
         $sortDirection = $request->query('direction') === 'desc' ? 'desc' : 'asc';
+        $perPage = in_array((int) $request->query('per_page'), [10, 25, 50, 100], true)
+            ? (int) $request->query('per_page')
+            : 25;
 
         $query = Employee::query()
             ->fieldStaff()
@@ -77,7 +80,7 @@ class EmployeeController extends Controller
 
         $employees = $query
             ->orderBy($sortBy, $sortDirection)
-            ->paginate(25)
+            ->paginate($perPage)
             ->withQueryString();
 
         $employees->setCollection($employees->getCollection()->map(function (Employee $emp) {
@@ -140,6 +143,7 @@ class EmployeeController extends Controller
                 'licence_mode' => $licenceMode,
                 'sort' => $sortBy,
                 'direction' => $sortDirection,
+                'per_page' => $perPage,
             ],
             'canSendDocuments' => $canSendDocuments,
             'documentTemplates' => $canSendDocuments

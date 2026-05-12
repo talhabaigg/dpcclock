@@ -11,6 +11,11 @@ class SafetyDataSheetController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = (int) $request->input('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+
         $query = SafetyDataSheet::with(['locations', 'media']);
 
         if ($request->filled('search')) {
@@ -40,14 +45,14 @@ class SafetyDataSheetController extends Controller
             };
         }
 
-        $sds = $query->orderBy('product_name')->paginate(25)->withQueryString();
+        $sds = $query->orderBy('product_name')->paginate($perPage)->withQueryString();
 
         $manufacturers = SafetyDataSheet::distinct()->orderBy('manufacturer')->pluck('manufacturer');
         $locations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('sds/index', [
             'sds' => $sds,
-            'filters' => $request->only(['search', 'manufacturer', 'location_id', 'expiry']),
+            'filters' => array_merge($request->only(['search', 'manufacturer', 'location_id', 'expiry']), ['per_page' => $perPage]),
             'manufacturers' => $manufacturers,
             'locations' => $locations,
             'hazardClassifications' => SafetyDataSheet::HAZARD_CLASSIFICATIONS,
@@ -180,6 +185,20 @@ class SafetyDataSheetController extends Controller
         $sd->delete();
 
         return redirect()->route('sds.index')->with('success', 'SDS deleted successfully.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:safety_data_sheets,id',
+        ]);
+
+        SafetyDataSheet::whereIn('id', $validated['ids'])->delete();
+
+        $count = count($validated['ids']);
+
+        return redirect()->route('sds.index')->with('success', "{$count} SDS " . ($count === 1 ? 'record' : 'records') . ' deleted.');
     }
 
     public function download(SafetyDataSheet $sd)

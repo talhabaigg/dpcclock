@@ -1,19 +1,74 @@
-import { ImporterWizardTrigger } from '@/components/importer-wizard';
+import { ImporterWizardDialog } from '@/components/importer-wizard';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
-import { type ColumnDef, type ColumnOrderState, type ColumnSizingState, type VisibilityState, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, CirclePlus, Columns3, Download, Search, Trash2 } from 'lucide-react';
+import { type ColumnDef, type VisibilityState, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    ChevronsLeft,
+    ChevronsRight,
+    CirclePlus,
+    Columns3,
+    Download,
+    EllipsisVertical,
+    Menu,
+    Search,
+    Trash2,
+    Upload,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Items', href: '/material-items/all' }];
+
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
+}
 
 type SupplierCategory = {
     id: number;
@@ -136,9 +191,13 @@ export default function ItemList() {
 
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
     const [rowSelection, setRowSelection] = useState({});
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-    const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-    const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+        price_expiry_date: false,
+        category: false,
+    });
+    const [importerOpen, setImporterOpen] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteRowTarget, setDeleteRowTarget] = useState<MaterialItem | null>(null);
     const isNavigating = useRef(false);
 
     // Navigate with Inertia query params
@@ -149,16 +208,16 @@ export default function ItemList() {
                 sort: filters.sort,
                 dir: filters.dir,
                 page: items.current_page,
+                per_page: filters.per_page,
                 ...params,
             };
-            // Remove empty search from URL
             if (!query.search) delete query.search;
-            // Remove defaults from URL
             if (query.sort === 'id' && query.dir === 'desc') {
                 delete query.sort;
                 delete query.dir;
             }
             if (query.page === 1) delete query.page;
+            if (query.per_page === 50) delete query.per_page;
 
             isNavigating.current = true;
             router.get('/material-items/all', query as Record<string, string>, {
@@ -223,10 +282,14 @@ export default function ItemList() {
     }, [flash.success, flash.error]);
 
     // Delete
-    const deleteSelected = () => {
+    const openDeleteConfirm = () => {
         const rows = table.getFilteredSelectedRowModel().rows;
         if (!rows.length) return toast.error('No rows selected for deletion.');
-        if (!confirm('Are you sure you want to delete the selected material items?')) return;
+        setDeleteConfirmOpen(true);
+    };
+
+    const confirmDelete = () => {
+        const rows = table.getFilteredSelectedRowModel().rows;
         router.delete('/material-items/delete-multiple', {
             data: { ids: rows.map((r) => r.original.id) },
             onSuccess: () => {
@@ -234,6 +297,18 @@ export default function ItemList() {
                 setRowSelection({});
             },
         });
+        setDeleteConfirmOpen(false);
+    };
+
+    const confirmDeleteRow = () => {
+        if (!deleteRowTarget) return;
+        router.delete('/material-items/delete-multiple', {
+            data: { ids: [deleteRowTarget.id] },
+            onSuccess: () => {
+                toast.success('Item deleted.');
+            },
+        });
+        setDeleteRowTarget(null);
     };
 
     // Columns
@@ -328,16 +403,33 @@ export default function ItemList() {
                 id: 'actions',
                 enableHiding: false,
                 enableResizing: false,
+                header: () => <span className="sr-only">Actions</span>,
                 cell: ({ row }) => (
-                    <Link href={`/material-items/${row.original.id}/edit`}>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs">
-                            Edit
-                        </Button>
-                    </Link>
+                    <div className="flex justify-end">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Row actions">
+                                    <EllipsisVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/material-items/${row.original.id}/edit`}>Edit</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeleteRowTarget(row.original)}
+                                >
+                                    Delete
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 ),
-                size: 60,
-                minSize: 60,
-                maxSize: 60,
+                size: 48,
+                minSize: 48,
+                maxSize: 48,
             },
         ],
         [categories, filters.sort, filters.dir, handleSort],
@@ -346,12 +438,9 @@ export default function ItemList() {
     const table = useReactTable({
         data: items.data,
         columns,
-        state: { rowSelection, columnVisibility, columnSizing, columnOrder },
+        state: { rowSelection, columnVisibility },
         onRowSelectionChange: setRowSelection,
         onColumnVisibilityChange: setColumnVisibility,
-        onColumnSizingChange: setColumnSizing,
-        onColumnOrderChange: setColumnOrder,
-        columnResizeMode: 'onChange',
         getCoreRowModel: getCoreRowModel(),
         manualPagination: true,
         manualSorting: true,
@@ -366,7 +455,7 @@ export default function ItemList() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Material items" />
 
-            <div className="mx-auto flex w-full min-w-[320px] flex-col gap-4 p-3 sm:p-4">
+            <div className="mx-auto flex w-full max-w-5xl min-w-[320px] flex-col gap-4 p-3 sm:p-4">
                 {/* Toolbar */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     {/* Search */}
@@ -378,56 +467,61 @@ export default function ItemList() {
                     {/* Actions */}
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         {selectedCount > 0 && (
-                            <Button variant="destructive" size="sm" onClick={deleteSelected}>
+                            <Button variant="destructive" size="sm" onClick={openDeleteConfirm}>
                                 <Trash2 className="h-4 w-4 sm:mr-1" />
                                 <span className="hidden sm:inline">Delete ({selectedCount})</span>
                                 <span className="sm:hidden">({selectedCount})</span>
                             </Button>
                         )}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <Columns3 className="h-4 w-4 sm:mr-1" />
-                                    <span className="hidden sm:inline">Columns</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {table
-                                    .getAllColumns()
-                                    .filter((col) => col.getCanHide())
-                                    .map((col) => (
-                                        <DropdownMenuCheckboxItem
-                                            key={col.id}
-                                            checked={col.getIsVisible()}
-                                            onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                                            onSelect={(e) => e.preventDefault()}
-                                        >
-                                            {(col.columnDef.meta as { label?: string })?.label ?? col.id}
-                                        </DropdownMenuCheckboxItem>
-                                    ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <ImporterWizardTrigger
-                            title="Import Material Items"
-                            description="Upload a CSV or Excel file to import material items."
-                            columns={IMPORT_COLUMNS as any}
-                            onSubmit={handleImport}
-                            serverValidateUrl="/material-items/validate-import"
-                        />
-                        <a href="/material-items/download">
-                            <Button variant="outline" size="sm">
-                                <Download className="h-4 w-4 sm:mr-1" />
-                                <span className="hidden sm:inline">Export</span>
-                            </Button>
-                        </a>
                         <Link href="/material-items/create">
                             <Button size="sm">
                                 <CirclePlus className="h-4 w-4 sm:mr-1" />
                                 <span className="hidden sm:inline">Add Item</span>
                             </Button>
                         </Link>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Columns3 className="h-4 w-4" />
+                                        Toggle columns
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {table
+                                            .getAllColumns()
+                                            .filter((col) => col.getCanHide())
+                                            .map((col) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={col.id}
+                                                    checked={col.getIsVisible()}
+                                                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
+                                                    onSelect={(e) => e.preventDefault()}
+                                                >
+                                                    {(col.columnDef.meta as { label?: string })?.label ?? col.id}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setImporterOpen(true)}>
+                                    <Upload className="h-4 w-4" />
+                                    Import CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <a href="/material-items/download">
+                                        <Download className="h-4 w-4" />
+                                        Export
+                                    </a>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 
@@ -466,53 +560,19 @@ export default function ItemList() {
                     <Table>
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id} className="bg-muted/50">
+                                <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => (
                                         <TableHead
                                             key={header.id}
-                                            className="group relative px-3"
+                                            className="px-3"
                                             style={{
-                                                ...(header.column.columnDef.enableResizing === false || columnSizing[header.column.id] != null
-                                                    ? { width: header.getSize() }
-                                                    : {}),
+                                                width: header.getSize(),
                                                 minWidth: header.column.columnDef.minSize,
                                             }}
-                                            onDragOver={(e) => {
-                                                e.preventDefault();
-                                                e.dataTransfer.dropEffect = 'move';
-                                            }}
-                                            onDrop={(e) => {
-                                                e.preventDefault();
-                                                const draggedId = e.dataTransfer.getData('text/plain');
-                                                if (draggedId === header.column.id) return;
-                                                const currentOrder = table.getState().columnOrder.length
-                                                    ? [...table.getState().columnOrder]
-                                                    : table.getAllLeafColumns().map((c) => c.id);
-                                                const fromIdx = currentOrder.indexOf(draggedId);
-                                                const toIdx = currentOrder.indexOf(header.column.id);
-                                                if (fromIdx === -1 || toIdx === -1) return;
-                                                currentOrder.splice(fromIdx, 1);
-                                                currentOrder.splice(toIdx, 0, draggedId);
-                                                setColumnOrder(currentOrder);
-                                            }}
                                         >
-                                            <div
-                                                className={`truncate ${header.column.getCanHide() && !header.isPlaceholder ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                                                draggable={header.column.getCanHide() && !header.isPlaceholder}
-                                                onDragStart={(e) => {
-                                                    e.dataTransfer.setData('text/plain', header.column.id);
-                                                    e.dataTransfer.effectAllowed = 'move';
-                                                }}
-                                            >
+                                            <div className="truncate">
                                                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                             </div>
-                                            {header.column.getCanResize() && (
-                                                <div
-                                                    onMouseDown={header.getResizeHandler()}
-                                                    onTouchStart={header.getResizeHandler()}
-                                                    className={`absolute top-0 right-0 h-full w-1 cursor-col-resize select-none touch-none opacity-0 transition-opacity group-hover:opacity-100 ${header.column.getIsResizing() ? 'bg-primary opacity-100' : 'bg-border'}`}
-                                                />
-                                            )}
                                         </TableHead>
                                     ))}
                                 </TableRow>
@@ -537,9 +597,7 @@ export default function ItemList() {
                                                 key={cell.id}
                                                 className="px-3"
                                                 style={{
-                                                    ...(cell.column.columnDef.enableResizing === false || columnSizing[cell.column.id] != null
-                                                        ? { width: cell.column.getSize() }
-                                                        : {}),
+                                                    width: cell.column.getSize(),
                                                     minWidth: cell.column.columnDef.minSize,
                                                 }}
                                             >
@@ -554,39 +612,156 @@ export default function ItemList() {
                 </div>
 
                 {/* Pagination */}
-                <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-                    <p className="text-muted-foreground text-xs sm:text-sm">{items.total > 0 ? `${fromRow}\u2013${toRow} of ${items.total.toLocaleString()} items` : 'No items'}</p>
-                    <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: 1 })}>
-                            <ChevronFirst className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" disabled={items.current_page <= 1} onClick={() => navigate({ page: items.current_page - 1 })}>
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-muted-foreground px-2 text-xs tabular-nums sm:px-3 sm:text-sm">
-                            {items.current_page} / {items.last_page}
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8"
-                            disabled={items.current_page >= items.last_page}
-                            onClick={() => navigate({ page: items.current_page + 1 })}
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8"
-                            disabled={items.current_page >= items.last_page}
-                            onClick={() => navigate({ page: items.last_page })}
-                        >
-                            <ChevronLast className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
+                {(() => {
+                    const pageWindow = getPageWindow(items.current_page, items.last_page);
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-muted-foreground text-xs sm:text-sm">
+                                {items.total > 0 ? `${fromRow}\u2013${toRow} of ${items.total.toLocaleString()} items` : 'No items'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                    <Select
+                                        value={String(filters.per_page)}
+                                        onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                                    >
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>
+                                                    {n}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={items.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (items.current_page > 1) navigate({ page: 1 });
+                                                }}
+                                                className={items.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={items.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (items.current_page > 1) navigate({ page: items.current_page - 1 });
+                                                }}
+                                                className={items.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === items.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            navigate({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={items.current_page >= items.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (items.current_page < items.last_page) navigate({ page: items.current_page + 1 });
+                                                }}
+                                                className={items.current_page >= items.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={items.current_page >= items.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (items.current_page < items.last_page) navigate({ page: items.last_page });
+                                                }}
+                                                className={items.current_page >= items.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
+
+            <ImporterWizardDialog
+                open={importerOpen}
+                onOpenChange={setImporterOpen}
+                title="Import Material Items"
+                description="Upload a CSV or Excel file to import material items."
+                columns={IMPORT_COLUMNS as any}
+                onSubmit={handleImport}
+                serverValidateUrl="/material-items/validate-import"
+            />
+
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete {selectedCount} item{selectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the selected material item{selectedCount === 1 ? '' : 's'}. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-white hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!deleteRowTarget} onOpenChange={(o) => !o && setDeleteRowTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this item?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete {deleteRowTarget ? <span className="font-medium">{deleteRowTarget.code}</span> : 'this item'}. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeleteRow} className="bg-destructive text-white hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

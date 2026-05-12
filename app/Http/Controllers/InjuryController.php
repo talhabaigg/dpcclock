@@ -20,6 +20,11 @@ class InjuryController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+        $perPage = (int) $request->input('per_page', 25);
+
         $query = Injury::with(['employee', 'location', 'representative', 'creator']);
 
         if (! $request->user()->can('injury-register.view-all')) {
@@ -106,7 +111,7 @@ class InjuryController extends Controller
             }
         }
 
-        $injuries = $query->latest('occurred_at')->paginate(25)->withQueryString();
+        $injuries = $query->latest('occurred_at')->paginate($perPage)->withQueryString();
 
         return Inertia::render('injury-register/index', [
             'injuries' => $injuries,

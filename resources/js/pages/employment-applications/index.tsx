@@ -1,9 +1,11 @@
-import PaginationComponent, { type PaginationData } from '@/components/index-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -12,8 +14,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertTriangle, ChevronDown, CircleCheck, Columns3, Download, FileText, Filter, GripVertical, LayoutList, Loader2, MapPin, Search, Trash2, Upload, UserCheck, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertTriangle, ChevronsLeft, ChevronsRight, CircleCheck, Columns3, FileText, Filter, GripVertical, LayoutList, Loader2, MapPin, Menu, Search, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const ApplicantMapView = lazy(() => import('@/components/employment-applications/applicant-map-view'));
@@ -44,13 +46,19 @@ interface Filters {
     duplicates_only?: string;
     apprentice?: string;
     apprentice_year?: string;
+    per_page?: string | number;
+}
 
+interface Paginated<T> {
+    data: T[];
+    current_page?: number;
+    last_page?: number;
+    per_page?: number;
+    total?: number;
 }
 
 interface PageProps {
-    applications: {
-        data: EmploymentApplication[];
-    } & Partial<PaginationData>;
+    applications: Paginated<EmploymentApplication>;
     filters: Filters;
     statuses: string[];
     occupations: string[];
@@ -297,8 +305,23 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
 
     const activeFilterCount = [filters.status, filters.occupation, filters.suburb, filters.date_from || filters.date_to, filters.duplicates_only, filters.apprentice, filters.apprentice_year].filter(Boolean).length;
 
+    type ComboItem = { value: string; label: string };
+    const statusItems = useMemo<ComboItem[]>(
+        () => [{ value: '', label: 'All statuses' }, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))],
+        [],
+    );
+    const occupationItems = useMemo<ComboItem[]>(
+        () => [
+            { value: '', label: 'All occupations' },
+            ...occupations.map((occ) => ({ value: occ, label: occ.charAt(0).toUpperCase() + occ.slice(1) })),
+        ],
+        [occupations],
+    );
+    const selectedStatus = statusItems.find((i) => i.value === (filters.status ?? '')) ?? statusItems[0];
+    const selectedOccupation = occupationItems.find((i) => i.value === (filters.occupation ?? '')) ?? occupationItems[0];
+
     const buildQuery = useCallback(
-        (overrides: Partial<Filters & { view: string }> = {}) => {
+        (overrides: Partial<Filters & { view: string; page: number }> = {}) => {
             const merged = { ...filters, view, ...overrides };
             const query: Record<string, string> = {};
             if (merged.search) query.search = merged.search;
@@ -310,11 +333,31 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
             if (merged.duplicates_only) query.duplicates_only = merged.duplicates_only;
             if (merged.apprentice) query.apprentice = merged.apprentice;
             if (merged.apprentice_year) query.apprentice_year = merged.apprentice_year;
+            if (merged.per_page) query.per_page = String(merged.per_page);
+            if (overrides.page && overrides.page > 1) query.page = String(overrides.page);
             if (merged.view && merged.view !== 'list') query.view = merged.view;
             return query;
         },
         [filters, view],
     );
+
+    const goToPage = useCallback(
+        (overrides: { page?: number; per_page?: number }) => {
+            router.get('/employment-applications', buildQuery(overrides), { preserveState: true, preserveScroll: true });
+        },
+        [buildQuery],
+    );
+
+    const getPageWindow = (current: number, last: number): (number | 'ellipsis')[] => {
+        if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+        const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+        const pages: (number | 'ellipsis')[] = [1];
+        if (around[0] > 2) pages.push('ellipsis');
+        pages.push(...around);
+        if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+        pages.push(last);
+        return pages;
+    };
 
     const applyFilters = useCallback(
         (newFilters: Partial<Filters>) => {
@@ -405,7 +448,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employment Enquiries" />
 
-            <div className={`flex flex-col p-3 sm:p-4 ${view === 'kanban' || view === 'map' ? 'h-[calc(100dvh-4rem)] overflow-hidden gap-3' : 'gap-4'}`}>
+            <div className={`flex flex-col p-3 sm:p-4 ${view === 'kanban' || view === 'map' ? 'h-[calc(100dvh-4rem)] overflow-hidden gap-3' : 'mx-auto w-full max-w-5xl gap-4'}`}>
                 {alertMessage && (
                     <Alert
                         variant={alertMessage.type === 'error' ? 'destructive' : 'default'}
@@ -421,7 +464,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                     </Alert>
                 )}
 
-                {/* Search + Filter Toggle + View Toggle */}
+                {/* Search + Filter Trigger + View Toggle + Burger Menu */}
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <div className="relative w-full sm:max-w-xs">
                         <Search className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2" size={18} />
@@ -433,15 +476,171 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             className="pl-10"
                         />
                     </div>
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFilters(!showFilters)}>
-                        <Filter size={14} />
-                        Filters
-                        {activeFilterCount > 0 && (
-                            <Badge variant="secondary" className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-xs">
-                                {activeFilterCount}
-                            </Badge>
-                        )}
-                    </Button>
+                    <Sheet open={showFilters} onOpenChange={setShowFilters}>
+                        <SheetTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-1.5">
+                                <Filter size={14} />
+                                Filters
+                                {activeFilterCount > 0 && (
+                                    <Badge variant="secondary" className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-xs">
+                                        {activeFilterCount}
+                                    </Badge>
+                                )}
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-full sm:max-w-md">
+                            <SheetHeader>
+                                <SheetTitle>Filters</SheetTitle>
+                            </SheetHeader>
+                            <div className="flex flex-col gap-4 overflow-y-auto px-4">
+                                {/* Status */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-muted-foreground text-xs font-medium">Status</label>
+                                    <Combobox<ComboItem>
+                                        items={statusItems}
+                                        value={selectedStatus}
+                                        itemToStringLabel={(item) => item.label}
+                                        itemToStringValue={(item) => item.value}
+                                        onValueChange={(item) => item && applyFilters({ status: item.value })}
+                                    >
+                                        <ComboboxTrigger
+                                            render={<Button variant="outline" className="w-full justify-between" />}
+                                            aria-label="Filter by status"
+                                        >
+                                            <span className="truncate">{selectedStatus.label}</span>
+                                        </ComboboxTrigger>
+                                        <ComboboxContent className="w-(--anchor-width) p-0">
+                                            <ComboboxInput placeholder="Search statuses..." className="h-9" showTrigger={false} />
+                                            <ComboboxEmpty>No statuses found.</ComboboxEmpty>
+                                            <ComboboxList>
+                                                {(option: ComboItem) => (
+                                                    <ComboboxItem key={option.value} value={option}>
+                                                        <span className="truncate">{option.label}</span>
+                                                    </ComboboxItem>
+                                                )}
+                                            </ComboboxList>
+                                        </ComboboxContent>
+                                    </Combobox>
+                                </div>
+
+                                {/* Occupation */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-muted-foreground text-xs font-medium">Occupation</label>
+                                    <Combobox<ComboItem>
+                                        items={occupationItems}
+                                        value={selectedOccupation}
+                                        itemToStringLabel={(item) => item.label}
+                                        itemToStringValue={(item) => item.value}
+                                        onValueChange={(item) => item && applyFilters({ occupation: item.value })}
+                                    >
+                                        <ComboboxTrigger
+                                            render={<Button variant="outline" className="w-full justify-between" />}
+                                            aria-label="Filter by occupation"
+                                        >
+                                            <span className="truncate">{selectedOccupation.label}</span>
+                                        </ComboboxTrigger>
+                                        <ComboboxContent className="w-(--anchor-width) p-0">
+                                            <ComboboxInput placeholder="Search occupations..." className="h-9" showTrigger={false} />
+                                            <ComboboxEmpty>No occupations found.</ComboboxEmpty>
+                                            <ComboboxList>
+                                                {(option: ComboItem) => (
+                                                    <ComboboxItem key={option.value} value={option}>
+                                                        <span className="truncate">{option.label}</span>
+                                                    </ComboboxItem>
+                                                )}
+                                            </ComboboxList>
+                                        </ComboboxContent>
+                                    </Combobox>
+                                </div>
+
+                                {/* Apprentices */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-muted-foreground text-xs font-medium">Apprentices</label>
+                                    <Select value={filters.apprentice ?? ''} onValueChange={(v) => applyFilters({ apprentice: v === 'all' ? '' : v, apprentice_year: v !== 'only' ? '' : filters.apprentice_year })}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="All candidates" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All candidates</SelectItem>
+                                            <SelectItem value="only">Apprentices only</SelectItem>
+                                            <SelectItem value="exclude">Exclude apprentices</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Apprentice year — only when filtering apprentices */}
+                                {filters.apprentice === 'only' && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-muted-foreground text-xs font-medium">Apprentice year</label>
+                                        <Select value={filters.apprentice_year ?? ''} onValueChange={(v) => applyFilters({ apprentice_year: v === 'all' ? '' : v })}>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Any year" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">Any year</SelectItem>
+                                                <SelectItem value="1">Year 1</SelectItem>
+                                                <SelectItem value="2">Year 2</SelectItem>
+                                                <SelectItem value="3">Year 3</SelectItem>
+                                                <SelectItem value="4">Year 4</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+
+                                {/* Suburb */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-muted-foreground text-xs font-medium">Suburb</label>
+                                    <Input
+                                        type="text"
+                                        placeholder="Any suburb"
+                                        value={suburb}
+                                        onChange={(e) => {
+                                            setSuburb(e.target.value);
+                                            clearTimeout(suburbTimeout.current);
+                                            suburbTimeout.current = setTimeout(() => applyFilters({ suburb: e.target.value }), 400);
+                                        }}
+                                        className="w-full"
+                                    />
+                                </div>
+
+                                {/* Date range */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-muted-foreground text-xs font-medium">Date range</label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            type="date"
+                                            value={filters.date_from ?? ''}
+                                            onChange={(e) => applyFilters({ date_from: e.target.value })}
+                                            className="flex-1"
+                                        />
+                                        <span className="text-muted-foreground text-xs">to</span>
+                                        <Input
+                                            type="date"
+                                            value={filters.date_to ?? ''}
+                                            onChange={(e) => applyFilters({ date_to: e.target.value })}
+                                            className="flex-1"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Duplicates checkbox */}
+                                <label htmlFor="duplicates_only" className="flex cursor-pointer items-center gap-2">
+                                    <Checkbox
+                                        id="duplicates_only"
+                                        checked={filters.duplicates_only === '1'}
+                                        onCheckedChange={(checked) => applyFilters({ duplicates_only: checked ? '1' : '' })}
+                                    />
+                                    <span className="text-sm whitespace-nowrap">Duplicates only</span>
+                                </label>
+                            </div>
+                            <SheetFooter className="flex-row justify-end gap-2">
+                                <Button variant="ghost" onClick={clearFilters} disabled={activeFilterCount === 0 && !filters.search}>
+                                    Reset
+                                </Button>
+                                <Button onClick={() => setShowFilters(false)}>Done</Button>
+                            </SheetFooter>
+                        </SheetContent>
+                    </Sheet>
                     {(activeFilterCount > 0 || filters.search) && (
                         <Button variant="ghost" size="sm" className="text-muted-foreground gap-1 text-xs" onClick={clearFilters}>
                             <X size={14} />
@@ -449,42 +648,8 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                         </Button>
                     )}
 
-                    {/* Import + View toggle */}
+                    {/* View toggle + Burger Menu pinned right */}
                     <div className="ml-auto flex items-center gap-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2">
-                                    Actions
-                                    <ChevronDown size={14} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="z-[10000]">
-                                <DropdownMenuItem asChild>
-                                    <a href="/employment-applications/import-template">
-                                        <Download size={14} />
-                                        Download Template
-                                    </a>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleFindOnboarded}>
-                                    <UserCheck size={14} />
-                                    Find Onboarded
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowImportDialog(true)}>
-                                    <Upload size={14} />
-                                    Import
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowLegacyImportDialog(true)}>
-                                    <Upload size={14} />
-                                    Import Legacy
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {isLocal && (
-                            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-2" onClick={() => setShowDropAllDialog(true)} title="Delete all enquiries (local only)">
-                                <Trash2 size={14} />
-                                <span className="hidden sm:inline">Drop All</span>
-                            </Button>
-                        )}
                         <div className="flex items-center gap-0.5 rounded-md border p-0.5">
                             <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => toggleView('list')} title="List view">
                                 <LayoutList size={14} />
@@ -496,132 +661,34 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                 <MapPin size={14} />
                             </Button>
                         </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-max">
+                                <DropdownMenuItem asChild className="whitespace-nowrap">
+                                    <a href="/employment-applications/import-template">Download Template</a>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="whitespace-nowrap" onClick={handleFindOnboarded}>Find Onboarded</DropdownMenuItem>
+                                <DropdownMenuItem className="whitespace-nowrap" onClick={() => setShowImportDialog(true)}>Import</DropdownMenuItem>
+                                <DropdownMenuItem className="whitespace-nowrap" onClick={() => setShowLegacyImportDialog(true)}>Import Legacy</DropdownMenuItem>
+                                {isLocal && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive whitespace-nowrap"
+                                            onClick={() => setShowDropAllDialog(true)}
+                                        >
+                                            Drop All
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
-
-                {/* Filter Bar */}
-                {showFilters && (
-                    <div className="shrink-0 rounded-lg border p-3">
-                        <div className="flex flex-wrap gap-x-4 gap-y-3">
-                            {/* Status */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium">Status</label>
-                                <Select value={filters.status ?? ''} onValueChange={(v) => applyFilters({ status: v === 'all' ? '' : v })}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="All statuses" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All statuses</SelectItem>
-                                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Occupation */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium">Occupation</label>
-                                <Select value={filters.occupation ?? ''} onValueChange={(v) => applyFilters({ occupation: v === 'all' ? '' : v })}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="All occupations" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All occupations</SelectItem>
-                                        {occupations.map((occ) => (
-                                            <SelectItem key={occ} value={occ}>
-                                                {occ.charAt(0).toUpperCase() + occ.slice(1)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Apprentices */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium">Apprentices</label>
-                                <Select value={filters.apprentice ?? ''} onValueChange={(v) => applyFilters({ apprentice: v === 'all' ? '' : v, apprentice_year: v !== 'only' ? '' : filters.apprentice_year })}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="All candidates" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All candidates</SelectItem>
-                                        <SelectItem value="only">Apprentices only</SelectItem>
-                                        <SelectItem value="exclude">Exclude apprentices</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Apprentice year — only when filtering apprentices */}
-                            {filters.apprentice === 'only' && (
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-muted-foreground text-xs font-medium">Apprentice year</label>
-                                    <Select value={filters.apprentice_year ?? ''} onValueChange={(v) => applyFilters({ apprentice_year: v === 'all' ? '' : v })}>
-                                        <SelectTrigger className="w-[120px]">
-                                            <SelectValue placeholder="Any year" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Any year</SelectItem>
-                                            <SelectItem value="1">Year 1</SelectItem>
-                                            <SelectItem value="2">Year 2</SelectItem>
-                                            <SelectItem value="3">Year 3</SelectItem>
-                                            <SelectItem value="4">Year 4</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            {/* Suburb */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium">Suburb</label>
-                                <Input
-                                    type="text"
-                                    placeholder="Any suburb"
-                                    value={suburb}
-                                    onChange={(e) => {
-                                        setSuburb(e.target.value);
-                                        clearTimeout(suburbTimeout.current);
-                                        suburbTimeout.current = setTimeout(() => applyFilters({ suburb: e.target.value }), 400);
-                                    }}
-                                    className="w-[160px]"
-                                />
-                            </div>
-
-                            {/* Date range */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium">Date range</label>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        type="date"
-                                        value={filters.date_from ?? ''}
-                                        onChange={(e) => applyFilters({ date_from: e.target.value })}
-                                        className="w-[140px]"
-                                    />
-                                    <span className="text-muted-foreground text-xs">to</span>
-                                    <Input
-                                        type="date"
-                                        value={filters.date_to ?? ''}
-                                        onChange={(e) => applyFilters({ date_to: e.target.value })}
-                                        className="w-[140px]"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Duplicates checkbox */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-muted-foreground text-xs font-medium invisible">Show</label>
-                                <label htmlFor="duplicates_only" className="flex h-9 cursor-pointer items-center gap-2">
-                                    <Checkbox
-                                        id="duplicates_only"
-                                        checked={filters.duplicates_only === '1'}
-                                        onCheckedChange={(checked) => applyFilters({ duplicates_only: checked ? '1' : '' })}
-                                    />
-                                    <span className="text-sm whitespace-nowrap">Duplicates only</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* Kanban view */}
                 {view === 'kanban' && (
@@ -681,11 +748,10 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                         <div className="hidden overflow-hidden rounded-lg border sm:block">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-muted/50">
+                                    <TableRow>
                                         <TableHead className="px-3">Enquiry #</TableHead>
                                         <TableHead className="px-3">Name</TableHead>
-                                        <TableHead className="px-3">Email</TableHead>
-                                        <TableHead className="px-3">Phone</TableHead>
+                                        <TableHead className="px-3">Contact</TableHead>
                                         <TableHead className="px-3">Occupation</TableHead>
                                         <TableHead className="px-3">Suburb</TableHead>
                                         <TableHead className="px-3">Status</TableHead>
@@ -695,7 +761,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                 <TableBody>
                                     {!applications.data.length ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-32 text-center">
+                                            <TableCell colSpan={7} className="h-32 text-center">
                                                 <div className="text-muted-foreground flex flex-col items-center gap-2">
                                                     <FileText className="h-8 w-8 opacity-40" />
                                                     <p>No enquiries found</p>
@@ -718,8 +784,12 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground px-3 text-sm">{app.email}</TableCell>
-                                                <TableCell className="text-muted-foreground px-3 text-sm">{app.phone}</TableCell>
+                                                <TableCell className="text-muted-foreground px-3 text-sm">
+                                                    <div className="flex flex-col leading-tight">
+                                                        <span>{app.phone}</span>
+                                                        <span className="text-xs break-all">{app.email}</span>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="px-3 text-sm">{occupationLabel(app)}</TableCell>
                                                 <TableCell className="text-muted-foreground px-3 text-sm">{app.suburb}</TableCell>
                                                 <TableCell className="px-3">
@@ -734,9 +804,113 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                         </div>
 
                         {/* Pagination */}
-                        {applications.last_page != null && applications.last_page > 1 && (
-                            <PaginationComponent pagination={applications as unknown as PaginationData} />
-                        )}
+                        {applications.current_page != null && applications.last_page != null && applications.per_page != null && applications.total != null && (() => {
+                            const currentPage = applications.current_page!;
+                            const lastPage = applications.last_page!;
+                            const perPage = applications.per_page!;
+                            const total = applications.total!;
+                            const fromRow = total === 0 ? 0 : (currentPage - 1) * perPage + 1;
+                            const toRow = Math.min(currentPage * perPage, total);
+                            const pageWindow = getPageWindow(currentPage, lastPage);
+
+                            return (
+                                <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                                    <p className="text-muted-foreground text-xs sm:text-sm">
+                                        {total > 0 ? `${fromRow}–${toRow} of ${total.toLocaleString()} items` : 'No items'}
+                                    </p>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                            <Select value={String(perPage)} onValueChange={(v) => goToPage({ per_page: Number(v), page: 1 })}>
+                                                <SelectTrigger size="sm" className="w-[72px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {[10, 25, 50, 100].map((n) => (
+                                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <Pagination className="mx-0 w-auto justify-end">
+                                            <PaginationContent>
+                                                <PaginationItem>
+                                                    <PaginationLink
+                                                        aria-label="Go to first page"
+                                                        aria-disabled={currentPage <= 1}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (currentPage > 1) goToPage({ page: 1 });
+                                                        }}
+                                                        className={currentPage <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                                    >
+                                                        <ChevronsLeft className="h-4 w-4" />
+                                                    </PaginationLink>
+                                                </PaginationItem>
+
+                                                <PaginationItem>
+                                                    <PaginationPrevious
+                                                        aria-disabled={currentPage <= 1}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (currentPage > 1) goToPage({ page: currentPage - 1 });
+                                                        }}
+                                                        className={currentPage <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                                    />
+                                                </PaginationItem>
+
+                                                {pageWindow.map((p, i) =>
+                                                    p === 'ellipsis' ? (
+                                                        <PaginationItem key={`e-${i}`}>
+                                                            <PaginationEllipsis />
+                                                        </PaginationItem>
+                                                    ) : (
+                                                        <PaginationItem key={p}>
+                                                            <PaginationLink
+                                                                isActive={p === currentPage}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    goToPage({ page: p });
+                                                                }}
+                                                            >
+                                                                {p}
+                                                            </PaginationLink>
+                                                        </PaginationItem>
+                                                    ),
+                                                )}
+
+                                                <PaginationItem>
+                                                    <PaginationNext
+                                                        aria-disabled={currentPage >= lastPage}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (currentPage < lastPage) goToPage({ page: currentPage + 1 });
+                                                        }}
+                                                        className={currentPage >= lastPage ? 'pointer-events-none opacity-50' : ''}
+                                                    />
+                                                </PaginationItem>
+
+                                                <PaginationItem>
+                                                    <PaginationLink
+                                                        aria-label="Go to last page"
+                                                        aria-disabled={currentPage >= lastPage}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (currentPage < lastPage) goToPage({ page: lastPage });
+                                                        }}
+                                                        className={currentPage >= lastPage ? 'pointer-events-none opacity-50' : ''}
+                                                    >
+                                                        <ChevronsRight className="h-4 w-4" />
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            </PaginationContent>
+                                        </Pagination>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </>
                 )}
             </div>

@@ -1,14 +1,19 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format, parse } from 'date-fns';
-import { Download, Mail, RotateCcw, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, EllipsisVertical, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 interface SigningRequestRow {
@@ -32,10 +37,13 @@ interface SigningRequestRow {
 
 interface PaginatedResponse<T> {
     data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
     from: number | null;
     to: number | null;
-    total: number;
+    links: { url: string | null; label: string; active: boolean }[];
 }
 
 interface Filters {
@@ -46,6 +54,7 @@ interface Filters {
     date_from?: string;
     date_to?: string;
     q?: string;
+    per_page?: string;
 }
 
 interface IndexPageProps {
@@ -71,6 +80,17 @@ function formatDateTime(dateStr: string | null): string {
     });
 }
 
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
+}
+
 export default function SigningRequestsIndex() {
     const { signingRequests, filters, senders, signableTypes, statuses } = usePage<IndexPageProps>().props;
 
@@ -81,12 +101,15 @@ export default function SigningRequestsIndex() {
     const [sentBy, setSentBy] = useState<string>(filters.sent_by ?? 'all');
     const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
     const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+    const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
-    const applyFilters = (overrides: Partial<Filters> = {}) => {
+    const buildParams = (overrides: Partial<Filters> = {}) => {
         const params: Record<string, string> = {};
         const effective = {
             q, status, delivery_method: deliveryMethod, signable_type: signableType,
-            sent_by: sentBy, date_from: dateFrom, date_to: dateTo, ...overrides,
+            sent_by: sentBy, date_from: dateFrom, date_to: dateTo,
+            per_page: filters.per_page ?? String(signingRequests.per_page),
+            ...overrides,
         };
         if (effective.q) params.q = effective.q;
         if (effective.status && effective.status !== 'all') params.status = effective.status;
@@ -95,7 +118,20 @@ export default function SigningRequestsIndex() {
         if (effective.sent_by && effective.sent_by !== 'all') params.sent_by = effective.sent_by;
         if (effective.date_from) params.date_from = effective.date_from;
         if (effective.date_to) params.date_to = effective.date_to;
-        router.get(route('signing-requests.index'), params, { preserveState: true, preserveScroll: true });
+        if (effective.per_page) params.per_page = effective.per_page;
+        return params;
+    };
+
+    const applyFilters = (overrides: Partial<Filters> = {}) => {
+        router.get(route('signing-requests.index'), buildParams(overrides), { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const navigate = (overrides: { page?: number; per_page?: number }) => {
+        router.get(
+            route('signing-requests.index'),
+            { ...buildParams(), page: overrides.page, per_page: String(overrides.per_page ?? signingRequests.per_page) },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
     };
 
     const resetFilters = () => {
@@ -103,13 +139,12 @@ export default function SigningRequestsIndex() {
         router.get(route('signing-requests.index'), {}, { preserveState: true, preserveScroll: true });
     };
 
-    // Debounced search
     useEffect(() => {
         const t = setTimeout(() => {
             if ((filters.q ?? '') !== q) applyFilters({ q });
         }, 300);
         return () => clearTimeout(t);
-         
+
     }, [q]);
 
     const signableTypeLabel = useMemo(() => {
@@ -117,63 +152,156 @@ export default function SigningRequestsIndex() {
         return (type: string | null) => (type ? map.get(type) ?? type.split('\\').pop() ?? type : '—');
     }, [signableTypes]);
 
+    const activeFilterCount = [
+        status !== 'all',
+        deliveryMethod !== 'all',
+        signableType !== 'all',
+        sentBy !== 'all',
+        !!dateFrom,
+        !!dateTo,
+    ].filter(Boolean).length;
+
+    const selectedSender = senders.find((s) => String(s.id) === sentBy);
+
+    const fromRow = signingRequests.total === 0 ? 0 : (signingRequests.current_page - 1) * signingRequests.per_page + 1;
+    const toRow = Math.min(signingRequests.current_page * signingRequests.per_page, signingRequests.total);
+    const pageWindow = getPageWindow(signingRequests.current_page, signingRequests.last_page);
+    const atFirst = signingRequests.current_page <= 1;
+    const atLast = signingRequests.current_page >= signingRequests.last_page;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Signing Requests" />
             <div className="flex flex-col gap-4 p-4">
-                {/* Filter bar */}
-                <div className="rounded-lg border bg-card p-3">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        <Input placeholder="Search recipient / document…" value={q} onChange={(e) => setQ(e.target.value)} className="sm:col-span-2" />
-
-                        <Select value={status} onValueChange={(v) => { setStatus(v); applyFilters({ status: v }); }}>
-                            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All statuses</SelectItem>
-                                {statuses.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={deliveryMethod} onValueChange={(v) => { setDeliveryMethod(v); applyFilters({ delivery_method: v }); }}>
-                            <SelectTrigger><SelectValue placeholder="Delivery" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All delivery</SelectItem>
-                                <SelectItem value="email">Email</SelectItem>
-                                <SelectItem value="in_person">In-person</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={signableType} onValueChange={(v) => { setSignableType(v); applyFilters({ signable_type: v }); }}>
-                            <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All types</SelectItem>
-                                {signableTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={sentBy} onValueChange={(v) => { setSentBy(v); applyFilters({ sent_by: v }); }}>
-                            <SelectTrigger><SelectValue placeholder="Sent by" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All senders</SelectItem>
-                                {senders.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-
-                        <DatePickerDemo
-                            value={dateFrom ? parse(dateFrom, 'yyyy-MM-dd', new Date()) : undefined}
-                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateFrom(v); applyFilters({ date_from: v }); }}
-                            placeholder="From date"
-                            displayFormat="dd/MM/yyyy"
-                        />
-                        <DatePickerDemo
-                            value={dateTo ? parse(dateTo, 'yyyy-MM-dd', new Date()) : undefined}
-                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateTo(v); applyFilters({ date_to: v }); }}
-                            placeholder="To date"
-                            displayFormat="dd/MM/yyyy"
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="w-full sm:max-w-xs">
+                        <Input
+                            placeholder="Search recipient / document…"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
                         />
                     </div>
-                    <div className="mt-2 flex justify-end">
-                        <Button variant="ghost" size="sm" onClick={resetFilters}>Reset filters</Button>
+
+                    <div className="flex items-center gap-2">
+                        <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+                            <SheetTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                    Filters
+                                    {activeFilterCount > 0 && (
+                                        <Badge variant="secondary">{activeFilterCount}</Badge>
+                                    )}
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-full sm:max-w-sm">
+                                <SheetHeader>
+                                    <SheetTitle>Filters</SheetTitle>
+                                </SheetHeader>
+                                <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Status</Label>
+                                        <Select value={status} onValueChange={(v) => { setStatus(v); applyFilters({ status: v }); }}>
+                                            <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All statuses</SelectItem>
+                                                {statuses.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Delivery method</Label>
+                                        <Select value={deliveryMethod} onValueChange={(v) => { setDeliveryMethod(v); applyFilters({ delivery_method: v }); }}>
+                                            <SelectTrigger><SelectValue placeholder="All delivery" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All delivery</SelectItem>
+                                                <SelectItem value="email">Email</SelectItem>
+                                                <SelectItem value="in_person">In-person</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Type</Label>
+                                        <Select value={signableType} onValueChange={(v) => { setSignableType(v); applyFilters({ signable_type: v }); }}>
+                                            <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All types</SelectItem>
+                                                {signableTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Sent by</Label>
+                                        <Combobox
+                                            items={senders}
+                                            value={selectedSender ?? null}
+                                            onValueChange={(s: { id: number; name: string } | null) => {
+                                                const v = s ? String(s.id) : 'all';
+                                                setSentBy(v);
+                                                applyFilters({ sent_by: v });
+                                            }}
+                                        >
+                                            <ComboboxTrigger
+                                                render={<Button variant="outline" className="w-full justify-between font-normal" />}
+                                                aria-label="Filter by sender"
+                                            >
+                                                <span className={selectedSender ? '' : 'text-muted-foreground'}>
+                                                    {selectedSender?.name ?? 'All senders'}
+                                                </span>
+                                            </ComboboxTrigger>
+                                            <ComboboxContent className="w-(--anchor-width) min-w-(--anchor-width) p-0">
+                                                <ComboboxInput placeholder="Search senders…" className="h-9" showTrigger={false} />
+                                                <ComboboxEmpty>No senders found.</ComboboxEmpty>
+                                                <ComboboxList>
+                                                    {(s: { id: number; name: string }) => (
+                                                        <ComboboxItem key={s.id} value={s}>
+                                                            {s.name}
+                                                        </ComboboxItem>
+                                                    )}
+                                                </ComboboxList>
+                                            </ComboboxContent>
+                                        </Combobox>
+                                        {sentBy !== 'all' && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="self-start text-xs"
+                                                onClick={() => { setSentBy('all'); applyFilters({ sent_by: 'all' }); }}
+                                            >
+                                                Clear sender
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>From date</Label>
+                                        <DatePickerDemo
+                                            value={dateFrom ? parse(dateFrom, 'yyyy-MM-dd', new Date()) : undefined}
+                                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateFrom(v); applyFilters({ date_from: v }); }}
+                                            placeholder="From date"
+                                            displayFormat="dd/MM/yyyy"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>To date</Label>
+                                        <DatePickerDemo
+                                            value={dateTo ? parse(dateTo, 'yyyy-MM-dd', new Date()) : undefined}
+                                            onChange={(d) => { const v = d ? format(d, 'yyyy-MM-dd') : ''; setDateTo(v); applyFilters({ date_to: v }); }}
+                                            placeholder="To date"
+                                            displayFormat="dd/MM/yyyy"
+                                        />
+                                    </div>
+                                </div>
+                                <SheetFooter>
+                                    <Button variant="ghost" onClick={resetFilters}>Reset</Button>
+                                    <Button onClick={() => setFilterSheetOpen(false)}>Done</Button>
+                                </SheetFooter>
+                            </SheetContent>
+                        </Sheet>
                     </div>
                 </div>
 
@@ -181,13 +309,13 @@ export default function SigningRequestsIndex() {
                 <div className="overflow-hidden rounded-lg border">
                     <Table>
                         <TableHeader>
-                            <TableRow className="bg-muted/50">
+                            <TableRow>
                                 <TableHead className="px-3 text-xs">Document</TableHead>
                                 <TableHead className="px-3 text-xs">Recipient</TableHead>
                                 <TableHead className="px-3 text-xs">Signable</TableHead>
                                 <TableHead className="px-3 text-xs">Sent by</TableHead>
                                 <TableHead className="px-3 text-xs">Status</TableHead>
-                                <TableHead className="px-3 text-xs text-right">Actions</TableHead>
+                                <TableHead className="w-12 px-3 text-xs text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -233,36 +361,54 @@ export default function SigningRequestsIndex() {
                                                 <span className="text-muted-foreground">{statusTimestamp}</span>
                                             </TableCell>
                                             <TableCell className="px-3 text-right">
-                                                <div className="flex justify-end gap-1">
-                                                    {isSigned && (
-                                                        <>
-                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
-                                                                <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
-                                                                    <Download className="h-3 w-3" />
-                                                                    Download
-                                                                </a>
-                                                            </Button>
-                                                            {sr.recipient_email && (
-                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend-signed-copy`, {}, { preserveScroll: true })}>
-                                                                    <Mail className="h-3 w-3" />
-                                                                    Resend Copy
-                                                                </Button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                    {isPending && (
-                                                        <>
-                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
-                                                                <RotateCcw className="h-3 w-3" />
-                                                                Resend
-                                                            </Button>
-                                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
-                                                                <X className="h-3 w-3" />
-                                                                Cancel
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                            <EllipsisVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                                                        {isSigned && (
+                                                            <>
+                                                                <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                    <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
+                                                                        Download
+                                                                    </a>
+                                                                </DropdownMenuItem>
+                                                                {sr.recipient_email && (
+                                                                    <DropdownMenuItem
+                                                                        className="whitespace-nowrap"
+                                                                        onClick={() => router.post(`/signing-requests/${sr.id}/resend-signed-copy`, {}, { preserveScroll: true })}
+                                                                    >
+                                                                        Resend Signed Copy
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                        {isPending && (
+                                                            <>
+                                                                <DropdownMenuItem
+                                                                    className="whitespace-nowrap"
+                                                                    onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                >
+                                                                    Resend
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                    onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                >
+                                                                    Cancel
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                        {!isSigned && !isPending && (
+                                                            <DropdownMenuItem disabled className="whitespace-nowrap text-muted-foreground">
+                                                                No actions available
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -273,24 +419,106 @@ export default function SigningRequestsIndex() {
                 </div>
 
                 {/* Pagination */}
-                {signingRequests.data.length > 0 && (
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <div>Showing {signingRequests.from}–{signingRequests.to} of {signingRequests.total}</div>
-                        <div className="flex gap-1">
-                            {signingRequests.links.map((link, idx) => (
-                                <Button
-                                    key={idx}
-                                    variant={link.active ? 'default' : 'ghost'}
-                                    size="sm"
-                                    disabled={!link.url}
-                                    onClick={() => link.url && router.get(link.url, {}, { preserveState: true, preserveScroll: true })}
-                                    className="h-7 px-2 text-xs"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ))}
+                <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                    <p className="text-muted-foreground text-xs sm:text-sm">
+                        {signingRequests.total > 0
+                            ? `${fromRow}–${toRow} of ${signingRequests.total.toLocaleString()} items`
+                            : 'No items'}
+                    </p>
+
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                            <Select
+                                value={String(signingRequests.per_page)}
+                                onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                            >
+                                <SelectTrigger size="sm" className="w-[72px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {[10, 25, 50, 100].map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
+
+                        <Pagination className="mx-0 w-auto justify-end">
+                            <PaginationContent>
+                                <PaginationItem>
+                                    <PaginationLink
+                                        aria-label="Go to first page"
+                                        aria-disabled={atFirst}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (!atFirst) navigate({ page: 1 });
+                                        }}
+                                        className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </PaginationLink>
+                                </PaginationItem>
+
+                                <PaginationItem>
+                                    <PaginationPrevious
+                                        aria-disabled={atFirst}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (!atFirst) navigate({ page: signingRequests.current_page - 1 });
+                                        }}
+                                        className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                    />
+                                </PaginationItem>
+
+                                {pageWindow.map((p, i) =>
+                                    p === 'ellipsis' ? (
+                                        <PaginationItem key={`e-${i}`}>
+                                            <PaginationEllipsis />
+                                        </PaginationItem>
+                                    ) : (
+                                        <PaginationItem key={p}>
+                                            <PaginationLink
+                                                isActive={p === signingRequests.current_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    navigate({ page: p });
+                                                }}
+                                            >
+                                                {p}
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    ),
+                                )}
+
+                                <PaginationItem>
+                                    <PaginationNext
+                                        aria-disabled={atLast}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (!atLast) navigate({ page: signingRequests.current_page + 1 });
+                                        }}
+                                        className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                    />
+                                </PaginationItem>
+
+                                <PaginationItem>
+                                    <PaginationLink
+                                        aria-label="Go to last page"
+                                        aria-disabled={atLast}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (!atLast) navigate({ page: signingRequests.last_page });
+                                        }}
+                                        className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </PaginationLink>
+                                </PaginationItem>
+                            </PaginationContent>
+                        </Pagination>
                     </div>
-                )}
+                </div>
             </div>
         </AppLayout>
     );

@@ -147,18 +147,10 @@ export default function OfficeEmployeesList() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Office Employees" />
-            <div className="flex flex-col gap-4 p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-semibold">Office Employees</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Salaried staff — {employees.length} {employees.length === 1 ? 'person' : 'people'}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="relative w-full sm:max-w-xs">
-                            <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or email" />
-                        </div>
+                    <div className="relative w-full sm:max-w-xs">
+                        <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or email" />
                     </div>
                 </div>
 

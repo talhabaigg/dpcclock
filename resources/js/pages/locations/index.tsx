@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -12,34 +13,13 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSortableData } from '@/hooks/use-sortable-data';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import {
-    ArrowUpDown,
-    CalendarDays,
-    ChartColumnIncreasing,
-    CheckCircle2,
-    Clock,
-    ClockAlert,
-    Download,
-    EllipsisVertical,
-    FileImage,
-    FlaskConical,
-    GitBranch,
-    Loader2,
-    Lock,
-    MapPin,
-    Pencil,
-    RefreshCcw,
-    RotateCcw,
-    XCircle,
-} from 'lucide-react';
+import { ArrowUpDown, CheckCircle2, EllipsisVertical, Loader2, MapPin, Menu, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Locations', href: '/locations' }];
@@ -63,36 +43,35 @@ const companyTabs = [
 ];
 
 type LocationAction = 'close' | 'reopen' | 'resync';
-type IconType = React.ComponentType<{ className?: string }>;
 type ActionItem =
     | { kind: 'separator' }
     | { kind: 'label'; text: string }
-    | { kind: 'link'; href: string; icon: IconType; label: string; isExternal?: boolean }
-    | { kind: 'action'; icon: IconType; label: string; action: LocationAction; destructive?: boolean };
+    | { kind: 'link'; href: string; label: string; isExternal?: boolean }
+    | { kind: 'action'; label: string; action: LocationAction; destructive?: boolean };
 
 function getActions(location: Location, canClose: boolean): ActionItem[] {
     const items: ActionItem[] = [
-        { kind: 'link', href: `/locations/${location.id}/dashboard`, icon: ChartColumnIncreasing, label: 'Project Dashboard' },
+        { kind: 'link', href: `/locations/${location.id}/dashboard`, label: 'Project Dashboard' },
         { kind: 'separator' },
-        { kind: 'link', href: `/location/${location.id}/job-forecast`, icon: ChartColumnIncreasing, label: 'Job Forecast' },
-        { kind: 'link', href: `/projects/${location.id}/drawings`, icon: FileImage, label: 'Drawings' },
-        { kind: 'link', href: `/locations/${location.id}/variations`, icon: GitBranch, label: 'Variations' },
-        { kind: 'link', href: `/locations/${location.id}/schedule`, icon: CalendarDays, label: 'Schedule' },
+        { kind: 'link', href: `/location/${location.id}/job-forecast`, label: 'Job Forecast' },
+        { kind: 'link', href: `/projects/${location.id}/drawings`, label: 'Drawings' },
+        { kind: 'link', href: `/locations/${location.id}/variations`, label: 'Variations' },
+        { kind: 'link', href: `/locations/${location.id}/schedule`, label: 'Schedule' },
         { kind: 'separator' },
-        { kind: 'link', href: `/locations/${location.id}/sds`, icon: FlaskConical, label: 'SDS Register' },
-        { kind: 'link', href: `/locations/${location.id}/sds/download`, icon: Download, label: 'Download SDS PDF', isExternal: true },
+        { kind: 'link', href: `/locations/${location.id}/sds`, label: 'SDS Register' },
+        { kind: 'link', href: `/locations/${location.id}/sds/download`, label: 'Download SDS PDF', isExternal: true },
         { kind: 'separator' },
         { kind: 'label', text: 'Admin' },
-        { kind: 'link', href: `/location/${location.id}/material-item-price-list-uploads`, icon: ClockAlert, label: 'Audit Uploads' },
-        { kind: 'link', href: route('location.req-header.edit', { locationId: location.id }), icon: Pencil, label: 'Requisition Header' },
-        { kind: 'action', icon: Clock, label: 'Resync Timesheets', action: 'resync' },
+        { kind: 'link', href: `/location/${location.id}/material-item-price-list-uploads`, label: 'Audit Uploads' },
+        { kind: 'link', href: route('location.req-header.edit', { locationId: location.id }), label: 'Requisition Header' },
+        { kind: 'action', label: 'Resync Timesheets', action: 'resync' },
     ];
     if (canClose) {
         items.push(
             { kind: 'separator' },
             location.closed_at
-                ? { kind: 'action', icon: RotateCcw, label: 'Reopen Project', action: 'reopen' }
-                : { kind: 'action', icon: Lock, label: 'Close Project', action: 'close', destructive: true },
+                ? { kind: 'action', label: 'Reopen Project', action: 'reopen' }
+                : { kind: 'action', label: 'Close Project', action: 'close', destructive: true },
         );
     }
     return items;
@@ -117,7 +96,7 @@ function LocationActions({
                     <EllipsisVertical className="h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52">
+            <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
                 {items.map((item, i) => {
                     if (item.kind === 'separator') return <DropdownMenuSeparator key={`sep-${i}`} />;
                     if (item.kind === 'label')
@@ -130,26 +109,15 @@ function LocationActions({
                         return (
                             <DropdownMenuItem
                                 key={item.label}
-                                className={`gap-2 ${item.destructive ? 'text-destructive focus:text-destructive' : ''}`}
+                                className={item.destructive ? 'text-destructive focus:text-destructive' : ''}
                                 onClick={() => onAction(location, item.action)}
                             >
-                                <item.icon className="h-4 w-4" />
                                 {item.label}
                             </DropdownMenuItem>
                         );
                     return (
                         <DropdownMenuItem key={item.label} asChild>
-                            {item.isExternal ? (
-                                <a href={item.href} className="gap-2">
-                                    <item.icon className="h-4 w-4" />
-                                    {item.label}
-                                </a>
-                            ) : (
-                                <Link href={item.href} className="gap-2">
-                                    <item.icon className="h-4 w-4" />
-                                    {item.label}
-                                </Link>
-                            )}
+                            {item.isExternal ? <a href={item.href}>{item.label}</a> : <Link href={item.href}>{item.label}</Link>}
                         </DropdownMenuItem>
                     );
                 })}
@@ -343,34 +311,41 @@ export default function LocationsList() {
 
                 {/* Toolbar */}
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <div className="w-full shrink-0 @md:w-64">
+                    <div className="min-w-0 flex-1 @md:max-w-xs">
                         <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="name or ID" />
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0 @md:ml-auto">
-                        <TabsList className="w-full @md:w-auto">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0">
+                        <TabsList>
                             {companyTabs.map((tab) => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 @md:flex-initial">
+                                <TabsTrigger key={tab.value} value={tab.value}>
                                     {tab.label}
                                 </TabsTrigger>
                             ))}
                         </TabsList>
                     </Tabs>
 
-                    <div className="flex items-center gap-2">
-                        <Switch id="show-closed" checked={showClosed} onCheckedChange={handleToggleClosed} />
-                        <Label htmlFor="show-closed" className="text-muted-foreground text-sm whitespace-nowrap">
-                            Show Closed
-                        </Label>
-                    </div>
-
-                    <Link href="/locations/sync" method="get" className="ml-auto @md:ml-0">
-                        <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                            <RefreshCcw className="h-4 w-4" />
-                            <span className="hidden @md:inline">Sync Locations</span>
-                            <span className="@md:hidden">Sync</span>
-                        </Button>
-                    </Link>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="ml-auto" aria-label="More actions">
+                                <Menu className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                            <DropdownMenuCheckboxItem checked={showClosed} onCheckedChange={handleToggleClosed}>
+                                Show closed projects
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    setOpen(true);
+                                    router.get('/locations/sync');
+                                }}
+                            >
+                                Sync locations
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
                 {/* Content */}

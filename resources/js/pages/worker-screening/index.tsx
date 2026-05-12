@@ -1,12 +1,19 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Pencil, Plus, XCircle } from 'lucide-react';
+import { EllipsisVertical, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { WorkerScreening, columns } from './columns';
@@ -121,27 +128,24 @@ export default function WorkerScreeningIndex({ screenings }: Props) {
             cell: ({ row }: { row: { original: WorkerScreening } }) => {
                 if (row.original.status === 'removed') return null;
                 return (
-                    <div className="flex justify-end gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                openEditDialog(row.original);
-                            }}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                openRemoveDialog(row.original);
-                            }}
-                        >
-                            <XCircle className="h-4 w-4 text-red-500" />
-                        </Button>
+                    <div className="flex justify-end">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" aria-label="Row actions">
+                                    <EllipsisVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                                <DropdownMenuItem onClick={() => openEditDialog(row.original)}>Edit</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => openRemoveDialog(row.original)}
+                                >
+                                    Remove
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 );
             },
@@ -151,14 +155,14 @@ export default function WorkerScreeningIndex({ screenings }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Worker Screening" />
-            <div className="mt-2 mr-2 flex justify-end gap-2">
-                <Button onClick={openCreateDialog}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Entry
-                </Button>
-            </div>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2">
-                <DataTable columns={columnsWithActions} data={screenings} onRowClick={openEditDialog} />
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
+                <div className="flex justify-end">
+                    <Button onClick={openCreateDialog}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Entry
+                    </Button>
+                </div>
+                <DataTable columns={columnsWithActions} data={screenings} />
             </div>
 
             {/* Create/Edit Dialog */}

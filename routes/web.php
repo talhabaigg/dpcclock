@@ -474,6 +474,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:sds.manage')->group(function () {
         Route::post('/sds', [SafetyDataSheetController::class, 'store'])->name('sds.store');
         Route::put('/sds/{sd}', [SafetyDataSheetController::class, 'update'])->name('sds.update');
+        Route::delete('/sds/bulk', [SafetyDataSheetController::class, 'bulkDestroy'])->name('sds.bulk-destroy');
         Route::delete('/sds/{sd}', [SafetyDataSheetController::class, 'destroy'])->name('sds.destroy');
     });
 

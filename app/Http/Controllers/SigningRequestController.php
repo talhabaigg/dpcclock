@@ -32,7 +32,11 @@ class SigningRequestController extends Controller
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
             'q' => 'nullable|string|max:255',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
         ]);
+
+        $perPage = $filters['per_page'] ?? 25;
+        unset($filters['per_page']);
 
         $query = SigningRequest::query()
             ->with(['documentTemplate:id,name', 'sentBy:id,name', 'signable'])
@@ -66,7 +70,7 @@ class SigningRequestController extends Controller
             });
         }
 
-        $signingRequests = $query->paginate(25)->withQueryString();
+        $signingRequests = $query->paginate($perPage)->withQueryString();
 
         $senders = \App\Models\User::query()
             ->whereIn('id', SigningRequest::query()->whereNotNull('sent_by')->distinct()->pluck('sent_by'))

@@ -77,6 +77,7 @@ export interface InjuryEmployee {
 export interface InjuryLocation {
     id: number;
     name: string;
+    external_id?: string | null;
 }
 
 export interface InjuryMedia {

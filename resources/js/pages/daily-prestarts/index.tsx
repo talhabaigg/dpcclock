@@ -3,9 +3,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +14,7 @@ import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Lock, MoreHorizontal, Plus } from 'lucide-react';
+import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Daily Prestarts', href: '/daily-prestarts' }];
@@ -46,17 +46,26 @@ interface PaginatedPrestarts {
     data: Prestart[];
     current_page: number;
     last_page: number;
+    per_page: number;
     total: number;
-    links: { url: string | null; label: string; active: boolean }[];
-    prev_page_url: string | null;
-    next_page_url: string | null;
 }
 
 interface Props {
     prestarts: PaginatedPrestarts;
-    filters: { location_id?: string; work_date?: string };
+    filters: { location_id?: string; work_date?: string; per_page?: number };
     locations: Location[];
     workDates: { value: string; label: string }[];
+}
+
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
 }
 
 function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; variant: 'signed' | 'not_signed' }) {
@@ -85,18 +94,9 @@ function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; var
                     </Tooltip>
                 ))}
                 {overflow > 0 && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
-                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>+{overflow}</AvatarFallback>
-                            </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-48 text-xs">
-                            {employees.slice(maxShow).map((e) => (
-                                <div key={e.id}>{e.name}</div>
-                            ))}
-                        </TooltipContent>
-                    </Tooltip>
+                    <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
+                        <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>+{overflow}</AvatarFallback>
+                    </Avatar>
                 )}
             </div>
         </TooltipProvider>
@@ -114,12 +114,16 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
     const [locationOpen, setLocationOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Prestart | null>(null);
 
+    const navigate = (params: Record<string, string | number | undefined>) => {
+        router.get('/daily-prestarts', { ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
     const applyFilter = (key: string, value: string) => {
-        router.get('/daily-prestarts', { ...filters, [key]: value || undefined }, { preserveState: true, replace: true });
+        navigate({ [key]: value || undefined, page: 1 });
     };
 
     const clearFilters = () => {
-        router.get('/daily-prestarts', {}, { preserveState: true, replace: true });
+        router.get('/daily-prestarts', { per_page: filters.per_page }, { preserveState: true, replace: true });
     };
 
     const confirmDelete = () => {
@@ -135,7 +139,7 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Daily Prestarts" />
-            <div className="mx-auto w-full max-w-7xl space-y-6 p-4">
+            <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
                 {flash?.success && <SuccessAlertFlash message={flash.success} />}
 
                 {/* Filters */}
@@ -252,13 +256,13 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                         <AvatarGroup employees={p.not_signed_employees ?? []} variant="not_signed" />
                                     </TableCell>
                                     <TableCell>
-                                        <DropdownMenu modal={false}>
+                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                    <EllipsisVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
+                                            <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
                                                 <DropdownMenuItem asChild>
                                                     <Link href={`/daily-prestarts/${p.id}`}>View</Link>
                                                 </DropdownMenuItem>
@@ -285,7 +289,15 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can('prestarts.delete') && !p.is_locked && (
-                                                    <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(p)}>Delete</DropdownMenuItem>
+                                                    <>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive"
+                                                            onClick={() => setDeleteTarget(p)}
+                                                        >
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </>
                                                 )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -297,31 +309,114 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                 </div>
 
                 {/* Pagination */}
-                {prestarts.last_page > 1 && (
-                    <Pagination>
-                        <PaginationContent>
-                            {prestarts.prev_page_url && (
-                                <PaginationItem>
-                                    <PaginationPrevious href={prestarts.prev_page_url} />
-                                </PaginationItem>
-                            )}
-                            {prestarts.links
-                                .filter((l) => !['&laquo; Previous', 'Next &raquo;'].includes(l.label))
-                                .map((link) => (
-                                    <PaginationItem key={link.label}>
-                                        <PaginationLink href={link.url ?? '#'} isActive={link.active}>
-                                            {link.label}
-                                        </PaginationLink>
-                                    </PaginationItem>
-                                ))}
-                            {prestarts.next_page_url && (
-                                <PaginationItem>
-                                    <PaginationNext href={prestarts.next_page_url} />
-                                </PaginationItem>
-                            )}
-                        </PaginationContent>
-                    </Pagination>
-                )}
+                {(() => {
+                    const fromRow = prestarts.total === 0 ? 0 : (prestarts.current_page - 1) * prestarts.per_page + 1;
+                    const toRow = Math.min(prestarts.current_page * prestarts.per_page, prestarts.total);
+                    const pageWindow = getPageWindow(prestarts.current_page, prestarts.last_page);
+
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-muted-foreground text-xs sm:text-sm">
+                                {prestarts.total > 0 ? `${fromRow}–${toRow} of ${prestarts.total.toLocaleString()} items` : 'No items'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                    <Select
+                                        value={String(prestarts.per_page)}
+                                        onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                                    >
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>
+                                                    {n}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={prestarts.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (prestarts.current_page > 1) navigate({ page: 1 });
+                                                }}
+                                                className={prestarts.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={prestarts.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (prestarts.current_page > 1) navigate({ page: prestarts.current_page - 1 });
+                                                }}
+                                                className={prestarts.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === prestarts.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            navigate({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={prestarts.current_page >= prestarts.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (prestarts.current_page < prestarts.last_page) navigate({ page: prestarts.current_page + 1 });
+                                                }}
+                                                className={prestarts.current_page >= prestarts.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={prestarts.current_page >= prestarts.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (prestarts.current_page < prestarts.last_page) navigate({ page: prestarts.last_page });
+                                                }}
+                                                className={prestarts.current_page >= prestarts.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Delete confirmation */}
                 <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

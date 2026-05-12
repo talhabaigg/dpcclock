@@ -17,6 +17,11 @@ class ToolboxTalkController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+        $perPage = (int) $request->input('per_page', 25);
+
         $query = ToolboxTalk::with(['location', 'calledBy', 'attendees.employee']);
 
         if ($request->filled('location_id')) {
@@ -26,7 +31,7 @@ class ToolboxTalkController extends Controller
             $query->whereDate('meeting_date', $request->meeting_date);
         }
 
-        $talks = $query->latest('meeting_date')->paginate(25)->withQueryString();
+        $talks = $query->latest('meeting_date')->paginate($perPage)->withQueryString();
 
         $talks->getCollection()->transform(function (ToolboxTalk $talk) {
             $location = $talk->location;

@@ -7,14 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Copy, Lock, LockOpen, MoreHorizontal, Plus } from 'lucide-react';
+import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 interface EmployeeSummary {
@@ -95,9 +95,22 @@ interface PaginatedTalks {
     data: Talk[];
     current_page: number;
     last_page: number;
+    per_page: number;
+    total: number;
     links: { url: string | null; label: string; active: boolean }[];
     prev_page_url: string | null;
     next_page_url: string | null;
+}
+
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
 }
 
 interface Props {
@@ -127,6 +140,14 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
         router.get('/toolbox-talks', {}, { preserveState: true, replace: true });
     };
 
+    const navigate = (overrides: { page?: number; per_page?: number }) => {
+        router.get(
+            '/toolbox-talks',
+            { ...filters, page: overrides.page, per_page: overrides.per_page ?? talks.per_page },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
     const confirmDelete = () => {
         if (!deleteTarget) return;
         router.delete(`/toolbox-talks/${deleteTarget.id}`, {
@@ -140,7 +161,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Toolbox Talks" />
-            <div className="mx-auto w-full max-w-7xl space-y-6 p-4">
+            <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
                 {flash?.success && <SuccessAlertFlash message={flash.success} />}
 
                 {/* Filters */}
@@ -220,7 +241,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                 <TableHead>Called By</TableHead>
                                 <TableHead>Signed</TableHead>
                                 <TableHead>Not Signed</TableHead>
-                                <TableHead className="w-12"></TableHead>
+                                <TableHead className="w-12 text-right"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -248,14 +269,14 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                     <TableCell>
                                         <AvatarGroup employees={t.not_signed_employees ?? []} variant="not_signed" />
                                     </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu modal={false}>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                    <EllipsisVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
+                                            <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
                                                 <DropdownMenuItem asChild>
                                                     <Link href={`/toolbox-talks/${t.id}`}>View</Link>
                                                 </DropdownMenuItem>
@@ -268,7 +289,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                                     <DropdownMenuItem
                                                         onClick={() => router.post(`/toolbox-talks/${t.id}/duplicate`, {}, { preserveScroll: true })}
                                                     >
-                                                        <Copy className="mr-2 h-4 w-4" /> Duplicate
+                                                        Duplicate
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuItem asChild>
@@ -290,7 +311,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                                     <DropdownMenuItem
                                                         onClick={() => router.post(`/toolbox-talks/${t.id}/${t.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
                                                     >
-                                                        {t.is_locked ? <><LockOpen className="mr-2 h-4 w-4" /> Unlock</> : <><Lock className="mr-2 h-4 w-4" /> Lock</>}
+                                                        {t.is_locked ? 'Unlock' : 'Lock'}
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can('prestarts.delete') && !t.is_locked && (
@@ -306,31 +327,114 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                 </div>
 
                 {/* Pagination */}
-                {talks.last_page > 1 && (
-                    <Pagination>
-                        <PaginationContent>
-                            {talks.prev_page_url && (
-                                <PaginationItem>
-                                    <PaginationPrevious href={talks.prev_page_url} />
-                                </PaginationItem>
-                            )}
-                            {talks.links
-                                .filter((l) => !['&laquo; Previous', 'Next &raquo;'].includes(l.label))
-                                .map((link) => (
-                                    <PaginationItem key={link.label}>
-                                        <PaginationLink href={link.url ?? '#'} isActive={link.active}>
-                                            {link.label}
-                                        </PaginationLink>
-                                    </PaginationItem>
-                                ))}
-                            {talks.next_page_url && (
-                                <PaginationItem>
-                                    <PaginationNext href={talks.next_page_url} />
-                                </PaginationItem>
-                            )}
-                        </PaginationContent>
-                    </Pagination>
-                )}
+                {(() => {
+                    const fromRow = talks.total === 0 ? 0 : (talks.current_page - 1) * talks.per_page + 1;
+                    const toRow = Math.min(talks.current_page * talks.per_page, talks.total);
+                    const pageWindow = getPageWindow(talks.current_page, talks.last_page);
+                    const atFirst = talks.current_page <= 1;
+                    const atLast = talks.current_page >= talks.last_page;
+
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-muted-foreground text-xs sm:text-sm">
+                                {talks.total > 0 ? `${fromRow}–${toRow} of ${talks.total.toLocaleString()} items` : 'No items'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                    <Select
+                                        value={String(talks.per_page)}
+                                        onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                                    >
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={atFirst}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atFirst) navigate({ page: 1 });
+                                                }}
+                                                className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={atFirst}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atFirst) navigate({ page: talks.current_page - 1 });
+                                                }}
+                                                className={atFirst ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === talks.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            navigate({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={atLast}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atLast) navigate({ page: talks.current_page + 1 });
+                                                }}
+                                                className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={atLast}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (!atLast) navigate({ page: talks.last_page });
+                                                }}
+                                                className={atLast ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Delete confirmation */}
                 <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

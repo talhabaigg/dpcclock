@@ -23,7 +23,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type ColumnDef, flexRender, getCoreRowModel, type RowSelectionState, useReactTable } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, FilePlus2, Filter, RefreshCcw, RotateCcw, Users, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, ChevronsLeft, ChevronsRight, FilePlus2, Filter, RefreshCcw, RotateCcw, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface EmployeeDocument {
@@ -58,22 +58,14 @@ interface FileTypeOption {
     category: string;
 }
 
-interface PaginationLinkData {
-    url: string | null;
-    label: string;
-    active: boolean;
-}
-
 interface PaginatedEmployees {
     data: Employee[];
     current_page: number;
     last_page: number;
+    per_page: number;
     total: number;
     from: number | null;
     to: number | null;
-    prev_page_url: string | null;
-    next_page_url: string | null;
-    links: PaginationLinkData[];
 }
 
 type SortField = 'name' | 'email' | 'employment_type';
@@ -86,6 +78,7 @@ interface Filters {
     licence_mode?: 'has' | 'has_not';
     sort?: SortField;
     direction?: SortDirection;
+    per_page?: number;
 }
 
 type QueryState = {
@@ -95,12 +88,21 @@ type QueryState = {
     licence_mode: 'has' | 'has_not';
     sort: SortField;
     direction: SortDirection;
+    per_page?: number;
+    page?: number;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employees', href: '/employees' }];
 
-function sanitizePaginationLabel(label: string) {
-    return label.replace(/<[^>]+>/g, '').replace(/&laquo;|&raquo;/g, '').trim();
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
 }
 
 function SortHeader({
@@ -276,6 +278,7 @@ export default function EmployeesList() {
         licence_mode: licenceFilterMode,
         sort: currentSort,
         direction: currentDirection,
+        per_page: filters.per_page,
         ...overrides,
     });
 
@@ -291,6 +294,12 @@ export default function EmployeesList() {
         if (nextState.sort !== 'name' || nextState.direction !== 'asc') {
             params.sort = nextState.sort;
             params.direction = nextState.direction;
+        }
+        if (nextState.per_page && nextState.per_page !== 25) {
+            params.per_page = String(nextState.per_page);
+        }
+        if (nextState.page && nextState.page > 1) {
+            params.page = String(nextState.page);
         }
 
         return params;
@@ -534,15 +543,12 @@ export default function EmployeesList() {
 
     const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k]).map(Number);
 
-    const resultsLabel =
-        employees.total === 0 ? 'Showing 0 employees' : `Showing ${employees.from ?? 0}-${employees.to ?? 0} of ${employees.total} employees`;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
             <LoadingDialog open={open} setOpen={setOpen} />
 
-            <div className="flex flex-col gap-4 p-3 sm:p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 {flash.success && (
                     <Alert className="border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -632,8 +638,6 @@ export default function EmployeesList() {
                     </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">{resultsLabel}</p>
-
                 <div className="flex flex-col gap-2 sm:hidden">
                     {!employees.data.length ? (
                         <div className="py-12 text-center text-sm text-muted-foreground">
@@ -677,7 +681,7 @@ export default function EmployeesList() {
                     <Table>
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id} className="bg-muted/50">
+                                <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => (
                                         <TableHead key={header.id} className="px-3">
                                             {header.isPlaceholder ? null : header.id === 'documents' ? (
@@ -726,37 +730,114 @@ export default function EmployeesList() {
                     </Table>
                 </div>
 
-                {employees.last_page > 1 && (
-                    <Pagination className="justify-end">
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious href={employees.prev_page_url ?? undefined} />
-                            </PaginationItem>
-                            {employees.links.slice(1, -1).map((link, index) => {
-                                const label = sanitizePaginationLabel(link.label);
+                {(() => {
+                    const fromRow = employees.total === 0 ? 0 : (employees.current_page - 1) * employees.per_page + 1;
+                    const toRow = Math.min(employees.current_page * employees.per_page, employees.total);
+                    const pageWindow = getPageWindow(employees.current_page, employees.last_page);
 
-                                if (label === '...') {
-                                    return (
-                                        <PaginationItem key={`ellipsis-${index}`}>
-                                            <PaginationEllipsis />
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-xs text-muted-foreground sm:text-sm">
+                                {employees.total > 0 ? `${fromRow}–${toRow} of ${employees.total.toLocaleString()} employees` : 'No employees'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground sm:text-sm">Rows per page</span>
+                                    <Select
+                                        value={String(employees.per_page)}
+                                        onValueChange={(v) => applyQuery({ per_page: Number(v), page: 1 })}
+                                    >
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>
+                                                    {n}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={employees.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (employees.current_page > 1) applyQuery({ page: 1 });
+                                                }}
+                                                className={employees.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
                                         </PaginationItem>
-                                    );
-                                }
 
-                                return (
-                                    <PaginationItem key={label}>
-                                        <PaginationLink href={link.url ?? undefined} isActive={link.active}>
-                                            {label}
-                                        </PaginationLink>
-                                    </PaginationItem>
-                                );
-                            })}
-                            <PaginationItem>
-                                <PaginationNext href={employees.next_page_url ?? undefined} />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
-                )}
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={employees.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (employees.current_page > 1) applyQuery({ page: employees.current_page - 1 });
+                                                }}
+                                                className={employees.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === employees.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            applyQuery({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={employees.current_page >= employees.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (employees.current_page < employees.last_page) applyQuery({ page: employees.current_page + 1 });
+                                                }}
+                                                className={employees.current_page >= employees.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={employees.current_page >= employees.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (employees.current_page < employees.last_page) applyQuery({ page: employees.last_page });
+                                                }}
+                                                className={employees.current_page >= employees.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Bulk send modal */}

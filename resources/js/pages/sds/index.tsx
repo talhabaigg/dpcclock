@@ -1,19 +1,44 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import PaginationComponent, { type PaginationData } from '@/components/index-pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { AlertTriangle, CircleCheck, Download, FileText, Loader2, MoreVertical, Pencil, Plus, Printer, QrCode, Search, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+    AlertTriangle,
+    ChevronsLeft,
+    ChevronsRight,
+    CircleCheck,
+    EllipsisVertical,
+    FileText,
+    Loader2,
+    Menu,
+    Plus,
+    Printer,
+    QrCode,
+    Search,
+    SlidersHorizontal,
+    X,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -43,14 +68,34 @@ interface Filters {
     manufacturer?: string;
     location_id?: string;
     expiry?: string;
+    per_page?: number;
+}
+
+interface PaginatedSds {
+    data: SdsRecord[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
 }
 
 interface PageProps {
-    sds: { data: SdsRecord[] } & Partial<PaginationData>;
+    sds: PaginatedSds;
     filters: Filters;
     manufacturers: string[];
     locations: { id: number; name: string }[];
     hazardClassifications: string[];
+}
+
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
 }
 
 function isExpired(dateStr: string): boolean {
@@ -110,6 +155,13 @@ export default function SdsIndex() {
 
     // Delete dialog
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Bulk select / delete
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+    // Filter sheet
+    const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
     // QR dialog
     const [showQrDialog, setShowQrDialog] = useState(false);
@@ -212,20 +264,63 @@ export default function SdsIndex() {
         return () => clearTimeout(searchTimeout.current);
     }, [search]);
 
-    const applyFilter = (key: string, value: string) => {
-        const newFilters = { ...filters, [key]: value || undefined };
-        Object.keys(newFilters).forEach((k) => {
-            if (!newFilters[k as keyof Filters]) delete newFilters[k as keyof Filters];
+    const navigate = (params: Record<string, string | number | undefined>) => {
+        const merged: Record<string, string | number | undefined> = { ...filters, ...params };
+        Object.keys(merged).forEach((k) => {
+            if (merged[k] === '' || merged[k] === undefined || merged[k] === null) delete merged[k];
         });
-        router.get('/sds', newFilters, { preserveState: true, preserveScroll: true });
+        router.get('/sds', merged, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const applyFilter = (key: string, value: string) => {
+        navigate({ [key]: value || undefined, page: 1 });
     };
 
     const clearFilters = () => {
         setSearch('');
-        router.get('/sds', {}, { preserveState: true, preserveScroll: true });
+        router.get('/sds', { per_page: filters.per_page }, { preserveState: true, preserveScroll: true });
     };
 
+    const activeFilterCount = useMemo(() => {
+        return [filters.manufacturer, filters.expiry, filters.location_id].filter((v) => !!v).length;
+    }, [filters.manufacturer, filters.expiry, filters.location_id]);
+
     const hasFilters = !!(filters.search || filters.manufacturer || filters.location_id || filters.expiry);
+
+    // Selection helpers
+    const pageIds = sds.data.map((r) => r.id);
+    const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+    const someOnPageSelected = pageIds.some((id) => selectedIds.has(id));
+
+    const toggleRow = (id: number, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    };
+
+    const toggleAllOnPage = () => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+            else pageIds.forEach((id) => next.add(id));
+            return next;
+        });
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const handleBulkDelete = () => {
+        router.delete('/sds/bulk', {
+            data: { ids: Array.from(selectedIds) },
+            onSuccess: () => {
+                clearSelection();
+                setBulkDeleteOpen(false);
+            },
+        });
+    };
 
     // Create / Edit
     const openCreate = () => {
@@ -325,23 +420,8 @@ export default function SdsIndex() {
                     </div>
                 )}
 
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">SDS Register</h2>
-                    <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setShowQrDialog(true)} className="gap-1.5">
-                            <QrCode size={14} />
-                            Public QR
-                        </Button>
-                        <Button size="sm" onClick={openCreate} className="gap-1.5">
-                            <Plus size={14} />
-                            Add SDS
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-2">
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative w-full sm:max-w-xs">
                         <Search className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2" size={18} />
                         <Input
@@ -353,61 +433,59 @@ export default function SdsIndex() {
                         />
                     </div>
 
-                    <Select value={filters.manufacturer ?? ''} onValueChange={(v) => applyFilter('manufacturer', v === 'all' ? '' : v)}>
-                        <SelectTrigger className="h-9 w-[180px] text-sm">
-                            <SelectValue placeholder="Manufacturer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Manufacturers</SelectItem>
-                            {manufacturers.map((m) => (
-                                <SelectItem key={m} value={m}>
-                                    {m}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <Select value={filters.expiry ?? ''} onValueChange={(v) => applyFilter('expiry', v === 'all' ? '' : v)}>
-                        <SelectTrigger className="h-9 w-[180px] text-sm">
-                            <SelectValue placeholder="Expiry" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Expiry</SelectItem>
-                            <SelectItem value="expired">Expired</SelectItem>
-                            <SelectItem value="tomorrow">Expires Tomorrow</SelectItem>
-                            <SelectItem value="7days">Within 7 Days</SelectItem>
-                            <SelectItem value="30days">Within 30 Days</SelectItem>
-                            <SelectItem value="90days">Within 90 Days</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    <Select value={filters.location_id ?? ''} onValueChange={(v) => applyFilter('location_id', v === 'all' ? '' : v)}>
-                        <SelectTrigger className="h-9 w-[180px] text-sm">
-                            <SelectValue placeholder="Project" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Projects</SelectItem>
-                            {locations.map((l) => (
-                                <SelectItem key={l.id} value={String(l.id)}>
-                                    {l.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {hasFilters && (
-                        <Button variant="ghost" size="sm" className="h-9 gap-1 text-xs" onClick={clearFilters}>
-                            <X size={14} />
-                            Clear filters
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => setFilterSheetOpen(true)}>
+                            <SlidersHorizontal className="h-4 w-4" />
+                            Filters
+                            {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount}</Badge>}
                         </Button>
-                    )}
+                        <Button size="sm" onClick={openCreate} className="gap-1.5">
+                            <Plus size={14} />
+                            Add SDS
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-max">
+                                <DropdownMenuItem className="whitespace-nowrap" onClick={() => setShowQrDialog(true)}>
+                                    Public QR
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
+
+                {/* Bulk action bar */}
+                {selectedIds.size > 0 && (
+                    <div className="bg-muted/40 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">{selectedIds.size} selected</span>
+                            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={clearSelection}>
+                                <X size={12} />
+                                Clear
+                            </Button>
+                        </div>
+                        <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                            Delete selected
+                        </Button>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="overflow-x-auto rounded-lg border">
                     <Table>
                         <TableHeader>
-                            <TableRow className="bg-muted/50">
+                            <TableRow>
+                                <TableHead className="w-10 px-3">
+                                    <Checkbox
+                                        aria-label="Select all on this page"
+                                        checked={allOnPageSelected ? true : someOnPageSelected ? 'indeterminate' : false}
+                                        onCheckedChange={() => toggleAllOnPage()}
+                                    />
+                                </TableHead>
                                 <TableHead className="px-3 text-xs">Product & Manufacturer</TableHead>
                                 <TableHead className="px-3 text-xs">Expiry Date</TableHead>
                                 <TableHead className="px-3 text-xs">Description</TableHead>
@@ -419,7 +497,7 @@ export default function SdsIndex() {
                         <TableBody>
                             {sds.data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
                                         No SDS records found.
                                     </TableCell>
                                 </TableRow>
@@ -428,7 +506,14 @@ export default function SdsIndex() {
                                 const otherFiles = getOtherFiles(record.media);
                                 const expired = isExpired(record.expires_at);
                                 return (
-                                    <TableRow key={record.id} className="group">
+                                    <TableRow key={record.id} className="group" data-state={selectedIds.has(record.id) ? 'selected' : undefined}>
+                                        <TableCell className="w-10 px-3">
+                                            <Checkbox
+                                                aria-label={`Select ${record.product_name}`}
+                                                checked={selectedIds.has(record.id)}
+                                                onCheckedChange={(c) => toggleRow(record.id, !!c)}
+                                            />
+                                        </TableCell>
                                         <TableCell className="px-3">
                                             <div className="text-sm font-medium">{record.product_name}</div>
                                             <div className="text-muted-foreground text-xs">{record.manufacturer}</div>
@@ -475,24 +560,20 @@ export default function SdsIndex() {
                                         <TableCell className="px-3">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                                        <MoreVertical size={14} />
+                                                    <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                        <EllipsisVertical className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
+                                                <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
                                                     <DropdownMenuItem asChild>
-                                                        <a href={`/sds/${record.id}/download`}>
-                                                            <Download className="mr-2 h-3.5 w-3.5" />
-                                                            Download SDS
-                                                        </a>
+                                                        <a href={`/sds/${record.id}/download`}>Download SDS</a>
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => openEdit(record)}>
-                                                        <Pencil className="mr-2 h-3.5 w-3.5" />
-                                                        Edit
-                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => openEdit(record)}>Edit</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(record.id)}>
-                                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                                    <DropdownMenuItem
+                                                        className="text-destructive focus:text-destructive"
+                                                        onClick={() => setDeleteId(record.id)}
+                                                    >
                                                         Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -505,7 +586,112 @@ export default function SdsIndex() {
                     </Table>
                 </div>
 
-                {sds.data.length > 0 && <PaginationComponent pagination={sds as PaginationData} />}
+                {/* Pagination */}
+                {(() => {
+                    const fromRow = sds.total === 0 ? 0 : (sds.current_page - 1) * sds.per_page + 1;
+                    const toRow = Math.min(sds.current_page * sds.per_page, sds.total);
+                    const pageWindow = getPageWindow(sds.current_page, sds.last_page);
+
+                    return (
+                        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                            <p className="text-muted-foreground text-xs sm:text-sm">
+                                {sds.total > 0 ? `${fromRow}–${toRow} of ${sds.total.toLocaleString()} items` : 'No items'}
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                                    <Select value={String(sds.per_page)} onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}>
+                                        <SelectTrigger size="sm" className="w-[72px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 25, 50, 100].map((n) => (
+                                                <SelectItem key={n} value={String(n)}>
+                                                    {n}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <Pagination className="mx-0 w-auto justify-end">
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to first page"
+                                                aria-disabled={sds.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (sds.current_page > 1) navigate({ page: 1 });
+                                                }}
+                                                className={sds.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsLeft className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                aria-disabled={sds.current_page <= 1}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (sds.current_page > 1) navigate({ page: sds.current_page - 1 });
+                                                }}
+                                                className={sds.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        {pageWindow.map((p, i) =>
+                                            p === 'ellipsis' ? (
+                                                <PaginationItem key={`e-${i}`}>
+                                                    <PaginationEllipsis />
+                                                </PaginationItem>
+                                            ) : (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        isActive={p === sds.current_page}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            navigate({ page: p });
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ),
+                                        )}
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                aria-disabled={sds.current_page >= sds.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (sds.current_page < sds.last_page) navigate({ page: sds.current_page + 1 });
+                                                }}
+                                                className={sds.current_page >= sds.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            />
+                                        </PaginationItem>
+
+                                        <PaginationItem>
+                                            <PaginationLink
+                                                aria-label="Go to last page"
+                                                aria-disabled={sds.current_page >= sds.last_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (sds.current_page < sds.last_page) navigate({ page: sds.last_page });
+                                                }}
+                                                className={sds.current_page >= sds.last_page ? 'pointer-events-none opacity-50' : ''}
+                                            >
+                                                <ChevronsRight className="h-4 w-4" />
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Create / Edit Dialog */}
@@ -786,6 +972,106 @@ export default function SdsIndex() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Bulk Delete Confirmation */}
+            <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete {selectedIds.size} SDS {selectedIds.size === 1 ? 'record' : 'records'}?</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground text-sm">
+                        This will permanently delete the selected SDS {selectedIds.size === 1 ? 'record' : 'records'}. This action cannot be undone.
+                    </p>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleBulkDelete}>
+                            Delete {selectedIds.size}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Filter Sheet */}
+            <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+                <SheetContent side="right" className="flex flex-col gap-0 sm:max-w-sm">
+                    <SheetHeader>
+                        <SheetTitle>Filters</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+                        <div className="flex flex-col gap-1.5">
+                            <Label className="text-sm">Manufacturer</Label>
+                            <Select
+                                value={filters.manufacturer ?? 'all'}
+                                onValueChange={(v) => applyFilter('manufacturer', v === 'all' ? '' : v)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Manufacturers" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Manufacturers</SelectItem>
+                                    {manufacturers.map((m) => (
+                                        <SelectItem key={m} value={m}>
+                                            {m}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label className="text-sm">Expiry</Label>
+                            <Select value={filters.expiry ?? 'all'} onValueChange={(v) => applyFilter('expiry', v === 'all' ? '' : v)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Expiry" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Expiry</SelectItem>
+                                    <SelectItem value="expired">Expired</SelectItem>
+                                    <SelectItem value="tomorrow">Expires Tomorrow</SelectItem>
+                                    <SelectItem value="7days">Within 7 Days</SelectItem>
+                                    <SelectItem value="30days">Within 30 Days</SelectItem>
+                                    <SelectItem value="90days">Within 90 Days</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label className="text-sm">Project</Label>
+                            <Select
+                                value={filters.location_id ?? 'all'}
+                                onValueChange={(v) => applyFilter('location_id', v === 'all' ? '' : v)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Projects" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Projects</SelectItem>
+                                    {locations.map((l) => (
+                                        <SelectItem key={l.id} value={String(l.id)}>
+                                            {l.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <SheetFooter className="border-t">
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                clearFilters();
+                                setFilterSheetOpen(false);
+                            }}
+                            disabled={!hasFilters}
+                        >
+                            Reset
+                        </Button>
+                        <Button onClick={() => setFilterSheetOpen(false)}>Done</Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </AppLayout>
     );
 }

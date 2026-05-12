@@ -20,6 +20,11 @@ class DailyPrestartController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = (int) $request->input('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+
         $query = DailyPrestart::with(['location', 'foreman', 'createdBy', 'signatures.employee'])
             ->withCount('signatures');
 
@@ -30,7 +35,7 @@ class DailyPrestartController extends Controller
             $query->whereDate('work_date', $request->work_date);
         }
 
-        $prestarts = $query->latest('work_date')->paginate(25)->withQueryString();
+        $prestarts = $query->latest('work_date')->paginate($perPage)->withQueryString();
 
         // Get distinct work dates (last 200) for the date filter dropdown
         $workDates = DailyPrestart::select('work_date')
@@ -74,7 +79,7 @@ class DailyPrestartController extends Controller
 
         return Inertia::render('daily-prestarts/index', [
             'prestarts' => $prestarts,
-            'filters' => $request->only(['location_id', 'work_date']),
+            'filters' => array_merge($request->only(['location_id', 'work_date']), ['per_page' => $perPage]),
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
             'workDates' => $workDates,
         ]);

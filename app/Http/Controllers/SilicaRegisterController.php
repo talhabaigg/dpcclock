@@ -12,6 +12,17 @@ class SilicaRegisterController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date',
+            'performed' => 'nullable|in:yes,no',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+
+        $perPage = $validated['per_page'] ?? 25;
+
         $query = SilicaEntry::with('employee')
             ->orderByDesc('clock_out_date')
             ->orderByDesc('created_at');
@@ -35,7 +46,7 @@ class SilicaRegisterController extends Controller
             $query->where('performed', $request->performed === 'yes');
         }
 
-        $entries = $query->paginate(25)->withQueryString();
+        $entries = $query->paginate($perPage)->withQueryString();
 
         $options = [
             'tasks' => SilicaOption::ofType(SilicaOptionType::Task)->orderBy('sort_order')->get(),
@@ -45,7 +56,7 @@ class SilicaRegisterController extends Controller
 
         return Inertia::render('silica-register/index', [
             'entries' => $entries,
-            'filters' => $request->only(['search', 'from', 'to', 'performed']),
+            'filters' => $request->only(['search', 'from', 'to', 'performed', 'per_page']),
             'options' => $options,
         ]);
     }

@@ -27,7 +27,10 @@ class MaterialItemController extends Controller
     {
         $search = $request->input('search', '');
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = min(100, max(1, (int) $request->input('per_page', 50)));
+        $perPage = (int) $request->input('per_page', 50);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
 
         $allowedSorts = ['id', 'code', 'description', 'unit_cost', 'price_expiry_date'];
         $sortBy = in_array($request->input('sort'), $allowedSorts) ? $request->input('sort') : 'id';

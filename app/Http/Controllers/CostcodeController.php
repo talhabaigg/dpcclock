@@ -9,14 +9,27 @@ use Inertia\Inertia;
 
 class CostcodeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $request->validate([
+            'search' => 'nullable|string|max:255',
+            'page' => 'nullable|integer|min:1',
+        ]);
+
         $costCodes = CostCode::with('costType')
-            ->orderBy('code') // DB-level sort
-            ->get();
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where('code', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('code')
+            ->paginate(25)
+            ->withQueryString();
 
         return Inertia::render('costCodes/index', [
             'costcodes' => $costCodes,
+            'filters' => $request->only(['search']),
         ]);
     }
 
