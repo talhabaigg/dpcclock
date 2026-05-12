@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\ProvidesFormPlaceholders;
 use App\Models\Concerns\HasChecklists;
 use App\Models\Concerns\HasComments;
 use App\Models\Concerns\HasFormRequests;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-class EmploymentApplication extends Model
+class EmploymentApplication extends Model implements ProvidesFormPlaceholders
 {
     use HasChecklists, HasComments, HasFormRequests, HasSigningRequests;
     public const STATUS_NEW = 'new';
@@ -163,5 +164,98 @@ class EmploymentApplication extends Model
         return $this->belongsToMany(Employee::class, 'employment_application_employee')
             ->withPivot('eh_location_id', 'linked_at')
             ->withTimestamps();
+    }
+
+    /**
+     * Find an Employee record (active or archived) that matches this applicant.
+     * Matches on email, then mobile, then name+DOB — same precedence as
+     * WorkerScreening::checkWorker(). Returns null when nothing matches.
+     */
+    public function findMatchingEmployee(): ?Employee
+    {
+        $email = $this->email ? strtolower($this->email) : null;
+        $phoneDigits = $this->phone ? preg_replace('/\D+/', '', $this->phone) : null;
+        $fullName = trim("{$this->first_name} {$this->surname}");
+        $dob = $this->date_of_birth?->format('Y-m-d');
+
+        if (! $email && ! $phoneDigits && (! $fullName || ! $dob)) {
+            return null;
+        }
+
+        return Employee::withTrashed()
+            ->where(function ($q) use ($email, $phoneDigits, $fullName, $dob) {
+                if ($email) {
+                    $q->orWhereRaw('LOWER(email) = ?', [$email]);
+                }
+                if ($phoneDigits) {
+                    // Strip common separators on the column so '0400 000 000' matches '0400000000'.
+                    // REGEXP_REPLACE isn't portable; chained REPLACE() works on MySQL + SQLite.
+                    $q->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(mobile_number, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = ?",
+                        [$phoneDigits],
+                    );
+                }
+                if ($fullName && $dob) {
+                    $q->orWhere(function ($qq) use ($fullName, $dob) {
+                        $qq->whereRaw('LOWER(name) = ?', [strtolower($fullName)])
+                            ->where('date_of_birth', $dob);
+                    });
+                }
+            })
+            ->first();
+    }
+
+    public function formPlaceholderValues(): array
+    {
+        return [
+            'applicant.first_name' => $this->first_name,
+            'applicant.last_name' => $this->surname,
+            'applicant.full_name' => trim("{$this->first_name} {$this->surname}"),
+            'applicant.email' => $this->email,
+            'applicant.phone' => $this->phone,
+            'applicant.suburb' => $this->suburb,
+            'applicant.state' => $this->state,
+            'applicant.occupation' => $this->occupation,
+            'applicant.preferred_site' => $this->preferred_project_site,
+            'application.id' => (string) $this->id,
+            'application.status' => $this->status,
+            'application.received_date' => $this->created_at?->format('j M Y'),
+        ];
+    }
+
+    public static function formPlaceholderDefinitions(): array
+    {
+        return [
+            'applicant.first_name' => 'Applicant first name',
+            'applicant.last_name' => 'Applicant last name',
+            'applicant.full_name' => 'Applicant full name',
+            'applicant.email' => 'Applicant email',
+            'applicant.phone' => 'Applicant phone',
+            'applicant.suburb' => 'Applicant suburb',
+            'applicant.state' => 'Applicant state',
+            'applicant.occupation' => 'Applicant occupation',
+            'applicant.preferred_site' => 'Preferred project site',
+            'application.id' => 'Application ID',
+            'application.status' => 'Application status',
+            'application.received_date' => 'Application received date',
+        ];
+    }
+
+    public static function formPlaceholderSamples(): array
+    {
+        return [
+            'applicant.first_name' => 'Jane',
+            'applicant.last_name' => 'Doe',
+            'applicant.full_name' => 'Jane Doe',
+            'applicant.email' => 'jane.doe@example.com',
+            'applicant.phone' => '0400 000 000',
+            'applicant.suburb' => 'Geelong',
+            'applicant.state' => 'VIC',
+            'applicant.occupation' => 'Carpenter',
+            'applicant.preferred_site' => 'Site A',
+            'application.id' => '42',
+            'application.status' => 'whs_review',
+            'application.received_date' => '1 May 2026',
+        ];
     }
 }

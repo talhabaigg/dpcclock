@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FormRequest;
+use App\Services\FormPlaceholderResolver;
 use App\Services\FormService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -11,6 +12,7 @@ class FormRequestController extends Controller
 {
     public function __construct(
         private FormService $formService,
+        private FormPlaceholderResolver $placeholderResolver,
     ) {}
 
     // ─── Public actions (token-based, no auth) ───────────────
@@ -52,13 +54,32 @@ class FormRequestController extends Controller
                 ->get();
         }
 
+        $fields = $this->resolveFieldPlaceholders(
+            $formRequest->formTemplate->fields,
+            $formRequest->formable,
+        );
+
         return view('forms.fill', [
             'formRequest' => $formRequest,
-            'fields' => $formRequest->formTemplate->fields,
+            'fields' => $fields,
             'token' => $token,
             'pendingDocuments' => $pendingDocuments,
             'pendingForms' => $pendingForms,
         ]);
+    }
+
+    /**
+     * Interpolate placeholder tokens in each field's display strings against
+     * the parent formable. Returns the same collection with `label`,
+     * `default_value`, and `placeholder` resolved.
+     */
+    private function resolveFieldPlaceholders($fields, ?\Illuminate\Database\Eloquent\Model $formable)
+    {
+        return $fields->each(function ($field) use ($formable) {
+            $field->label = $this->placeholderResolver->interpolate($field->label, $formable);
+            $field->placeholder = $this->placeholderResolver->interpolate($field->placeholder, $formable);
+            $field->default_value = $this->placeholderResolver->interpolate($field->default_value, $formable);
+        });
     }
 
     public function submit(string $token, Request $request)
@@ -75,51 +96,7 @@ class FormRequestController extends Controller
             return view('forms.expired');
         }
 
-        // Build validation rules from form fields
-        $rules = [];
-        foreach ($formRequest->formTemplate->fields as $field) {
-            if ($field->isDisplayOnly()) {
-                continue;
-            }
-
-            $fieldRules = [];
-
-            if ($field->is_required) {
-                $fieldRules[] = 'required';
-            } else {
-                $fieldRules[] = 'nullable';
-            }
-
-            match ($field->type) {
-                'email' => $fieldRules[] = 'email:rfc',
-                'number' => $fieldRules[] = 'numeric',
-                'date' => $fieldRules[] = 'date',
-                'phone' => $fieldRules[] = 'regex:/^[\d\s\+\-\(\)\.]+$/',
-                'checkbox' => array_push($fieldRules, 'array', 'max:50') ? null : null,
-                default => null,
-            };
-
-            // Enforce string type and max length for text-based inputs
-            if (in_array($field->type, ['text', 'email', 'phone', 'textarea'])) {
-                $fieldRules[] = 'string';
-                $fieldRules[] = $field->type === 'textarea' ? 'max:5000' : 'max:500';
-            }
-
-            // Enforce string type for select/radio
-            if (in_array($field->type, ['select', 'radio'])) {
-                $fieldRules[] = 'string';
-                $fieldRules[] = 'max:500';
-            }
-
-            // Enforce each checkbox value is a string
-            if ($field->type === 'checkbox') {
-                $rules["field_{$field->id}.*"] = ['string', 'max:500'];
-            }
-
-            $rules["field_{$field->id}"] = $fieldRules;
-        }
-
-        $validated = $request->validate($rules);
+        $validated = $request->validate($this->buildValidationRules($formRequest));
 
         // Build responses keyed by field ID
         $responses = [];
@@ -199,6 +176,100 @@ class FormRequestController extends Controller
         }
 
         return null;
+    }
+
+    // ─── Authenticated in-app submission ─────────────────────
+
+    /**
+     * Submit a form from inside the authenticated app (no token needed).
+     * Used when an internal user (the assignee or an admin) fills the form
+     * on the parent model's show page instead of clicking the emailed link.
+     */
+    public function submitInternal(Request $request, FormRequest $formRequest)
+    {
+        $formRequest->load('formTemplate.fields');
+
+        if ($formRequest->isSubmitted()) {
+            return back()->withErrors(['form' => 'This form has already been submitted.']);
+        }
+        if ($formRequest->isCancelled()) {
+            return back()->withErrors(['form' => 'This form has been cancelled.']);
+        }
+
+        $rules = $this->buildValidationRules($formRequest);
+        $validated = $request->validate($rules);
+
+        $responses = [];
+        foreach ($formRequest->formTemplate->fields as $field) {
+            if ($field->isDisplayOnly()) {
+                continue;
+            }
+            $responses[$field->id] = $validated["field_{$field->id}"] ?? null;
+        }
+
+        try {
+            $this->formService->processSubmission($formRequest, $responses, $request);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['form' => $e->getMessage()]);
+        }
+
+        // Log who actually submitted from inside the app so the audit trail
+        // captures the authenticated user, not just the email-time recipient.
+        $formable = $formRequest->formable;
+        if ($formable && method_exists($formable, 'addSystemComment')) {
+            $templateName = $formRequest->formTemplate->name;
+            $formable->addSystemComment(
+                "Form \"{$templateName}\" submitted in-app by {$request->user()->name}",
+                ['type' => 'form_submitted_in_app', 'form_request_id' => $formRequest->id],
+                $request->user()->id,
+            );
+        }
+
+        return back()->with('success', 'Form submitted.');
+    }
+
+    /**
+     * Build Laravel validation rules from a FormRequest's template fields.
+     * Shared between public (token) and authenticated (in-app) submission.
+     */
+    private function buildValidationRules(FormRequest $formRequest): array
+    {
+        $rules = [];
+        foreach ($formRequest->formTemplate->fields as $field) {
+            if ($field->isDisplayOnly()) {
+                continue;
+            }
+
+            $fieldRules = [];
+            $fieldRules[] = $field->is_required ? 'required' : 'nullable';
+
+            match ($field->type) {
+                'email' => $fieldRules[] = 'email:rfc',
+                'number' => $fieldRules[] = 'numeric',
+                'date' => $fieldRules[] = 'date',
+                'phone' => $fieldRules[] = 'regex:/^[\d\s\+\-\(\)\.]+$/',
+                'checkbox' => array_push($fieldRules, 'array', 'max:50') ? null : null,
+                default => null,
+            };
+
+            if (in_array($field->type, ['text', 'email', 'phone', 'textarea'])) {
+                $fieldRules[] = 'string';
+                $fieldRules[] = $field->type === 'textarea' ? 'max:5000' : 'max:500';
+            }
+
+            if (in_array($field->type, ['select', 'radio'])) {
+                $fieldRules[] = 'string';
+                $fieldRules[] = 'max:500';
+            }
+
+            if ($field->type === 'checkbox') {
+                $rules["field_{$field->id}.*"] = ['string', 'max:500'];
+            }
+
+            $rules["field_{$field->id}"] = $fieldRules;
+        }
+
+        return $rules;
     }
 
     // ─── Admin actions (authenticated) ───────────────────────

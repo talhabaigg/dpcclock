@@ -379,11 +379,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/form-templates/{formTemplate}/edit', [FormTemplateController::class, 'edit'])->name('form-templates.edit');
         Route::put('/form-templates/{formTemplate}', [FormTemplateController::class, 'update'])->name('form-templates.update');
         Route::delete('/form-templates/{formTemplate}', [FormTemplateController::class, 'destroy'])->name('form-templates.destroy');
+        Route::get('/form-templates/placeholders/list', [FormTemplateController::class, 'placeholders'])->name('form-templates.placeholders');
+
+        // Phase-form mappings (which form auto-sends on which status, to whom)
+        Route::get('/application-phase-forms', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'index'])->name('application-phase-forms.index');
+        Route::post('/application-phase-forms', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'store'])->name('application-phase-forms.store');
+        Route::put('/application-phase-forms/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'update'])->name('application-phase-forms.update');
+        Route::delete('/application-phase-forms/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'destroy'])->name('application-phase-forms.destroy');
     });
 
     // Form Requests (admin actions)
     Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
     Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
+    Route::post('/form-requests/{formRequest}/submit-internal', [FormRequestController::class, 'submitInternal'])->name('form-requests.submit-internal');
 
     Route::middleware('permission:signing-requests.view')->group(function () {
         Route::get('/signing-requests', [SigningRequestController::class, 'index'])->name('signing-requests.index');
