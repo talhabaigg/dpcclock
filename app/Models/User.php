@@ -80,10 +80,8 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
         try {
             return $media->getTemporaryUrl(now()->addMinutes(30));
         } catch (\RuntimeException) {
-            // Fallback if disk doesn't support temporary URLs (e.g. local/public disk)
+            return $media->getUrl();
         }
-
-        return $media->getUrl();
     }
 
     public function hasSavedSignature(): bool
