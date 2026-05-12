@@ -30,6 +30,18 @@ What this looks like in practice:
 
 **Keep** headers that are NOT the page title — e.g. section headings inside cards, empty-state headings, modal titles. Those are not redundant.
 
+#### Also remove redundant "Back to ..." buttons
+
+Same principle: the breadcrumb is already the back-navigation affordance. A `← Back to Suppliers` button (or `<ArrowLeft />` link) at the top of the page that targets the same destination as the parent breadcrumb is **duplicate navigation** — remove it.
+
+How to decide:
+
+- Look at the `breadcrumbs` array passed to `<AppLayout>`. If the previous crumb's `href` matches the back button's destination, the button is redundant — delete it.
+- If the back button targets something the breadcrumbs do **not** already link to (e.g. a "Back to dashboard" shortcut on a deep page where dashboard is not in the crumb trail), keep it — it's not redundant.
+- If the page is rendered as a modal/overlay without `AppLayout` breadcrumbs, keep the back / close affordance — the rule only applies when breadcrumbs are present.
+
+After removing, also delete now-unused imports (`ArrowLeft`, `ChevronLeft`, `Link` if only used for the button, etc.) so lint stays clean.
+
 ### 2. Cap the table container at `max-w-5xl w-full`
 
 The container that wraps the index table (and its toolbar) should be `max-w-5xl w-full mx-auto` so the table doesn't sprawl on wide monitors and stays readable.
@@ -563,6 +575,66 @@ import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, C
   </ComboboxContent>
 </Combobox>
 ```
+
+#### Combobox is its own trigger — do NOT wrap it in another button
+
+> ⚠️ The shadcn `<Combobox>` family ships with its **own** trigger component (`<ComboboxTrigger>`, or `<ComboboxChipsTrigger>` for the chips variant). The trigger already renders a styled button with the value, placeholder, and a chevron. **It is the button.** Do not wrap it in a `<Button>`, a `<DropdownMenuTrigger>`, a `<PopoverTrigger>`, or any other clickable element to "give it a button look".
+>
+> Common failure mode you must avoid: a Combobox rendered inside an outer `<Button variant="outline">` (or a dropdown trigger), which produces a **nested-button** with **two chevrons stacked** — the outer button's caret and the inner ComboboxTrigger's caret — looking like ⇕▾. This is the symptom that you've wrapped the Combobox incorrectly.
+
+Rules:
+
+- The clickable surface for a `<Combobox>` is `<ComboboxTrigger>` (single-select) or `<ComboboxChipsTrigger>` (multi-select). Use one of those — never both, never a wrapper.
+- Don't put a `<ComboboxValue>` (or any combobox internals) inside a `<Button>` / `<DropdownMenuTrigger>` / `<PopoverTrigger>`. Those are for other primitives.
+- Don't add `asChild` slotting to try to "merge" an outer button into the trigger — `<ComboboxTrigger>` is already the button; there is nothing to merge.
+- If you need an inline label (e.g. "Category:"), put it as a sibling `<span>` / `<Label>` **outside** the `<Combobox>` — not as a button wrapping it.
+
+```tsx
+// ❌ WRONG — nested buttons, two chevrons, broken focus/keyboard semantics
+<Button variant="outline" className="justify-between">
+  <Combobox value={category} onValueChange={setCategory} items={categories}>
+    <ComboboxTrigger>
+      <ComboboxValue placeholder="Select category..." />
+    </ComboboxTrigger>
+    {/* ... */}
+  </Combobox>
+  <ChevronDown className="h-4 w-4" />
+</Button>
+
+// ❌ ALSO WRONG — DropdownMenuTrigger is for DropdownMenu, not Combobox
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Combobox ...>...</Combobox>
+  </DropdownMenuTrigger>
+</DropdownMenu>
+
+// ✅ CORRECT — ComboboxTrigger IS the button
+<div className="flex items-center gap-2">
+  <Label>Category:</Label>
+  <Combobox value={category} onValueChange={setCategory} items={categories}>
+    <ComboboxTrigger>
+      <ComboboxValue placeholder="Select category..." />
+    </ComboboxTrigger>
+    <ComboboxContent className="min-w-(--anchor-width)">
+      <ComboboxInput placeholder="Search..." />
+      <ComboboxEmpty>No match.</ComboboxEmpty>
+      <ComboboxList>
+        {categories.map((c) => (
+          <ComboboxItem key={c.id} value={c.id}>{c.name}</ComboboxItem>
+        ))}
+      </ComboboxList>
+    </ComboboxContent>
+  </Combobox>
+</div>
+```
+
+How to recognise the mistake when reviewing or editing existing code:
+
+- **Two carets** showing on a single field is the giveaway — one belongs to the outer wrapper, one to `<ComboboxTrigger>`. Delete the outer wrapper, not the inner trigger.
+- The field is clickable on the outer chrome but not on the inner trigger (or vice-versa), and keyboard focus rings render in the wrong place.
+- The popup positions against the wrong anchor (the outer wrapper, not the trigger), so `min-w-(--anchor-width)` produces the wrong width.
+
+Same rule applies to `<ComboboxChips>` — its trigger is `<ComboboxChipsTrigger>`, also already-a-button. Do not wrap.
 
 #### Combobox dropdown width — always match the trigger
 

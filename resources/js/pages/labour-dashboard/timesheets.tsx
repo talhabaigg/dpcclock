@@ -1,14 +1,40 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Combobox,
+    ComboboxChip,
+    ComboboxChips,
+    ComboboxChipsInput,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxTrigger,
+    ComboboxValue,
+} from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DatePickerDemo } from '@/components/date-picker';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, ArrowUpDown, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { format, parse } from 'date-fns';
+import { ArrowUpDown, ChevronsLeft, ChevronsRight, Search, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface TimesheetRow {
     id: number;
@@ -29,14 +55,47 @@ interface TimesheetRow {
     ot_hours?: number;
 }
 
+interface PaginatedRows {
+    data: TimesheetRow[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+}
+
+interface Totals {
+    hours: number;
+    nt: number;
+    ot: number;
+    employees: number;
+}
+
+type SortKey = 'date' | 'employee_name' | 'hours' | 'worktype_name' | 'location_name';
+type SortDir = 'asc' | 'desc';
+
+interface Filters {
+    search: string | null;
+    per_page: number;
+    sort_key: SortKey;
+    sort_dir: SortDir;
+}
+
+interface ProjectOption {
+    id: number;
+    name: string;
+}
+
 interface TimesheetsPageProps {
-    rows: TimesheetRow[];
+    rows: PaginatedRows;
+    totals: Totals;
     category: Category;
     date_from: string;
     date_to: string;
     project_names: string[];
     project_ids: number[];
+    available_projects: ProjectOption[];
     truncated: boolean;
+    filters: Filters;
 }
 
 type Category =
@@ -68,43 +127,34 @@ const CATEGORY_LABELS: Record<Category, string> = {
     available: 'Available (all clocks)',
 };
 
-const CATEGORY_BLURBS: Record<Category, string> = {
-    nt: 'Productive hours capped at 8/day per employee. Each row shows its NT portion based on the day total.',
-    ot: 'Days where an employee\'s productive hours exceeded 8h. Rows are split into NT and OT portions.',
-    worked: 'Every productive shift (NT + OT). Each row shows its NT/OT split for that day.',
-    weather: 'Clocks at the project\'s Inclement Weather / Weather sub-locations.',
-    safety: 'Clocks at the project\'s Safety sub-locations.',
-    al: 'Annual Leave clocks.',
-    sick: "Personal / Carer's Leave clocks.",
-    rdo: 'RDO Taken / Rostered Day Off Taken clocks.',
-    ph: 'Public Holiday clocks.',
-    lost: 'Union of Weather + Safety + AL + Sick + RDO + PH.',
-    non_standard: 'Clocks not classified by any bucket — typically Leave Without Pay, Industrial Action, pay-category adjustments, or clocks missing a work type.',
-    available: 'Every clock in scope (any work type except Workcover).',
-};
-
 const formatHours = (value: number) => {
     if (!value) return '-';
     return value.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-type SortKey = 'date' | 'employee_name' | 'hours' | 'worktype_name' | 'location_name';
-type SortDir = 'asc' | 'desc';
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
+}
 
 export default function Timesheets({
     rows,
+    totals,
     category,
     date_from,
     date_to,
-    project_names,
     project_ids,
+    available_projects,
     truncated,
+    filters,
 }: TimesheetsPageProps) {
     const showNtOt = category === 'nt' || category === 'ot' || category === 'worked';
-    const [search, setSearch] = useState('');
-    const [sortKey, setSortKey] = useState<SortKey>('date');
-    const [sortDir, setSortDir] = useState<SortDir>('asc');
-
     const backUrl = `/labour-dashboard?projects=${project_ids.join(',')}&from=${date_from}&to=${date_to}`;
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -112,136 +162,231 @@ export default function Timesheets({
         { title: CATEGORY_LABELS[category], href: '#' },
     ];
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        const base = q
-            ? rows.filter(
-                  (r) =>
-                      r.employee_name.toLowerCase().includes(q) ||
-                      r.worktype_name.toLowerCase().includes(q) ||
-                      r.location_name.toLowerCase().includes(q) ||
-                      r.date.includes(q),
-              )
-            : rows;
-        const sign = sortDir === 'asc' ? 1 : -1;
-        return [...base].sort((a, b) => {
-            const av = a[sortKey] as string | number;
-            const bv = b[sortKey] as string | number;
-            if (typeof av === 'number' && typeof bv === 'number') return sign * (av - bv);
-            return sign * String(av).localeCompare(String(bv));
+    const navigate = (params: Record<string, string | number | undefined | null>) => {
+        const query: Record<string, string | number | undefined> = {
+            location_ids: project_ids.join(','),
+            date_from,
+            date_to,
+            category,
+            search: filters.search ?? undefined,
+            per_page: filters.per_page,
+            sort_key: filters.sort_key,
+            sort_dir: filters.sort_dir,
+            ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, v ?? undefined])),
+        };
+        router.get('/labour-dashboard/timesheets', query, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
         });
-    }, [rows, search, sortKey, sortDir]);
-
-    const totals = useMemo(
-        () => ({
-            hours: filtered.reduce((s, r) => s + r.hours, 0),
-            nt: filtered.reduce((s, r) => s + (r.nt_hours ?? 0), 0),
-            ot: filtered.reduce((s, r) => s + (r.ot_hours ?? 0), 0),
-            employees: new Set(filtered.map((r) => r.eh_employee_id)).size,
-        }),
-        [filtered],
-    );
-
-    const toggleSort = (key: SortKey) => {
-        if (sortKey === key) {
-            setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortKey(key);
-            setSortDir('asc');
-        }
     };
 
-    const onCategoryChange = (next: Category) => {
-        router.get(
-            '/labour-dashboard/timesheets',
-            {
-                location_ids: project_ids.join(','),
-                date_from,
-                date_to,
-                category: next,
-            },
-            { preserveScroll: false, preserveState: false },
-        );
+    // Debounced search
+    const [searchInput, setSearchInput] = useState(filters.search ?? '');
+    const firstRender = useRef(true);
+    useEffect(() => {
+        if (firstRender.current) {
+            firstRender.current = false;
+            return;
+        }
+        const id = setTimeout(() => {
+            const next = searchInput.trim();
+            if (next === (filters.search ?? '')) return;
+            navigate({ search: next || undefined, page: 1 });
+        }, 300);
+        return () => clearTimeout(id);
+         
+    }, [searchInput]);
+
+    const toggleSort = (key: SortKey) => {
+        const sameKey = filters.sort_key === key;
+        const nextDir: SortDir = sameKey ? (filters.sort_dir === 'asc' ? 'desc' : 'asc') : 'asc';
+        navigate({ sort_key: key, sort_dir: nextDir, page: 1 });
     };
 
     const SortButton = ({ k, label }: { k: SortKey; label: string }) => (
         <button onClick={() => toggleSort(k)} className="flex items-center gap-1 hover:text-foreground">
             {label}
-            <ArrowUpDown className={cn('h-3 w-3 shrink-0', sortKey === k && 'text-foreground')} />
+            <ArrowUpDown className={cn('h-3 w-3 shrink-0', filters.sort_key === k && 'text-foreground')} />
         </button>
     );
+
+    // Filter sheet — local draft state, committed on Apply
+    const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+    const initialSelectedProjects = useMemo(
+        () => available_projects.filter((p) => project_ids.includes(p.id)),
+        [available_projects, project_ids],
+    );
+    const [draftProjects, setDraftProjects] = useState<ProjectOption[]>(initialSelectedProjects);
+    const [draftDateFrom, setDraftDateFrom] = useState(date_from);
+    const [draftDateTo, setDraftDateTo] = useState(date_to);
+    const [draftCategory, setDraftCategory] = useState<Category>(category);
+
+    useEffect(() => {
+        if (filterSheetOpen) {
+            setDraftProjects(initialSelectedProjects);
+            setDraftDateFrom(date_from);
+            setDraftDateTo(date_to);
+            setDraftCategory(category);
+        }
+    }, [filterSheetOpen, initialSelectedProjects, date_from, date_to, category]);
+
+    const applyFilterSheet = () => {
+        if (draftProjects.length === 0) return;
+        setFilterSheetOpen(false);
+        router.get(
+            '/labour-dashboard/timesheets',
+            {
+                location_ids: draftProjects.map((p) => p.id).join(','),
+                date_from: draftDateFrom,
+                date_to: draftDateTo,
+                category: draftCategory,
+                per_page: filters.per_page,
+                sort_key: filters.sort_key,
+                sort_dir: filters.sort_dir,
+                search: filters.search ?? undefined,
+            },
+            { preserveScroll: true, preserveState: false },
+        );
+    };
+
+    const resetFilterSheet = () => {
+        setDraftProjects(initialSelectedProjects);
+        setDraftDateFrom(date_from);
+        setDraftDateTo(date_to);
+        setDraftCategory(category);
+    };
+
+    const fromRow = rows.total === 0 ? 0 : (rows.current_page - 1) * rows.per_page + 1;
+    const toRow = Math.min(rows.current_page * rows.per_page, rows.total);
+    const pageWindow = getPageWindow(rows.current_page, rows.last_page);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Timesheets — ${CATEGORY_LABELS[category]}`} />
 
-            <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-4 p-4 md:p-6">
-                {/* Header */}
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                        <Link href={backUrl} className="inline-flex w-fit">
-                            <Button variant="ghost" size="sm" className="-ml-2 h-7 gap-1 text-muted-foreground hover:text-foreground">
-                                <ArrowLeft className="h-3.5 w-3.5" />
-                                Back to Labour Dashboard
-                            </Button>
-                        </Link>
-                        <div className="flex flex-wrap items-baseline gap-2">
-                            <h1 className="text-xl font-semibold">{CATEGORY_LABELS[category]}</h1>
-                            <span className="text-sm text-muted-foreground">timesheets</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{CATEGORY_BLURBS[category]}</p>
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 md:p-6">
+                {/* Toolbar: search left, filters right */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Filter employee / work type / location…"
+                            className="h-8 pl-7 text-xs"
+                        />
                     </div>
 
-                    {/* Summary tiles */}
-                    <div className="flex flex-wrap items-center gap-4">
-                        <Summary label="Clocks" value={filtered.length.toLocaleString()} />
-                        <Summary label="Employees" value={totals.employees.toLocaleString()} />
-                        <Summary label="Hours" value={formatHours(totals.hours)} />
-                        {showNtOt && (
-                            <>
-                                <Summary label="NT" value={formatHours(totals.nt)} />
-                                <Summary label="OT" value={formatHours(totals.ot)} />
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/20 p-3 text-xs">
                     <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Projects:</span>
-                        <span className="font-medium">{project_names.join(', ') || '—'}</span>
-                    </div>
-                    <span className="text-muted-foreground">·</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Range:</span>
-                        <span className="font-medium">
-                            {date_from} → {date_to}
-                        </span>
-                    </div>
-                    <div className="ml-auto flex items-center gap-2">
-                        <span className="text-muted-foreground">Category:</span>
-                        <Select value={category} onValueChange={(v) => onCategoryChange(v as Category)}>
-                            <SelectTrigger className="h-8 w-[220px] text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
-                                    <SelectItem key={c} value={c} className="text-xs">
-                                        {CATEGORY_LABELS[c]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Filter employee / work type / location…"
-                                className="h-8 w-[280px] pl-7 text-xs"
+                        <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+                            <SheetTrigger
+                                render={
+                                    <Button variant="outline" size="sm" className="gap-2">
+                                        <SlidersHorizontal className="h-4 w-4" />
+                                        Filters
+                                    </Button>
+                                }
                             />
-                        </div>
+                            <SheetContent side="right" className="w-full sm:max-w-sm">
+                                <SheetHeader>
+                                    <SheetTitle>Filters</SheetTitle>
+                                </SheetHeader>
+                                <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Category</Label>
+                                        <Combobox<Category>
+                                            items={Object.keys(CATEGORY_LABELS) as Category[]}
+                                            value={draftCategory}
+                                            itemToStringLabel={(c) => CATEGORY_LABELS[c]}
+                                            itemToStringValue={(c) => c}
+                                            isItemEqualToValue={(a, b) => a === b}
+                                            onValueChange={(c) => c && setDraftCategory(c)}
+                                        >
+                                            <ComboboxTrigger
+                                                aria-label="Select category"
+                                                className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 text-sm font-normal text-foreground transition-colors hover:bg-muted aria-expanded:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                                            >
+                                                <ComboboxValue>{CATEGORY_LABELS[draftCategory]}</ComboboxValue>
+                                            </ComboboxTrigger>
+                                            <ComboboxContent className="min-w-(--anchor-width) p-0">
+                                                <ComboboxInput placeholder="Search categories…" className="h-9" showTrigger={false} />
+                                                <ComboboxEmpty>No categories found.</ComboboxEmpty>
+                                                <ComboboxList>
+                                                    {(c: Category) => (
+                                                        <ComboboxItem key={c} value={c}>
+                                                            {CATEGORY_LABELS[c]}
+                                                        </ComboboxItem>
+                                                    )}
+                                                </ComboboxList>
+                                            </ComboboxContent>
+                                        </Combobox>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Projects</Label>
+                                        <Combobox<ProjectOption>
+                                            items={available_projects}
+                                            value={draftProjects}
+                                            multiple
+                                            itemToStringLabel={(p) => p.name}
+                                            itemToStringValue={(p) => String(p.id)}
+                                            isItemEqualToValue={(a, b) => a.id === b.id}
+                                            onValueChange={(next) => setDraftProjects(next ?? [])}
+                                        >
+                                            <ComboboxChips>
+                                                {draftProjects.map((p) => (
+                                                    <ComboboxChip key={p.id} value={p}>
+                                                        {p.name}
+                                                    </ComboboxChip>
+                                                ))}
+                                                <ComboboxChipsInput placeholder={draftProjects.length === 0 ? 'Select projects…' : ''} />
+                                            </ComboboxChips>
+                                            <ComboboxContent className="min-w-(--anchor-width) p-0">
+                                                <ComboboxInput placeholder="Search projects…" className="h-9" showTrigger={false} />
+                                                <ComboboxEmpty>No projects found.</ComboboxEmpty>
+                                                <ComboboxList>
+                                                    {(p: ProjectOption) => (
+                                                        <ComboboxItem key={p.id} value={p}>
+                                                            {p.name}
+                                                        </ComboboxItem>
+                                                    )}
+                                                </ComboboxList>
+                                            </ComboboxContent>
+                                        </Combobox>
+                                        {draftProjects.length === 0 && (
+                                            <p className="text-xs text-destructive">Select at least one project.</p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>From date</Label>
+                                        <DatePickerDemo
+                                            value={draftDateFrom ? parse(draftDateFrom, 'yyyy-MM-dd', new Date()) : undefined}
+                                            onChange={(d) => setDraftDateFrom(d ? format(d, 'yyyy-MM-dd') : '')}
+                                            placeholder="From date"
+                                            displayFormat="dd/MM/yyyy"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>To date</Label>
+                                        <DatePickerDemo
+                                            value={draftDateTo ? parse(draftDateTo, 'yyyy-MM-dd', new Date()) : undefined}
+                                            onChange={(d) => setDraftDateTo(d ? format(d, 'yyyy-MM-dd') : '')}
+                                            placeholder="To date"
+                                            displayFormat="dd/MM/yyyy"
+                                        />
+                                    </div>
+                                </div>
+                                <SheetFooter>
+                                    <Button variant="ghost" onClick={resetFilterSheet}>Reset</Button>
+                                    <Button onClick={applyFilterSheet} disabled={draftProjects.length === 0 || !draftDateFrom || !draftDateTo}>
+                                        Apply
+                                    </Button>
+                                </SheetFooter>
+                            </SheetContent>
+                        </Sheet>
                     </div>
                 </div>
 
@@ -254,7 +399,7 @@ export default function Timesheets({
                 {/* Table */}
                 <div className="overflow-hidden rounded-md border">
                     <Table className="text-xs">
-                        <TableHeader className="bg-muted/30">
+                        <TableHeader>
                             <TableRow>
                                 <TableHead><SortButton k="date" label="Date" /></TableHead>
                                 <TableHead className="w-12">Day</TableHead>
@@ -268,18 +413,17 @@ export default function Timesheets({
                                         <TableHead className="text-right">OT</TableHead>
                                     </>
                                 )}
-                                <TableHead className="w-24">Status</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filtered.length === 0 ? (
+                            {rows.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={showNtOt ? 9 : 7} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={showNtOt ? 8 : 6} className="py-8 text-center text-muted-foreground">
                                         No timesheets match this drill-through.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filtered.map((row) => (
+                                rows.data.map((row) => (
                                     <TableRow key={row.id}>
                                         <TableCell className="tabular-nums">{row.date}</TableCell>
                                         <TableCell className="text-muted-foreground">{row.day}</TableCell>
@@ -314,17 +458,12 @@ export default function Timesheets({
                                                 </TableCell>
                                             </>
                                         )}
-                                        <TableCell>
-                                            <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                                                {row.status}
-                                            </Badge>
-                                        </TableCell>
                                     </TableRow>
                                 ))
                             )}
-                            {filtered.length > 0 && (
+                            {rows.data.length > 0 && (
                                 <TableRow className="bg-muted/50 font-semibold">
-                                    <TableCell colSpan={5}>Total</TableCell>
+                                    <TableCell colSpan={5}>Total Hours</TableCell>
                                     <TableCell className="text-right tabular-nums">{formatHours(totals.hours)}</TableCell>
                                     {showNtOt && (
                                         <>
@@ -332,22 +471,114 @@ export default function Timesheets({
                                             <TableCell className="text-right tabular-nums">{formatHours(totals.ot)}</TableCell>
                                         </>
                                     )}
-                                    <TableCell />
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Pagination */}
+                <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                    <p className="text-muted-foreground text-xs sm:text-sm">
+                        {rows.total > 0 ? `${fromRow}–${toRow} of ${rows.total.toLocaleString()} items` : 'No items'}
+                    </p>
+
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                            <Select
+                                value={String(rows.per_page)}
+                                onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                            >
+                                <SelectTrigger size="sm" className="w-[72px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {[10, 25, 50, 100].map((n) => (
+                                        <SelectItem key={n} value={String(n)}>
+                                            {n}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Pagination className="mx-0 w-auto justify-end">
+                            <PaginationContent>
+                                <PaginationItem>
+                                    <PaginationLink
+                                        aria-label="Go to first page"
+                                        aria-disabled={rows.current_page <= 1}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (rows.current_page > 1) navigate({ page: 1 });
+                                        }}
+                                        className={rows.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </PaginationLink>
+                                </PaginationItem>
+
+                                <PaginationItem>
+                                    <PaginationPrevious
+                                        aria-disabled={rows.current_page <= 1}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (rows.current_page > 1) navigate({ page: rows.current_page - 1 });
+                                        }}
+                                        className={rows.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                                    />
+                                </PaginationItem>
+
+                                {pageWindow.map((p, i) =>
+                                    p === 'ellipsis' ? (
+                                        <PaginationItem key={`e-${i}`}>
+                                            <PaginationEllipsis />
+                                        </PaginationItem>
+                                    ) : (
+                                        <PaginationItem key={p}>
+                                            <PaginationLink
+                                                isActive={p === rows.current_page}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    navigate({ page: p });
+                                                }}
+                                            >
+                                                {p}
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    ),
+                                )}
+
+                                <PaginationItem>
+                                    <PaginationNext
+                                        aria-disabled={rows.current_page >= rows.last_page}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (rows.current_page < rows.last_page) navigate({ page: rows.current_page + 1 });
+                                        }}
+                                        className={rows.current_page >= rows.last_page ? 'pointer-events-none opacity-50' : ''}
+                                    />
+                                </PaginationItem>
+
+                                <PaginationItem>
+                                    <PaginationLink
+                                        aria-label="Go to last page"
+                                        aria-disabled={rows.current_page >= rows.last_page}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (rows.current_page < rows.last_page) navigate({ page: rows.last_page });
+                                        }}
+                                        className={rows.current_page >= rows.last_page ? 'pointer-events-none opacity-50' : ''}
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </PaginationLink>
+                                </PaginationItem>
+                            </PaginationContent>
+                        </Pagination>
+                    </div>
+                </div>
             </div>
         </AppLayout>
-    );
-}
-
-function Summary({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-            <span className="text-sm font-semibold tabular-nums">{value}</span>
-        </div>
     );
 }

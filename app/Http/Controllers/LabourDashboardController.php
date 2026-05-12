@@ -11,6 +11,7 @@ use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -293,6 +294,11 @@ class LabourDashboardController extends Controller
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
             'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available',
+            'search' => 'nullable|string|max:255',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+            'sort_key' => 'nullable|in:date,employee_name,hours,worktype_name,location_name',
+            'sort_dir' => 'nullable|in:asc,desc',
         ]);
 
         $user = $request->user();
@@ -300,6 +306,11 @@ class LabourDashboardController extends Controller
         $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
         $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
         $category = $request->input('category');
+        $search = trim((string) $request->input('search', ''));
+        $perPage = (int) ($request->input('per_page') ?? 25);
+        $page = max(1, (int) ($request->input('page') ?? 1));
+        $sortKey = (string) ($request->input('sort_key') ?? 'date');
+        $sortDir = (string) ($request->input('sort_dir') ?? 'asc');
 
         // Scope to user's permitted locations if they lack view-all
         $locationQuery = Location::whereIn('id', $rawIds);
@@ -438,14 +449,72 @@ class LabourDashboardController extends Controller
             return $row;
         })->values();
 
+        // Search filter across the full computed set
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+            $rows = $rows->filter(function ($r) use ($needle) {
+                return str_contains(mb_strtolower($r['employee_name']), $needle)
+                    || str_contains(mb_strtolower($r['worktype_name']), $needle)
+                    || str_contains(mb_strtolower($r['location_name']), $needle)
+                    || str_contains($r['date'], $needle);
+            })->values();
+        }
+
+        // Sort across the full filtered set
+        $rows = $rows->sortBy(
+            fn ($r) => $r[$sortKey] ?? null,
+            SORT_REGULAR,
+            $sortDir === 'desc',
+        )->values();
+
+        // Totals computed across the search-filtered, pre-paginated set
+        $totals = [
+            'hours' => round((float) $rows->sum('hours'), 2),
+            'nt' => round((float) $rows->sum(fn ($r) => $r['nt_hours'] ?? 0), 2),
+            'ot' => round((float) $rows->sum(fn ($r) => $r['ot_hours'] ?? 0), 2),
+            'employees' => $rows->pluck('eh_employee_id')->unique()->count(),
+        ];
+
+        $total = $rows->count();
+        $pageRows = $rows->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $paginator = new LengthAwarePaginator(
+            $pageRows,
+            $total,
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        // Available projects (locations) for the Filters sheet
+        $availableProjectsQuery = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+            ->open()
+            ->orderBy('name');
+        if (!$user->can('labour-dashboard.view-all')) {
+            $managedEhIds = $user->managedKiosks()->with('location')->get()
+                ->pluck('location.eh_location_id')->filter()->unique();
+            $availableProjectsQuery->whereIn('eh_location_id', $managedEhIds);
+        }
+        $availableProjects = $availableProjectsQuery->get(['id', 'name'])
+            ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name])
+            ->values();
+
         return Inertia::render('labour-dashboard/timesheets', [
-            'rows' => $rows,
+            'rows' => $paginator,
+            'totals' => $totals,
             'category' => $category,
             'date_from' => $dateFrom->format('Y-m-d'),
             'date_to' => $dateTo->format('Y-m-d'),
             'project_names' => collect($parentLocationMap)->pluck('name')->all(),
             'project_ids' => array_values($selectedLocations->pluck('id')->all()),
+            'available_projects' => $availableProjects,
             'truncated' => $clocks->count() >= 10000,
+            'filters' => [
+                'search' => $search !== '' ? $search : null,
+                'per_page' => $perPage,
+                'sort_key' => $sortKey,
+                'sort_dir' => $sortDir,
+            ],
         ]);
     }
 
