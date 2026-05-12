@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
+    Activity,
     AlertTriangle,
     ArrowRight,
     Calendar,
@@ -54,7 +55,7 @@ import {
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import SubmissionContent from '@/components/employment-applications/submission-content';
 
@@ -241,6 +242,17 @@ interface SigningRequestData {
     sent_by: { id: number; name: string } | null;
 }
 
+interface FormFieldData {
+    id: number;
+    label: string;
+    type: string;
+    is_required: boolean;
+    options: string[] | null;
+    placeholder: string | null;
+    help_text: string | null;
+    default_value: string | null;
+}
+
 interface FormRequestData {
     id: number;
     status: string;
@@ -251,7 +263,7 @@ interface FormRequestData {
     opened_at: string | null;
     expires_at: string | null;
     responses: Record<string, unknown> | null;
-    form_template: { id: number; name: string } | null;
+    form_template: { id: number; name: string; fields: FormFieldData[] } | null;
     sent_by: { id: number; name: string } | null;
 }
 
@@ -276,6 +288,25 @@ interface OnboardingLocation {
     eh_parent_id: string;
 }
 
+interface InjuryHistoryItem {
+    id: number;
+    id_formal: string | null;
+    occurred_at: string | null;
+    incident_label: string | null;
+    description: string | null;
+    work_cover_claim: boolean;
+    claim_status: string | null;
+    work_days_missed: number | null;
+    days_suitable_duties: number | null;
+    report_type_label: string | null;
+    locked_at: string | null;
+}
+
+interface InjuryHistory {
+    employee: { id: number; name: string; is_archived: boolean };
+    injuries: InjuryHistoryItem[];
+}
+
 interface PageProps {
     application: Application;
     comments: CommentData[];
@@ -289,6 +320,7 @@ interface PageProps {
     formRequests: FormRequestData[];
     onboardingLocations: Record<string, OnboardingLocation[]>;
     screeningAlert?: boolean;
+    injuryHistory?: InjuryHistory | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1890,9 +1922,253 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
     );
 }
 
+// ─── Form Fill Pane (in-app, authenticated submission) ───────────────────────
+
+type FormResponseValue = string | string[];
+
+function FormFillPane({
+    formRequest,
+    onClose,
+}: {
+    formRequest: FormRequestData | null;
+    onClose: () => void;
+}) {
+    const [values, setValues] = useState<Record<number, FormResponseValue>>({});
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+
+    const fields = useMemo(() => formRequest?.form_template?.fields ?? [], [formRequest]);
+
+    useEffect(() => {
+        if (!formRequest) return;
+        const initial: Record<number, FormResponseValue> = {};
+        for (const field of fields) {
+            const def = field.default_value ?? '';
+            if (field.type === 'checkbox') {
+                initial[field.id] = def
+                    ? def.split(',').map((v) => v.trim()).filter(Boolean)
+                    : [];
+            } else {
+                initial[field.id] = def;
+            }
+        }
+        setValues(initial);
+        setFieldErrors({});
+    }, [formRequest, fields]);
+
+    function setValue(fieldId: number, v: FormResponseValue) {
+        setValues((prev) => ({ ...prev, [fieldId]: v }));
+    }
+
+    function toggleCheckbox(fieldId: number, option: string, checked: boolean) {
+        setValues((prev) => {
+            const current = Array.isArray(prev[fieldId]) ? (prev[fieldId] as string[]) : [];
+            const next = checked ? [...current, option] : current.filter((v) => v !== option);
+            return { ...prev, [fieldId]: next };
+        });
+    }
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!formRequest) return;
+
+        const localErrors: Record<string, string> = {};
+        for (const field of fields) {
+            if (!field.is_required) continue;
+            if (['heading', 'paragraph'].includes(field.type)) continue;
+            const v = values[field.id];
+            const empty = Array.isArray(v) ? v.length === 0 : !v || !String(v).trim();
+            if (empty) {
+                localErrors[`field_${field.id}`] = `${field.label} is required.`;
+            }
+        }
+        if (Object.keys(localErrors).length > 0) {
+            setFieldErrors(localErrors);
+            return;
+        }
+
+        const payload: Record<string, FormResponseValue> = {};
+        for (const field of fields) {
+            if (['heading', 'paragraph'].includes(field.type)) continue;
+            payload[`field_${field.id}`] = values[field.id] ?? '';
+        }
+
+        setSaving(true);
+        router.post(route('form-requests.submit-internal', formRequest.id), payload, {
+            preserveScroll: true,
+            onSuccess: () => {
+                onClose();
+            },
+            onError: (errs) => {
+                setFieldErrors(errs as Record<string, string>);
+            },
+            onFinish: () => setSaving(false),
+        });
+    }
+
+    if (!formRequest) return null;
+
+    return (
+        <aside
+            className="bg-background fixed inset-y-0 right-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
+            aria-label="Fill out form"
+        >
+            {/* Header */}
+            <div className="bg-background flex shrink-0 items-start justify-between gap-2 border-b px-4 py-3">
+                <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold">{formRequest.form_template?.name ?? 'Form'}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                        Originally sent to <span className="text-foreground">{formRequest.recipient_name}</span>
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors"
+                    title="Close"
+                    aria-label="Close form pane"
+                >
+                    <XIcon className="h-4 w-4" />
+                </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                {/* Scrollable body */}
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                    <div className="space-y-4">
+                        {fields.map((field) => {
+                            if (field.type === 'heading') {
+                                return (
+                                    <h3 key={field.id} className="border-b pb-1 text-xs font-semibold uppercase tracking-wide">
+                                        {field.label}
+                                    </h3>
+                                );
+                            }
+                            if (field.type === 'paragraph') {
+                                return (
+                                    <p key={field.id} className="text-xs text-muted-foreground">
+                                        {field.label}
+                                    </p>
+                                );
+                            }
+
+                            const v = values[field.id];
+                            const stringValue = typeof v === 'string' ? v : '';
+                            const arrayValue = Array.isArray(v) ? v : [];
+                            const err = fieldErrors[`field_${field.id}`];
+                            const fieldId = `fill-field-${field.id}`;
+
+                            return (
+                                <div key={field.id}>
+                                    <Label htmlFor={fieldId} className="mb-1 block text-xs font-medium">
+                                        {field.label}
+                                        {field.is_required && <span className="ml-0.5 text-red-500">*</span>}
+                                    </Label>
+
+                                    {field.type === 'textarea' ? (
+                                        <Textarea
+                                            id={fieldId}
+                                            value={stringValue}
+                                            onChange={(e) => setValue(field.id, e.target.value)}
+                                            placeholder={field.placeholder ?? ''}
+                                            rows={3}
+                                            className="text-xs md:text-xs"
+                                        />
+                                    ) : field.type === 'select' ? (
+                                        <Select value={stringValue} onValueChange={(val) => setValue(field.id, val)}>
+                                            <SelectTrigger id={fieldId} className="h-7 text-xs md:text-xs">
+                                                <SelectValue placeholder="Select an option" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(field.options ?? []).map((opt) => (
+                                                    <SelectItem key={opt} value={opt} className="text-xs">
+                                                        {opt}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : field.type === 'radio' ? (
+                                        <RadioGroup value={stringValue} onValueChange={(val) => setValue(field.id, val)} className="gap-1.5">
+                                            {(field.options ?? []).map((opt) => (
+                                                <div key={opt} className="flex items-center gap-2">
+                                                    <RadioGroupItem value={opt} id={`${fieldId}-${opt}`} className="h-3.5 w-3.5" />
+                                                    <Label htmlFor={`${fieldId}-${opt}`} className="cursor-pointer text-xs font-normal">
+                                                        {opt}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </RadioGroup>
+                                    ) : field.type === 'checkbox' ? (
+                                        <div className="space-y-1.5">
+                                            {(field.options ?? []).map((opt) => (
+                                                <div key={opt} className="flex items-center gap-2">
+                                                    <Checkbox
+                                                        id={`${fieldId}-${opt}`}
+                                                        checked={arrayValue.includes(opt)}
+                                                        onCheckedChange={(checked) => toggleCheckbox(field.id, opt, !!checked)}
+                                                        className="h-3.5 w-3.5"
+                                                    />
+                                                    <Label htmlFor={`${fieldId}-${opt}`} className="cursor-pointer text-xs font-normal">
+                                                        {opt}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            id={fieldId}
+                                            type={
+                                                field.type === 'number'
+                                                    ? 'number'
+                                                    : field.type === 'email'
+                                                      ? 'email'
+                                                      : field.type === 'phone'
+                                                        ? 'tel'
+                                                        : field.type === 'date'
+                                                          ? 'date'
+                                                          : 'text'
+                                            }
+                                            value={stringValue}
+                                            onChange={(e) => setValue(field.id, e.target.value)}
+                                            placeholder={field.placeholder ?? ''}
+                                            className="h-7 text-xs md:text-xs"
+                                        />
+                                    )}
+
+                                    {field.help_text && (
+                                        <p className="mt-1 text-xs text-muted-foreground">{field.help_text}</p>
+                                    )}
+                                    {err && <p className="mt-1 text-xs text-red-500">{err}</p>}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Pinned footer */}
+                <div className="bg-background flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={saving}>
+                        {saving ? (
+                            <>
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                Submitting...
+                            </>
+                        ) : (
+                            'Submit form'
+                        )}
+                    </Button>
+                </div>
+            </form>
+        </aside>
+    );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, screeningAlert }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, screeningAlert, injuryHistory }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
@@ -1906,6 +2182,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [showOnboardModal, setShowOnboardModal] = useState(false);
     const [showSubmissionPane, setShowSubmissionPane] = useState(false);
+    const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
 
     // Reference check dialog
     const [refCheckOpen, setRefCheckOpen] = useState(false);
@@ -2050,7 +2327,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Enquiry`} />
 
-            <div className={cn('transition-[padding] duration-200', showSubmissionPane && 'xl:pr-[520px]')}>
+            <div className={cn('transition-[padding] duration-200', (showSubmissionPane || fillingFormRequest) && 'xl:pr-[520px]')}>
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {alertMessage && (
                     <Alert variant="destructive">
@@ -2099,6 +2376,88 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                             {app.declined_reason && <> — {app.declined_reason}</>}
                         </AlertDescription>
                     </Alert>
+                )}
+
+                {/* Injury History — only loaded at WHS Review when applicant matches an employee */}
+                {injuryHistory && (
+                    <Card className="overflow-hidden">
+                        <div className="flex items-start justify-between gap-3 border-b bg-amber-50/50 px-4 py-3 dark:bg-amber-950/20">
+                            <div className="flex items-start gap-2.5">
+                                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                <div>
+                                    <p className="text-sm font-semibold">Prior injury history</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Matched to{' '}
+                                        <Link href={`/employees/${injuryHistory.employee.id}`} className="text-primary hover:underline">
+                                            {injuryHistory.employee.name}
+                                        </Link>
+                                        {injuryHistory.employee.is_archived && (
+                                            <Badge variant="secondary" className="ml-1.5 text-[10px]">Archived</Badge>
+                                        )}
+                                        <span className="ml-1.5">·</span>
+                                        <span className="ml-1.5">{injuryHistory.injuries.length} record{injuryHistory.injuries.length === 1 ? '' : 's'}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {injuryHistory.injuries.length === 0 ? (
+                            <p className="px-4 py-4 text-sm text-muted-foreground">No injury records on file for this employee.</p>
+                        ) : (
+                            <div className="divide-y">
+                                {injuryHistory.injuries.map((inj) => (
+                                    <div key={inj.id} className="px-4 py-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <Link
+                                                        href={`/injury-register/${inj.id}`}
+                                                        className="text-sm font-medium text-primary hover:underline"
+                                                    >
+                                                        {inj.id_formal ?? `Injury #${inj.id}`}
+                                                    </Link>
+                                                    {inj.incident_label && (
+                                                        <Badge variant="outline" className="text-[10px]">{inj.incident_label}</Badge>
+                                                    )}
+                                                    {inj.report_type_label && (
+                                                        <Badge variant="secondary" className="text-[10px]">{inj.report_type_label}</Badge>
+                                                    )}
+                                                    {inj.work_cover_claim && (
+                                                        <Badge className="border-rose-500/30 bg-rose-500/10 text-[10px] text-rose-700 hover:bg-rose-500/10">
+                                                            WorkCover {inj.claim_status ?? 'claim'}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                {inj.description && (
+                                                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{inj.description}</p>
+                                                )}
+                                                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                                                    {inj.occurred_at && (
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <Calendar className="h-3 w-3" />
+                                                            {formatDate(inj.occurred_at)}
+                                                        </span>
+                                                    )}
+                                                    {(inj.work_days_missed ?? 0) > 0 && (
+                                                        <span>{inj.work_days_missed} days missed</span>
+                                                    )}
+                                                    {(inj.days_suitable_duties ?? 0) > 0 && (
+                                                        <span>{inj.days_suitable_duties} days suitable duties</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <Link
+                                                href={`/injury-register/${inj.id}`}
+                                                className="text-muted-foreground hover:text-foreground shrink-0"
+                                                aria-label="Open injury record"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
                 )}
 
                 {/* Single Card Layout */}
@@ -2409,7 +2768,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         {fr.sent_by && ` by ${fr.sent_by.name}`}
                                                     </p>
                                                     {canScreen && (
-                                                        <div className="mt-1.5 flex gap-1.5">
+                                                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="h-7 flex-1 text-xs"
+                                                                onClick={() => setFillingFormRequest(fr)}
+                                                                disabled={!fr.form_template?.fields?.length}
+                                                            >
+                                                                <Pencil className="mr-1 h-3 w-3" />
+                                                                Fill out
+                                                            </Button>
                                                             <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
                                                                 Resend
                                                             </Button>
@@ -2709,6 +3078,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 onOpenChange={setShowOnboardModal}
                 application={app}
                 locations={onboardingLocations ?? {}}
+            />
+
+            {/* Fill phase form in-app */}
+            <FormFillPane
+                formRequest={fillingFormRequest}
+                onClose={() => setFillingFormRequest(null)}
             />
 
         </AppLayout>

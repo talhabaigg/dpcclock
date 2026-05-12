@@ -15,6 +15,7 @@ use App\Models\Skill;
 use App\Models\WorkerScreening;
 use App\Services\ApplicationPhaseFormService;
 use App\Services\EmploymentHeroService;
+use App\Services\FormPlaceholderResolver;
 use App\Services\GetCompanyCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -335,12 +336,15 @@ class EmploymentApplicationController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'description']);
 
-        // Load active (non-cancelled) form requests
+        // Load active (non-cancelled) form requests with their fields so the
+        // show page can render a fill-in-app dialog without a second round-trip.
         $formRequests = $employmentApplication->formRequests()
             ->whereNotIn('status', ['cancelled'])
-            ->with(['formTemplate:id,name', 'sentBy:id,name'])
+            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name'])
             ->latest()
             ->get();
+
+        $placeholderResolver = app(FormPlaceholderResolver::class);
 
         // Load locations for onboarding modal (grouped by company)
         $companyCodeService = new GetCompanyCodeService;
@@ -359,9 +363,44 @@ class EmploymentApplicationController extends Controller
             'date_of_birth' => $employmentApplication->date_of_birth,
         ]) !== null;
 
+        // Injury history lookup — only at WHS Review. If the applicant matches
+        // an existing (or archived) employee, surface their injury history so
+        // the reviewer can assess risk.
+        $injuryHistory = null;
+        if ($employmentApplication->status === EmploymentApplication::STATUS_WHS_REVIEW) {
+            $matchedEmployee = $employmentApplication->findMatchingEmployee();
+            if ($matchedEmployee) {
+                $injuries = $matchedEmployee->injuries()
+                    ->orderByDesc('occurred_at')
+                    ->get();
+
+                $injuryHistory = [
+                    'employee' => [
+                        'id' => $matchedEmployee->id,
+                        'name' => $matchedEmployee->name,
+                        'is_archived' => $matchedEmployee->trashed(),
+                    ],
+                    'injuries' => $injuries->map(fn ($i) => [
+                        'id' => $i->id,
+                        'id_formal' => $i->id_formal,
+                        'occurred_at' => $i->occurred_at?->toISOString(),
+                        'incident_label' => $i->incident_label,
+                        'description' => $i->description,
+                        'work_cover_claim' => (bool) $i->work_cover_claim,
+                        'claim_status' => $i->claim_status,
+                        'work_days_missed' => $i->work_days_missed,
+                        'days_suitable_duties' => $i->days_suitable_duties,
+                        'report_type_label' => $i->report_type_label,
+                        'locked_at' => $i->locked_at?->toISOString(),
+                    ])->values(),
+                ];
+            }
+        }
+
         return Inertia::render('employment-applications/show', [
             'application' => $employmentApplication,
             'screeningAlert' => $screeningAlert,
+            'injuryHistory' => $injuryHistory,
             'comments' => $comments,
             'checklists' => $checklists,
             'availableTemplates' => $availableTemplates,
@@ -408,6 +447,16 @@ class EmploymentApplicationController extends Controller
                 'form_template' => $fr->formTemplate ? [
                     'id' => $fr->formTemplate->id,
                     'name' => $fr->formTemplate->name,
+                    'fields' => $fr->formTemplate->fields->map(fn ($field) => [
+                        'id' => $field->id,
+                        'label' => $placeholderResolver->interpolate($field->label, $employmentApplication),
+                        'type' => $field->type,
+                        'is_required' => (bool) $field->is_required,
+                        'options' => $field->options,
+                        'placeholder' => $placeholderResolver->interpolate($field->placeholder, $employmentApplication),
+                        'help_text' => $field->help_text,
+                        'default_value' => $placeholderResolver->interpolate($field->default_value, $employmentApplication),
+                    ])->values(),
                 ] : null,
                 'sent_by' => $fr->sentBy ? [
                     'id' => $fr->sentBy->id,

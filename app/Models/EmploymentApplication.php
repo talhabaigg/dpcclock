@@ -166,6 +166,45 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
             ->withTimestamps();
     }
 
+    /**
+     * Find an Employee record (active or archived) that matches this applicant.
+     * Matches on email, then mobile, then name+DOB — same precedence as
+     * WorkerScreening::checkWorker(). Returns null when nothing matches.
+     */
+    public function findMatchingEmployee(): ?Employee
+    {
+        $email = $this->email ? strtolower($this->email) : null;
+        $phoneDigits = $this->phone ? preg_replace('/\D+/', '', $this->phone) : null;
+        $fullName = trim("{$this->first_name} {$this->surname}");
+        $dob = $this->date_of_birth?->format('Y-m-d');
+
+        if (! $email && ! $phoneDigits && (! $fullName || ! $dob)) {
+            return null;
+        }
+
+        return Employee::withTrashed()
+            ->where(function ($q) use ($email, $phoneDigits, $fullName, $dob) {
+                if ($email) {
+                    $q->orWhereRaw('LOWER(email) = ?', [$email]);
+                }
+                if ($phoneDigits) {
+                    // Strip common separators on the column so '0400 000 000' matches '0400000000'.
+                    // REGEXP_REPLACE isn't portable; chained REPLACE() works on MySQL + SQLite.
+                    $q->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(mobile_number, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = ?",
+                        [$phoneDigits],
+                    );
+                }
+                if ($fullName && $dob) {
+                    $q->orWhere(function ($qq) use ($fullName, $dob) {
+                        $qq->whereRaw('LOWER(name) = ?', [strtolower($fullName)])
+                            ->where('date_of_birth', $dob);
+                    });
+                }
+            })
+            ->first();
+    }
+
     public function formPlaceholderValues(): array
     {
         return [

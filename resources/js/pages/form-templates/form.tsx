@@ -1,12 +1,9 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -98,23 +95,24 @@ const DISPLAY_ONLY_TYPES = ['heading', 'paragraph'];
 
 const MODEL_OPTIONS = [{ value: 'employment_application', label: 'Employment Enquiry' }];
 
-/** Map field type to its icon component and a color class for the accent. */
-const FIELD_TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-    text: { icon: Type, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
-    textarea: { icon: AlignLeft, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40' },
-    number: { icon: Hash, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
-    email: { icon: Mail, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40' },
-    phone: { icon: Phone, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
-    date: { icon: Calendar, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/40' },
-    select: { icon: List, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-50 dark:bg-cyan-950/40' },
-    radio: { icon: CircleDot, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40' },
-    checkbox: { icon: CheckSquare, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40' },
-    heading: { icon: Heading, color: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800/50' },
-    paragraph: { icon: FileText, color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800/50' },
+/** Map field type to its icon. All icons render in a single neutral tone — colour
+ *  is reserved for state (errors, required), not field-type categorisation. */
+const FIELD_TYPE_ICONS: Record<string, React.ElementType> = {
+    text: Type,
+    textarea: AlignLeft,
+    number: Hash,
+    email: Mail,
+    phone: Phone,
+    date: Calendar,
+    select: List,
+    radio: CircleDot,
+    checkbox: CheckSquare,
+    heading: Heading,
+    paragraph: FileText,
 };
 
-function getFieldMeta(type: string) {
-    return FIELD_TYPE_META[type] ?? FIELD_TYPE_META.text;
+function getFieldIcon(type: string): React.ElementType {
+    return FIELD_TYPE_ICONS[type] ?? FIELD_TYPE_ICONS.text;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -162,7 +160,7 @@ function PlaceholderPicker({ tokens, onInsert }: PlaceholderPickerProps) {
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    className="inline-flex h-6 items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground"
                     aria-label="Insert placeholder"
                 >
                     <Braces className="h-3 w-3" />
@@ -177,7 +175,7 @@ function PlaceholderPicker({ tokens, onInsert }: PlaceholderPickerProps) {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search placeholders..."
-                            className="h-8 pl-7 text-sm"
+                            className="h-7 pl-7 text-xs md:text-xs"
                             autoFocus
                         />
                     </div>
@@ -188,7 +186,7 @@ function PlaceholderPicker({ tokens, onInsert }: PlaceholderPickerProps) {
                     ) : (
                         Object.entries(grouped).map(([group, items]) => (
                             <div key={group} className="px-1 py-1">
-                                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
                                     {group}
                                 </div>
                                 {items.map((t) => (
@@ -204,9 +202,9 @@ function PlaceholderPicker({ tokens, onInsert }: PlaceholderPickerProps) {
                                     >
                                         <span className="flex flex-col items-start">
                                             <span className="font-medium">{t.label}</span>
-                                            <code className="text-[10px] text-muted-foreground">{`{{${t.token}}}`}</code>
+                                            <code className="text-xs text-muted-foreground">{`{{${t.token}}}`}</code>
                                         </span>
-                                        <span className="shrink-0 text-[10px] text-muted-foreground/70">{t.sample}</span>
+                                        <span className="shrink-0 text-xs text-muted-foreground/70">{t.sample}</span>
                                     </button>
                                 ))}
                             </div>
@@ -301,8 +299,7 @@ function SortableFieldCard({
         transition,
     };
 
-    const meta = getFieldMeta(field.type);
-    const Icon = meta.icon;
+    const Icon = getFieldIcon(field.type);
     const isDisplay = DISPLAY_ONLY_TYPES.includes(field.type);
     const hasOptions = TYPES_WITH_OPTIONS.includes(field.type);
     const fieldTypeLabel = FIELD_TYPES.find((ft) => ft.value === field.type)?.label ?? field.type;
@@ -311,52 +308,42 @@ function SortableFieldCard({
         <div
             ref={setNodeRef}
             style={style}
-            className={`group relative rounded-lg border transition-all duration-200 ${
+            className={`group relative border-b border-border/60 transition-colors ${
                 isDragging
-                    ? 'z-50 scale-[1.02] border-primary/40 bg-background shadow-xl ring-2 ring-primary/20'
-                    : 'border-border/60 bg-background shadow-sm hover:shadow-md hover:border-border'
-            } ${isDisplay ? 'border-dashed' : ''}`}
+                    ? 'z-50 bg-muted/40'
+                    : 'bg-transparent hover:bg-muted/30'
+            }`}
         >
             <Collapsible open={isOpen} onOpenChange={() => onToggle(index)}>
                 {/* ── Card Header ── */}
-                <div className="px-3 py-2.5">
+                <div className="px-2 py-1.5">
                     <div className="flex items-center gap-2">
                         {/* Drag handle */}
                         <button
                             type="button"
-                            className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+                            className="shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
                             aria-label="Drag to reorder"
                             {...attributes}
                             {...listeners}
                         >
-                            <GripVertical className="h-4 w-4" />
+                            <GripVertical className="h-3.5 w-3.5" />
                         </button>
 
                         {/* Field number */}
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
-                            {index + 1}
+                        <span className="shrink-0 w-5 text-right text-xs tabular-nums text-muted-foreground/70">
+                            {index + 1}.
                         </span>
 
-                        {/* Type icon with colored background */}
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${meta.bg}`}>
-                            <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
-                        </span>
+                        {/* Type icon */}
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
 
-                        {/* Badges */}
-                        <div className="hidden items-center gap-1.5 sm:flex">
-                            <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 whitespace-nowrap">
-                                {fieldTypeLabel}
-                            </Badge>
+                        {/* Type + state labels */}
+                        <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+                            <span>{fieldTypeLabel}</span>
                             {field.is_required && (
-                                <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-red-500/90 hover:bg-red-500 whitespace-nowrap">
-                                    Required
-                                </Badge>
+                                <span className="text-foreground">· Required</span>
                             )}
-                            {isDisplay && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
-                                    Display
-                                </Badge>
-                            )}
+                            {isDisplay && <span>· Display</span>}
                         </div>
 
                         {/* Spacer */}
@@ -407,46 +394,44 @@ function SortableFieldCard({
                     </div>
 
                     {/* Field label */}
-                    <p className="mt-1.5 text-sm font-medium leading-snug">
+                    <p className="mt-1.5 text-xs font-medium leading-snug">
                         {field.label || <span className="italic text-muted-foreground/60">Untitled field</span>}
                     </p>
                 </div>
 
                 {/* ── Collapsible Content ── */}
                 <CollapsibleContent>
-                    <div className="border-t px-3 pb-3 pt-3">
-                        <div className="space-y-3">
+                    <div className="border-t border-dashed border-border/50 bg-muted/10 px-2 py-2 pl-9">
+                        <div className="space-y-2.5">
                             {/* Type */}
-                            <div className="grid gap-3">
+                            <div className="grid gap-2.5">
                                 <div>
                                     <Label className="mb-1 text-xs text-muted-foreground">Type</Label>
                                     <Select value={field.type} onValueChange={(v) => onUpdate(index, { type: v })}>
-                                        <SelectTrigger className="h-9">
+                                        <SelectTrigger className="h-7 text-xs md:text-xs">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Input Fields</div>
+                                            <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">Input Fields</div>
                                             {FIELD_TYPES.filter((ft) => !DISPLAY_ONLY_TYPES.includes(ft.value)).map((ft) => {
-                                                const ftMeta = getFieldMeta(ft.value);
-                                                const FtIcon = ftMeta.icon;
+                                                const FtIcon = getFieldIcon(ft.value);
                                                 return (
                                                     <SelectItem key={ft.value} value={ft.value}>
                                                         <span className="flex items-center gap-2">
-                                                            <FtIcon className={`h-3.5 w-3.5 ${ftMeta.color}`} />
+                                                            <FtIcon className="h-3.5 w-3.5 text-muted-foreground" />
                                                             {ft.label}
                                                         </span>
                                                     </SelectItem>
                                                 );
                                             })}
                                             <DropdownMenuSeparator />
-                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Display Elements</div>
+                                            <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">Display Elements</div>
                                             {FIELD_TYPES.filter((ft) => DISPLAY_ONLY_TYPES.includes(ft.value)).map((ft) => {
-                                                const ftMeta = getFieldMeta(ft.value);
-                                                const FtIcon = ftMeta.icon;
+                                                const FtIcon = getFieldIcon(ft.value);
                                                 return (
                                                     <SelectItem key={ft.value} value={ft.value}>
                                                         <span className="flex items-center gap-2">
-                                                            <FtIcon className={`h-3.5 w-3.5 ${ftMeta.color}`} />
+                                                            <FtIcon className="h-3.5 w-3.5 text-muted-foreground" />
                                                             {ft.label}
                                                         </span>
                                                     </SelectItem>
@@ -471,7 +456,7 @@ function SortableFieldCard({
                                                     }
                                                 />
                                             )}
-                                            <span className={`text-[10px] tabular-nums ${field.label.length > 1000 ? 'text-red-500' : 'text-muted-foreground/60'}`}>
+                                            <span className={`text-xs tabular-nums ${field.label.length > 1000 ? 'text-red-500' : 'text-muted-foreground/60'}`}>
                                                 {field.label.length}/1000
                                             </span>
                                         </div>
@@ -487,17 +472,17 @@ function SortableFieldCard({
                                                   ? 'Section title'
                                                   : 'Field label'
                                         }
-                                        className="min-h-[36px] resize-y text-sm"
+                                        className="min-h-[36px] resize-y text-xs md:text-xs"
                                         maxLength={1000}
                                         rows={field.type === 'paragraph' ? 2 : 1}
                                     />
                                     {isDisplay && labelPreview.preview && labelPreview.preview !== field.label && (
-                                        <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                                        <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
                                             <span className="font-medium text-foreground/70">Preview:</span> {labelPreview.preview}
                                         </div>
                                     )}
                                     {isDisplay && labelPreview.unknown.length > 0 && (
-                                        <p className="mt-1 text-[11px] text-red-500">
+                                        <p className="mt-1 text-xs text-red-500">
                                             Unknown placeholder{labelPreview.unknown.length > 1 ? 's' : ''}: {labelPreview.unknown.map((t) => `{{${t}}}`).join(', ')}
                                         </p>
                                     )}
@@ -511,7 +496,7 @@ function SortableFieldCard({
                                             value={field.placeholder}
                                             onChange={(e) => onUpdate(index, { placeholder: e.target.value })}
                                             placeholder="Placeholder text (optional)"
-                                            className="h-9 text-sm"
+                                            className="h-7 text-xs md:text-xs"
                                         />
                                     </div>
                                 )}
@@ -524,7 +509,7 @@ function SortableFieldCard({
                                             value={field.help_text}
                                             onChange={(e) => onUpdate(index, { help_text: e.target.value })}
                                             placeholder="Help text (optional)"
-                                            className="h-9 text-sm"
+                                            className="h-7 text-xs md:text-xs"
                                         />
                                     </div>
                                 )}
@@ -548,15 +533,15 @@ function SortableFieldCard({
                                             value={field.default_value}
                                             onChange={(e) => onUpdate(index, { default_value: e.target.value })}
                                             placeholder='Optional. Use {{token}} to pull from the application.'
-                                            className="h-9 text-sm"
+                                            className="h-7 text-xs md:text-xs"
                                         />
                                         {defaultPreview.preview && defaultPreview.preview !== field.default_value && (
-                                            <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                                            <div className="mt-1 rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
                                                 <span className="font-medium text-foreground/70">Preview:</span> {defaultPreview.preview}
                                             </div>
                                         )}
                                         {defaultPreview.unknown.length > 0 && (
-                                            <p className="mt-1 text-[11px] text-red-500">
+                                            <p className="mt-1 text-xs text-red-500">
                                                 Unknown placeholder{defaultPreview.unknown.length > 1 ? 's' : ''}: {defaultPreview.unknown.map((t) => `{{${t}}}`).join(', ')}
                                             </p>
                                         )}
@@ -577,7 +562,7 @@ function SortableFieldCard({
                                                     ? 'e.g. Option 1, Option 2'
                                                     : 'Must exactly match one of the options above'
                                             }
-                                            className="h-9 text-sm"
+                                            className="h-7 text-xs md:text-xs"
                                         />
                                     </div>
                                 )}
@@ -585,19 +570,19 @@ function SortableFieldCard({
 
                             {/* Options editor (for select/radio/checkbox) */}
                             {hasOptions && (
-                                <div className="rounded-md border border-dashed bg-muted/30 p-3">
-                                    <Label className="mb-2 block text-xs font-medium text-muted-foreground">Options</Label>
-                                    <div className="space-y-1.5">
+                                <div>
+                                    <Label className="mb-1 block text-xs text-muted-foreground">Options</Label>
+                                    <div className="space-y-1">
                                         {field.options.map((opt, oi) => (
                                             <div key={oi} className="flex items-center gap-1.5">
-                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[10px] text-muted-foreground/60">
+                                                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground/60">
                                                     {oi + 1}.
                                                 </span>
                                                 <Input
                                                     value={opt}
                                                     onChange={(e) => onUpdateOption(index, oi, e.target.value)}
                                                     placeholder={`Option ${oi + 1}`}
-                                                    className="h-7 flex-1 text-sm"
+                                                    className="h-7 flex-1 text-xs md:text-xs"
                                                     onKeyDown={(e) => {
                                                         if (e.key === 'Enter') {
                                                             e.preventDefault();
@@ -608,7 +593,8 @@ function SortableFieldCard({
                                                 <button
                                                     type="button"
                                                     onClick={() => onRemoveOption(index, oi)}
-                                                    className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-destructive"
+                                                    className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground"
+                                                    aria-label={`Remove option ${oi + 1}`}
                                                 >
                                                     <XCircle className="h-3.5 w-3.5" />
                                                 </button>
@@ -617,7 +603,7 @@ function SortableFieldCard({
                                     </div>
                                     <button
                                         type="button"
-                                        className="mt-2 flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                        className="mt-1.5 ml-6 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
                                         onClick={() => onAddOption(index)}
                                     >
                                         <Plus className="h-3 w-3" /> Add option
@@ -654,16 +640,16 @@ function FieldPreview({ field }: { field: FieldItem }) {
     const displayLabel = field.label || 'Untitled';
 
     if (field.type === 'heading') {
-        return <p className="text-base font-semibold">{displayLabel}</p>;
+        return <p className="text-xs font-semibold">{displayLabel}</p>;
     }
     if (field.type === 'paragraph') {
-        return <p className="text-sm text-muted-foreground">{displayLabel}</p>;
+        return <p className="text-xs text-muted-foreground">{displayLabel}</p>;
     }
     if (field.type === 'textarea') {
         return (
             <div>
                 <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-                <div className="h-14 rounded-md border border-dashed bg-background px-2 py-1 text-xs text-muted-foreground/50">
+                <div className="h-12 rounded-md border border-dashed bg-background px-2 py-1 text-xs text-muted-foreground/50">
                     {field.placeholder || 'Enter text...'}
                 </div>
             </div>
@@ -673,7 +659,7 @@ function FieldPreview({ field }: { field: FieldItem }) {
         return (
             <div>
                 <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-                <div className="flex h-8 items-center justify-between rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
+                <div className="flex h-7 items-center justify-between rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
                     <span>Select an option...</span>
                     <ChevronDown className="h-3 w-3" />
                 </div>
@@ -715,7 +701,7 @@ function FieldPreview({ field }: { field: FieldItem }) {
     return (
         <div>
             <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-            <div className="flex h-8 items-center rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
+            <div className="flex h-7 items-center rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
                 {field.placeholder || `Enter ${field.type}...`}
             </div>
         </div>
@@ -912,7 +898,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                         <h1 className="text-2xl font-bold tracking-tight">
                             {isEditing ? 'Edit Form Template' : 'New Form Template'}
                         </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 text-xs text-muted-foreground">
                             {isEditing
                                 ? 'Modify your form structure and settings'
                                 : 'Design a reusable form template with custom fields'}
@@ -942,7 +928,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                     <Alert variant="destructive" className="mb-6">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                            <ul className="list-disc pl-4 text-sm">
+                            <ul className="list-disc pl-4 text-xs">
                                 {Object.entries(errors).map(([key, message]) => (
                                     <li key={key}>{message}</li>
                                 ))}
@@ -952,25 +938,24 @@ export default function FormTemplateForm({ template }: PageProps) {
                 )}
 
                 {/* ── Two-Column Layout: Fields Left, Preview Right ── */}
-                <div className="grid gap-6 lg:grid-cols-2">
-                    {/* ── Left Column: Settings + Field Builder (single card) ── */}
-                    <div className="min-w-0">
-                        <Card className="shadow-sm py-2 gap-2">
-                            <CardContent className="p-3">
-                                {/* Collapsible Form Settings */}
-                                <Collapsible>
-                                    <CollapsibleTrigger asChild>
-                                        <button type="button" className="flex w-full items-center justify-between py-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
-                                            Form Settings
-                                            <ChevronDown className="h-4 w-4 transition-transform [[data-state=closed]>&]:rotate-[-90deg]" />
-                                        </button>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent>
-                                        <Separator className="my-3" />
+                <div className="grid gap-8 lg:grid-cols-2">
+                    {/* ── Left Column: Settings + Field Builder ── */}
+                    <div className="min-w-0 space-y-5">
+                        {/* Collapsible Form Settings */}
+                        <section>
+                            <Collapsible>
+                                <CollapsibleTrigger asChild>
+                                    <button type="button" className="flex w-full items-center justify-between py-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors">
+                                        Form Settings
+                                        <ChevronDown className="h-3.5 w-3.5 transition-transform [[data-state=closed]>&]:rotate-[-90deg]" />
+                                    </button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <div className="mt-3">
                                         <div className="grid gap-4">
                                             {/* Name */}
                                             <div>
-                                                <Label htmlFor="form-name" className="text-sm font-medium">
+                                                <Label htmlFor="form-name" className="text-xs font-medium">
                                                     Form Name <span className="text-red-500">*</span>
                                                 </Label>
                                                 <Input
@@ -978,14 +963,14 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     value={name}
                                                     onChange={(e) => setName(e.target.value)}
                                                     placeholder="e.g. Uniform Size Form"
-                                                    className={`mt-1.5 ${errors.name ? 'border-red-500 ring-1 ring-red-500/20' : ''}`}
+                                                    className={`mt-1.5 h-7 text-xs md:text-xs ${errors.name ? 'border-red-500 ring-1 ring-red-500/20' : ''}`}
                                                 />
                                                 {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
                                             </div>
 
                                             {/* Category */}
                                             <div>
-                                                <Label htmlFor="form-cat" className="text-sm font-medium">
+                                                <Label htmlFor="form-cat" className="text-xs font-medium">
                                                     Category
                                                     <span className="ml-1 text-xs font-normal text-muted-foreground">(optional)</span>
                                                 </Label>
@@ -994,13 +979,13 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     value={category}
                                                     onChange={(e) => setCategory(e.target.value)}
                                                     placeholder="e.g. employment, onboarding"
-                                                    className="mt-1.5"
+                                                    className="mt-1.5 h-7 text-xs md:text-xs"
                                                 />
                                             </div>
 
                                             {/* Description */}
                                             <div>
-                                                <Label htmlFor="form-desc" className="text-sm font-medium">
+                                                <Label htmlFor="form-desc" className="text-xs font-medium">
                                                     Description
                                                     <span className="ml-1 text-xs font-normal text-muted-foreground">(optional)</span>
                                                 </Label>
@@ -1009,16 +994,16 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     value={description}
                                                     onChange={(e) => setDescription(e.target.value)}
                                                     placeholder="Briefly describe the purpose of this form..."
-                                                    className="mt-1.5 resize-none"
+                                                    className="mt-1.5 resize-none text-xs md:text-xs"
                                                     rows={2}
                                                 />
                                             </div>
 
                                             {/* Model Type */}
                                             <div>
-                                                <Label className="text-sm font-medium">Applies To</Label>
+                                                <Label className="text-xs font-medium">Applies To</Label>
                                                 <Select value={modelType} onValueChange={setModelType}>
-                                                    <SelectTrigger className="mt-1.5">
+                                                    <SelectTrigger className="mt-1.5 h-7 text-xs md:text-xs">
                                                         <SelectValue placeholder="Any model" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -1035,80 +1020,76 @@ export default function FormTemplateForm({ template }: PageProps) {
 
                                         {/* Active toggle */}
                                         {isEditing && (
-                                            <>
-                                                <Separator className="my-4" />
-                                                <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-                                                    <div>
-                                                        <Label htmlFor="is-active" className="text-sm font-medium cursor-pointer">
-                                                            Active
-                                                        </Label>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Inactive forms cannot be assigned
-                                                        </p>
-                                                    </div>
-                                                    <Switch checked={isActive} onCheckedChange={setIsActive} id="is-active" />
+                                            <div className="mt-4 flex items-center justify-between border-t border-dashed border-border/60 pt-3">
+                                                <div>
+                                                    <Label htmlFor="is-active" className="cursor-pointer text-xs font-medium">
+                                                        Active
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Inactive forms cannot be assigned
+                                                    </p>
                                                 </div>
-                                            </>
+                                                <Switch checked={isActive} onCheckedChange={setIsActive} id="is-active" />
+                                            </div>
                                         )}
-                                    </CollapsibleContent>
-                                </Collapsible>
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        </section>
 
-                                <Separator className="my-4" />
-
-                                {/* Field errors */}
-                                {errors.fields && (
-                                    <p className="mb-3 text-sm text-red-500">{errors.fields}</p>
-                                )}
-
-                                {/* Collapse/Expand All */}
-                                <div className="mb-3 flex items-center gap-2 text-xs">
-                                    <button type="button" onClick={expandAll} className="text-muted-foreground hover:text-foreground transition-colors">
+                        <section>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Fields</h2>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <button type="button" onClick={expandAll} className="hover:text-foreground transition-colors">
                                         Expand all
                                     </button>
-                                    <span className="text-muted-foreground/40">|</span>
-                                    <button type="button" onClick={collapseAll} className="text-muted-foreground hover:text-foreground transition-colors">
+                                    <span className="text-muted-foreground/30">/</span>
+                                    <button type="button" onClick={collapseAll} className="hover:text-foreground transition-colors">
                                         Collapse all
                                     </button>
                                 </div>
+                            </div>
 
-                                {/* ── Sortable Field List ── */}
+                            {errors.fields && (
+                                <p className="mb-2 text-xs text-red-500">{errors.fields}</p>
+                            )}
+
+                            {/* ── Sortable Field List ── */}
+                            <div className="border-t border-border/60">
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                     <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
-                                        <div className="space-y-2.5">
-                                            {fields.map((field, index) => (
-                                                <SortableFieldCard
-                                                    key={fieldSortId(index)}
-                                                    field={field}
-                                                    index={index}
-                                                    totalFields={fields.length}
-                                                    isOpen={openFields[index] ?? true}
-                                                    tokens={tokens}
-                                                    onToggle={toggleField}
-                                                    onUpdate={updateField}
-                                                    onRemove={removeField}
-                                                    onDuplicate={duplicateField}
-                                                    onAddOption={addOption}
-                                                    onUpdateOption={updateOption}
-                                                    onRemoveOption={removeOption}
-                                                />
-                                            ))}
-                                        </div>
+                                        {fields.map((field, index) => (
+                                            <SortableFieldCard
+                                                key={fieldSortId(index)}
+                                                field={field}
+                                                index={index}
+                                                totalFields={fields.length}
+                                                isOpen={openFields[index] ?? true}
+                                                tokens={tokens}
+                                                onToggle={toggleField}
+                                                onUpdate={updateField}
+                                                onRemove={removeField}
+                                                onDuplicate={duplicateField}
+                                                onAddOption={addOption}
+                                                onUpdateOption={updateOption}
+                                                onRemoveOption={removeOption}
+                                            />
+                                        ))}
                                     </SortableContext>
                                 </DndContext>
+                            </div>
 
-                                {/* Inline add field button */}
-                                <div className="mt-4 flex items-center justify-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => addField('text')}
-                                        className="group flex items-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/20 px-6 py-3 text-sm text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                                    >
-                                        <Plus className="h-4 w-4 transition-transform group-hover:scale-110" />
-                                        Add another field
-                                    </button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                            {/* Inline add field button */}
+                            <button
+                                type="button"
+                                onClick={() => addField('text')}
+                                className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add field
+                            </button>
+                        </section>
 
                         {/* ── Bottom Actions (mobile-friendly) ── */}
                         <div className="mt-6 flex items-center gap-3 border-t pt-4 lg:hidden">
@@ -1124,50 +1105,43 @@ export default function FormTemplateForm({ template }: PageProps) {
                     {/* ── Right Column: Live Preview ── */}
                     <div className="hidden min-w-0 lg:block">
                         <div className="sticky top-6">
-                            <Card className="shadow-sm py-2 gap-2">
-                                <CardContent className="p-3">
-                                    <h3 className="py-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Live Preview
-                                    </h3>
-                                    <Separator className="my-3" />
+                            <h2 className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                Live Preview
+                            </h2>
 
-                                    {/* Form title preview */}
-                                    <div className="rounded-lg border bg-muted/20 p-4">
-                                        <h4 className="text-lg font-semibold">
-                                            {name || <span className="italic text-muted-foreground/50">Form Title</span>}
-                                        </h4>
-                                        {description && (
-                                            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-                                        )}
+                            <div className="border-l border-border/60 pl-5">
+                                <h4 className="text-xs font-medium">
+                                    {name || <span className="italic text-muted-foreground/50">Form Title</span>}
+                                </h4>
+                                {description && (
+                                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                                )}
 
-                                        {/* Field previews */}
-                                        <div className="mt-4 space-y-4">
-                                            {fields.filter((f) => f.label.trim() !== '').length === 0 ? (
-                                                <p className="py-8 text-center text-sm text-muted-foreground/50">
-                                                    Add fields to see a preview
-                                                </p>
-                                            ) : (
-                                                fields.map((field, index) => (
-                                                    field.label.trim() !== '' && (
-                                                        <div key={index}>
-                                                            <FieldPreview field={field} />
-                                                        </div>
-                                                    )
-                                                ))
-                                            )}
-                                        </div>
+                                {/* Field previews */}
+                                <div className="mt-4 space-y-3.5">
+                                    {fields.filter((f) => f.label.trim() !== '').length === 0 ? (
+                                        <p className="py-6 text-xs text-muted-foreground/50">
+                                            Add fields to see a preview
+                                        </p>
+                                    ) : (
+                                        fields.map(
+                                            (field, index) =>
+                                                field.label.trim() !== '' && (
+                                                    <div key={index}>
+                                                        <FieldPreview field={field} />
+                                                    </div>
+                                                ),
+                                        )
+                                    )}
+                                </div>
 
-                                        {/* Fake submit button */}
-                                        {fields.filter((f) => f.label.trim() !== '').length > 0 && (
-                                            <div className="mt-6 flex justify-end">
-                                                <div className="rounded-md bg-primary/20 px-4 py-2 text-xs font-medium text-primary">
-                                                    Submit
-                                                </div>
-                                            </div>
-                                        )}
+                                {/* Fake submit button — flat, neutral */}
+                                {fields.filter((f) => f.label.trim() !== '').length > 0 && (
+                                    <div className="mt-5 border-t border-dashed border-border/50 pt-3 text-xs text-muted-foreground">
+                                        Submit →
                                     </div>
-                                </CardContent>
-                            </Card>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

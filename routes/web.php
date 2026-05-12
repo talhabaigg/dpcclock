@@ -391,6 +391,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Form Requests (admin actions)
     Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
     Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
+    Route::post('/form-requests/{formRequest}/submit-internal', [FormRequestController::class, 'submitInternal'])->name('form-requests.submit-internal');
 
     Route::middleware('permission:signing-requests.view')->group(function () {
         Route::get('/signing-requests', [SigningRequestController::class, 'index'])->name('signing-requests.index');

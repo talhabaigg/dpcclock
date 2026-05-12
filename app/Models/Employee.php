@@ -68,6 +68,11 @@ class Employee extends Model implements ProvidesSigningPlaceholders
         return $this->hasMany(IncidentReport::class);
     }
 
+    public function injuries(): HasMany
+    {
+        return $this->hasMany(Injury::class);
+    }
+
     public function silicaEntries(): HasMany
     {
         return $this->hasMany(SilicaEntry::class);
