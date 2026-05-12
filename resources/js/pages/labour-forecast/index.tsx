@@ -1,5 +1,6 @@
 import InputSearch from '@/components/inputSearch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
@@ -30,28 +31,24 @@ interface LabourForecastIndexProps {
     forecastMonth: string;
 }
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-    not_started: {
-        label: 'Not Started',
-        className: 'border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
-    },
-    draft: {
-        label: 'Draft',
-        className: 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    },
-    submitted: {
-        label: 'Submitted',
-        className: 'border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    },
-    approved: {
-        label: 'Approved',
-        className: 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-    },
-    rejected: {
-        label: 'Rejected',
-        className: 'border border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300',
-    },
+const STATUS_LABELS: Record<string, string> = {
+    not_started: 'Not Started',
+    draft: 'Draft',
+    submitted: 'Submitted',
+    approved: 'Approved',
+    rejected: 'Rejected',
 };
+
+// eh_parent_id → company code. The backend currently scopes the index to
+// GREEN + SWCP only; SWC is intentionally excluded server-side.
+const COMPANY_LABELS: Record<number, string> = {
+    1198645: 'GREEN',
+    1249093: 'SWCP',
+};
+
+function companyCode(parentId: number): string | null {
+    return COMPANY_LABELS[parentId] ?? null;
+}
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-AU', {
@@ -61,6 +58,7 @@ const formatCurrency = (value: number) =>
         maximumFractionDigits: 0,
     }).format(value);
 
+ 
 const SortableHeader = ({ column, children }: { column: any; children: React.ReactNode }) => (
     <button className="hover:text-foreground flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
         {children}
@@ -72,25 +70,21 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
     {
         accessorKey: 'name',
         header: ({ column }) => <SortableHeader column={column}>Job Name</SortableHeader>,
-        cell: ({ row }) => <span className="font-medium">{row.getValue('name')}</span>,
-    },
-    {
-        accessorKey: 'job_number',
-        header: ({ column }) => <SortableHeader column={column}>Job Number</SortableHeader>,
-    },
-    {
-        accessorKey: 'state',
-        header: ({ column }) => <SortableHeader column={column}>State</SortableHeader>,
-        cell: ({ row }) => <span>{row.getValue('state')}</span>,
+        cell: ({ row }) => (
+            <p className="max-w-[12rem] truncate font-medium sm:max-w-[20rem]" title={row.original.name}>
+                {row.original.name}
+            </p>
+        ),
     },
     {
         accessorKey: 'forecast_status',
         header: ({ column }) => <SortableHeader column={column}>Status</SortableHeader>,
         cell: ({ row }) => {
             const status = (row.getValue('forecast_status') as string) || 'not_started';
-            const config = statusConfig[status] || statusConfig.not_started;
             return (
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}>{config.label}</span>
+                <Badge variant="outline" className="font-normal shadow-none">
+                    {STATUS_LABELS[status] ?? status}
+                </Badge>
             );
         },
     },
@@ -103,7 +97,7 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
         ),
         cell: ({ row }) => {
             const value = row.getValue('current_week_headcount') as number;
-            return <div className="text-right tabular-nums">{value ? value.toLocaleString() : '-'}</div>;
+            return <div className="text-right tabular-nums text-muted-foreground">{value ? value.toLocaleString() : '—'}</div>;
         },
     },
     {
@@ -116,7 +110,7 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
         cell: ({ row }) => {
             const value = row.getValue('current_week_cost') as number;
             const location = row.original;
-            if (!value) return <div className="text-right">-</div>;
+            if (!value) return <div className="text-right text-muted-foreground">—</div>;
             return (
                 <div className="text-right">
                     <button
@@ -124,7 +118,7 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
                             e.stopPropagation();
                             onCostClick(location.id, location.name);
                         }}
-                        className="cursor-pointer font-medium text-green-700 tabular-nums hover:text-green-800 hover:underline dark:text-green-400 dark:hover:text-green-300"
+                        className="cursor-pointer font-medium tabular-nums underline-offset-2 hover:underline"
                     >
                         {formatCurrency(value)}
                     </button>
@@ -136,25 +130,57 @@ const buildColumns = (onCostClick: (id: number, name: string) => void): ColumnDe
         id: 'actions',
         header: () => null,
         cell: ({ row }) => (
-            <div className="text-right">
+            <div className="pr-2 text-right">
                 <Link
                     href={`/location/${row.original.id}/labour-forecast/show`}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
+                    aria-label={`Open labour forecast for ${row.original.name}`}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                    Open
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="h-4 w-4" />
                 </Link>
             </div>
         ),
     },
 ];
 
+// Compact summary metric card used in the header strip.
+interface SummaryProps {
+    label: string;
+    value: string | number;
+    icon: React.ElementType;
+    foot?: string;
+}
+function Summary({ label, value, icon: Icon, foot }: SummaryProps) {
+    return (
+        <div className="flex items-center justify-between rounded-md border border-border/60 bg-background px-3 py-2">
+            <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums">{value}</p>
+                {foot && <p className="mt-0.5 hidden text-[10px] text-muted-foreground sm:block">{foot}</p>}
+            </div>
+            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        </div>
+    );
+}
+
 const LabourForecastIndex = ({ locations, currentWeekEnding, forecastMonth }: LabourForecastIndexProps) => {
     const breadcrumbs: BreadcrumbItem[] = [{ title: 'Labour Forecast', href: '/labour-forecast' }];
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [companyFilter, setCompanyFilter] = useState<string>('SWCP');
     const [sorting, setSorting] = useState<SortingState>([]);
+
+    // Distinct companies present in the data — keeps the dropdown honest when
+    // the server-side scope changes.
+    const availableCompanies = useMemo(() => {
+        const seen = new Set<string>();
+        for (const loc of locations) {
+            const code = companyCode(loc.eh_parent_id);
+            if (code) seen.add(code);
+        }
+        return Array.from(seen).sort();
+    }, [locations]);
 
     const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<{ id: number; name: string } | null>(null);
@@ -177,15 +203,17 @@ const LabourForecastIndex = ({ locations, currentWeekEnding, forecastMonth }: La
                 statusFilter === 'all' ||
                 (statusFilter === 'not_started' && !location.forecast_status) ||
                 (statusFilter !== 'not_started' && location.forecast_status === statusFilter);
-            return matchesSearch && matchesStatus;
+            const matchesCompany = companyFilter === 'all' || companyCode(location.eh_parent_id) === companyFilter;
+            return matchesSearch && matchesStatus && matchesCompany;
         });
-    }, [locations, searchQuery, statusFilter]);
+    }, [locations, searchQuery, statusFilter, companyFilter]);
 
     const handleCostClick = (locationId: number, locationName: string) => {
         setSelectedLocation({ id: locationId, name: locationName });
         setCostBreakdownOpen(true);
     };
 
+     
     const columns = useMemo(() => buildColumns(handleCostClick), []);
 
     const table = useReactTable({
@@ -197,149 +225,112 @@ const LabourForecastIndex = ({ locations, currentWeekEnding, forecastMonth }: La
         state: { sorting },
     });
 
+    // Map TanStack column IDs to responsive visibility classes so we can hide
+    // entire columns at small breakpoints (matches the form-templates pattern).
+    const columnVisibility: Record<string, string> = {
+        name: '',
+        forecast_status: '',
+        current_week_headcount: 'hidden sm:table-cell',
+        current_week_cost: '',
+        actions: '',
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Labour Forecast" />
 
-            <div className="flex flex-col gap-6 p-4 md:p-6">
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
-                                    Total Jobs
-                                </CardDescription>
-                                <span className="text-muted-foreground/60">
-                                    <Building2 className="h-4 w-4" />
-                                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">{stats.totalJobs}</CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">
-                                {stats.jobsStaffedThisWeek} staffed this week
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
-                                    Weekly Headcount
-                                </CardDescription>
-                                <span className="text-muted-foreground/60">
-                                    <Users className="h-4 w-4" />
-                                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
-                                {stats.totalHeadcount.toLocaleString()}
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">W/E {currentWeekEnding}</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
-                                    Weekly Labour Cost
-                                </CardDescription>
-                                <span className="text-muted-foreground/60">
-                                    <DollarSign className="h-4 w-4" />
-                                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
-                                {formatCurrency(stats.totalCost)}
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">W/E {currentWeekEnding}</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="gap-0 overflow-hidden py-0">
-                        <CardHeader className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <div className="flex items-center justify-between">
-                                <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase sm:text-xs">
-                                    Avg Cost / Head
-                                </CardDescription>
-                                <span className="text-muted-foreground/60">
-                                    <TrendingUp className="h-4 w-4" />
-                                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="px-2 py-1.5 sm:px-3 sm:py-2">
-                            <CardTitle className="text-sm font-semibold whitespace-nowrap tabular-nums sm:text-lg">
-                                {formatCurrency(stats.avgCostPerHead)}
-                            </CardTitle>
-                            <p className="text-muted-foreground mt-0.5 hidden text-[10px] sm:block sm:text-xs">Per week</p>
-                        </CardContent>
-                    </Card>
+            <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
+                {/* Summary strip */}
+                <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <Summary label="Total Jobs" value={stats.totalJobs} icon={Building2} foot={`${stats.jobsStaffedThisWeek} staffed this week`} />
+                    <Summary label="Weekly Headcount" value={stats.totalHeadcount.toLocaleString()} icon={Users} foot={`W/E ${currentWeekEnding}`} />
+                    <Summary label="Weekly Labour Cost" value={formatCurrency(stats.totalCost)} icon={DollarSign} foot={`W/E ${currentWeekEnding}`} />
+                    <Summary label="Avg Cost / Head" value={formatCurrency(stats.avgCostPerHead)} icon={TrendingUp} foot="Per week" />
                 </div>
 
-                {/* Search & Filters */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div className="relative w-full sm:w-64">
+                {/* Search + status, justified */}
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <div className="relative max-w-xs flex-1">
                         <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="job name or number" />
                     </div>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-full sm:w-40">
-                            <SelectValue placeholder="All Statuses" />
+                    <Select value={companyFilter} onValueChange={setCompanyFilter}>
+                        <SelectTrigger className="h-9 w-[140px] text-sm">
+                            <SelectValue placeholder="All companies" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="all">All companies</SelectItem>
+                            {availableCompanies.map((code) => (
+                                <SelectItem key={code} value={code}>
+                                    {code}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="h-9 w-[160px] text-sm">
+                            <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All statuses</SelectItem>
                             <SelectItem value="not_started">Not Started</SelectItem>
                             <SelectItem value="draft">Draft</SelectItem>
                             <SelectItem value="submitted">Submitted</SelectItem>
                             <SelectItem value="approved">Approved</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
                         </SelectContent>
                     </Select>
-                    <div className="text-muted-foreground text-xs sm:ml-auto">
-                        {filteredLocations.length} of {locations.length} jobs
-                    </div>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                        {filteredLocations.length} of {locations.length}
+                    </span>
                 </div>
 
-                {/* Data Table */}
-                <div className="overflow-hidden rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id}>
-                                    {headerGroup.headers.map((header) => (
-                                        <TableHead key={header.id} className="text-xs">
-                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </TableHead>
-                                    ))}
-                                </TableRow>
-                            ))}
-                        </TableHeader>
-                        <TableBody>
-                            {table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map((row) => (
-                                    <TableRow key={row.id}>
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id} className="text-sm">
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </TableCell>
+                {/* Table */}
+                <Card className="py-2 gap-2">
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                {table.getHeaderGroups().map((headerGroup) => (
+                                    <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                                        {headerGroup.headers.map((header) => (
+                                            <TableHead
+                                                key={header.id}
+                                                className={`text-xs ${columnVisibility[header.column.id] ?? ''} ${header.column.id === 'name' ? 'pl-4' : ''}`}
+                                            >
+                                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                            </TableHead>
                                         ))}
                                     </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={columns.length} className="text-muted-foreground h-24 text-center">
-                                        {searchQuery || statusFilter !== 'all'
-                                            ? 'No forecasts match your filters.'
-                                            : 'No job locations with labour forecast data.'}
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                ))}
+                            </TableHeader>
+                            <TableBody>
+                                {table.getRowModel().rows?.length ? (
+                                    table.getRowModel().rows.map((row) => (
+                                        <TableRow key={row.id} className="cursor-pointer" onClick={() => (window.location.href = `/location/${row.original.id}/labour-forecast/show`)}>
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell
+                                                    key={cell.id}
+                                                    className={`text-xs ${columnVisibility[cell.column.id] ?? ''} ${cell.column.id === 'name' ? 'pl-4' : ''}`}
+                                                >
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={columns.length} className="py-10 text-center">
+                                            <p className="text-muted-foreground text-sm">
+                                                {searchQuery || statusFilter !== 'all'
+                                                    ? 'No forecasts match your filters.'
+                                                    : 'No job locations with labour forecast data.'}
+                                            </p>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
 
                 {/* Cost Breakdown Dialog */}
                 {selectedLocation && (

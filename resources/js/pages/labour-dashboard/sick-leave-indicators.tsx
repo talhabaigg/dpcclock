@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -126,12 +125,12 @@ export default function SickLeaveIndicators({ data }: SickLeaveIndicatorsProps) 
 
     return (
         <>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-row items-start justify-between">
                     <div>
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                            <CardTitle className="text-sm">Sick Leave Sensitive Indicators</CardTitle>
+                            <h2 className="text-lg font-semibold">Sick Leave Sensitive Indicators</h2>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                             {data.length} employees flagged — Total score: {totalScore}
@@ -145,18 +144,16 @@ export default function SickLeaveIndicators({ data }: SickLeaveIndicatorsProps) 
                             <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                     )}
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border">
-                        <IndicatorTable data={data} />
-                    </div>
-                    <div className="mt-2 flex items-center gap-4 text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-1"><span className="text-red-500">&#9670;</span> High (10+)</span>
-                        <span className="flex items-center gap-1"><span className="text-amber-500">&#9650;</span> Medium (5-9)</span>
-                        <span className="flex items-center gap-1"><span className="text-green-500">&#9679;</span> Low (&lt;5)</span>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+                <div className="rounded-md border">
+                    <IndicatorTable data={data} />
+                </div>
+                <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="text-red-500">&#9670;</span> High (10+)</span>
+                    <span className="flex items-center gap-1"><span className="text-amber-500">&#9650;</span> Medium (5-9)</span>
+                    <span className="flex items-center gap-1"><span className="text-green-500">&#9679;</span> Low (&lt;5)</span>
+                </div>
+            </div>
 
             <Dialog open={fullscreen} onOpenChange={setFullscreen}>
                 <DialogContent className="min-w-full max-h-[85vh] flex flex-col">

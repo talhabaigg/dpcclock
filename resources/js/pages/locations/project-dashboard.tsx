@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronsUpDown, LayoutDashboard } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface AvailableLocation {
     id: number;
@@ -21,13 +21,68 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Project Dashboard', href: '/project-dashboard' },
 ];
 
+// Shared key — locations/dashboard.tsx writes here on mount so this selector can
+// auto-redirect on subsequent visits.
+export const RECENT_PROJECT_STORAGE_KEY = 'dpcclock:recent-project-location';
+
 export default function ProjectDashboard({ availableLocations }: Props) {
     const [open, setOpen] = useState(false);
+    // While checking localStorage we don't want to flash the selector
+    const [checking, setChecking] = useState(true);
+
+    useEffect(() => {
+        // Allow ?select=1 to force the picker (escape hatch if storage points
+        // to a job the user no longer wants to land on).
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('select')) {
+            try {
+                localStorage.removeItem(RECENT_PROJECT_STORAGE_KEY);
+            } catch {
+                /* localStorage may be unavailable (private mode, etc.) — fall through */
+            }
+            setChecking(false);
+            return;
+        }
+
+        let storedId: number | null = null;
+        try {
+            const raw = localStorage.getItem(RECENT_PROJECT_STORAGE_KEY);
+            if (raw) storedId = Number(raw);
+        } catch {
+            /* localStorage unavailable — show selector */
+        }
+
+        // Validate against accessible locations so a stale or revoked ID falls
+        // back to the picker instead of redirecting into a 404.
+        const match = storedId && availableLocations.find((l) => l.id === storedId);
+        if (match) {
+            router.get(`/locations/${match.id}/dashboard`, undefined, { replace: true });
+            return;
+        }
+
+        setChecking(false);
+    }, [availableLocations]);
 
     const handleLocationChange = (locationId: number) => {
         setOpen(false);
+        try {
+            localStorage.setItem(RECENT_PROJECT_STORAGE_KEY, String(locationId));
+        } catch {
+            /* ignore — non-blocking */
+        }
         router.get(`/locations/${locationId}/dashboard`);
     };
+
+    if (checking) {
+        return (
+            <AppLayout breadcrumbs={breadcrumbs}>
+                <Head title="Project Dashboard" />
+                <div className="flex flex-1 items-center justify-center p-6">
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                </div>
+            </AppLayout>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

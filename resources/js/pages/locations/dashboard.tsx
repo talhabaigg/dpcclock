@@ -167,6 +167,16 @@ export default function Dashboard({
             window.localStorage.setItem(TAB_STORAGE_KEY, activeTab);
         }
     }, [activeTab]);
+
+    // Remember this project so /project-dashboard can auto-redirect next time.
+    // Shared key with locations/project-dashboard.tsx.
+    useEffect(() => {
+        try {
+            window.localStorage.setItem('dpcclock:recent-project-location', String(location.id));
+        } catch {
+            /* localStorage unavailable — non-blocking */
+        }
+    }, [location.id]);
     const [groupBy, setGroupBy] = useState<GroupByMode>('area');
     const [selectedRow, setSelectedRow] = useState<RowSelection | null>(null);
     const [reportOpen, setReportOpen] = useState(false);
