@@ -11,15 +11,17 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { SearchSelect } from '@/components/search-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Loader2, RefreshCcw, Trash2 } from 'lucide-react';
+import { Info, Loader2, RefreshCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import { parseWeekEndingDate } from './helper/dateParser';
@@ -137,6 +139,34 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
 
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [draftLocation, setDraftLocation] = useState<string | null>(locationValue);
+    const [draftStatus, setDraftStatus] = useState<string>(statusValue);
+    const [draftWeeks, setDraftWeeks] = useState<number>(weeksValue);
+
+    const openFilters = () => {
+        setDraftLocation(locationValue);
+        setDraftStatus(statusValue);
+        setDraftWeeks(weeksValue);
+        setFiltersOpen(true);
+    };
+
+    const applyFilters = () => {
+        setLocationValue(draftLocation);
+        setStatusValue(draftStatus);
+        setWeeksValue(draftWeeks);
+        setFiltersOpen(false);
+    };
+
+    const resetFilters = () => {
+        setDraftLocation(null);
+        setDraftStatus('');
+        setDraftWeeks(1);
+    };
+
+    const activeFilterCount =
+        (locationValue ? 1 : 0) + (statusValue ? 1 : 0) + ((selectedWeeks ?? 1) > 1 ? 1 : 0);
+
     useEffect(() => {
         const nextWeek = formatDMY(weekEndingDate) || weekEnding;
         const nextLoc = locationValue ?? '';
@@ -203,7 +233,7 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="EH Reconciliation" />
-            <div className="space-y-4 p-4 md:p-6">
+            <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-6">
                 {flash?.success && (
                     <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
                         {flash.success}
@@ -215,94 +245,56 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
                     </div>
                 )}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Employment Hero Reconciliation</CardTitle>
-                        <CardDescription>
-                            Compare local clocks against Employment Hero timesheets for the selected week. Employment Hero is the source
-                            of truth for paid timesheets.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-                        <DatePickerDemo
-                            initialDate={weekEndingDate ?? new Date()}
-                            onDateChange={(d) => setWeekEndingDate(d)}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+                    <DatePickerDemo
+                        initialDate={weekEndingDate ?? new Date()}
+                        onDateChange={(d) => setWeekEndingDate(d)}
+                    />
+                    <Button variant="outline" size="sm" className="gap-2" onClick={openFilters}>
+                        <SlidersHorizontal className="h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount}</Badge>}
+                    </Button>
+                    {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
+
+                    <div className="ml-auto">
+                        <ConfirmButton
+                            title={multiWeek ? `Pull all ${selectedWeeks} weeks from EH?` : 'Pull this week from EH?'}
+                            description={
+                                multiWeek
+                                    ? `Re-runs the EH pull for each of the ${selectedWeeks} weeks. Synchronous — expect roughly ${selectedWeeks * 2}–${selectedWeeks * 4}s.`
+                                    : 'Re-runs the EH pull for this week. Local mismatches will be overwritten with EH values; missing local rows will be created.'
+                            }
+                            actionLabel="Pull from EH"
+                            onConfirm={repullWeek}
+                            trigger={
+                                <Button variant="default" disabled={busy === 'repull'}>
+                                    {busy === 'repull' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                    {multiWeek ? `Pull ${selectedWeeks} weeks from EH` : 'Pull this week from EH'}
+                                </Button>
+                            }
                         />
-                        <div className="min-w-[220px]">
-                            <SearchSelect
-                                options={locations.map((l) => ({ label: l.label, value: l.value }))}
-                                optionName="location"
-                                selectedOption={locationValue ?? ''}
-                                onValueChange={(v) => setLocationValue(v || null)}
-                            />
-                        </div>
-                        <Select value={statusValue || 'all'} onValueChange={(v) => setStatusValue(v === 'all' ? '' : v)}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="All statuses" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All statuses</SelectItem>
-                                {statusOptions.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {s}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={String(weeksValue)} onValueChange={(v) => setWeeksValue(Number(v))}>
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {weekOptions.map((n) => (
-                                    <SelectItem key={n} value={String(n)}>
-                                        {n === 1 ? '1 week' : `Last ${n} weeks`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
-
-                        <div className="ml-auto">
-                            <ConfirmButton
-                                title={multiWeek ? `Pull all ${selectedWeeks} weeks from EH?` : 'Pull this week from EH?'}
-                                description={
-                                    multiWeek
-                                        ? `Re-runs the EH pull for each of the ${selectedWeeks} weeks. Synchronous — expect roughly ${selectedWeeks * 2}–${selectedWeeks * 4}s.`
-                                        : 'Re-runs the EH pull for this week. Local mismatches will be overwritten with EH values; missing local rows will be created.'
-                                }
-                                actionLabel="Pull from EH"
-                                onConfirm={repullWeek}
-                                trigger={
-                                    <Button variant="default" disabled={busy === 'repull'}>
-                                        {busy === 'repull' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                                        {multiWeek ? `Pull ${selectedWeeks} weeks from EH` : 'Pull this week from EH'}
-                                    </Button>
-                                }
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-                    <StatCard label="EH timesheets" value={c.eh} />
-                    <StatCard label="Local clocks" value={c.local} />
-                    <StatCard label="Matched" value={c.matched} tone="ok" />
-                    <StatCard label="Mismatched" value={c.mismatched} tone={c.mismatched ? 'warn' : undefined} />
-                    <StatCard label="Local-only (unsynced)" value={c.unsynced} tone={c.unsynced ? 'warn' : undefined} />
-                    <StatCard label="Ghost (deleted in EH)" value={c.orphaned} tone={c.orphaned ? 'danger' : undefined} />
-                    <StatCard label="EH-only (missing locally)" value={c.eh_only} tone={c.eh_only ? 'danger' : undefined} />
+                    </div>
                 </div>
 
+                <dl className="divide-y">
+                    <StatRow label="EH timesheets" value={c.eh} />
+                    <StatRow label="Local clocks" value={c.local} />
+                    <StatRow label="Matched" value={c.matched} tone="ok" />
+                    <StatRow label="Mismatched" value={c.mismatched} tone={c.mismatched ? 'warn' : undefined} />
+                    <StatRow label="Local-only (unsynced)" value={c.unsynced} tone={c.unsynced ? 'warn' : undefined} />
+                    <StatRow label="Ghost (deleted in EH)" value={c.orphaned} tone={c.orphaned ? 'danger' : undefined} />
+                    <StatRow label="EH-only (missing locally)" value={c.eh_only} tone={c.eh_only ? 'danger' : undefined} />
+                </dl>
+
                 {multiWeek && report.per_week && report.per_week.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Per-week breakdown</CardTitle>
-                            <CardDescription>Click a week to drill in.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="overflow-auto">
-                                <Table>
+                    <div className="space-y-2">
+                        <div>
+                            <h3 className="text-sm font-semibold">Per-week breakdown</h3>
+                            <p className="text-muted-foreground text-xs">Click a week to drill in.</p>
+                        </div>
+                        <div className="overflow-auto rounded-md border">
+                            <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Week ending</TableHead>
@@ -345,64 +337,127 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
                                         })}
                                     </TableBody>
                                 </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 )}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Gaps ({totalGaps})</CardTitle>
-                        <CardDescription>
+                <div className="flex items-center gap-1.5">
+                    <h2 className="text-lg font-semibold">Gaps ({totalGaps})</h2>
+                    <HoverCard>
+                        <HoverCardTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label="About gaps"
+                                className="text-muted-foreground hover:text-foreground inline-flex h-4 w-4 items-center justify-center"
+                            >
+                                <Info className="h-3.5 w-3.5" />
+                            </button>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="text-sm" side="right" align="start">
                             Mismatched / EH-only are fixed by re-pulling. Unsynced and Ghosts are local-only stragglers — soft-delete them
                             (EH is truth; if EH had the shift, the pull would have created it).
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Tabs defaultValue="mismatched">
-                            <TabsList>
-                                <TabsTrigger value="mismatched">Mismatched ({c.mismatched})</TabsTrigger>
-                                <TabsTrigger value="unsynced">Unsynced ({c.unsynced})</TabsTrigger>
-                                <TabsTrigger value="orphaned">Ghosts ({c.orphaned})</TabsTrigger>
-                                <TabsTrigger value="eh_only">EH-only ({c.eh_only})</TabsTrigger>
-                            </TabsList>
+                        </HoverCardContent>
+                    </HoverCard>
+                </div>
 
-                            <TabsContent value="mismatched" className="mt-4">
-                                <MismatchedTable rows={report.mismatched} showWeek={multiWeek} />
-                            </TabsContent>
-                            <TabsContent value="unsynced" className="mt-4">
-                                <DeletableLocalTable
-                                    rows={report.unsynced}
-                                    emptyText="Nothing unsynced."
-                                    busy={busy}
-                                    busyKey="unsynced"
-                                    onDelete={(ids) => deleteIds(ids, 'unsynced')}
-                                    showWeek={multiWeek}
-                                />
-                            </TabsContent>
-                            <TabsContent value="orphaned" className="mt-4">
-                                <DeletableLocalTable
-                                    rows={report.orphaned}
-                                    emptyText="No ghost records."
-                                    showEhId
-                                    busy={busy}
-                                    busyKey="orphaned"
-                                    onDelete={(ids) => deleteIds(ids, 'orphaned')}
-                                    showWeek={multiWeek}
-                                />
-                            </TabsContent>
-                            <TabsContent value="eh_only" className="mt-4">
-                                <EhOnlyTable rows={report.eh_only} showWeek={multiWeek} />
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
+                <Tabs defaultValue="mismatched">
+                    <TabsList>
+                        <TabsTrigger value="mismatched">Mismatched ({c.mismatched})</TabsTrigger>
+                        <TabsTrigger value="unsynced">Unsynced ({c.unsynced})</TabsTrigger>
+                        <TabsTrigger value="orphaned">Ghosts ({c.orphaned})</TabsTrigger>
+                        <TabsTrigger value="eh_only">EH-only ({c.eh_only})</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="mismatched" className="mt-4">
+                        <MismatchedTable rows={report.mismatched} showWeek={multiWeek} />
+                    </TabsContent>
+                    <TabsContent value="unsynced" className="mt-4">
+                        <DeletableLocalTable
+                            rows={report.unsynced}
+                            emptyText="Nothing unsynced."
+                            busy={busy}
+                            busyKey="unsynced"
+                            onDelete={(ids) => deleteIds(ids, 'unsynced')}
+                            showWeek={multiWeek}
+                        />
+                    </TabsContent>
+                    <TabsContent value="orphaned" className="mt-4">
+                        <DeletableLocalTable
+                            rows={report.orphaned}
+                            emptyText="No ghost records."
+                            showEhId
+                            busy={busy}
+                            busyKey="orphaned"
+                            onDelete={(ids) => deleteIds(ids, 'orphaned')}
+                            showWeek={multiWeek}
+                        />
+                    </TabsContent>
+                    <TabsContent value="eh_only" className="mt-4">
+                        <EhOnlyTable rows={report.eh_only} showWeek={multiWeek} />
+                    </TabsContent>
+                </Tabs>
             </div>
+
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <SheetContent side="right" className="flex flex-col gap-0">
+                    <SheetHeader>
+                        <SheetTitle>Filters</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-2">
+                        <div className="flex flex-col gap-2">
+                            <Label>Location</Label>
+                            <SearchSelect
+                                options={locations.map((l) => ({ label: l.label, value: l.value }))}
+                                optionName="location"
+                                selectedOption={draftLocation ?? ''}
+                                onValueChange={(v) => setDraftLocation(v || null)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <Label>Status</Label>
+                            <Select value={draftStatus || 'all'} onValueChange={(v) => setDraftStatus(v === 'all' ? '' : v)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    {statusOptions.map((s) => (
+                                        <SelectItem key={s} value={s}>
+                                            {s}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <Label>Weeks</Label>
+                            <Select value={String(draftWeeks)} onValueChange={(v) => setDraftWeeks(Number(v))}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {weekOptions.map((n) => (
+                                        <SelectItem key={n} value={String(n)}>
+                                            {n === 1 ? '1 week' : `Last ${n} weeks`}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <SheetFooter>
+                        <Button variant="ghost" onClick={resetFilters}>
+                            Reset
+                        </Button>
+                        <Button onClick={applyFilters}>Apply</Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </AppLayout>
     );
 };
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' | 'danger' }) {
+function StatRow({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' | 'danger' }) {
     const toneClass =
         tone === 'ok'
             ? 'text-emerald-600 dark:text-emerald-400'
@@ -412,20 +467,18 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone?:
                 ? 'text-rose-600 dark:text-rose-400'
                 : '';
     return (
-        <Card>
-            <CardContent className="p-4">
-                <div className="text-xs text-muted-foreground">{label}</div>
-                <div className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</div>
-            </CardContent>
-        </Card>
+        <div className="flex items-center justify-between px-4 py-2.5">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd className={`text-base font-semibold tabular-nums ${toneClass}`}>{value}</dd>
+        </div>
     );
 }
 
 function MismatchedTable({ rows, showWeek = false }: { rows: Mismatch[]; showWeek?: boolean }) {
     if (!rows.length) return <Empty text="No field mismatches." />;
     return (
-        <div className="overflow-auto">
-            <Table>
+        <div className="overflow-auto rounded-md border">
+            <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                 <TableHeader>
                     <TableRow>
                         {showWeek && <TableHead>Week</TableHead>}
@@ -506,8 +559,8 @@ function DeletableLocalTable({
                     }
                 />
             </div>
-            <div className="overflow-auto">
-                <Table>
+            <div className="overflow-auto rounded-md border">
+                <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                     <TableHeader>
                         <TableRow>
                             {showWeek && <TableHead>Week</TableHead>}
@@ -568,8 +621,8 @@ function EhOnlyTable({ rows, showWeek = false }: { rows: EhRow[]; showWeek?: boo
             <div className="text-sm text-muted-foreground">
                 These exist in EH but not locally. Use the "Pull from EH" button at the top to bring them in.
             </div>
-            <div className="overflow-auto">
-                <Table>
+            <div className="overflow-auto rounded-md border">
+                <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                     <TableHeader>
                         <TableRow>
                             {showWeek && <TableHead>Week</TableHead>}
