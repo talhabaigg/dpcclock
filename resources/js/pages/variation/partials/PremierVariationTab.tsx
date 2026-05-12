@@ -20,6 +20,7 @@ import { ChevronDown, Download, Loader2, Send } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PricingItem } from './VariationPricingTab';
+import { DirectMaterialItem } from './directMaterialTable/utils';
 
 type GenerateMode = 'standard' | 'dayworks';
 
@@ -39,6 +40,7 @@ interface PremierVariationTabProps {
     variationId?: number;
     locationId?: number | string;
     pricingItems: PricingItem[];
+    directMaterials?: DirectMaterialItem[];
     lineItems: LineItem[];
     linesStale?: boolean;
     onLineItemsChange: (items: LineItem[]) => void;
@@ -50,6 +52,7 @@ export default function PremierVariationTab({
     variationId,
     locationId,
     pricingItems,
+    directMaterials = [],
     lineItems,
     linesStale = false,
     onLineItemsChange,
@@ -107,6 +110,13 @@ export default function PremierVariationTab({
                             material_cost: i.material_cost,
                             qty: i.qty,
                             takeoff_condition_id: i.takeoff_condition_id ?? null,
+                            sell_rate: i.sell_rate ?? null,
+                        })),
+                        direct_materials: directMaterials.map((m) => ({
+                            qty: m.qty,
+                            unit_cost: m.unit_cost,
+                            sell_markup_pct: m.sell_markup_pct,
+                            client_markup_pct: m.client_markup_pct,
                         })),
                     }
                 );

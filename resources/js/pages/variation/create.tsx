@@ -925,6 +925,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     variationId={savedVariationId}
                                     locationId={data.location_id}
                                     pricingItems={pricingItems}
+                                    directMaterials={directMaterials}
                                     lineItems={data.line_items}
                                     linesStale={linesStale}
                                     onLineItemsChange={(items) => setData('line_items', items)}

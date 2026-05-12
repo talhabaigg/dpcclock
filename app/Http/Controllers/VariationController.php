@@ -1045,6 +1045,12 @@ class VariationController extends Controller
             'pricing_items.*.material_cost' => 'required|numeric',
             'pricing_items.*.qty' => 'required|numeric',
             'pricing_items.*.takeoff_condition_id' => 'nullable|integer',
+            'pricing_items.*.sell_rate' => 'nullable|numeric|min:0',
+            'direct_materials' => 'nullable|array',
+            'direct_materials.*.qty' => 'nullable|numeric|min:0',
+            'direct_materials.*.unit_cost' => 'nullable|numeric|min:0',
+            'direct_materials.*.sell_markup_pct' => 'nullable|numeric|min:0',
+            'direct_materials.*.client_markup_pct' => 'nullable|numeric|min:0',
             'mode' => 'nullable|string|in:standard,dayworks',
         ]);
 
@@ -1054,6 +1060,7 @@ class VariationController extends Controller
             $validated['pricing_items'],
             $location,
             $validated['mode'] ?? 'standard',
+            $validated['direct_materials'] ?? [],
         );
 
         return response()->json($result);
@@ -1157,36 +1164,49 @@ class VariationController extends Controller
 
         $rows = $validated['items'] ?? [];
 
+        // Wipe-and-recreate would always flip the variation stale via the
+        // create/delete model listeners, even on no-op saves. Snapshot the
+        // premier-affecting fields, suppress events during the swap, then only
+        // mark stale if the new set materially differs from the old one.
+        $existingSig = $this->directMaterialsPremierSignature($variation);
+
         DB::transaction(function () use ($variation, $rows) {
-            $variation->directMaterials()->delete();
+            VariationDirectMaterial::withoutEvents(function () use ($variation, $rows) {
+                $variation->directMaterials()->delete();
 
-            foreach ($rows as $idx => $row) {
-                $qty = (float) ($row['qty'] ?? 0);
-                $unit = (float) ($row['unit_cost'] ?? 0);
-                $markup = (float) ($row['sell_markup_pct'] ?? 25);
-                // Sell cost = unit cost grossed up by the markup, then multiplied by qty.
-                $sellCost = round($qty * $unit * (1 + $markup / 100), 2);
+                foreach ($rows as $idx => $row) {
+                    $qty = (float) ($row['qty'] ?? 0);
+                    $unit = (float) ($row['unit_cost'] ?? 0);
+                    $markup = (float) ($row['sell_markup_pct'] ?? 25);
+                    // Sell cost = unit cost grossed up by the markup, then multiplied by qty.
+                    $sellCost = round($qty * $unit * (1 + $markup / 100), 2);
 
-                $clientMarkup = (float) ($row['client_markup_pct'] ?? 10);
+                    $clientMarkup = (float) ($row['client_markup_pct'] ?? 10);
 
-                $variation->directMaterials()->create([
-                    'supplier_id' => $row['supplier_id'] ?? null,
-                    'material_item_id' => $row['material_item_id'] ?? null,
-                    'material_code' => $row['material_code'] ?? null,
-                    'material_description' => $row['material_description'] ?? null,
-                    'cost_code_id' => $row['cost_code_id'] ?? null,
-                    'cost_type' => $row['cost_type'] ?? null,
-                    'description' => $row['description'] ?? null,
-                    'qty' => $qty,
-                    'unit_cost' => round($unit, 2),
-                    'sell_markup_pct' => round($markup, 2),
-                    'client_markup_pct' => round($clientMarkup, 2),
-                    'sell_cost' => $sellCost,
-                    'line_number' => (int) ($row['line_number'] ?? ($idx + 1)),
-                    'sort_order' => $idx + 1,
-                ]);
-            }
+                    $variation->directMaterials()->create([
+                        'supplier_id' => $row['supplier_id'] ?? null,
+                        'material_item_id' => $row['material_item_id'] ?? null,
+                        'material_code' => $row['material_code'] ?? null,
+                        'material_description' => $row['material_description'] ?? null,
+                        'cost_code_id' => $row['cost_code_id'] ?? null,
+                        'cost_type' => $row['cost_type'] ?? null,
+                        'description' => $row['description'] ?? null,
+                        'qty' => $qty,
+                        'unit_cost' => round($unit, 2),
+                        'sell_markup_pct' => round($markup, 2),
+                        'client_markup_pct' => round($clientMarkup, 2),
+                        'sell_cost' => $sellCost,
+                        'line_number' => (int) ($row['line_number'] ?? ($idx + 1)),
+                        'sort_order' => $idx + 1,
+                    ]);
+                }
+            });
         });
+
+        $newSig = $this->directMaterialsPremierSignature($variation);
+        if ($newSig !== $existingSig) {
+            $variation->forceFill(['premier_lines_stale' => true])->save();
+        }
 
         $items = $variation->directMaterials()
             ->with('materialItem:id,code,description', 'costCode:id,code,description', 'supplier:id,code,name')
@@ -1194,6 +1214,27 @@ class VariationController extends Controller
             ->get();
 
         return response()->json(['direct_materials' => $items]);
+    }
+
+    /**
+     * Stable hash of direct-material fields that affect Premier output
+     * (cost_code_id, qty, unit_cost) and revenue (sell_markup_pct,
+     * client_markup_pct). Used by syncDirectMaterials to skip the stale-flag
+     * flip when a save changes nothing material.
+     */
+    private function directMaterialsPremierSignature(Variation $variation): string
+    {
+        return $variation->directMaterials()
+            ->orderBy('sort_order')
+            ->get(['cost_code_id', 'qty', 'unit_cost', 'sell_markup_pct', 'client_markup_pct'])
+            ->map(fn ($r) => [
+                $r->cost_code_id,
+                (float) $r->qty,
+                (float) $r->unit_cost,
+                (float) $r->sell_markup_pct,
+                (float) $r->client_markup_pct,
+            ])
+            ->toJson();
     }
 
     /**

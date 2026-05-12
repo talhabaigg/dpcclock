@@ -215,10 +215,33 @@ class ChangeOrderGenerator
         $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
         $variation->loadMissing('pricingItems', 'directMaterials.costCode.costType');
 
+        // Revenue for the 99-99 line mirrors the Client Variation total: pricing
+        // items' qty × sell_rate plus direct materials' qty × unit_cost compounded
+        // with sell_markup_pct then client_markup_pct.
+        $totalRevenue = $this->computeClientRevenue(
+            $variation->pricingItems->map(fn ($p) => [
+                'qty' => (float) $p->qty,
+                'sell_rate' => (float) ($p->sell_rate ?? 0),
+            ])->all(),
+            $variation->directMaterials->map(fn ($m) => [
+                'qty' => (float) $m->qty,
+                'unit_cost' => (float) $m->unit_cost,
+                'sell_markup_pct' => (float) ($m->sell_markup_pct ?? 0),
+                'client_markup_pct' => (float) ($m->client_markup_pct ?? 0),
+            ])->all(),
+        );
+
         // ── Step 1: Collect costs from pricing items ──
         $totalLabour = 0;
         // materialByCostCode: keyed by cost_code string, value = [cost_code_id, description, total]
         $materialByCostCode = [];
+
+        // Track the conditional-material contribution separately. Direct
+        // materials emit at raw buy cost (matches Client Variation's cost
+        // basis) and feed the revenue line; loading MAT prelim on top would
+        // inflate Premier's cost past what the quote was built against, so
+        // only conditional material flows into the Step 4 prelim fan-out.
+        $conditionalMaterialTotal = 0.0;
 
         // Direct material rows roll up by cost code → one Premier line per cost
         // code with sum(qty × unit_cost). Lines are emitted at Step 3 (alongside
@@ -281,6 +304,7 @@ class ChangeOrderGenerator
                     ];
                 }
                 $materialByCostCode[$code]['total'] += $cc['line_cost'];
+                $conditionalMaterialTotal += (float) $cc['line_cost'];
             }
         }
 
@@ -362,7 +386,9 @@ class ChangeOrderGenerator
         }
 
         // ── Step 4: Material prelim lines (Quick Gen logic) ──
-        if ($totalMaterial > 0) {
+        // Base excludes direct material — see $conditionalMaterialTotal note.
+        $prelimBase = round($conditionalMaterialTotal, 2);
+        if ($prelimBase > 0) {
             foreach ($locationCostCodes as $costCode) {
                 $ratio = (float) ($costCode->pivot->{$ratioColumn} ?? 0);
                 $prelimType = strtoupper(trim($costCode->pivot->prelim_type ?? ''));
@@ -371,7 +397,7 @@ class ChangeOrderGenerator
                     continue;
                 }
 
-                $lineAmount = round($totalMaterial * ($ratio / 100), 2);
+                $lineAmount = round($prelimBase * ($ratio / 100), 2);
                 $lineItems[] = [
                     'line_number' => $lineNumber++,
                     'description' => $costCode->description,
@@ -384,6 +410,11 @@ class ChangeOrderGenerator
                     'cost_code_id' => $costCode->id,
                 ];
             }
+        }
+
+        // ── Step 5: Revenue line (99-99) ──
+        if ($totalRevenue > 0) {
+            $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
         }
 
         // Wipe existing and create new
@@ -447,11 +478,14 @@ class ChangeOrderGenerator
      * @param  string  $mode  'standard' (uses variation_ratio) | 'dayworks' (uses dayworks_ratio)
      * @return array{line_items: array, summary: array}
      */
-    public function previewFromPricingItems(array $pricingItems, Location $location, string $mode = 'standard'): array
+    public function previewFromPricingItems(array $pricingItems, Location $location, string $mode = 'standard', array $directMaterials = []): array
     {
         $ratioColumn = $mode === 'dayworks' ? 'dayworks_ratio' : 'variation_ratio';
         $totalLabour = 0;
         $materialByCostCode = [];
+
+        // Revenue mirrors the Client Variation total (see generateFromPricingItems).
+        $totalRevenue = $this->computeClientRevenue($pricingItems, $directMaterials);
 
         foreach ($pricingItems as $item) {
             $conditionId = $item['takeoff_condition_id'] ?? null;
@@ -565,6 +599,10 @@ class ChangeOrderGenerator
                     'cost_code_id' => $costCode->id,
                 ];
             }
+        }
+
+        if ($totalRevenue > 0) {
+            $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
         }
 
         $totalCost = array_sum(array_column($lineItems, 'total_cost'));
@@ -695,6 +733,46 @@ class ChangeOrderGenerator
         }
 
         return round($total, 2);
+    }
+
+    /**
+     * Sum the Client Variation total: pricing items' qty × sell_rate plus
+     * direct materials' qty × unit_cost compounded by sell_markup_pct then
+     * client_markup_pct. Mirrors the totals in ClientVariationTab.
+     *
+     * @param  array<array{qty?: float|int|string, sell_rate?: float|int|string|null}>  $pricingItems
+     * @param  array<array{qty?: float|int|string, unit_cost?: float|int|string, sell_markup_pct?: float|int|string, client_markup_pct?: float|int|string}>  $directMaterials
+     */
+    private function computeClientRevenue(array $pricingItems, array $directMaterials): float
+    {
+        $total = 0.0;
+        foreach ($pricingItems as $item) {
+            $total += (float) ($item['qty'] ?? 0) * (float) ($item['sell_rate'] ?? 0);
+        }
+        foreach ($directMaterials as $m) {
+            $qty = (float) ($m['qty'] ?? 0);
+            $unitCost = (float) ($m['unit_cost'] ?? 0);
+            $sellMarkup = (float) ($m['sell_markup_pct'] ?? 0);
+            $clientMarkup = (float) ($m['client_markup_pct'] ?? 0);
+            $perUnitSell = $unitCost * (1 + $sellMarkup / 100);
+            $total += $qty * $perUnitSell * (1 + $clientMarkup / 100);
+        }
+
+        return round($total, 2);
+    }
+
+    private function buildRevenueLine(int $lineNumber, float $revenue): array
+    {
+        return [
+            'line_number' => $lineNumber,
+            'description' => 'Revenue',
+            'qty' => 1,
+            'unit_cost' => 0,
+            'total_cost' => 0,
+            'cost_item' => '99-99',
+            'cost_type' => 'REV',
+            'revenue' => round($revenue, 2),
+        ];
     }
 
     private function findBaseCostCode($costCodes, string $type): string
