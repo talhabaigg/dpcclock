@@ -529,14 +529,16 @@ class VariationController extends Controller
         $coNumber = $assignedCoNumber ?? $variation->co_number;
 
         $lineItems = $variation->lineItems->map(function ($item) {
+            $isRevenue = strtoupper((string) $item->cost_type) === 'REV';
+
             return [
                 'LineNumber' => $item->line_number,
                 'JobCostItem' => $item->cost_item,
                 'JobCostType' => $item->cost_type,
                 'LineDescription' => $item->description,
-                'Quantity' => $item->qty,
-                'UnitCost' => $item->unit_cost,
-                'Amount' => $item->total_cost,
+                'Quantity' => $isRevenue ? 0 : $item->qty,
+                'UnitCost' => $isRevenue ? 0 : $item->unit_cost,
+                'Amount' => $isRevenue ? (float) $item->revenue : $item->total_cost,
             ];
         })->toArray();
 
