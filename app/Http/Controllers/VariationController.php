@@ -536,7 +536,7 @@ class VariationController extends Controller
                 'JobCostItem' => $item->cost_item,
                 'JobCostType' => $item->cost_type,
                 'LineDescription' => $item->description,
-                'Quantity' => $isRevenue ? 0 : $item->qty,
+                'Quantity' => $isRevenue ? 1 : $item->qty,
                 'UnitCost' => $isRevenue ? 0 : $item->unit_cost,
                 'Amount' => $isRevenue ? (float) $item->revenue : $item->total_cost,
             ];

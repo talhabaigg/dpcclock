@@ -67,7 +67,7 @@ class LocationCostcodeController extends Controller
 
     public function edit(Location $location)
     {
-        $costCodes = $location->costCodes()->orderBy('code')->get();
+        $costCodes = $location->costCodes()->with('costType:id,code')->orderBy('code')->get();
 
         return Inertia::render('locations/costCodeEdit', [
             'location' => $location,

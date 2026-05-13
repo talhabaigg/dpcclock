@@ -1,4 +1,4 @@
-import { ImporterWizardTrigger } from '@/components/importer-wizard';
+import { ImporterWizardDialog } from '@/components/importer-wizard';
 import type { ImporterColumnDef } from '@/components/importer-wizard';
 import { router } from '@inertiajs/react';
 
@@ -28,7 +28,13 @@ const columns: ImporterColumnDef[] = [
     { key: 'prelim_type', label: 'Prelim Type', aliases: ['type', 'prelim', 'mat/lab'] },
 ];
 
-const RatioUploader = ({ locationId }: { locationId: number }) => {
+type RatioUploaderProps = {
+    locationId: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+};
+
+const RatioUploader = ({ locationId, open, onOpenChange }: RatioUploaderProps) => {
     const handleSubmit = async (rows: Record<string, string>[]) => {
         return new Promise<void>((resolve, reject) => {
             router.post(
@@ -43,7 +49,9 @@ const RatioUploader = ({ locationId }: { locationId: number }) => {
     };
 
     return (
-        <ImporterWizardTrigger
+        <ImporterWizardDialog
+            open={open}
+            onOpenChange={onOpenChange}
             title="Import Cost Code Ratios"
             description="Upload a CSV or Excel file with cost code ratios."
             columns={columns}

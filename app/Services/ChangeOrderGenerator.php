@@ -413,9 +413,12 @@ class ChangeOrderGenerator
         }
 
         // ── Step 5: Revenue line (99-99) ──
-        if ($totalRevenue > 0) {
-            $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
-        }
+        // Disabled: Premier maps Amount to Cost regardless of UnitCost=0 because
+        // the JobCostType code "REV" isn't recognised as a revenue-flagged type
+        // in Premier's master list. Re-enable once Premier confirms the correct code.
+        // if ($totalRevenue > 0) {
+        //     $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
+        // }
 
         // Wipe existing and create new
         $variation->lineItems()->delete();
@@ -601,9 +604,12 @@ class ChangeOrderGenerator
             }
         }
 
-        if ($totalRevenue > 0) {
-            $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
-        }
+        // Disabled: see note in generateFromPricingItems — Premier classifies
+        // lines as cost vs revenue via the JobCostType master list and the code
+        // "REV" isn't flagged as revenue, so the Amount lands under Cost.
+        // if ($totalRevenue > 0) {
+        //     $lineItems[] = $this->buildRevenueLine($lineNumber++, $totalRevenue);
+        // }
 
         $totalCost = array_sum(array_column($lineItems, 'total_cost'));
 

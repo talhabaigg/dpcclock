@@ -310,15 +310,15 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Company</span>
+                        <span className="text-xs font-medium text-muted-foreground">Company</span>
                         <Select
                             value={filters.company ?? 'all'}
                             onValueChange={(val) => navigate({ company: val === 'all' ? null : val })}
                         >
-                            <SelectTrigger className="w-[130px]">
+                            <SelectTrigger className="w-[130px] text-xs h-7 px-2">
                                 <SelectValue placeholder="All" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="text-xs">
                                 <SelectItem value="all">All</SelectItem>
                                 {companies.map((c) => (
                                     <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -328,25 +328,25 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                     </div>
 
                     {canEdit && (
-                        <Button variant="outline" size="sm" onClick={openAddDialog}>
-                            <Plus className="mr-2 h-4 w-4" />
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2.5" onClick={openAddDialog}>
+                            <Plus className="mr-1.5 size-3.5" />
                             Add Manual Entry
                         </Button>
                     )}
 
-                    <Button variant="outline" size="sm" onClick={exportToExcel}>
-                        <Download className="mr-2 h-4 w-4" />
+                    <Button variant="outline" size="sm" className="text-xs h-7 px-2.5" onClick={exportToExcel}>
+                        <Download className="mr-1.5 size-3.5" />
                         Export Excel
                     </Button>
 
-                    <span className="text-sm text-muted-foreground ml-auto">
+                    <span className="text-xs text-muted-foreground ml-auto">
                         {retentionData.length} {retentionData.length === 1 ? 'job' : 'jobs'}
                     </span>
                 </div>
 
                 {/* Table */}
                 <div className="flex-1 min-h-0 rounded-lg border overflow-auto">
-                    <Table>
+                    <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5 [&_td]:px-2 [&_th]:px-2">
                         <TableHeader className="sticky top-0 z-10">
                             <TableRow className="bg-muted/30">
                                 <TableHead className="sticky left-0 z-20 bg-muted/30 min-w-[200px]">Job Name</TableHead>
@@ -376,7 +376,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                             <TableCell className="sticky left-0 z-10 bg-background group-hover:bg-muted/30 min-w-[200px] max-w-[250px] truncate font-medium" title={row.job_name}>
                                                 <span className="mr-2">{row.job_name}</span>
                                                 {row.is_manual_entry && (
-                                                    <Badge variant="secondary">Manual</Badge>
+                                                    <Badge variant="secondary" className="text-xs px-1.5 py-0">Manual</Badge>
                                                 )}
                                             </TableCell>
                                             <TableCell className="min-w-[160px] max-w-[200px] truncate" title={row.customer_name}>
@@ -397,7 +397,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                                     step="0.01"
                                                                     value={editValue}
                                                                     onChange={(e) => setEditValue(e.target.value)}
-                                                                    className="w-28 h-7 text-right text-sm"
+                                                                    className="w-28 h-7 px-2 text-right text-xs"
                                                                     onKeyDown={(e) => {
                                                                         if (e.key === 'Enter') saveManualRetention(row.job_number);
                                                                         if (e.key === 'Escape') cancelEditing();
@@ -532,9 +532,10 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-4">
                         <div className="flex flex-col gap-2">
-                            <Label>Project</Label>
+                            <Label className="text-xs">Project</Label>
                             {dialogMode === 'edit' ? (
                                 <Input
+                                    className="text-xs h-7 px-2"
                                     value={(() => {
                                         const loc = availableLocations.find(l => l.external_id === dialogJobNumber);
                                         return loc ? `${loc.external_id} - ${loc.name}` : dialogJobNumber;
@@ -551,16 +552,18 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                             )}
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label>Customer Name</Label>
+                            <Label className="text-xs">Customer Name</Label>
                             <Input
+                                className="text-xs h-7 px-2"
                                 placeholder="e.g. Anura Pty Ltd"
                                 value={dialogForm.customer_name}
                                 onChange={(e) => setDialogForm(f => ({ ...f, customer_name: e.target.value }))}
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label>Revised Contract Value</Label>
+                            <Label className="text-xs">Revised Contract Value</Label>
                             <Input
+                                className="text-xs h-7 px-2"
                                 type="number"
                                 step="0.01"
                                 placeholder="e.g. 1500000"
@@ -569,8 +572,9 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label>Current Cash Holding Retention (Excl GST)</Label>
+                            <Label className="text-xs">Current Cash Holding Retention (Excl GST)</Label>
                             <Input
+                                className="text-xs h-7 px-2"
                                 type="number"
                                 step="0.01"
                                 placeholder="e.g. 15000 or -5000"
@@ -582,7 +586,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                             </p>
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label>Estimated Completion Date</Label>
+                            <Label className="text-xs">Estimated Completion Date</Label>
                             <DatePickerDemo
                                 value={dialogForm.estimated_end_date}
                                 onChange={(date) => setDialogForm(f => ({ ...f, estimated_end_date: date }))}
@@ -594,10 +598,10 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2.5" onClick={() => setDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={saveDialog} disabled={!dialogJobNumber || !dialogForm.retention_held}>
+                        <Button size="sm" className="text-xs h-7 px-2.5" onClick={saveDialog} disabled={!dialogJobNumber || !dialogForm.retention_held}>
                             {dialogMode === 'add' ? 'Add Entry' : 'Save Changes'}
                         </Button>
                     </DialogFooter>

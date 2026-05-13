@@ -1,14 +1,12 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Download } from 'lucide-react';
-import { useEffect } from 'react';
+import { Head, useForm } from '@inertiajs/react';
+import { Menu } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import CostCodeRatiosGrid, { type RatioRow } from './partials.tsx/costCodeRatiosGrid';
 import RatioUploader from './partials.tsx/ratioUploader';
 
 type CostCodeFormRow = {
@@ -23,6 +21,7 @@ interface CostCode {
     id: number;
     code: string;
     description: string;
+    cost_type?: { code: string } | null;
     pivot: {
         variation_ratio?: number;
         dayworks_ratio?: number;
@@ -40,6 +39,8 @@ export default function CostCodeEdit({
     costCodes: CostCode[];
     flash: { success?: string };
 }) {
+    const [importerOpen, setImporterOpen] = useState(false);
+
     const { data, setData, put, processing, errors } = useForm<{
         locationId: number;
         costCodes: CostCodeFormRow[];
@@ -53,6 +54,9 @@ export default function CostCodeEdit({
             prelim_type: code.pivot.prelim_type ?? '',
         })),
     });
+
+    const dataRef = useRef(data);
+    dataRef.current = data;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Locations', href: '/locations' },
@@ -70,24 +74,35 @@ export default function CostCodeEdit({
         }
     }, [errors]);
 
-    const handleRatioChange = (id: number, value: string, key: 'variation_ratio' | 'dayworks_ratio' | 'waste_ratio') => {
-        const num = Number.parseFloat(value);
-        const sanitized = Number.isFinite(num) ? num : 0;
+    const initialRows = useMemo<RatioRow[]>(
+        () =>
+            costCodes.map((code) => ({
+                id: code.id,
+                code: code.code,
+                description: code.description,
+                cost_type: code.cost_type?.code ?? '',
+                variation_ratio: code.pivot.variation_ratio ?? 0,
+                dayworks_ratio: code.pivot.dayworks_ratio ?? 0,
+                waste_ratio: code.pivot.waste_ratio ?? 0,
+                prelim_type: code.pivot.prelim_type ? code.pivot.prelim_type : 'NONE',
+            })),
+        [costCodes],
+    );
+
+    const handleRowChange = (id: number, patch: Partial<RatioRow>) => {
+        const normalized: Partial<CostCodeFormRow> = {};
+        if ('variation_ratio' in patch) normalized.variation_ratio = Number(patch.variation_ratio) || 0;
+        if ('dayworks_ratio' in patch) normalized.dayworks_ratio = Number(patch.dayworks_ratio) || 0;
+        if ('waste_ratio' in patch) normalized.waste_ratio = Number(patch.waste_ratio) || 0;
+        if ('prelim_type' in patch) normalized.prelim_type = patch.prelim_type === 'NONE' ? '' : (patch.prelim_type ?? '');
+
         setData(
             'costCodes',
-            data.costCodes.map((c) => (c.id === id ? { ...c, [key]: sanitized } : c)),
+            dataRef.current.costCodes.map((c) => (c.id === id ? { ...c, ...normalized } : c)),
         );
     };
 
-    const handlePrelimTypeChange = (id: number, value: string) => {
-        setData(
-            'costCodes',
-            data.costCodes.map((c) => (c.id === id ? { ...c, prelim_type: value === 'NONE' ? '' : value } : c)),
-        );
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSave = () => {
         put(`/location/${location.id}/cost-codes/update`);
     };
 
@@ -95,120 +110,38 @@ export default function CostCodeEdit({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Edit Ratios - ${location.name}`} />
 
-            <div className="flex flex-col gap-4 p-2 sm:gap-6 sm:p-4 md:p-6">
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <Link href={`/locations/${location.id}`}>
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                    </Link>
-                    <div className="flex-1" />
-                    <RatioUploader locationId={location.id} />
-                    <a href={`/location/${location.id}/cost-code-ratios/download-csv`}>
-                        <Button variant="outline" size="sm" className="gap-2">
-                            <Download className="h-4 w-4" />
-                            <span className="hidden sm:inline">Download Excel</span>
-                        </Button>
-                    </a>
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 p-2 sm:gap-4 sm:p-4 md:p-6">
+                <div className="flex items-center justify-end gap-2">
+                    <Button type="button" size="sm" disabled={processing} onClick={handleSave}>
+                        {processing ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" aria-label="More actions">
+                                <Menu className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-max">
+                            <DropdownMenuItem className="whitespace-nowrap" onClick={() => setImporterOpen(true)}>
+                                Import Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="whitespace-nowrap" asChild>
+                                <a href={`/location/${location.id}/cost-code-ratios/download-csv`}>Download Excel</a>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <Card>
-                        <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base">Cost Code Ratios</CardTitle>
-                                <Button type="submit" size="sm" disabled={processing}>
-                                    {processing ? 'Saving...' : 'Save Changes'}
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {costCodes.length === 0 ? (
-                                <div className="text-muted-foreground py-12 text-center text-sm">
-                                    No cost codes found. Sync from Premier first.
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="pl-3 sm:pl-6">Code</TableHead>
-                                                <TableHead className="hidden sm:table-cell">Description</TableHead>
-                                                <TableHead className="text-right">Variation %</TableHead>
-                                                <TableHead className="text-right">Dayworks %</TableHead>
-                                                <TableHead className="hidden text-right md:table-cell">Waste %</TableHead>
-                                                <TableHead className="pr-3 sm:pr-6">Type</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {costCodes.map((code) => {
-                                                const row = data.costCodes.find((c) => c.id === code.id);
-                                                return (
-                                                    <TableRow key={code.id}>
-                                                        <TableCell className="pl-3 sm:pl-6">
-                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs font-medium">
-                                                                {code.code}
-                                                            </code>
-                                                            <p className="text-muted-foreground mt-0.5 text-xs sm:hidden">
-                                                                {code.description}
-                                                            </p>
-                                                        </TableCell>
-                                                        <TableCell className="text-muted-foreground hidden max-w-xs truncate sm:table-cell">
-                                                            {code.description}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Input
-                                                                type="number"
-                                                                step="any"
-                                                                value={row?.variation_ratio ?? 0}
-                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'variation_ratio')}
-                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Input
-                                                                type="number"
-                                                                step="any"
-                                                                value={row?.dayworks_ratio ?? 0}
-                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'dayworks_ratio')}
-                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="hidden text-right md:table-cell">
-                                                            <Input
-                                                                type="number"
-                                                                step="any"
-                                                                value={row?.waste_ratio ?? 0}
-                                                                onChange={(e) => handleRatioChange(code.id, e.target.value, 'waste_ratio')}
-                                                                className="ml-auto h-8 w-20 text-right sm:w-24"
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="pr-3 sm:pr-6">
-                                                            <Select
-                                                                onValueChange={(val) => handlePrelimTypeChange(code.id, val)}
-                                                                value={row?.prelim_type || 'NONE'}
-                                                            >
-                                                                <SelectTrigger className="h-8 w-20 sm:w-24">
-                                                                    <SelectValue placeholder="-" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="NONE">None</SelectItem>
-                                                                    <SelectItem value="MAT">MAT</SelectItem>
-                                                                    <SelectItem value="LAB">LAB</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </form>
+                {costCodes.length === 0 ? (
+                    <div className="text-muted-foreground rounded-md border py-12 text-center text-sm">
+                        No cost codes found. Sync from Premier first.
+                    </div>
+                ) : (
+                    <CostCodeRatiosGrid rows={initialRows} onRowChange={handleRowChange} />
+                )}
             </div>
+
+            <RatioUploader locationId={location.id} open={importerOpen} onOpenChange={setImporterOpen} />
         </AppLayout>
     );
 }

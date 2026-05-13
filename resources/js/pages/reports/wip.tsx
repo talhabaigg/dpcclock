@@ -266,18 +266,18 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Company Filter */}
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Company</span>
+                        <span className="text-xs font-medium text-muted-foreground">Company</span>
                         <Select
                             value={filters.company ?? 'all'}
                             onValueChange={(val) => navigate({ company: val === 'all' ? null : val, 'location_ids[]': null })}
                         >
-                            <SelectTrigger className="w-[130px]">
+                            <SelectTrigger className="w-[130px] h-7 px-2 text-xs">
                                 <SelectValue placeholder="All" />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
+                            <SelectContent className="text-xs">
+                                <SelectItem value="all" className="text-xs">All</SelectItem>
                                 {companies.map((c) => (
-                                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                                    <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -285,14 +285,14 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
 
                     {/* Project / Job Selector */}
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Projects</span>
+                        <span className="text-xs font-medium text-muted-foreground">Projects</span>
                         <Popover open={jobSelectorOpen} onOpenChange={setJobSelectorOpen}>
                             <PopoverTrigger asChild>
                                 <Button
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={jobSelectorOpen}
-                                    className="w-[280px] justify-between font-normal"
+                                    className="w-[280px] h-7 px-2 text-xs justify-between font-normal"
                                 >
                                     {filters.location_ids_none
                                         ? 'No Projects'
@@ -301,7 +301,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                         : filters.location_ids.length === 1
                                             ? (() => { const loc = availableLocations.find(l => l.id === filters.location_ids[0]); return loc ? `${loc.external_id} - ${loc.name}` : '1 selected'; })()
                                             : `${filters.location_ids.length} projects selected`}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    <ChevronsUpDown className="ml-2 size-3.5 shrink-0 opacity-50" />
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[350px] p-0" align="start">
@@ -322,15 +322,16 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                     </button>
                                 </div>
                                 <Command>
-                                    <CommandInput placeholder="Search projects..." />
+                                    <CommandInput placeholder="Search projects..." className="text-xs" />
                                     <CommandList>
-                                        <CommandEmpty>No project found.</CommandEmpty>
+                                        <CommandEmpty className="text-xs">No project found.</CommandEmpty>
                                         <CommandGroup>
                                             {availableLocations.map((loc) => (
                                                 <CommandItem
                                                     key={loc.id}
                                                     value={`${loc.external_id} ${loc.name}`}
                                                     onSelect={() => toggleLocation(loc.id)}
+                                                    className="text-xs"
                                                 >
                                                     <Checkbox
                                                         checked={filters.location_ids.includes(loc.id)}
@@ -345,59 +346,59 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                             </PopoverContent>
                         </Popover>
                         {filters.location_ids.length > 0 && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate({ 'location_ids[]': null })}>
-                                <X className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate({ 'location_ids[]': null })}>
+                                <X className="size-3.5" />
                             </Button>
                         )}
                     </div>
 
                     {/* Month End Selector */}
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Month End</span>
+                        <span className="text-xs font-medium text-muted-foreground">Month End</span>
                         <Select
                             value={filters.month_end}
                             onValueChange={(val) => navigate({ month_end: val })}
                         >
-                            <SelectTrigger className="w-[180px]">
+                            <SelectTrigger className="w-[180px] h-7 px-2 text-xs">
                                 <SelectValue placeholder="Select month..." />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="text-xs">
                                 {monthEnds.map((d) => (
-                                    <SelectItem key={d} value={d}>{formatMonthEnd(d)}</SelectItem>
+                                    <SelectItem key={d} value={d} className="text-xs">{formatMonthEnd(d)}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
 
                     {/* Export */}
-                    <Button variant="outline" size="sm" onClick={exportToExcel}>
-                        <Download className="mr-2 h-4 w-4" />
+                    <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={exportToExcel}>
+                        <Download className="mr-2 size-3.5" />
                         Export Excel
                     </Button>
 
                     {/* Row count */}
-                    <span className="text-sm text-muted-foreground ml-auto">
+                    <span className="text-xs text-muted-foreground ml-auto">
                         {wipData.length} {wipData.length === 1 ? 'job' : 'jobs'}
                     </span>
                 </div>
 
                 {/* Table */}
                 <div className="flex-1 min-h-0 rounded-lg border overflow-auto">
-                    <Table>
-                        <TableHeader className="sticky top-0 z-10">
+                    <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5 [&_td]:px-2 [&_th]:px-2">
+                        <TableHeader className="sticky top-0 z-10 bg-background">
                             {/* Group header row */}
-                            <TableRow className="bg-muted/50">
-                                <TableHead colSpan={2} className="border-r" />
-                                <TableHead className="border-r text-center" />
-                                <TableHead colSpan={3} className="border-r text-center font-bold">Variations</TableHead>
-                                <TableHead className="border-r text-center" />
-                                <TableHead colSpan={6} className="border-r text-center font-bold">To Date</TableHead>
-                                <TableHead colSpan={3} className="text-center font-bold">{monthLabel}</TableHead>
+                            <TableRow>
+                                <TableHead colSpan={2} className="border-r bg-background" />
+                                <TableHead className="border-r text-center bg-background" />
+                                <TableHead colSpan={3} className="border-r text-center font-bold bg-background">Variations</TableHead>
+                                <TableHead className="border-r text-center bg-background" />
+                                <TableHead colSpan={6} className="border-r text-center font-bold bg-background">To Date</TableHead>
+                                <TableHead colSpan={3} className="text-center font-bold bg-background">{monthLabel}</TableHead>
                             </TableRow>
                             {/* Column header row */}
-                            <TableRow className="bg-muted/30">
-                                <TableHead className="sticky left-0 z-20 bg-muted/30 min-w-[100px]">Job #</TableHead>
-                                <TableHead className="sticky left-[100px] z-20 bg-muted/30 border-r min-w-[200px]">Job Name</TableHead>
+                            <TableRow>
+                                <TableHead className="sticky left-0 z-20 bg-background min-w-[100px]">Job #</TableHead>
+                                <TableHead className="sticky left-[100px] z-20 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]">Job Name</TableHead>
                                 <TableHead className="text-right border-r min-w-[140px]">Total Contract</TableHead>
                                 <TableHead className="text-right min-w-[100px]">Pending</TableHead>
                                 <TableHead className="text-right min-w-[100px]">Approved</TableHead>
@@ -429,7 +430,9 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                         return (
                                             <TableRow key={row.id} className="hover:bg-muted/30">
                                                 <TableCell className="sticky left-0 z-10 bg-background font-semibold min-w-[100px]">{row.job_number}</TableCell>
-                                                <TableCell className="sticky left-[100px] z-10 bg-background border-r min-w-[200px] max-w-[250px] truncate" title={row.job_name}>{row.job_name}</TableCell>
+                                                <TableCell className="sticky left-[100px] z-10 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]" title={row.job_name}>
+                                                    <div className="truncate">{row.job_name}</div>
+                                                </TableCell>
                                                 <TableCell className="text-right border-r">{formatCurrency(row.total_contract_value)}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(row.pending_variations)}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(row.approved_variations)}</TableCell>
@@ -451,7 +454,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                     {totals && (
                                         <TableRow className="bg-muted/50 font-bold border-t-2">
                                             <TableCell className="sticky left-0 z-10 bg-muted/50 min-w-[100px]" />
-                                            <TableCell className="sticky left-[100px] z-10 bg-muted/50 border-r min-w-[200px]">GRAND TOTAL</TableCell>
+                                            <TableCell className="sticky left-[100px] z-10 bg-muted/50 border-r w-[150px] min-w-[150px] max-w-[150px]">GRAND TOTAL</TableCell>
                                             <TableCell className="text-right border-r">{formatCurrency(totals.total_contract_value)}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(totals.pending_variations)}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(totals.approved_variations)}</TableCell>
