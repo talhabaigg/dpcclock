@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class InfoDocumentNotification extends Notification implements ShouldQueue
@@ -40,7 +41,7 @@ class InfoDocumentNotification extends Notification implements ShouldQueue
         $uploadedMedia = $this->signingRequest->getFirstMedia('uploaded_document');
         if ($uploadedMedia) {
             $filename = Str::slug($documentLabel) . '.pdf';
-            $message->attachData(file_get_contents($uploadedMedia->getPath()), $filename, [
+            $message->attachData(Storage::disk($uploadedMedia->disk)->get($uploadedMedia->getPathRelativeToRoot()), $filename, [
                 'mime' => $uploadedMedia->mime_type,
             ]);
         } else {

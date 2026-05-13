@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SignedDocumentSenderNotification extends Notification implements ShouldQueue
@@ -39,7 +40,7 @@ class SignedDocumentSenderNotification extends Notification implements ShouldQue
         $pdf = $this->signingRequest->getFirstMedia('signed_document');
         if ($pdf) {
             $filename = Str::slug($documentLabel) . '-signed.pdf';
-            $message->attachData(file_get_contents($pdf->getPath()), $filename, [
+            $message->attachData(Storage::disk($pdf->disk)->get($pdf->getPathRelativeToRoot()), $filename, [
                 'mime' => 'application/pdf',
             ]);
         }

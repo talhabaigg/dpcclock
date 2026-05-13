@@ -597,6 +597,9 @@ class SigningRequestController extends Controller
             'document_template_ids.*' => 'exists:document_templates,id',
             'document_title' => 'nullable|string|max:255',
             'document_html' => 'nullable|string',
+            'custom_documents' => 'nullable|array',
+            'custom_documents.*.title' => 'required_with:custom_documents.*.html|string|max:255',
+            'custom_documents.*.html' => 'required_with:custom_documents.*.title|string',
             'attachments' => 'nullable|array',
             'attachments.*' => 'file|mimes:pdf|max:20480',
             'requires_signature' => 'nullable|boolean',
@@ -618,7 +621,16 @@ class SigningRequestController extends Controller
 
         $employeeCustomFields = $validated['employee_custom_fields'] ?? [];
         $templateIds = $validated['document_template_ids'] ?? [];
-        $hasWritten = ! empty($validated['document_html']);
+
+        // Normalise written documents: prefer `custom_documents[]`, fall back to legacy single doc.
+        $customDocuments = $validated['custom_documents'] ?? [];
+        if (empty($customDocuments) && ! empty($validated['document_html'])) {
+            $customDocuments = [[
+                'title' => $validated['document_title'] ?? 'Document',
+                'html' => $validated['document_html'],
+            ]];
+        }
+        $hasWritten = ! empty($customDocuments);
         $attachments = $request->file('attachments', []);
         $requiresSig = (bool) ($validated['requires_signature'] ?? true);
         $employeeIds = $validated['employee_ids'] ?? [];
@@ -679,8 +691,8 @@ class SigningRequestController extends Controller
                         $gaps = $this->detectPlaceholderGaps($employee, $t->body_html ?? '', $validated['delivery_method']);
                         if (! empty($gaps)) { $allGaps[] = $employee->name . ': ' . implode(', ', $gaps); }
                     }
-                    if ($hasWritten) {
-                        $gaps = $this->detectPlaceholderGaps($employee, $validated['document_html'], $validated['delivery_method']);
+                    foreach ($customDocuments as $doc) {
+                        $gaps = $this->detectPlaceholderGaps($employee, $doc['html'], $validated['delivery_method']);
                         if (! empty($gaps)) { $allGaps[] = $employee->name . ': ' . implode(', ', $gaps); }
                     }
                 }
@@ -729,15 +741,19 @@ class SigningRequestController extends Controller
             ];
         }
 
-        $batchId = ($isBulk && $internalSigner) ? (string) \Illuminate\Support\Str::uuid() : null;
-
         $created = 0;
         foreach ($recipients as $recipientIndex => $recipient) {
+            // Each recipient gets their own batch — all their docs ship in one consolidated email.
+            $recipientBatchId = (string) \Illuminate\Support\Str::uuid();
+            /** @var \Illuminate\Support\Collection<int, \App\Models\SigningRequest> $batchCreated */
+            $batchCreated = collect();
+
             \Illuminate\Support\Facades\Log::info('[storeCombined:debug] entering recipient loop iteration', [
                 'iteration' => $recipientIndex,
                 'employee_id' => $recipient['employee_id'] ?? null,
                 'recipient_name' => $recipient['name'] ?? null,
                 'recipient_email' => $recipient['email'] ?? null,
+                'batch_id' => $recipientBatchId,
             ]);
 
             // Resolve custom fields: per-employee (mail merge) or shared
@@ -749,39 +765,22 @@ class SigningRequestController extends Controller
             // 1. Templates
             foreach ($templates as $template) {
                 if ($requiresSig && $internalSigner) {
-                    \Illuminate\Support\Facades\Log::info('[storeCombined:debug] calling createWithInternalSigner', [
-                        'employee_id' => $recipient['employee_id'] ?? null,
-                        'template_id' => $template->id,
-                        'batch_id' => $batchId,
-                    ]);
-                    try {
-                        $createdReq = $this->signingService->createWithInternalSigner(
-                            template: $template,
-                            deliveryMethod: $validated['delivery_method'],
-                            admin: $request->user(),
-                            recipientName: $recipient['name'],
-                            recipientEmail: $recipient['email'],
-                            internalSigner: $internalSigner,
-                            customFields: $recipientCustomFields,
-                            signable: $recipient['signable'],
-                            senderFullName: $validated['sender_full_name'] ?? null,
-                            senderPosition: $validated['sender_position'] ?? null,
-                            batchId: $batchId,
-                        );
-                        \Illuminate\Support\Facades\Log::info('[storeCombined:debug] createWithInternalSigner returned', [
-                            'employee_id' => $recipient['employee_id'] ?? null,
-                            'created_signing_request_id' => $createdReq->id,
-                        ]);
-                    } catch (\Throwable $e) {
-                        \Illuminate\Support\Facades\Log::error('[storeCombined:debug] createWithInternalSigner threw', [
-                            'employee_id' => $recipient['employee_id'] ?? null,
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                        ]);
-                        throw $e;
-                    }
+                    $createdReq = $this->signingService->createWithInternalSigner(
+                        template: $template,
+                        deliveryMethod: $validated['delivery_method'],
+                        admin: $request->user(),
+                        recipientName: $recipient['name'],
+                        recipientEmail: $recipient['email'],
+                        internalSigner: $internalSigner,
+                        customFields: $recipientCustomFields,
+                        signable: $recipient['signable'],
+                        senderFullName: $validated['sender_full_name'] ?? null,
+                        senderPosition: $validated['sender_position'] ?? null,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
+                    );
                 } elseif ($requiresSig) {
-                    $this->signingService->createAndSend(
+                    $createdReq = $this->signingService->createAndSend(
                         template: $template,
                         deliveryMethod: $validated['delivery_method'],
                         admin: $request->user(),
@@ -792,24 +791,32 @@ class SigningRequestController extends Controller
                         senderSignature: $senderSignature,
                         senderFullName: $validated['sender_full_name'] ?? null,
                         senderPosition: $validated['sender_position'] ?? null,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
                     );
                 } else {
-                    $this->signingService->createAndDeliver(
+                    $createdReq = $this->signingService->createAndDeliver(
                         admin: $request->user(),
                         recipientName: $recipient['name'],
                         recipientEmail: $recipient['email'],
                         signable: $recipient['signable'],
                         template: $template,
                         customFields: $recipientCustomFields,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
                     );
                 }
+                $batchCreated->push($createdReq);
                 $created++;
             }
 
-            // 2. Written document
-            if ($hasWritten) {
+            // 2. Written documents (one or more)
+            foreach ($customDocuments as $doc) {
+                $docTitle = $doc['title'] ?: 'Document';
+                $docHtml = $doc['html'];
+
                 if ($requiresSig && $internalSigner) {
-                    $this->signingService->createWithInternalSigner(
+                    $createdReq = $this->signingService->createWithInternalSigner(
                         template: null,
                         deliveryMethod: $validated['delivery_method'],
                         admin: $request->user(),
@@ -819,12 +826,13 @@ class SigningRequestController extends Controller
                         signable: $recipient['signable'],
                         senderFullName: $validated['sender_full_name'] ?? null,
                         senderPosition: $validated['sender_position'] ?? null,
-                        documentHtml: $validated['document_html'],
-                        documentTitle: $validated['document_title'] ?? 'Document',
-                        batchId: $batchId,
+                        documentHtml: $docHtml,
+                        documentTitle: $docTitle,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
                     );
                 } elseif ($requiresSig) {
-                    $this->signingService->createAndSend(
+                    $createdReq = $this->signingService->createAndSend(
                         template: null,
                         deliveryMethod: $validated['delivery_method'],
                         admin: $request->user(),
@@ -833,20 +841,25 @@ class SigningRequestController extends Controller
                         signable: $recipient['signable'],
                         senderSignature: $senderSignature,
                         senderFullName: $validated['sender_full_name'] ?? null,
-                        documentHtml: $validated['document_html'],
-                        documentTitle: $validated['document_title'] ?? 'Document',
+                        documentHtml: $docHtml,
+                        documentTitle: $docTitle,
                         senderPosition: $validated['sender_position'] ?? null,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
                     );
                 } else {
-                    $this->signingService->createAndDeliver(
+                    $createdReq = $this->signingService->createAndDeliver(
                         admin: $request->user(),
                         recipientName: $recipient['name'],
                         recipientEmail: $recipient['email'],
                         signable: $recipient['signable'],
-                        documentHtml: $validated['document_html'],
-                        documentTitle: $validated['document_title'] ?? 'Document',
+                        documentHtml: $docHtml,
+                        documentTitle: $docTitle,
+                        batchId: $recipientBatchId,
+                        suppressDelivery: true,
                     );
                 }
+                $batchCreated->push($createdReq);
                 $created++;
             }
 
@@ -858,18 +871,24 @@ class SigningRequestController extends Controller
                 $tempFile = tempnam(sys_get_temp_dir(), 'att_');
                 file_put_contents($tempFile, \Illuminate\Support\Facades\Storage::disk('s3')->get($att['path']));
 
-                $this->signingService->createAndDeliver(
+                $createdReq = $this->signingService->createAndDeliver(
                     admin: $request->user(),
                     recipientName: $recipient['name'],
                     recipientEmail: $recipient['email'],
                     signable: $recipient['signable'],
                     documentTitle: $att['name'],
                     uploadedFilePath: $tempFile,
+                    batchId: $recipientBatchId,
+                    suppressDelivery: true,
                 );
 
                 @unlink($tempFile);
+                $batchCreated->push($createdReq);
                 $created++;
             }
+
+            // ── Send ONE consolidated email per recipient ──
+            $this->dispatchBatchDelivery($batchCreated, $recipient, $validated['delivery_method'], $internalSigner, $request->user());
         }
 
         // Cleanup S3 temp files
@@ -884,6 +903,65 @@ class SigningRequestController extends Controller
         $recipientLabel = $isBulk ? count($recipients) . ' employees' : ($recipients[0]['name'] ?? 'recipient');
 
         return redirect()->back()->with('success', "{$created} document(s) sent to {$recipientLabel}.");
+    }
+
+    /**
+     * Send a single consolidated email for a batch of signing requests, then mark each as sent.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\SigningRequest>  $batch
+     * @param  array{name: string, email: string|null, signable: mixed, employee_id?: int}  $recipient
+     */
+    private function dispatchBatchDelivery(
+        \Illuminate\Support\Collection $batch,
+        array $recipient,
+        string $deliveryMethod,
+        ?\App\Models\User $internalSigner,
+        \App\Models\User $admin,
+    ): void {
+        if ($batch->isEmpty()) {
+            return;
+        }
+
+        // Internal signer flow: one consolidated email to the internal signer.
+        // Recipient emails happen later (per-doc) as each is internally signed.
+        if ($internalSigner) {
+            $internalSigner->notify(new \App\Notifications\BatchInternalSignatureRequestedNotification($batch));
+            foreach ($batch as $sr) {
+                $sr->logEvent('internal_sign_requested', 'system', null, null, [
+                    'to' => $internalSigner->email,
+                    'batched' => true,
+                ]);
+            }
+            return;
+        }
+
+        // Standard email delivery: one consolidated email to the recipient.
+        if ($deliveryMethod === 'email' && ! empty($recipient['email'])) {
+            \Illuminate\Support\Facades\Notification::route('mail', $recipient['email'])
+                ->notify(new \App\Notifications\BatchSigningNotification($recipient['name'], $batch));
+
+            foreach ($batch as $sr) {
+                // 'delivered' = info-only doc (createAndDeliver), 'pending' = signing required (createAndSend).
+                $event = $sr->status === 'delivered' ? 'delivered' : 'sent';
+                if ($sr->status === 'pending') {
+                    $sr->update(['status' => 'sent']);
+                }
+                $sr->logEvent($event, 'system', null, null, [
+                    'method' => 'email',
+                    'to' => $recipient['email'],
+                    'batched' => true,
+                ]);
+            }
+            return;
+        }
+
+        // In-person delivery (or no recipient email): mark sent, no email.
+        foreach ($batch as $sr) {
+            if ($sr->status === 'pending') {
+                $sr->update(['status' => 'sent']);
+                $sr->logEvent('sent', 'admin', $admin->id, null, ['method' => 'in_person']);
+            }
+        }
     }
 
     public function storeInfoOnly(Request $request)
@@ -1235,6 +1313,147 @@ class SigningRequestController extends Controller
         $this->signingService->resendSignedCopy($signingRequest);
 
         return redirect()->back()->with('success', 'Signed copy resent to ' . $signingRequest->recipient_email);
+    }
+
+    public function bulkCancel(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:signing_requests,id',
+        ]);
+
+        $cancellableStatuses = ['sent', 'opened', 'viewed', 'awaiting_internal_signature'];
+        $requests = SigningRequest::query()->whereIn('id', $data['ids'])->get();
+        $cancelled = 0;
+        foreach ($requests as $sr) {
+            if (! in_array($sr->status, $cancellableStatuses, true)) {
+                continue;
+            }
+            $this->authorizeSignableAction($sr);
+            $this->signingService->cancel($sr, $request->user());
+            $cancelled++;
+        }
+
+        return redirect()->back()->with('success', "Cancelled {$cancelled} signing request" . ($cancelled === 1 ? '' : 's') . '.');
+    }
+
+    public function bulkResend(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:signing_requests,id',
+        ]);
+
+        $resendableStatuses = ['sent', 'opened', 'viewed'];
+        $requests = SigningRequest::query()->whereIn('id', $data['ids'])->get();
+
+        // Group resendable requests by recipient so each recipient receives a
+        // single consolidated email containing all of their resent links.
+        $byRecipient = [];
+        foreach ($requests as $sr) {
+            if (! in_array($sr->status, $resendableStatuses, true)) {
+                continue;
+            }
+            $this->authorizeSignableAction($sr);
+            $key = ($sr->recipient_email ?? 'no-email') . '|' . $sr->recipient_name . '|' . $sr->delivery_method;
+            $byRecipient[$key][] = $sr;
+        }
+
+        $resent = 0;
+        foreach ($byRecipient as $group) {
+            $first = $group[0];
+            $batchId = (string) \Illuminate\Support\Str::uuid();
+            $batchCreated = collect();
+
+            foreach ($group as $sr) {
+                $this->signingService->cancel($sr, $request->user());
+                $template = $sr->documentTemplate;
+                $newReq = $this->signingService->createAndSend(
+                    template: $template,
+                    deliveryMethod: $sr->delivery_method,
+                    admin: $request->user(),
+                    recipientName: $sr->recipient_name,
+                    recipientEmail: $sr->recipient_email,
+                    customFields: $sr->custom_fields ?? [],
+                    signable: $sr->signable,
+                    senderSignature: $sr->sender_signature,
+                    senderFullName: $sr->sender_full_name,
+                    documentHtml: $template ? null : $sr->document_html,
+                    documentTitle: $template ? null : $sr->document_title,
+                    senderPosition: $sr->sender_position,
+                    batchId: $batchId,
+                    suppressDelivery: true,
+                );
+                $batchCreated->push($newReq);
+                $resent++;
+            }
+
+            $this->dispatchBatchDelivery(
+                $batchCreated,
+                [
+                    'name' => $first->recipient_name,
+                    'email' => $first->recipient_email,
+                    'signable' => $first->signable,
+                ],
+                $first->delivery_method,
+                null,
+                $request->user(),
+            );
+        }
+
+        $emailCount = count($byRecipient);
+        return redirect()->back()->with('success', "Resent {$resent} signing request" . ($resent === 1 ? '' : 's') . " in {$emailCount} email" . ($emailCount === 1 ? '' : 's') . '.');
+    }
+
+    public function bulkDownload(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:signing_requests,id',
+        ]);
+
+        $requests = SigningRequest::query()->whereIn('id', $data['ids'])->get();
+        $files = [];
+        foreach ($requests as $sr) {
+            $this->authorizeSignableAction($sr);
+            $media = $sr->getFirstMedia('signed_document') ?? $sr->getFirstMedia('uploaded_document');
+            if ($media) {
+                $files[] = ['name' => $media->file_name, 'path' => $media->getPath()];
+                continue;
+            }
+            if ($sr->document_html) {
+                $pdfService = app(\App\Services\SignedDocumentPdfService::class);
+                $pdf = $pdfService->generateTemplatePreview($sr->document_html);
+                $files[] = ['name' => str()->slug($sr->document_title ?: 'document') . '-' . $sr->id . '.pdf', 'contents' => $pdf];
+            }
+        }
+
+        if (empty($files)) {
+            return redirect()->back()->with('error', 'No downloadable documents in selection.');
+        }
+
+        $tmpZip = tempnam(sys_get_temp_dir(), 'signing-bulk-') . '.zip';
+        $zip = new \ZipArchive();
+        $zip->open($tmpZip, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $usedNames = [];
+        foreach ($files as $f) {
+            $name = $f['name'];
+            $i = 1;
+            while (isset($usedNames[$name])) {
+                $info = pathinfo($f['name']);
+                $name = ($info['filename'] ?? 'file') . "-{$i}." . ($info['extension'] ?? '');
+                $i++;
+            }
+            $usedNames[$name] = true;
+            if (isset($f['path'])) {
+                $zip->addFile($f['path'], $name);
+            } else {
+                $zip->addFromString($name, $f['contents']);
+            }
+        }
+        $zip->close();
+
+        return response()->download($tmpZip, 'signing-documents-' . now()->format('Ymd-His') . '.zip')->deleteFileAfterSend(true);
     }
 
     public function download(SigningRequest $signingRequest)

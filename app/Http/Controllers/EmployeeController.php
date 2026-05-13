@@ -147,7 +147,7 @@ class EmployeeController extends Controller
             ],
             'canSendDocuments' => $canSendDocuments,
             'documentTemplates' => $canSendDocuments
-                ? \App\Models\DocumentTemplate::active()->forEmployeeType(false)->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
+                ? \App\Models\DocumentTemplate::active()->forEmployeeType(false)->orderBy('name')->get(['id', 'name', 'category', 'placeholders', 'body_html'])
                 : [],
             'savedSenderSignatureUrl' => $canSendDocuments ? $user->savedSignatureUrl() : null,
             'appUsers' => $canSendDocuments
@@ -169,7 +169,7 @@ class EmployeeController extends Controller
             'employees' => $employees,
             'canSendDocuments' => $canSend,
             'documentTemplates' => $canSend
-                ? \App\Models\DocumentTemplate::active()->forEmployeeType(true)->orderBy('name')->get(['id', 'name', 'placeholders', 'body_html'])
+                ? \App\Models\DocumentTemplate::active()->forEmployeeType(true)->orderBy('name')->get(['id', 'name', 'category', 'placeholders', 'body_html'])
                 : [],
             'savedSenderSignatureUrl' => $canSend ? $user->savedSignatureUrl() : null,
             'appUsers' => $canSend
@@ -231,7 +231,7 @@ class EmployeeController extends Controller
             $documentTemplates = \App\Models\DocumentTemplate::active()
                 ->forEmployeeType($employee->isOfficeStaff())
                 ->orderBy('name')
-                ->get(['id', 'name', 'placeholders', 'body_html']);
+                ->get(['id', 'name', 'category', 'placeholders', 'body_html']);
 
             // Shape placeholders for the UI — key, label, preview value for this employee.
             $availablePlaceholders = collect($employee->signingPlaceholders())

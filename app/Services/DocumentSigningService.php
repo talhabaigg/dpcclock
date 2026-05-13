@@ -39,6 +39,8 @@ class DocumentSigningService
         ?string $documentHtml = null,
         ?string $documentTitle = null,
         ?string $senderPosition = null,
+        ?string $batchId = null,
+        bool $suppressDelivery = false,
     ): SigningRequest {
         if ($template === null && ($documentHtml === null || trim($documentHtml) === '')) {
             throw new \InvalidArgumentException('createAndSend requires either a template or raw document HTML.');
@@ -87,6 +89,7 @@ class DocumentSigningService
             'sender_signature' => $senderSignature,
             'sender_full_name' => $senderFullName,
             'sender_position' => $senderPosition,
+            'batch_id' => $batchId,
             'expires_at' => now()->addDays(7),
         ]);
 
@@ -98,8 +101,11 @@ class DocumentSigningService
             ]);
         }
 
-        // Deliver based on method
-        $this->deliverToRecipient($signingRequest, $admin);
+        // Deliver based on method. When suppressed, the caller is responsible for
+        // sending a single consolidated email and marking the request as 'sent'.
+        if (! $suppressDelivery) {
+            $this->deliverToRecipient($signingRequest, $admin);
+        }
 
         // Update signable status if applicable
         if ($signable instanceof \App\Models\EmploymentApplication) {
@@ -370,6 +376,7 @@ class DocumentSigningService
         ?string $documentHtml = null,
         ?string $documentTitle = null,
         ?string $batchId = null,
+        bool $suppressDelivery = false,
     ): SigningRequest {
         $placeholderValues = $this->buildPlaceholderValues(
             $template, $customFields, $recipientName, $recipientEmail, $internalSigner, $signable,
@@ -410,11 +417,13 @@ class DocumentSigningService
             'internal_signer' => $internalSigner->name,
         ]);
 
-        // Notify the internal signer
-        $internalSigner->notify(new InternalSignatureRequestedNotification($signingRequest));
-        $signingRequest->logEvent('internal_sign_requested', 'system', null, null, [
-            'to' => $internalSigner->email,
-        ]);
+        // Notify the internal signer. When suppressed, the caller sends a single consolidated email.
+        if (! $suppressDelivery) {
+            $internalSigner->notify(new InternalSignatureRequestedNotification($signingRequest));
+            $signingRequest->logEvent('internal_sign_requested', 'system', null, null, [
+                'to' => $internalSigner->email,
+            ]);
+        }
 
         // System comment on signable
         if ($signable && method_exists($signable, 'addSystemComment')) {
@@ -513,6 +522,8 @@ class DocumentSigningService
         ?string $documentTitle = null,
         array $customFields = [],
         ?string $uploadedFilePath = null,
+        ?string $batchId = null,
+        bool $suppressDelivery = false,
     ): SigningRequest {
         $renderedHtml = '';
 
@@ -544,6 +555,7 @@ class DocumentSigningService
             'recipient_name' => $recipientName,
             'recipient_email' => $recipientEmail,
             'custom_fields' => ! empty($customFields) ? $customFields : null,
+            'batch_id' => $batchId,
             'expires_at' => null,
         ]);
 
@@ -556,8 +568,8 @@ class DocumentSigningService
 
         $signingRequest->logEvent('created', 'admin', $admin->id, null, ['info_only' => true]);
 
-        // Deliver via email
-        if ($recipientEmail) {
+        // Deliver via email. When suppressed, the caller sends a single consolidated email.
+        if (! $suppressDelivery && $recipientEmail) {
             Notification::route('mail', $recipientEmail)
                 ->notify(new InfoDocumentNotification($signingRequest));
             $signingRequest->logEvent('delivered', 'system', null, null, ['method' => 'email', 'to' => $recipientEmail]);

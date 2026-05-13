@@ -332,7 +332,7 @@ class EmploymentApplicationController extends Controller
         $documentTemplates = \App\Models\DocumentTemplate::active()
             ->category('employment')
             ->orderBy('name')
-            ->get(['id', 'name', 'placeholders', 'body_html']);
+            ->get(['id', 'name', 'category', 'placeholders', 'body_html']);
 
         // Load active form templates for the send modal
         $formTemplates = \App\Models\FormTemplate::active()

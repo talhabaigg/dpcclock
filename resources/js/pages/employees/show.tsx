@@ -1,9 +1,11 @@
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
@@ -12,7 +14,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
-import { AlertTriangle, BookOpen, Check, Clock, Download, ExternalLink, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Clock, EllipsisVertical, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -75,6 +77,7 @@ interface SigningRequestSummary {
     signer_full_name: string | null;
     document_template: { id: number; name: string } | null;
     sent_by: { id: number; name: string } | null;
+    signing_url?: string | null;
 }
 
 interface JournalEntry {
@@ -165,6 +168,97 @@ export default function EmployeeShow() {
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [editingDraft, setEditingDraft] = useState<SigningRequestSummary | null>(null);
     const [confirmDiscardDraftId, setConfirmDiscardDraftId] = useState<number | null>(null);
+    const [selectedSigningIds, setSelectedSigningIds] = useState<Set<number>>(new Set());
+    const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
+    const [confirmBulkResend, setConfirmBulkResend] = useState(false);
+
+    const toggleSigningSelected = useCallback((id: number) => {
+        setSelectedSigningIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const allSigningIds = useMemo(() => signingRequests.map((sr) => sr.id), [signingRequests]);
+    const allSelectedOnPage = allSigningIds.length > 0 && allSigningIds.every((id) => selectedSigningIds.has(id));
+    const someSelectedOnPage = allSigningIds.some((id) => selectedSigningIds.has(id));
+
+    const toggleSigningSelectAll = useCallback(() => {
+        setSelectedSigningIds((prev) => {
+            const allSelected = allSigningIds.length > 0 && allSigningIds.every((id) => prev.has(id));
+            if (allSelected) return new Set();
+            return new Set(allSigningIds);
+        });
+    }, [allSigningIds]);
+
+    const clearSigningSelection = useCallback(() => setSelectedSigningIds(new Set()), []);
+
+    const selectedSigningRequests = useMemo(
+        () => signingRequests.filter((sr) => selectedSigningIds.has(sr.id)),
+        [signingRequests, selectedSigningIds],
+    );
+    const cancellableStatuses = useMemo(() => new Set(['sent', 'opened', 'viewed', 'awaiting_internal_signature']), []);
+    const resendableStatuses = useMemo(() => new Set(['sent', 'opened', 'viewed']), []);
+    const downloadableStatuses = useMemo(() => new Set(['signed', 'delivered']), []);
+    const cancellableSelectedCount = selectedSigningRequests.filter((sr) => cancellableStatuses.has(sr.status)).length;
+    const resendableSelectedCount = selectedSigningRequests.filter((sr) => resendableStatuses.has(sr.status)).length;
+    const downloadableSelectedCount = selectedSigningRequests.filter((sr) => downloadableStatuses.has(sr.status)).length;
+
+    const runBulkCancel = useCallback(() => {
+        const ids = selectedSigningRequests.filter((sr) => cancellableStatuses.has(sr.status)).map((sr) => sr.id);
+        if (ids.length === 0) {
+            setConfirmBulkCancel(false);
+            return;
+        }
+        router.post('/signing-requests/bulk-cancel', { ids }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                clearSigningSelection();
+                setConfirmBulkCancel(false);
+            },
+        });
+    }, [selectedSigningRequests, cancellableStatuses, clearSigningSelection]);
+
+    const runBulkResend = useCallback(() => {
+        const ids = selectedSigningRequests.filter((sr) => resendableStatuses.has(sr.status)).map((sr) => sr.id);
+        if (ids.length === 0) {
+            setConfirmBulkResend(false);
+            return;
+        }
+        router.post('/signing-requests/bulk-resend', { ids }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                clearSigningSelection();
+                setConfirmBulkResend(false);
+            },
+        });
+    }, [selectedSigningRequests, resendableStatuses, clearSigningSelection]);
+
+    const runBulkDownload = useCallback(() => {
+        const ids = selectedSigningRequests.filter((sr) => downloadableStatuses.has(sr.status)).map((sr) => sr.id);
+        if (ids.length === 0) return;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/signing-requests/bulk-download';
+        const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_token';
+        csrfInput.value = csrf;
+        form.appendChild(csrfInput);
+        ids.forEach((id) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ids[]';
+            input.value = String(id);
+            form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }, [selectedSigningRequests, downloadableStatuses]);
 
     const openSendModal = useCallback(() => {
         setEditingDraft(null);
@@ -581,15 +675,63 @@ export default function EmployeeShow() {
                                         <p className="text-muted-foreground text-sm italic">No documents sent yet.</p>
                                     ) : (
                                         <>
+                                            {selectedSigningIds.size > 0 && (
+                                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <span className="font-medium">{selectedSigningIds.size} selected</span>
+                                                        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={clearSigningSelection}>
+                                                            <X className="h-3 w-3" /> Clear
+                                                        </Button>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 text-xs"
+                                                            disabled={downloadableSelectedCount === 0}
+                                                            onClick={runBulkDownload}
+                                                        >
+                                                            Download ({downloadableSelectedCount})
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 text-xs"
+                                                            disabled={resendableSelectedCount === 0}
+                                                            onClick={() => setConfirmBulkResend(true)}
+                                                        >
+                                                            Resend ({resendableSelectedCount})
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 text-destructive text-xs"
+                                                            disabled={cancellableSelectedCount === 0}
+                                                            onClick={() => setConfirmBulkCancel(true)}
+                                                        >
+                                                            Cancel ({cancellableSelectedCount})
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Desktop table */}
                                             <div className="hidden overflow-hidden rounded-lg border md:block">
                                                 <Table>
                                                     <TableHeader>
-                                                        <TableRow className="bg-muted/50">
+                                                        <TableRow>
+                                                            <TableHead className="w-10 px-3">
+                                                                <Checkbox
+                                                                    aria-label="Select all"
+                                                                    checked={allSelectedOnPage}
+                                                                    indeterminate={!allSelectedOnPage && someSelectedOnPage}
+                                                                    onCheckedChange={() => toggleSigningSelectAll()}
+                                                                />
+                                                            </TableHead>
                                                             <TableHead className="px-3 text-xs">Document</TableHead>
                                                             <TableHead className="px-3 text-xs">Sent by</TableHead>
                                                             <TableHead className="px-3 text-xs">Status</TableHead>
-                                                            <TableHead className="px-3 text-xs text-right">Actions</TableHead>
+                                                            <TableHead className="w-12 px-3 text-xs text-right">Actions</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -598,8 +740,8 @@ export default function EmployeeShow() {
                                                             const isDraft = sr.status === 'draft';
                                                             const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
                                                             const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
-                                                        const isDelivered = sr.status === 'delivered';
-                                                        const statusLabel = isDraft ? 'draft' : isDelivered ? 'delivered' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
+                                                            const isDelivered = sr.status === 'delivered';
+                                                            const statusLabel = isDraft ? 'draft' : isDelivered ? 'delivered' : isAwaitingInternal ? 'awaiting signer' : (isSigned ? 'signed' : 'sent');
                                                             const statusTimestamp = isDraft
                                                                 ? `saved ${formatDateTime(sr.updated_at ?? sr.created_at)}`
                                                                 : isSigned
@@ -608,8 +750,17 @@ export default function EmployeeShow() {
                                                             const deliveryLabel = isDraft
                                                                 ? 'One-off · not yet sent'
                                                                 : (sr.delivery_method === 'email' ? 'Via email' : 'In-person');
+                                                            const isSent = !isDraft && !isSigned && !isDelivered && !isAwaitingInternal;
+                                                            const hasActions = isDraft || isSigned || isDelivered || isSent;
                                                             return (
-                                                                <TableRow key={sr.id}>
+                                                                <TableRow key={sr.id} data-state={selectedSigningIds.has(sr.id) ? 'selected' : undefined}>
+                                                                    <TableCell className="w-10 px-3">
+                                                                        <Checkbox
+                                                                            aria-label={`Select ${docTitle}`}
+                                                                            checked={selectedSigningIds.has(sr.id)}
+                                                                            onCheckedChange={() => toggleSigningSelected(sr.id)}
+                                                                        />
+                                                                    </TableCell>
                                                                     <TableCell className="px-3 text-xs">
                                                                         <p className="font-medium leading-tight">{docTitle}</p>
                                                                         <p className="text-[10px] text-muted-foreground">{deliveryLabel}</p>
@@ -619,49 +770,59 @@ export default function EmployeeShow() {
                                                                         <Badge variant={isDraft ? 'outline' : isDelivered ? 'default' : isAwaitingInternal ? 'outline' : (isSigned ? 'default' : 'secondary')} className="mr-1.5 text-[10px] capitalize">{statusLabel}</Badge>
                                                                         <span className="text-muted-foreground">{statusTimestamp}</span>
                                                                     </TableCell>
-                                                                    <TableCell className="px-3 text-right">
-                                                                        <div className="flex justify-end gap-1">
-                                                                            {isDraft ? (
-                                                                                <>
-                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
-                                                                                        <Pencil className="h-3 w-3" />
-                                                                                        Edit
+                                                                    <TableCell className="w-12 px-3 text-right">
+                                                                        {hasActions ? (
+                                                                            <DropdownMenu>
+                                                                                <DropdownMenuTrigger asChild>
+                                                                                    <Button variant="ghost" size="icon" aria-label="Row actions" className="h-7 w-7">
+                                                                                        <EllipsisVertical className="h-4 w-4" />
                                                                                     </Button>
-                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
-                                                                                        <Trash2 className="h-3 w-3" />
-                                                                                        Discard
-                                                                                    </Button>
-                                                                                </>
-                                                                            ) : isSigned || isDelivered ? (
-                                                                                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
-                                                                                    <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
-                                                                                        <Download className="h-3 w-3" />
-                                                                                        Download
-                                                                                    </a>
-                                                                                </Button>
-                                                                            ) : isAwaitingInternal ? (
-                                                                                <span className="text-xs text-muted-foreground italic">No actions</span>
-                                                                            ) : (
-                                                                                <>
-                                                                                    {sr.signing_url && (
-                                                                                        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" asChild>
-                                                                                            <a href={sr.signing_url} target="_blank" rel="noreferrer">
-                                                                                                <ExternalLink className="h-3 w-3" />
-                                                                                                Sign In Person
-                                                                                            </a>
-                                                                                        </Button>
+                                                                                </DropdownMenuTrigger>
+                                                                                <DropdownMenuContent align="end" className="min-w-max">
+                                                                                    {isDraft && (
+                                                                                        <>
+                                                                                            <DropdownMenuItem className="whitespace-nowrap" onClick={() => openDraftModal(sr)}>Edit draft</DropdownMenuItem>
+                                                                                            <DropdownMenuSeparator />
+                                                                                            <DropdownMenuItem
+                                                                                                className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                                onClick={() => setConfirmDiscardDraftId(sr.id)}
+                                                                                            >
+                                                                                                Discard draft
+                                                                                            </DropdownMenuItem>
+                                                                                        </>
                                                                                     )}
-                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
-                                                                                        <RotateCcw className="h-3 w-3" />
-                                                                                        Resend
-                                                                                    </Button>
-                                                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
-                                                                                        <X className="h-3 w-3" />
-                                                                                        Cancel
-                                                                                    </Button>
-                                                                                </>
-                                                                            )}
-                                                                        </div>
+                                                                                    {(isSigned || isDelivered) && (
+                                                                                        <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                            <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">Download</a>
+                                                                                        </DropdownMenuItem>
+                                                                                    )}
+                                                                                    {isSent && (
+                                                                                        <>
+                                                                                            {sr.signing_url && (
+                                                                                                <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                                    <a href={sr.signing_url} target="_blank" rel="noreferrer">Sign in person</a>
+                                                                                                </DropdownMenuItem>
+                                                                                            )}
+                                                                                            <DropdownMenuItem
+                                                                                                className="whitespace-nowrap"
+                                                                                                onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                            >
+                                                                                                Resend
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuSeparator />
+                                                                                            <DropdownMenuItem
+                                                                                                className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                                onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                                            >
+                                                                                                Cancel
+                                                                                            </DropdownMenuItem>
+                                                                                        </>
+                                                                                    )}
+                                                                                </DropdownMenuContent>
+                                                                            </DropdownMenu>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground italic">—</span>
+                                                                        )}
                                                                     </TableCell>
                                                                 </TableRow>
                                                             );
@@ -684,50 +845,78 @@ export default function EmployeeShow() {
                                                         : isSigned
                                                             ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
                                                             : (sr.created_at ? formatDateTime(sr.created_at) : '');
+                                                    const isSent = !isDraft && !isSigned && !isDelivered && !isAwaitingInternal;
+                                                    const hasActions = isDraft || isSigned || isDelivered || isSent;
                                                     return (
                                                         <div key={sr.id} className="rounded-md border p-3">
                                                             <div className="flex items-start justify-between gap-2">
-                                                                <div>
-                                                                    <p className="text-sm font-medium">{docTitle}</p>
-                                                                    {!isDraft && <p className="text-[10px] text-muted-foreground">by {sr.sent_by?.name ?? '—'}</p>}
+                                                                <div className="flex items-start gap-2">
+                                                                    <Checkbox
+                                                                        aria-label={`Select ${docTitle}`}
+                                                                        className="mt-0.5"
+                                                                        checked={selectedSigningIds.has(sr.id)}
+                                                                        onCheckedChange={() => toggleSigningSelected(sr.id)}
+                                                                    />
+                                                                    <div>
+                                                                        <p className="text-sm font-medium">{docTitle}</p>
+                                                                        {!isDraft && <p className="text-[10px] text-muted-foreground">by {sr.sent_by?.name ?? '—'}</p>}
+                                                                    </div>
                                                                 </div>
-                                                                <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="shrink-0 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="shrink-0 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                    {hasActions && (
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild>
+                                                                                <Button variant="ghost" size="icon" aria-label="Row actions" className="h-7 w-7">
+                                                                                    <EllipsisVertical className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end" className="min-w-max">
+                                                                                {isDraft && (
+                                                                                    <>
+                                                                                        <DropdownMenuItem className="whitespace-nowrap" onClick={() => openDraftModal(sr)}>Edit draft</DropdownMenuItem>
+                                                                                        <DropdownMenuSeparator />
+                                                                                        <DropdownMenuItem
+                                                                                            className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                            onClick={() => setConfirmDiscardDraftId(sr.id)}
+                                                                                        >
+                                                                                            Discard draft
+                                                                                        </DropdownMenuItem>
+                                                                                    </>
+                                                                                )}
+                                                                                {(isSigned || isDelivered) && (
+                                                                                    <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                        <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">Download</a>
+                                                                                    </DropdownMenuItem>
+                                                                                )}
+                                                                                {isSent && (
+                                                                                    <>
+                                                                                        {sr.signing_url && (
+                                                                                            <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                                <a href={sr.signing_url} target="_blank" rel="noreferrer">Sign in person</a>
+                                                                                            </DropdownMenuItem>
+                                                                                        )}
+                                                                                        <DropdownMenuItem
+                                                                                            className="whitespace-nowrap"
+                                                                                            onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                        >
+                                                                                            Resend
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuSeparator />
+                                                                                        <DropdownMenuItem
+                                                                                            className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                            onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                                        >
+                                                                                            Cancel
+                                                                                        </DropdownMenuItem>
+                                                                                    </>
+                                                                                )}
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <p className="mt-1 text-[10px] text-muted-foreground">{statusTimestamp}</p>
-                                                            <div className="mt-2 flex gap-1.5">
-                                                                {isDraft ? (
-                                                                    <>
-                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => openDraftModal(sr)}>
-                                                                            <Pencil className="h-3 w-3" /> Edit
-                                                                        </Button>
-                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs text-destructive" onClick={() => setConfirmDiscardDraftId(sr.id)}>
-                                                                            <Trash2 className="h-3 w-3" /> Discard
-                                                                        </Button>
-                                                                    </>
-                                                                ) : isSigned || isDelivered ? (
-                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" asChild>
-                                                                        <a href={`/signing-requests/${sr.id}/download`} target="_blank" rel="noreferrer">
-                                                                            <Download className="h-3 w-3" /> Download
-                                                                        </a>
-                                                                    </Button>
-                                                                ) : isAwaitingInternal ? null : (
-                                                                    <>
-                                                                        {sr.signing_url && (
-                                                                            <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" asChild>
-                                                                                <a href={sr.signing_url} target="_blank" rel="noreferrer">
-                                                                                    <ExternalLink className="h-3 w-3" /> Sign In Person
-                                                                                </a>
-                                                                            </Button>
-                                                                        )}
-                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}>
-                                                                            <RotateCcw className="h-3 w-3" /> Resend
-                                                                        </Button>
-                                                                        <Button variant="outline" size="sm" className="h-7 flex-1 gap-1 text-xs text-destructive" onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}>
-                                                                            <X className="h-3 w-3" /> Cancel
-                                                                        </Button>
-                                                                    </>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -967,6 +1156,38 @@ export default function EmployeeShow() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Bulk cancel confirmation */}
+            <AlertDialog open={confirmBulkCancel} onOpenChange={setConfirmBulkCancel}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel {cancellableSelectedCount} signing request{cancellableSelectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The selected pending signing requests will be cancelled. The recipient will no longer be able to sign them. This can't be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Keep</AlertDialogCancel>
+                        <AlertDialogAction onClick={runBulkCancel}>Cancel selected</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk resend confirmation */}
+            <AlertDialog open={confirmBulkResend} onOpenChange={setConfirmBulkResend}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Resend {resendableSelectedCount} signing request{resendableSelectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A reminder email will be sent to each recipient for the selected pending requests.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={runBulkResend}>Resend selected</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
         </AppLayout>
     );
