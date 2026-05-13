@@ -670,6 +670,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/timesheets-reconcile', [\App\Http\Controllers\EhReconciliationController::class, 'index'])->name('timesheets.reconcile');
         Route::post('/timesheets-reconcile/delete', [\App\Http\Controllers\EhReconciliationController::class, 'deleteClocks'])->name('timesheets.reconcile.delete');
         Route::post('/timesheets-reconcile/repull', [\App\Http\Controllers\EhReconciliationController::class, 'repullWeek'])->name('timesheets.reconcile.repull');
+        Route::post('/timesheets-reconcile/auto', [\App\Http\Controllers\EhReconciliationController::class, 'autoReconcile'])->name('timesheets.reconcile.auto');
     });
     Route::get('/timesheets-converter', [ClockController::class, 'showTimesheetsConverter'])->name('timesheets.converter')
         ->middleware('permission:timesheets.convert');

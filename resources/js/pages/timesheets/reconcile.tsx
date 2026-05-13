@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Info, Loader2, RefreshCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Info, Loader2, RefreshCcw, SlidersHorizontal, Trash2, Wand2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DatePickerDemo } from './components/datePicker';
 import { parseWeekEndingDate } from './helper/dateParser';
@@ -230,6 +230,18 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
         );
     };
 
+    const autoReconcile = () => {
+        setBusy('auto');
+        router.post(
+            '/timesheets-reconcile/auto',
+            stateParams,
+            {
+                preserveScroll: true,
+                onFinish: () => setBusy(null),
+            },
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="EH Reconciliation" />
@@ -257,7 +269,19 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
                     </Button>
                     {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
 
-                    <div className="ml-auto">
+                    <div className="ml-auto flex items-center gap-2">
+                        <ConfirmButton
+                            title={multiWeek ? `Auto-reconcile ${selectedWeeks} weeks?` : 'Auto-reconcile this week?'}
+                            description="Pulls from EH (resolving mismatched + EH-only), then soft-deletes unsynced rows (before today, never pushed) and ghost rows. Runs in the background — you'll be emailed when it finishes. EH is never modified."
+                            actionLabel="Run auto-reconcile"
+                            onConfirm={autoReconcile}
+                            trigger={
+                                <Button variant="default" disabled={busy === 'auto'}>
+                                    {busy === 'auto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                                    {multiWeek ? `Auto-reconcile ${selectedWeeks} weeks` : 'Auto-reconcile'}
+                                </Button>
+                            }
+                        />
                         <ConfirmButton
                             title={multiWeek ? `Pull all ${selectedWeeks} weeks from EH?` : 'Pull this week from EH?'}
                             description={
@@ -268,7 +292,7 @@ const Reconcile = ({ weekEnding, selectedLocation, selectedStatus, selectedWeeks
                             actionLabel="Pull from EH"
                             onConfirm={repullWeek}
                             trigger={
-                                <Button variant="default" disabled={busy === 'repull'}>
+                                <Button variant="outline" disabled={busy === 'repull'}>
                                     {busy === 'repull' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
                                     {multiWeek ? `Pull ${selectedWeeks} weeks from EH` : 'Pull this week from EH'}
                                 </Button>
@@ -666,8 +690,9 @@ function ConfirmButton({
     onConfirm: () => void;
     trigger: React.ReactNode;
 }) {
+    const [open, setOpen] = useState(false);
     return (
-        <AlertDialog>
+        <AlertDialog open={open} onOpenChange={setOpen}>
             <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>
@@ -676,7 +701,7 @@ function ConfirmButton({
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onConfirm}>{actionLabel}</AlertDialogAction>
+                    <AlertDialogAction onClick={() => { setOpen(false); onConfirm(); }}>{actionLabel}</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>

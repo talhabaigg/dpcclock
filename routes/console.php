@@ -11,6 +11,7 @@ use App\Jobs\LoadJobReportByCostItemAndCostTypes;
 use App\Jobs\LoadJobSummaries;
 use App\Jobs\LoadJobVendorCommitments;
 use App\Jobs\LoadTimesheetsFromEH;
+use App\Jobs\ReconcileTimesheetsJob;
 use App\Models\QueueJobLog;
 use Carbon\Carbon;
 
@@ -107,4 +108,23 @@ Schedule::call(function () {
 })
     ->name('load-timesheets-from-eh')
     ->dailyAt('05:00')
+    ->withoutOverlapping();
+
+// Employment Hero Timesheet Reconciliation - Daily
+// Runs AFTER load-timesheets-from-eh (5:00). Re-pulls + applies cleanup rules:
+//   - mismatched/eh_only resolved by re-pull
+//   - unsynced (pre-today, never-pushed) soft-deleted
+//   - ghosts (EH deleted upstream) soft-deleted
+// Admins get a notification with counts when it completes.
+Schedule::call(function () {
+    $tz = 'Australia/Brisbane';
+    $now = Carbon::now($tz);
+    $latestFriday = $now->isFriday()
+        ? $now->copy()
+        : $now->copy()->previous(Carbon::FRIDAY);
+    dispatch(new ReconcileTimesheetsJob($latestFriday->format('d-m-Y'), 2));
+})
+    ->name('reconcile-timesheets-eh')
+    ->dailyAt('05:30')
+    ->timezone('Australia/Brisbane')
     ->withoutOverlapping();

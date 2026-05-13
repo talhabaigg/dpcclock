@@ -108,10 +108,13 @@ class LoadTimesheetsFromEH implements ShouldQueue
                 ->when($externalId, fn ($q) => $q->orWhere('uuid', $externalId))
                 ->first();
 
-            // Optional: last-resort fallback if both ids missing
-            if (! $clock && ! $eh_timesheet_id && ! $externalId && $clock_in) {
+            // Fallback: recover the link when EH dropped externalId (e.g. an office user
+            // re-saved the timesheet in EH and our uuid round-trip was lost). We match
+            // local rows that look unlinked (no eh_timesheet_id) by employee + start time.
+            if (! $clock && $clock_in) {
                 $clock = Clock::where('eh_employee_id', $ehId)
                     ->where('clock_in', $clock_in->toDateTimeString())
+                    ->whereNull('eh_timesheet_id')
                     ->first();
             }
 
@@ -132,14 +135,14 @@ class LoadTimesheetsFromEH implements ShouldQueue
                 }
                 $clock->fill($payLoad)->save();
             } else {
-                // Only create if we have a valid kiosk_id
+                // Non-kiosk locations (training, TAFE, office admin) — create with null eh_kiosk_id.
                 if ($kioskId === 0) {
-                    Log::warning('Skipping clock creation: no kiosk found', [
+                    unset($payLoad['eh_kiosk_id']);
+                    Log::info('Creating clock without kiosk (non-kiosk location)', [
                         'employee_id' => $ehId,
                         'location_id' => $locationId,
                         'clock_in' => $clock_in->toDateString(),
                     ]);
-                    continue;
                 }
                 Clock::create($payLoad);
             }

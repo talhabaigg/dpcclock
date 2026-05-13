@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\LoadTimesheetsFromEH;
+use App\Jobs\ReconcileTimesheetsJob;
 use App\Models\Clock;
 use App\Models\Kiosk;
 use App\Services\EhTimesheetReconciliationService;
@@ -86,6 +87,39 @@ class EhReconciliationController extends Controller
             'location' => $data['location'] ?: null,
             'status' => $data['status'] ?: null,
         ])->with('success', "Soft-deleted {$deleted} clock(s).");
+    }
+
+    public function autoReconcile(Request $request)
+    {
+        $data = $request->validate([
+            'weekEnding' => 'required|string',
+            'weeks' => 'nullable|integer|min:1|max:13',
+            'location' => 'nullable|string',
+            'status' => 'nullable|string',
+        ]);
+
+        $tz = 'Australia/Brisbane';
+        try {
+            Carbon::createFromFormat('d-m-Y', $data['weekEnding'], $tz);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Invalid week-ending date.');
+        }
+
+        $weeks = $data['weeks'] ?? 2;
+        $userId = $request->user()?->id;
+
+        ReconcileTimesheetsJob::dispatch($data['weekEnding'], $weeks, $userId);
+
+        $msg = $weeks === 1
+            ? "Reconciliation queued for week ending {$data['weekEnding']}. You'll be emailed when it finishes."
+            : "Reconciliation queued for {$weeks} weeks ending {$data['weekEnding']}. You'll be emailed when it finishes.";
+
+        return redirect()->route('timesheets.reconcile', [
+            'weekEnding' => $data['weekEnding'],
+            'weeks' => $weeks,
+            'location' => $data['location'] ?: null,
+            'status' => $data['status'] ?: null,
+        ])->with('success', $msg);
     }
 
     public function repullWeek(Request $request)
