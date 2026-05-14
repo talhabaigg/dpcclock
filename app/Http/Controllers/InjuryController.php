@@ -442,11 +442,7 @@ class InjuryController extends Controller
         $mediaItem = $injury->media()->where('id', $media)->where('collection_name', 'files')->first();
         abort_unless($mediaItem, 404);
 
-        if (app()->environment('production')) {
-            return redirect($mediaItem->getTemporaryUrl(now()->addMinutes(30)));
-        }
-
-        return $mediaItem;
+        return redirect($this->mediaUrl($mediaItem));
     }
 
     public function dropAll()

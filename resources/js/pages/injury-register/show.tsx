@@ -491,7 +491,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                             {injury.media
                                                 .filter((m) => m.collection_name === 'files')
                                                 .map((m) => (
-                                                    <a key={m.id} href={m.original_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-2 rounded border px-2 py-1.5 text-xs">
+                                                    <a key={m.id} href={`/injury-register/${injury.id}/files/${m.id}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-2 rounded border px-2 py-1.5 text-xs">
                                                         <FileText className="h-3.5 w-3.5 shrink-0" />
                                                         <span className="truncate">{m.file_name}</span>
                                                     </a>
