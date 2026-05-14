@@ -262,7 +262,11 @@ class ToolboxTalkController extends Controller
 
     public function downloadPdf(ToolboxTalk $toolboxTalk)
     {
-        $toolboxTalk->load('location', 'calledBy');
+        $toolboxTalk->load('location', 'calledBy', 'media');
+
+        $signatureMediaByAttendee = $toolboxTalk
+            ->getMedia('attendee_signatures')
+            ->keyBy(fn ($m) => $m->getCustomProperty('attendee_id'));
 
         $digitalAttendees = ToolboxTalkAttendee::with('employee')
             ->where('toolbox_talk_id', $toolboxTalk->id)
@@ -270,12 +274,28 @@ class ToolboxTalkController extends Controller
             ->whereNotNull('signature_path')
             ->orderBy('signed_at')
             ->get()
-            ->map(function (ToolboxTalkAttendee $a) {
+            ->map(function (ToolboxTalkAttendee $a) use ($signatureMediaByAttendee) {
                 $name = $a->employee?->preferred_name ?? $a->employee?->name ?? 'Unknown';
                 $signatureDataUri = null;
-                if ($a->signature_path && Storage::disk('public')->exists($a->signature_path)) {
-                    $signatureDataUri = 'data:image/png;base64,'
-                        .base64_encode(Storage::disk('public')->get($a->signature_path));
+
+                $media = $signatureMediaByAttendee->get($a->employee_id);
+                if ($media) {
+                    try {
+                        $signatureDataUri = 'data:image/png;base64,'
+                            .base64_encode(Storage::disk($media->disk)->get($media->getPathRelativeToRoot()));
+                    } catch (\Throwable $e) {
+                        // fall through to legacy path lookup
+                    }
+                }
+
+                if (! $signatureDataUri && $a->signature_path && ! ctype_digit($a->signature_path)) {
+                    foreach (['s3', 'public'] as $disk) {
+                        if (Storage::disk($disk)->exists($a->signature_path)) {
+                            $signatureDataUri = 'data:image/png;base64,'
+                                .base64_encode(Storage::disk($disk)->get($a->signature_path));
+                            break;
+                        }
+                    }
                 }
 
                 return [

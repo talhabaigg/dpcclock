@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -193,10 +192,18 @@ class ToolboxSignController extends Controller
         $binary = base64_decode($base64, true);
         abort_if($binary === false, 422, 'Invalid signature data.');
 
-        $filename = sprintf('toolbox-signatures/%s/%d-%s.png', $talk->id, $employee->id, Str::random(8));
-        Storage::disk('public')->put($filename, $binary);
+        $talk->getMedia('attendee_signatures')
+            ->where('custom_properties.attendee_id', $employee->id)
+            ->each(fn ($m) => $m->delete());
 
-        return $filename;
+        $filename = sprintf('%d-%s.png', $employee->id, Str::random(8));
+
+        $media = $talk->addMediaFromString($binary)
+            ->usingFileName($filename)
+            ->withCustomProperties(['attendee_id' => $employee->id])
+            ->toMediaCollection('attendee_signatures');
+
+        return (string) $media->id;
     }
 
     private function checkPin(?Kiosk $kiosk, Employee $employee, string $pin): bool
