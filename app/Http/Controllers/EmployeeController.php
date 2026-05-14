@@ -32,7 +32,7 @@ class EmployeeController extends Controller
             ->values()
             ->all();
         $licenceMode = $request->query('licence_mode') === 'has_not' ? 'has_not' : 'has';
-        $sortBy = in_array($request->query('sort'), ['name', 'email', 'employment_type'], true)
+        $sortBy = in_array($request->query('sort'), ['name', 'email', 'employment_type', 'start_date'], true)
             ? $request->query('sort')
             : 'name';
         $sortDirection = $request->query('direction') === 'desc' ? 'desc' : 'asc';

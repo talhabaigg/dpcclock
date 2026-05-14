@@ -17,6 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
@@ -41,6 +42,7 @@ interface Employee {
     external_id?: string | null;
     eh_employee_id?: string | null;
     employment_type?: string | null;
+    start_date?: string | null;
     worktypes?: { eh_worktype_id: string; name: string }[];
     documents?: EmployeeDocument[];
 }
@@ -68,7 +70,7 @@ interface PaginatedEmployees {
     to: number | null;
 }
 
-type SortField = 'name' | 'email' | 'employment_type';
+type SortField = 'name' | 'email' | 'employment_type' | 'start_date';
 type SortDirection = 'asc' | 'desc';
 
 interface Filters {
@@ -406,32 +408,11 @@ export default function EmployeesList() {
                             updated_at: '',
                             phone: '',
                         }}
+                        showEmail
                     />
                     {row.original.preferred_name && <span className="text-xs text-muted-foreground">({row.original.preferred_name})</span>}
                 </Link>
             ),
-        },
-        {
-            accessorKey: 'email',
-            header: () => (
-                <SortHeader
-                    label="Email"
-                    columnKey="email"
-                    currentSort={currentSort}
-                    currentDirection={currentDirection}
-                    onSort={handleSortChange}
-                />
-            ),
-            cell: ({ row }) => {
-                const value = row.original.email;
-                return value ? (
-                    <a href={`mailto:${value.toLowerCase()}`} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-                        {value.toLowerCase()}
-                    </a>
-                ) : (
-                    <span className="text-sm italic text-muted-foreground">-</span>
-                );
-            },
         },
         {
             accessorKey: 'employment_type',
@@ -453,6 +434,29 @@ export default function EmployeesList() {
             },
         },
         {
+            accessorKey: 'start_date',
+            header: () => (
+                <SortHeader
+                    label="Start Date"
+                    columnKey="start_date"
+                    currentSort={currentSort}
+                    currentDirection={currentDirection}
+                    onSort={handleSortChange}
+                />
+            ),
+            cell: ({ row }) => {
+                const value = row.original.start_date;
+                if (!value) return <span className="text-sm italic text-muted-foreground">-</span>;
+                const date = new Date(value);
+                if (isNaN(date.getTime())) return <span className="text-sm italic text-muted-foreground">-</span>;
+                return (
+                    <span className="text-sm whitespace-nowrap">
+                        {date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                );
+            },
+        },
+        {
             id: 'worktypes',
             header: 'Work Types',
             cell: ({ row }) => {
@@ -462,10 +466,10 @@ export default function EmployeesList() {
                 }
 
                 return (
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="flex max-w-32 flex-wrap items-center gap-1">
                         {worktypes.slice(0, 2).map((wt) => (
-                            <Badge key={wt.eh_worktype_id} variant="secondary" className="text-xs">
-                                {wt.name}
+                            <Badge key={wt.eh_worktype_id} variant="secondary" className="max-w-full truncate text-xs">
+                                <span className="truncate">{wt.name}</span>
                             </Badge>
                         ))}
                         {worktypes.length > 2 && (
@@ -502,17 +506,42 @@ export default function EmployeesList() {
                     return <span className="text-sm italic text-muted-foreground">None</span>;
                 }
 
+                const visible = documents.slice(0, 3);
+                const hidden = documents.slice(3);
                 return (
-                    <div className="flex max-w-xs flex-wrap gap-1">
-                        {documents.map((document) => (
+                    <div className="flex max-w-xs flex-wrap items-center gap-1">
+                        {visible.map((document) => (
                             <Badge
                                 key={document.file_type_id}
                                 variant={document.status === 'expired' ? 'destructive' : 'outline'}
-                                className={`text-xs ${document.status === 'expiring_soon' ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300' : ''}`}
+                                className={`max-w-full truncate text-xs ${document.status === 'expiring_soon' ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300' : ''}`}
                             >
-                                {document.name}
+                                <span className="truncate">{document.name}</span>
                             </Badge>
                         ))}
+                        {hidden.length > 0 && (
+                            <HoverCard>
+                                <HoverCardTrigger asChild>
+                                    <Badge variant="outline" className="cursor-pointer text-xs text-muted-foreground hover:bg-muted">
+                                        +{hidden.length}
+                                    </Badge>
+                                </HoverCardTrigger>
+                                <HoverCardContent side="bottom" className="w-auto max-w-xs p-3">
+                                    <p className="mb-2 text-xs font-medium">{hidden.length} more {hidden.length === 1 ? 'licence' : 'licences'}</p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {hidden.map((document) => (
+                                            <Badge
+                                                key={document.file_type_id}
+                                                variant={document.status === 'expired' ? 'destructive' : 'outline'}
+                                                className={`!h-auto max-w-full whitespace-normal break-words py-0.5 text-xs leading-snug ${document.status === 'expiring_soon' ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300' : ''}`}
+                                            >
+                                                {document.name}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </HoverCardContent>
+                            </HoverCard>
+                        )}
                     </div>
                 );
             },
